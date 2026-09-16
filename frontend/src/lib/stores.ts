@@ -1,0 +1,70 @@
+import { derived, get, writable, type Writable } from 'svelte/store'
+import { api } from './api'
+import { emptyFilters, type Filters, type Refs, type Repo } from './types'
+
+function persisted<T>(key: string, initial: T): Writable<T> {
+  let start = initial
+  try {
+    const raw = localStorage.getItem(key)
+    if (raw !== null) start = JSON.parse(raw)
+  } catch {
+    // Storage unavailable: fall back to the default.
+  }
+  const store = writable<T>(start)
+  store.subscribe((value) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value))
+    } catch {
+      // Ignore: persistence is a convenience.
+    }
+  })
+  return store
+}
+
+export const sidebarWidth = persisted('sidebarWidth', 280)
+export const chatWidth = persisted('chatWidth', 340)
+export const detailsHeight = persisted('detailsHeight', 280)
+export const chatOpen = persisted('chatOpen', true)
+export const selectedRepoId = persisted('selectedRepoId', '')
+
+export const repos = writable<Repo[]>([])
+export const refs = writable<Refs | null>(null)
+export const filters = writable<Filters>(emptyFilters())
+export const selectedHash = writable('')
+export const jumpTo = writable('')
+export const logVersion = writable(0)
+export const busy = writable('')
+
+export const selectedRepo = derived([repos, selectedRepoId], ([$repos, $id]) => $repos.find((r) => r.id === $id) ?? null)
+
+export async function loadRepos() {
+  repos.set(await api.listRepos())
+}
+
+export async function loadRefs() {
+  const repo = get(selectedRepo)
+  if (!repo || repo.missing) {
+    refs.set(null)
+    return
+  }
+  try {
+    refs.set(await api.getRefs(repo.id))
+  } catch {
+    refs.set(null)
+  }
+}
+
+export async function refreshRepo() {
+  await loadRepos()
+  await loadRefs()
+  logVersion.update((v) => v + 1)
+}
+
+export function selectRepo(id: string) {
+  if (get(selectedRepoId) !== id) {
+    filters.set(emptyFilters())
+    selectedHash.set('')
+  }
+  selectedRepoId.set(id)
+  loadRefs()
+}
