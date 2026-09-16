@@ -1,18 +1,43 @@
-# git-ui — Design
+# git-ui — Sub-project 1: Core Viewer — Design
 
 Date: 2026-09-16
 Status: Draft for review
+
+## Product context
+
+git-ui is an AI-first desktop Git client. It is built as five sub-projects,
+each with its own spec, plan and working build:
+
+1. **Core viewer (this spec):** repos, refs, graph log, checkout, fetch/pull,
+   branch/tag create/delete, visual style, chat panel shell.
+2. **Working tree:** changes view, stage/unstage (hunk level), commit/amend,
+   push, stash.
+3. **AI foundation:** provider layer (Anthropic, OpenAI, Ollama), keys in macOS
+   Keychain, settings, streaming, context budgeting, secret redaction,
+   "local only" mode. Functional repo chat with git tools. First features:
+   commit message generation, explain commit/diff.
+4. **Merge / rebase / cherry-pick:** conflict resolution UI + AI conflict
+   resolver.
+5. **AI extras:** split changes into commits, pre-commit review, ticket-aware
+   messages, branch name suggestion, PR description, history cleanup,
+   release-branch sync, release notes, blame explain, natural-language search,
+   reflog recovery, risk explainer.
+
+AI rule for all sub-projects: AI proposes, the user confirms; no git write runs
+without explicit confirmation.
 
 ## Goal
 
 A desktop Git client for browsing multiple repositories with a JetBrains-style
 commit graph, plus common ref operations (checkout, fetch/pull, create/delete
-branches and tags).
+branches and tags), in a minimal Claude-desktop-like visual style, with the
+right-hand chat panel in place for sub-project 3.
 
-## Non-goals (v1)
+## Non-goals (this sub-project)
 
 Staging, committing, push (other than remote branch delete), merge, rebase,
-stash, pushing tags, repo folder scanning.
+stash, pushing tags, repo folder scanning, any AI provider calls (the chat
+panel is a placeholder).
 
 ## Stack
 
@@ -22,30 +47,58 @@ stash, pushing tags, repo folder scanning.
 - **Frontend:** Svelte + TypeScript (Vite), Node 22 via nvm.
 - Graph lane layout computed in Go; frontend only renders.
 
+## Visual style
+
+Modeled on the Claude desktop app: light warm-gray background, near-white
+content surfaces, thin line icons, small muted section headers with a `+`
+action aligned right, list rows without borders, active row as a rounded
+light-gray pill, generous spacing, one system font (SF Pro via
+`-apple-system`). Dark mode follows the OS via `prefers-color-scheme`.
+All colors are CSS custom properties in one `theme.css`. Graph lane colors
+are the only saturated colors in the UI.
+
 ## Layout
 
-Three resizable columns, with a resizable details pane under the log.
+Three columns: sidebar | log (with details pane below) | chat. Sidebar and
+chat widths are draggable; the chat panel collapses via a toggle in the top
+right. The details pane height is draggable.
 
 ```
-┌────────────┬──────────────────┬───────────────────────────────────────────┐
-│ REPOS   [+]│ BRANCHES         │ [text/hash] Branch▾ User▾ Date▾ Paths▾      │
-│ ● git-ui   │ ▾ Local          │ graph │ subject │ author │ date │ hash      │
-│   nexo-api │   ✓ develop      │                                           │
-│            │ ▾ Remote         ├───────────────────────────────────────────┤
-│            │   ▸ origin       │ COMMIT DETAILS                            │
-│            │ ▾ Tags           │ message · author · date · hash · parents  │
-│            │                  │ changed files │ diff of selected file     │
-└────────────┴──────────────────┴───────────────────────────────────────────┘
+┌──────────────────┬──────────────────────────────┬─────────────────┐
+│ + Add repo       │ [search] Branch▾ User▾ Date▾ │ Chat          ⟩ │
+│                  │ ●─┐ Merged in hotfix/...     │                 │
+│ Repos            │ │ ● fix: ...                 │                 │
+│ ▾ git-ui  main ⟳ │ ●─┘ ...                      │                 │
+│   Branches     + │                              │  Set up an AI   │
+│   ✓ main         │                              │  provider to    │
+│     feature/x    │                              │  chat with this │
+│   Remotes        ├──────────────────────────────┤  repo.          │
+│   Tags         + │ Commit details               │                 │
+│ ▸ nexo-api       │ files │ diff                 │ [disabled input]│
+│ ▸ storage        │                              │                 │
+│ ──────────────── │                              │                 │
+│ ⚙ Settings       │                              │                 │
+└──────────────────┴──────────────────────────────┴─────────────────┘
 ```
 
-- **Left — Repos:** persisted list. `+` opens a native folder picker and adds
-  one repo (must be a git work tree). Context menu: Remove. Each entry shows
-  current branch; Fetch and Pull buttons act on the selected repo.
-- **Middle — Refs:** tree of Local branches, Remote branches (grouped by
-  remote) and Tags. HEAD marked ✓; detached HEAD shown as `HEAD (<short>)`.
-  Click a branch → filter log to it. Double-click local branch → checkout.
-  Context menu: Checkout, New branch from here, Delete, New tag here.
-- **Right — Log:** filter bar (text/hash, Branch, User, Date range, Paths),
+- **Sidebar:** `+ Add repo` at the top opens a native folder picker and adds
+  one repo (must be a git work tree); the list is persisted. Each repo row
+  shows name and current branch; hovering shows Fetch and Pull buttons.
+  Clicking a repo selects it and expands it (one expanded at a time).
+  Context menu: Remove, Locate (for missing repos). Inside the expanded repo:
+  - **Branches** (`+` = new branch from HEAD): local branches, HEAD marked ✓;
+    detached HEAD shown first as `HEAD (<short>)`.
+  - **Remotes:** collapsible group per remote with its branches.
+  - **Tags** (`+` = new tag at HEAD).
+  Click a branch → filter log to it (click again to clear). Double-click local
+  branch → checkout. Context menu: Checkout, New branch from here, Delete,
+  New tag here.
+  Bottom: Settings (in this sub-project only shows app version; providers
+  arrive in sub-project 3).
+- **Chat panel:** header "Chat" with collapse toggle; body shows an empty
+  state "Set up an AI provider to chat with this repo" and a disabled input.
+  Collapsed state is persisted.
+- **Center — Log:** filter bar (text/hash, Branch, User, Date range, Paths),
   virtualized rows with canvas graph column, subject, author, relative date,
   short hash, ref badges. Merge commits rendered gray; HEAD commit drawn as a
   ring. Selecting a commit opens the details pane (full message, metadata,
