@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="#f4f3f0"/>
+  <g fill="none" stroke-width="40" stroke-linecap="round">
+    <path d="M320 170 V420 C320 520 420 520 440 560" stroke="#4f9d4f"/>
+    <path d="M704 170 V360 C704 470 610 500 590 550" stroke="#a4478f"/>
+    <path d="M512 850 V760" stroke="#3f7fbf"/>
+  </g>
+  <circle cx="320" cy="300" r="42" fill="#4f9d4f"/>
+  <circle cx="704" cy="260" r="42" fill="#a4478f"/>
+  <circle cx="512" cy="640" r="190" fill="#1f1e1c"/>
+  <text x="512" y="712" text-anchor="middle" font-family="-apple-system, 'SF Pro Display', Helvetica, sans-serif" font-weight="800" font-size="210" fill="#f4f3f0">ai</text>
+</svg>
