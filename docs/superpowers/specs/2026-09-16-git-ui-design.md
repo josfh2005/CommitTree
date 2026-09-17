@@ -44,7 +44,8 @@ panel is a placeholder).
 - **Wails v2** desktop app (Go backend + web view).
 - **Backend:** Go 1.26, shells out to the `git` CLI (uses user's SSH agent,
   credential helpers and config).
-- **Frontend:** Svelte + TypeScript (Vite), Node 22 via nvm.
+- **Frontend:** Svelte 5 (legacy component syntax) + TypeScript (Vite), Node 22 via nvm;
+  Svelte bundled via npm.
 - Graph lane layout computed in Go; frontend only renders.
 
 ## Visual style
@@ -90,9 +91,9 @@ right. The details pane height is draggable.
     detached HEAD shown first as `HEAD (<short>)`.
   - **Remotes:** collapsible group per remote with its branches.
   - **Tags** (`+` = new tag at HEAD).
-  Click a branch → filter log to it (click again to clear). Double-click local
-  branch → checkout. Context menu: Checkout, New branch from here, Delete,
-  New tag here.
+  Clicking a ref sets the log's branch filter, shown as a removable chip in the
+  filter bar. Double-click local branch → checkout. Context menu: Checkout,
+  New branch from here, Delete, New tag here.
   Bottom: Settings (in this sub-project only shows app version; providers
   arrive in sub-project 3).
 - **Chat panel:** header "Chat" with collapse toggle; body shows an empty
@@ -124,11 +125,14 @@ right. The details pane height is draggable.
    `git log --topo-order --parents --decorate=full -z --format=<fields sep by %x00> [--all | <branch>] [--author=] [--since=] [--until=] [--grep= -i] --skip=<offset> -n <limit> [-- <paths>]`.
    A text filter matching `^[0-9a-f]{4,40}$` is additionally tried as a hash
    (`git rev-parse --verify`); if it resolves, the log jumps to that commit.
-3. Parsed commits → `graph.Layout` (state cached per repo+filter key in the
-   backend so the next page continues the same lanes; reset when filters or
-   refs change).
+3. Parsed commits → `graph.Layout` (takes `[]graph.Node{Hash, Parents}`, returns
+   `[]graph.Row{Lane, Color, Edges}`, cached per repo+filter key so the next
+   page continues the same lanes; reset when filters or refs change).
+   Joined with commits into `app.LogRow` by `internal/app`.
 4. Returns `[]Row`; frontend appends and draws only visible rows. Next page is
    requested when scrolling within ~100 rows of the end.
+5. The graph is hidden when the text, author, since or until filter is set;
+   branch and path filters keep it.
 
 ```go
 type Commit struct {
@@ -140,7 +144,7 @@ type Commit struct {
     Refs          []Ref // {Name, Kind: local|remote|tag|head}
 }
 
-type EdgeKind int // Straight, MergeIn, ForkOut, ArrowUp, ArrowDown
+type EdgeKind int // Line, ArrowDown, ArrowUp
 
 type Edge struct {
     FromLane, ToLane int
