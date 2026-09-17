@@ -48,6 +48,7 @@ helper executable. Streaming output reaches the frontend as Wails events.
 | `ai/tasks` | One-shot tasks: `ExplainCommit(ctx, provider, dir, hash, budget)` builds context and streams the answer. |
 | `ai/settings` | Load/save `git-ui/ai.json`; defaults. |
 | `ai/chatstore` | Load/save/clear `git-ui/chats/<repoID>.json`. |
+| `ai/prompts` | One Markdown prompt ("skill") per AI action, embedded as defaults and overridable by user files; renders `{{repo}}`, `{{path}}`, `{{branch}}`, `{{date}}`. |
 
 ### Swift helper (`helpers/apple/`)
 
@@ -70,9 +71,10 @@ Go runs it with a 60 s timeout; cancelling kills the process.
 - `GetAISettings() settings.Settings`, `SaveAISettings(settings.Settings) error`.
 - `PullModel(name string) error` (streams `model:progress {name, completed, total, status}`, ends with `model:done {name, error?}`), `CancelPull() error`. One pull at a time.
 - `GetChat(repoID string) ([]ai.Message, error)`.
-- `SendChat(repoID, text string) (runID string, error)` — returns immediately; streams events. Returns `ErrChatBusy` if a run is active for that repo.
+- `SendChat(repoID, text, runID string) error` — the frontend generates `runID` (so no early event is missed); returns immediately and streams events. Returns `ErrChatBusy` if a run is active for that repo.
 - `StopChat(repoID string) error`, `ClearChat(repoID string) error`.
-- `ExplainCommit(repoID, hash string) (runID string, error)` — streams `explain:*` events.
+- `ExplainCommit(repoID, hash, provider, runID string) error` — `provider` is `""` (use settings), `"apple"` or `"ollama"`; streams `explain:*` events.
+- `ListPrompts() []prompts.Info`, `OpenPromptsFolder() error`, `ResetPrompt(name string) error`.
 
 ### Frontend
 
@@ -106,8 +108,8 @@ Go runs it with a 60 s timeout; cancelling kills the process.
 
 ## Chat flow
 
-1. Frontend calls `SendChat(repoID, text)`. Go appends the user message to the stored conversation and returns a `runID`.
-2. System prompt: repo name, path, current branch (`refs.CurrentLabel`), today's date (ISO), and rules: read-only access; use tools instead of guessing; cite short hashes; answer in the user's language; be concise.
+1. Frontend generates a `runID` and calls `SendChat(repoID, text, runID)`. Go appends the user message to the stored conversation and starts the run.
+2. System prompt: the `chat` prompt rendered with repo name, path, current branch (`refs.CurrentLabel`) and today's date (ISO). Default rules: read-only access; use tools instead of guessing; cite short hashes; convert relative dates; answer in the user's language; be concise.
 3. History sent to the model: last 40 messages; tool results older than the last 10 messages replaced by `"[earlier tool result omitted]"`. The stored file keeps everything.
 4. Agent loop, max 8 steps:
    - Call `provider.Chat` with tools; forward text as `chat:delta {repoID, runID, text}`.
@@ -135,9 +137,19 @@ All events carry `repoID` and `runID`; the frontend ignores other repos' runs.
 ## Explain commit
 
 - Context: subject, body, file list, and the full diff against the first parent truncated to 6,000 characters (Ollama) or 3,000 characters (Apple).
-- Instructions: "Explain this commit in 3–6 short bullet points: what changed and the likely reason. Answer in Spanish if the commit message is Spanish, otherwise English."
+- Instructions: the `explain-commit` prompt. Default: explain in 3 to 6 short bullet points what changed and the likely reason; answer in Spanish if the commit message is Spanish, otherwise English.
 - Streams `explain:delta {runID, text}`, `explain:done {runID}`, `explain:error {runID, message}`. Not persisted.
 - If Apple returns an error, the UI shows it with a "Try with Ollama" button that reruns with Ollama.
+
+## Prompts (skills)
+
+- One Markdown file per AI action. Defaults are embedded in the binary (`internal/ai/prompts/defaults/<name>.md`): `chat.md`, `explain-commit.md`. Later actions (commit message, PR description, conflict resolution, release notes) add a file each.
+- User overrides live in `os.UserConfigDir()/git-ui/prompts/<name>.md`; when present they replace the default.
+- Variables replaced at render time: `{{repo}}`, `{{path}}`, `{{branch}}`, `{{date}}`.
+- `ListPrompts` reports each prompt and whether the user file exists and differs from the default (`customized`).
+- `OpenPromptsFolder` creates the folder, writes a copy of each default whose user file is missing, and opens the folder in Finder.
+- `ResetPrompt(name)` overwrites the user file with the default.
+- Settings dialog: a Prompts section listing each prompt with a "customized" badge and "Restore default", plus "Open prompts folder".
 
 ## Error handling
 
