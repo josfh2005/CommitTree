@@ -19,12 +19,22 @@ const (
 	OmittedToolResult = "[earlier tool result omitted]"
 	StepLimitNote     = "Step limit reached."
 
+	EventStart      = "chat:start"
 	EventDelta      = "chat:delta"
 	EventTool       = "chat:tool"
 	EventToolResult = "chat:tool_result"
 	EventDone       = "chat:done"
 	EventError      = "chat:error"
 )
+
+// StartEvent announces a new answer, so the chat can show the question and an
+// empty answer even when the run was started from somewhere else (the log's
+// "Explain" action).
+type StartEvent struct {
+	RepoID string `json:"repoID"`
+	RunID  string `json:"runID"`
+	Text   string `json:"text"`
+}
 
 type DeltaEvent struct {
 	RepoID string `json:"repoID"`

@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -154,7 +153,7 @@ func TestSendChatRunsToolsStreamsAndSaves(t *testing.T) {
 		t.Fatalf("done = %#v", done.data)
 	}
 	names := strings.Join(ev.names(), ",")
-	if names != "chat:tool,chat:tool_result,chat:delta,chat:delta,chat:done" {
+	if names != "chat:start,chat:tool,chat:tool_result,chat:delta,chat:delta,chat:done" {
 		t.Fatalf("events = %s", names)
 	}
 	if !strings.Contains(system, "read-only") || !strings.Contains(system, "main") {
@@ -227,7 +226,7 @@ func TestSendChatReportsOllamaDown(t *testing.T) {
 	}
 }
 
-func TestExplainCommitWithOllama(t *testing.T) {
+func TestExplainInChatWritesTheAnswerToTheConversation(t *testing.T) {
 	var system, prompt string
 	srv := fakeOllama(t, func(req map[string]any) {
 		msgs := req["messages"].([]any)
@@ -239,93 +238,89 @@ func TestExplainCommitWithOllama(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	hash := head.Rows[0].Hash
 
-	if err := a.ExplainCommit(id, head.Rows[0].Hash, "ollama", "exp-1"); err != nil {
+	if err := a.ExplainInChat(id, hash, "ollama", "exp-1"); err != nil {
 		t.Fatal(err)
 	}
-	ev.wait(t, "explain:done")
-	if !strings.Contains(strings.Join(ev.names(), ","), "explain:delta") {
-		t.Fatalf("events = %v", ev.names())
+	start := ev.wait(t, agent.EventStart).data.(agent.StartEvent)
+	if start.RepoID != id || start.RunID != "exp-1" || !strings.Contains(start.Text, hash[:7]) {
+		t.Fatalf("start = %#v", start)
+	}
+	ev.wait(t, agent.EventDone)
+
+	names := strings.Join(ev.names(), ",")
+	if !strings.Contains(names, agent.EventDelta) || strings.Contains(names, "explain:") {
+		t.Fatalf("events = %s", names)
 	}
 	if !strings.Contains(system, "3 to 6") || !strings.Contains(prompt, "Subject: Merge feature") {
 		t.Fatalf("system %q\nprompt %q", system, prompt)
 	}
+
+	history, err := a.GetChat(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(history) != 2 || history[0].Role != ai.RoleUser || !strings.Contains(history[0].Content, hash[:7]) {
+		t.Fatalf("history = %#v", history)
+	}
+	if history[1].Role != ai.RoleAssistant || history[1].Content != "Hay ramas." {
+		t.Fatalf("answer = %#v", history[1])
+	}
 }
 
-func TestExplainCommitWithMissingAppleHelper(t *testing.T) {
+func TestExplainInChatWithMissingAppleHelper(t *testing.T) {
 	srv := fakeOllama(t, nil)
 	a, id, ev := newAIApp(t, srv.URL)
 	head, _ := a.GetLog(id, gitlog.Filters{}, 0, 1)
 
-	if err := a.ExplainCommit(id, head.Rows[0].Hash, "apple", "exp-2"); err != nil {
+	if err := a.ExplainInChat(id, head.Rows[0].Hash, "apple", "exp-2"); err != nil {
 		t.Fatal(err)
 	}
-	got := ev.wait(t, "explain:error").data.(ExplainError)
+	got := ev.wait(t, agent.EventError).data.(agent.ErrorEvent)
 	if got.RunID != "exp-2" || !strings.Contains(got.Message, "helper not found") {
 		t.Fatalf("error = %#v", got)
 	}
+	if err := a.ExplainInChat(id, head.Rows[0].Hash, "ollama", "exp-3"); err != nil {
+		t.Fatalf("repo still busy after a failed explain: %v", err)
+	}
 }
 
-func TestExplainCommitCancelsPreviousRunForSameRepo(t *testing.T) {
-	var calls int32
-	canceled1 := make(chan struct{})
+func TestExplainInChatIsBusyWhileChatting(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		n := atomic.AddInt32(&calls, 1)
-		writeLines(w, `{"message":{"role":"assistant","content":"partial"},"done":false}`)
-		if n == 1 {
-			<-r.Context().Done()
-			close(canceled1)
-			return
-		}
-		writeLines(w, `{"message":{"content":" more"},"done":false}`, `{"message":{"content":""},"done":true}`)
+		writeLines(w, `{"message":{"role":"assistant","content":"Pensando"},"done":false}`)
+		<-r.Context().Done()
 	}))
 	defer srv.Close()
 	a, id, ev := newAIApp(t, srv.URL)
-	head, err := a.GetLog(id, gitlog.Filters{}, 0, 1)
-	if err != nil {
+	head, _ := a.GetLog(id, gitlog.Filters{}, 0, 1)
+
+	if err := a.SendChat(id, "hola", "run-1"); err != nil {
 		t.Fatal(err)
 	}
+	ev.wait(t, agent.EventDelta)
 
-	if err := a.ExplainCommit(id, head.Rows[0].Hash, "ollama", "exp-1"); err != nil {
+	if err := a.ExplainInChat(id, head.Rows[0].Hash, "ollama", "exp-1"); !errors.Is(err, ErrChatBusy) {
+		t.Fatalf("explain while chatting: %v", err)
+	}
+	if err := a.StopChat(id); err != nil {
 		t.Fatal(err)
 	}
-	for {
-		e := ev.wait(t, "explain:delta")
-		if e.data.(ExplainDelta).RunID == "exp-1" {
-			break
-		}
-	}
+	ev.wait(t, agent.EventDone)
+}
 
-	ev.mu.Lock()
-	before := len(ev.list)
-	ev.mu.Unlock()
+func TestSendChatEmitsStart(t *testing.T) {
+	srv := fakeOllama(t, nil)
+	a, id, ev := newAIApp(t, srv.URL)
 
-	if err := a.ExplainCommit(id, head.Rows[0].Hash, "ollama", "exp-2"); err != nil {
+	if err := a.SendChat(id, "hola", "run-1"); err != nil {
 		t.Fatal(err)
 	}
-
-	select {
-	case <-canceled1:
-	case <-time.After(5 * time.Second):
-		t.Fatal("first explain run was not canceled when the second one started")
+	got := ev.wait(t, agent.EventStart).data.(agent.StartEvent)
+	if got != (agent.StartEvent{RepoID: id, RunID: "run-1", Text: "hola"}) {
+		t.Fatalf("start = %#v", got)
 	}
-
-	for {
-		e := ev.wait(t, "explain:delta")
-		if e.data.(ExplainDelta).RunID == "exp-2" {
-			break
-		}
-	}
-	ev.wait(t, "explain:done")
-
-	ev.mu.Lock()
-	list := append([]event(nil), ev.list[before:]...)
-	ev.mu.Unlock()
-	for _, e := range list {
-		if d, ok := e.data.(ExplainDelta); ok && d.RunID == "exp-1" {
-			t.Fatalf("run exp-1 kept emitting deltas after the second run started: %#v", e)
-		}
-	}
+	ev.wait(t, agent.EventDone)
 }
 
 func TestAIStatusCachesAppleAvailabilityAfterFirstProbe(t *testing.T) {

@@ -12,8 +12,6 @@ export function AIStatus():Promise<app.AIStatus>;
 
 export function AddRepo():Promise<repos.Repo>;
 
-export function CancelExplain(arg1:string):Promise<void>;
-
 export function CancelPull():Promise<void>;
 
 export function Checkout(arg1:string,arg2:string):Promise<void>;
@@ -34,7 +32,7 @@ export function DeleteRemoteBranch(arg1:string,arg2:string,arg3:string):Promise<
 
 export function DeleteTag(arg1:string,arg2:string):Promise<void>;
 
-export function ExplainCommit(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
+export function ExplainInChat(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
 export function Fetch(arg1:string):Promise<void>;
 

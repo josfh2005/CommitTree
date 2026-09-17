@@ -20,6 +20,7 @@ import (
 	"git-ui/internal/ai/settings"
 	"git-ui/internal/ai/tasks"
 	"git-ui/internal/ai/tools"
+	"git-ui/internal/gitlog"
 	"git-ui/internal/refs"
 )
 
@@ -43,15 +44,7 @@ type aiState struct {
 	mu         sync.Mutex
 	runs       map[string]context.CancelFunc // repo ID → running chat
 	pullCancel context.CancelFunc
-	explains   map[string]*explainRun // run ID → running explain
-	appleAvail *apple.Availability    // cached after the first successful probe
-}
-
-// explainRun tracks a running ExplainCommit so a later run for the same
-// repo can cancel it and CancelExplain can cancel it by run ID.
-type explainRun struct {
-	repoID string
-	cancel context.CancelFunc
+	appleAvail *apple.Availability // cached after the first successful probe
 }
 
 type OllamaStatus struct {
@@ -81,25 +74,11 @@ type ModelDone struct {
 	Canceled bool   `json:"canceled,omitempty"`
 }
 
-type ExplainDelta struct {
-	RunID string `json:"runID"`
-	Text  string `json:"text"`
-}
-
-type ExplainDone struct {
-	RunID string `json:"runID"`
-}
-
-type ExplainError struct {
-	RunID   string `json:"runID"`
-	Message string `json:"message"`
-}
-
 // WithAI turns on the AI API on a with the given dependencies. It is called
 // once during wiring in main.go, not exposed as a Wails binding, so the
 // renderer cannot invoke it with empty or arbitrary deps.
 func WithAI(a *App, d AIDeps) {
-	a.ai = &aiState{deps: d, runs: map[string]context.CancelFunc{}, explains: map[string]*explainRun{}}
+	a.ai = &aiState{deps: d, runs: map[string]context.CancelFunc{}}
 }
 
 func (a *App) emit(name string, data any) {
@@ -284,6 +263,8 @@ func (a *App) SendChat(repoID, text, runID string) error {
 		return err
 	}
 
+	a.emit(agent.EventStart, agent.StartEvent{RepoID: repoID, RunID: runID, Text: text})
+
 	go func() {
 		run := agent.Run{
 			RepoID: repoID, RunID: runID,
@@ -346,14 +327,15 @@ func (a *App) ClearChat(repoID string) error {
 	return a.ai.deps.Chats.Clear(repoID)
 }
 
-// ExplainCommit streams an explanation of a commit. provider is "" (use
-// settings), settings.ProviderApple or settings.ProviderOllama.
-func (a *App) ExplainCommit(repoID, hash, provider, runID string) error {
+// ExplainInChat explains a commit and writes the answer into the repository's
+// chat, so the question and the answer stay in the conversation. provider is
+// "" (use settings), settings.ProviderApple or settings.ProviderOllama.
+func (a *App) ExplainInChat(repoID, hash, provider, runID string) error {
 	if a.ai == nil {
 		return ErrAIDisabled
 	}
-	if runID == "" {
-		return errors.New("run id is required")
+	if runID == "" || hash == "" {
+		return errors.New("commit and run id are required")
 	}
 	repo, ok := a.store.Get(repoID)
 	if !ok {
@@ -383,60 +365,92 @@ func (a *App) ExplainCommit(repoID, hash, provider, runID string) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(a.ctx, 3*time.Minute)
+	// An explanation is an answer in the chat, so it takes the repo's chat slot.
 	a.ai.mu.Lock()
-	for id, run := range a.ai.explains {
-		if run.repoID == repoID {
-			run.cancel()
-			delete(a.ai.explains, id)
-		}
+	if _, busy := a.ai.runs[repoID]; busy {
+		a.ai.mu.Unlock()
+		return ErrChatBusy
 	}
-	a.ai.explains[runID] = &explainRun{repoID: repoID, cancel: cancel}
+	ctx, cancel := context.WithTimeout(a.ctx, 3*time.Minute)
+	a.ai.runs[repoID] = cancel
 	a.ai.mu.Unlock()
 	finish := func() {
 		a.ai.mu.Lock()
-		delete(a.ai.explains, runID)
+		delete(a.ai.runs, repoID)
 		a.ai.mu.Unlock()
 		cancel()
 	}
 
+	question, err := explainQuestion(ctx, repo.Path, hash)
+	history, loadErr := a.ai.deps.Chats.Load(repoID)
+	if err == nil {
+		err = loadErr
+	}
+	if err == nil {
+		history = append(history, ai.Message{Role: ai.RoleUser, Content: question})
+		err = a.ai.deps.Chats.Save(repoID, history)
+	}
+	if err != nil {
+		finish()
+		return err
+	}
+	a.emit(agent.EventStart, agent.StartEvent{RepoID: repoID, RunID: runID, Text: question})
+
 	go func() {
-		defer finish()
-		stream, err := tasks.Explain(ctx, responder, instructions, repo.Path, hash, budget)
-		if err != nil {
-			a.emit("explain:error", ExplainError{RunID: runID, Message: err.Error()})
-			return
+		answer, runErr := streamIntoString(ctx, a, repoID, runID, responder, instructions, repo.Path, hash, budget)
+		var saveErr error
+		if answer != "" || runErr == nil {
+			saveErr = a.ai.deps.Chats.Save(repoID, append(history, ai.Message{
+				Role: ai.RoleAssistant, Content: answer, Stopped: runErr != nil && errors.Is(runErr, context.Canceled),
+			}))
 		}
-		var streamErr error
-		for chunk := range stream {
-			switch {
-			case chunk.Err != nil:
-				streamErr = chunk.Err
-			case chunk.Delta != "":
-				a.emit("explain:delta", ExplainDelta{RunID: runID, Text: chunk.Delta})
-			}
+		finish()
+		switch {
+		case runErr != nil && !errors.Is(runErr, context.Canceled):
+			a.emit(agent.EventError, agent.ErrorEvent{RepoID: repoID, RunID: runID, Message: runErr.Error(), Code: chatErrorCode(runErr)})
+		case saveErr != nil:
+			a.emit(agent.EventError, agent.ErrorEvent{RepoID: repoID, RunID: runID, Message: saveErr.Error(), Code: "other"})
+		default:
+			a.emit(agent.EventDone, agent.DoneEvent{RepoID: repoID, RunID: runID})
 		}
-		if streamErr != nil {
-			a.emit("explain:error", ExplainError{RunID: runID, Message: streamErr.Error()})
-			return
-		}
-		a.emit("explain:done", ExplainDone{RunID: runID})
 	}()
 	return nil
 }
 
-// CancelExplain cancels a running explain by its run ID. It is a no-op if
-// no such run is active (already finished, or never started).
-func (a *App) CancelExplain(runID string) error {
-	if a.ai == nil {
-		return ErrAIDisabled
+// explainQuestion is the user message stored for an explanation.
+func explainQuestion(ctx context.Context, dir, hash string) (string, error) {
+	commits, err := gitlog.Get(ctx, dir, gitlog.Filters{Branch: hash}, 0, 1)
+	if err != nil {
+		return "", err
 	}
-	a.ai.mu.Lock()
-	defer a.ai.mu.Unlock()
-	if run, ok := a.ai.explains[runID]; ok {
-		run.cancel()
+	if len(commits) == 0 {
+		return "", fmt.Errorf("unknown commit %q", hash)
 	}
-	return nil
+	return fmt.Sprintf("Explain commit %s: %s", commits[0].Short, commits[0].Subject), nil
+}
+
+// streamIntoString forwards an explanation to the chat as it arrives and
+// returns the full text.
+func streamIntoString(ctx context.Context, a *App, repoID, runID string, r ai.Responder, instructions, dir, hash string, budget int) (string, error) {
+	stream, err := tasks.Explain(ctx, r, instructions, dir, hash, budget)
+	if err != nil {
+		return "", err
+	}
+	var text strings.Builder
+	var streamErr error
+	for chunk := range stream {
+		switch {
+		case chunk.Err != nil:
+			streamErr = chunk.Err
+		case chunk.Delta != "":
+			text.WriteString(chunk.Delta)
+			a.emit(agent.EventDelta, agent.DeltaEvent{RepoID: repoID, RunID: runID, Text: chunk.Delta})
+		}
+	}
+	if ctx.Err() != nil {
+		return text.String(), ctx.Err()
+	}
+	return text.String(), streamErr
 }
 
 func (a *App) ListPrompts() ([]prompts.Info, error) {

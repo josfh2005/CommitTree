@@ -151,7 +151,9 @@ func TestCancelKeepsPartialAnswer(t *testing.T) {
 
 type failing struct{ err error }
 
-func (f failing) Chat(ctx context.Context, req ai.Request) (<-chan ai.Chunk, error) { return nil, f.err }
+func (f failing) Chat(ctx context.Context, req ai.Request) (<-chan ai.Chunk, error) {
+	return nil, f.err
+}
 
 func TestProviderErrorIsReturned(t *testing.T) {
 	boom := errors.New("boom")

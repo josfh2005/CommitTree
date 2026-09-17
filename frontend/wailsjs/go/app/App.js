@@ -10,10 +10,6 @@ export function AddRepo() {
   return window['go']['app']['App']['AddRepo']();
 }
 
-export function CancelExplain(arg1) {
-  return window['go']['app']['App']['CancelExplain'](arg1);
-}
-
 export function CancelPull() {
   return window['go']['app']['App']['CancelPull']();
 }
@@ -54,8 +50,8 @@ export function DeleteTag(arg1, arg2) {
   return window['go']['app']['App']['DeleteTag'](arg1, arg2);
 }
 
-export function ExplainCommit(arg1, arg2, arg3, arg4) {
-  return window['go']['app']['App']['ExplainCommit'](arg1, arg2, arg3, arg4);
+export function ExplainInChat(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['App']['ExplainInChat'](arg1, arg2, arg3, arg4);
 }
 
 export function Fetch(arg1) {

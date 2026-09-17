@@ -6,7 +6,7 @@
   import {
     arrowAt, DOT_RADIUS, edgeSegment, graphWidth, laneColor, laneX, ROW_HEIGHT, rowCenterY, visibleRange,
   } from '../lib/geometry'
-  import { filters, jumpTo, logVersion, selectedHash } from '../lib/stores'
+  import { chatOpen, filters, jumpTo, logVersion, selectedHash } from '../lib/stores'
   import type { LogRow } from '../lib/types'
   import { copyText, errorMessage, openMenu, toast } from '../lib/ui'
 
@@ -165,9 +165,21 @@
     if (row) commitMenu(event, row)
   }
 
+  // Explaining a commit answers in the chat panel, so the answer is kept in
+  // the repository's conversation.
+  async function explain(row: LogRow) {
+    chatOpen.set(true)
+    try {
+      await api.explainInChat(repoId, row.hash, '', crypto.randomUUID())
+    } catch (e) {
+      toast(errorMessage(e), 'error')
+    }
+  }
+
   function commitMenu(event: MouseEvent, row: LogRow) {
     selectedHash.set(row.hash)
     openMenu(event, [
+      { label: '✨ Explain in chat', action: () => explain(row) },
       { label: 'Check out (detached)…', action: () => checkoutCommit(repoId, row.hash) },
       { label: 'New branch here…', action: () => newBranch(repoId, row.hash, row.short) },
       { label: 'New tag here…', action: () => newTag(repoId, row.hash, row.short) },

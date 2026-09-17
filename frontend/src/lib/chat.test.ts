@@ -54,6 +54,22 @@ describe('applyEvent', () => {
     })
   })
 
+  it('starts a run from a chat:start event (explain from the log)', () => {
+    const idle = emptyChat('r1')
+    const started = applyEvent(idle, 'chat:start', { repoID: 'r1', runID: 'run9', text: 'Explain commit a1b2c3d' })
+
+    expect(started.runID).toBe('run9')
+    expect(started.items).toEqual([
+      { role: 'user', text: 'Explain commit a1b2c3d', tools: [] },
+      { role: 'assistant', text: '', tools: [] },
+    ])
+    // The panel already echoed its own message, so its start event is a no-op.
+    const running_ = running()
+    expect(applyEvent(running_, 'chat:start', { repoID: 'r1', runID: 'run1', text: 'hola' })).toBe(running_)
+    // A start for another repo is ignored.
+    expect(applyEvent(idle, 'chat:start', { repoID: 'r2', runID: 'run9', text: 'x' })).toBe(idle)
+  })
+
   it('records errors and ends the run', () => {
     const s = applyEvent(running(), 'chat:error', { repoID: 'r1', runID: 'run1', message: 'down', code: 'ollama_down' })
     expect(s.runID).toBeNull()

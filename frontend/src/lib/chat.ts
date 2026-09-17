@@ -1,4 +1,4 @@
-import type { AIMessage, ChatDeltaEvent, ChatErrorEvent, ChatToolEvent, ChatToolResultEvent } from './types'
+import type { AIMessage, ChatDeltaEvent, ChatErrorEvent, ChatStartEvent, ChatToolEvent, ChatToolResultEvent } from './types'
 
 export interface ChatToolUse {
   name: string
@@ -67,10 +67,17 @@ export function startRun(state: ChatState, text: string, runID: string): ChatSta
   }
 }
 
-type Payload = ChatDeltaEvent | ChatToolEvent | ChatToolResultEvent | ChatErrorEvent | { repoID: string; runID: string }
+type Payload = ChatStartEvent | ChatDeltaEvent | ChatToolEvent | ChatToolResultEvent | ChatErrorEvent | { repoID: string; runID: string }
 
 export function applyEvent(state: ChatState, name: string, payload: Payload): ChatState {
-  if (payload.repoID !== state.repoID || payload.runID !== state.runID || state.runID === null) return state
+  if (payload.repoID !== state.repoID) return state
+  // A run can also start from the log ("Explain"); the panel's own send has
+  // already added the pair, so its start event changes nothing.
+  if (name === 'chat:start') {
+    if (state.runID === payload.runID) return state
+    return startRun(state, (payload as ChatStartEvent).text, payload.runID)
+  }
+  if (payload.runID !== state.runID || state.runID === null) return state
   const items = state.items.slice()
   const last = { ...items[items.length - 1], tools: items[items.length - 1].tools.slice() }
   items[items.length - 1] = last

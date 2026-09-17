@@ -158,6 +158,7 @@ export interface ModelDone {
   canceled?: boolean
 }
 
+export interface ChatStartEvent { repoID: string; runID: string; text: string }
 export interface ChatDeltaEvent { repoID: string; runID: string; text: string }
 export interface ChatToolEvent { repoID: string; runID: string; name: string; args: Record<string, unknown> | null }
 export interface ChatToolResultEvent { repoID: string; runID: string; name: string; summary: string }
