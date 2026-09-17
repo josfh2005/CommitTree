@@ -1,16 +1,29 @@
-# README
+# git-ui
 
-## About
+AI-first desktop Git client (Wails + Go + Svelte). Sub-project 1: core viewer.
 
-This is the official Wails Svelte-TS template.
+## Requirements
 
-## Live Development
+- macOS, Go 1.26, git ≥ 2.28
+- Node 22 (`nvm use 22`)
+- Wails CLI: `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
+- Svelte 5 is bundled via npm (no extra install)
 
-To run in live development mode, run `wails dev` in the project directory. This will run a Vite development
-server that will provide very fast hot reload of your frontend changes. If you want to develop in a browser
-and have access to your Go methods, there is also a dev server that runs on http://localhost:34115. Connect
-to this in your browser, and you can call your Go code from devtools.
+## Develop
 
-## Building
+```bash
+~/go/bin/wails dev
+```
 
-To build a redistributable, production mode package, use `wails build`.
+## Test
+
+```bash
+go test ./...
+cd frontend && npm test && npm run check
+```
+
+## Build
+
+```bash
+~/go/bin/wails build   # → build/bin/git-ui.app
+```
