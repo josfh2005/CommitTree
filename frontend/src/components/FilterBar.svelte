@@ -2,6 +2,7 @@
   import { onDestroy } from 'svelte'
   import Icon from './Icon.svelte'
   import { api } from '../lib/api'
+  import { untilDisplayValue, untilFilterValue } from '../lib/format'
   import { filters, jumpTo } from '../lib/stores'
 
   export let repoId: string
@@ -39,8 +40,13 @@
 
   onDestroy(() => clearTimeout(timer))
 
-  const update = (key: 'author' | 'since' | 'until') => (event: Event) =>
+  const update = (key: 'author' | 'since') => (event: Event) =>
     filters.update((f) => ({ ...f, [key]: (event.target as HTMLInputElement | HTMLSelectElement).value }))
+
+  function updateUntil(event: Event) {
+    const value = (event.target as HTMLInputElement).value
+    filters.update((f) => ({ ...f, until: untilFilterValue(value) }))
+  }
 
   function applyPaths() {
     filters.update((f) => ({ ...f, paths: paths.split(',').map((p) => p.trim()).filter(Boolean) }))
@@ -69,7 +75,7 @@
     {/each}
   </select>
   <input type="date" value={$filters.since} on:change={update('since')} title="Since" />
-  <input type="date" value={$filters.until} on:change={update('until')} title="Until" />
+  <input type="date" value={untilDisplayValue($filters.until)} on:change={updateUntil} title="Until" />
   <input class="paths" placeholder="Paths, comma separated" bind:value={paths} on:change={applyPaths} />
 </div>
 

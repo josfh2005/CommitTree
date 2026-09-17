@@ -46,6 +46,9 @@ func Run(ctx context.Context, dir string, timeout time.Duration, args ...string)
 
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "LC_ALL=C")
+	// A killed git whose child (e.g. a credential helper) holds the pipe open
+	// must not block Wait past this, on top of the context timeout above.
+	cmd.WaitDelay = 5 * time.Second
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 

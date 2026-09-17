@@ -1,3 +1,15 @@
+// The Until filter is otherwise exclusive of the chosen day (git's --until
+// cuts off at 00:00:00 that day), so store end-of-day when a date is picked.
+export function untilFilterValue(date: string): string {
+  return date ? `${date} 23:59:59` : ''
+}
+
+// Strips the end-of-day suffix so a native date input displays the plain
+// date the user picked.
+export function untilDisplayValue(stored: string): string {
+  return stored.split(' ')[0]
+}
+
 export function relativeDate(iso: string, now = new Date()): string {
   const date = new Date(iso)
   const seconds = Math.round((now.getTime() - date.getTime()) / 1000)
