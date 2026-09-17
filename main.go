@@ -45,7 +45,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	api.EnableAI(app.AIDeps{
+	app.WithAI(api, app.AIDeps{
 		SettingsPath: settingsPath,
 		Chats:        chatstore.New(chatsDir),
 		Prompts:      prompts.New(promptsDir),

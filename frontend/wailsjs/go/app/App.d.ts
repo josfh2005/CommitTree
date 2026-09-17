@@ -32,8 +32,6 @@ export function DeleteRemoteBranch(arg1:string,arg2:string,arg3:string):Promise<
 
 export function DeleteTag(arg1:string,arg2:string):Promise<void>;
 
-export function EnableAI(arg1:app.AIDeps):Promise<void>;
-
 export function ExplainCommit(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
 export function Fetch(arg1:string):Promise<void>;

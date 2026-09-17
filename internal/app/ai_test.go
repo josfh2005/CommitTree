@@ -72,7 +72,7 @@ func newAIApp(t *testing.T, ollamaURL string) (*App, string, *events) {
 	a, id := newTestApp(t)
 	dir := t.TempDir()
 	ev := newEvents()
-	a.EnableAI(AIDeps{
+	WithAI(a, AIDeps{
 		SettingsPath: filepath.Join(dir, "ai.json"),
 		Chats:        chatstore.New(filepath.Join(dir, "chats")),
 		Prompts:      prompts.New(filepath.Join(dir, "prompts")),

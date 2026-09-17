@@ -85,8 +85,10 @@ type ExplainError struct {
 	Message string `json:"message"`
 }
 
-// EnableAI turns on the AI API with the given dependencies.
-func (a *App) EnableAI(d AIDeps) {
+// WithAI turns on the AI API on a with the given dependencies. It is called
+// once during wiring in main.go, not exposed as a Wails binding, so the
+// renderer cannot invoke it with empty or arbitrary deps.
+func WithAI(a *App, d AIDeps) {
 	a.ai = &aiState{deps: d, runs: map[string]context.CancelFunc{}}
 }
 

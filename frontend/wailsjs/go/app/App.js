@@ -50,10 +50,6 @@ export function DeleteTag(arg1, arg2) {
   return window['go']['app']['App']['DeleteTag'](arg1, arg2);
 }
 
-export function EnableAI(arg1) {
-  return window['go']['app']['App']['EnableAI'](arg1);
-}
-
 export function ExplainCommit(arg1, arg2, arg3, arg4) {
   return window['go']['app']['App']['ExplainCommit'](arg1, arg2, arg3, arg4);
 }
