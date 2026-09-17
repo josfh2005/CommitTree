@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -261,6 +262,68 @@ func TestExplainCommitWithMissingAppleHelper(t *testing.T) {
 	got := ev.wait(t, "explain:error").data.(ExplainError)
 	if got.RunID != "exp-2" || !strings.Contains(got.Message, "helper not found") {
 		t.Fatalf("error = %#v", got)
+	}
+}
+
+func TestExplainCommitCancelsPreviousRunForSameRepo(t *testing.T) {
+	var calls int32
+	canceled1 := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := atomic.AddInt32(&calls, 1)
+		writeLines(w, `{"message":{"role":"assistant","content":"partial"},"done":false}`)
+		if n == 1 {
+			<-r.Context().Done()
+			close(canceled1)
+			return
+		}
+		writeLines(w, `{"message":{"content":" more"},"done":false}`, `{"message":{"content":""},"done":true}`)
+	}))
+	defer srv.Close()
+	a, id, ev := newAIApp(t, srv.URL)
+	head, err := a.GetLog(id, gitlog.Filters{}, 0, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := a.ExplainCommit(id, head.Rows[0].Hash, "ollama", "exp-1"); err != nil {
+		t.Fatal(err)
+	}
+	for {
+		e := ev.wait(t, "explain:delta")
+		if e.data.(ExplainDelta).RunID == "exp-1" {
+			break
+		}
+	}
+
+	ev.mu.Lock()
+	before := len(ev.list)
+	ev.mu.Unlock()
+
+	if err := a.ExplainCommit(id, head.Rows[0].Hash, "ollama", "exp-2"); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-canceled1:
+	case <-time.After(5 * time.Second):
+		t.Fatal("first explain run was not canceled when the second one started")
+	}
+
+	for {
+		e := ev.wait(t, "explain:delta")
+		if e.data.(ExplainDelta).RunID == "exp-2" {
+			break
+		}
+	}
+	ev.wait(t, "explain:done")
+
+	ev.mu.Lock()
+	list := append([]event(nil), ev.list[before:]...)
+	ev.mu.Unlock()
+	for _, e := range list {
+		if d, ok := e.data.(ExplainDelta); ok && d.RunID == "exp-1" {
+			t.Fatalf("run exp-1 kept emitting deltas after the second run started: %#v", e)
+		}
 	}
 }
 

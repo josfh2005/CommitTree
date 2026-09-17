@@ -41,6 +41,7 @@
 
   async function explain(provider: '' | 'apple' | 'ollama' = '') {
     if (!details) return
+    if (explainRun) api.cancelExplain(explainRun).catch(() => {})
     const runID = crypto.randomUUID()
     explainRun = runID
     explainText = ''
@@ -61,6 +62,7 @@
 
   async function load(id: string, h: string) {
     const current = ++request
+    if (explainRun) api.cancelExplain(explainRun).catch(() => {})
     details = null
     error = ''
     file = null

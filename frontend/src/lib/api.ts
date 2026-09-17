@@ -44,6 +44,7 @@ export const api = {
   clearChat: (repoID: string) => call<void>(Go.ClearChat(repoID)),
   explainCommit: (repoID: string, hash: string, provider: '' | 'apple' | 'ollama', runID: string) =>
     call<void>(Go.ExplainCommit(repoID, hash, provider, runID)),
+  cancelExplain: (runID: string) => call<void>(Go.CancelExplain(runID)),
   listPrompts: () => call<PromptInfo[]>(Go.ListPrompts()),
   openPromptsFolder: () => call<void>(Go.OpenPromptsFolder()),
   resetPrompt: (name: string) => call<void>(Go.ResetPrompt(name)),

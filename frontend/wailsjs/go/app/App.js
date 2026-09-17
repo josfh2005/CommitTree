@@ -10,6 +10,10 @@ export function AddRepo() {
   return window['go']['app']['App']['AddRepo']();
 }
 
+export function CancelExplain(arg1) {
+  return window['go']['app']['App']['CancelExplain'](arg1);
+}
+
 export function CancelPull() {
   return window['go']['app']['App']['CancelPull']();
 }

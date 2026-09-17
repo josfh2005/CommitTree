@@ -43,6 +43,14 @@ type aiState struct {
 	mu         sync.Mutex
 	runs       map[string]context.CancelFunc // repo ID → running chat
 	pullCancel context.CancelFunc
+	explains   map[string]*explainRun // run ID → running explain
+}
+
+// explainRun tracks a running ExplainCommit so a later run for the same
+// repo can cancel it and CancelExplain can cancel it by run ID.
+type explainRun struct {
+	repoID string
+	cancel context.CancelFunc
 }
 
 type OllamaStatus struct {
@@ -89,7 +97,7 @@ type ExplainError struct {
 // once during wiring in main.go, not exposed as a Wails binding, so the
 // renderer cannot invoke it with empty or arbitrary deps.
 func WithAI(a *App, d AIDeps) {
-	a.ai = &aiState{deps: d, runs: map[string]context.CancelFunc{}}
+	a.ai = &aiState{deps: d, runs: map[string]context.CancelFunc{}, explains: map[string]*explainRun{}}
 }
 
 func (a *App) emit(name string, data any) {
@@ -350,9 +358,25 @@ func (a *App) ExplainCommit(repoID, hash, provider, runID string) error {
 		return err
 	}
 
+	ctx, cancel := context.WithTimeout(a.ctx, 3*time.Minute)
+	a.ai.mu.Lock()
+	for id, run := range a.ai.explains {
+		if run.repoID == repoID {
+			run.cancel()
+			delete(a.ai.explains, id)
+		}
+	}
+	a.ai.explains[runID] = &explainRun{repoID: repoID, cancel: cancel}
+	a.ai.mu.Unlock()
+	finish := func() {
+		a.ai.mu.Lock()
+		delete(a.ai.explains, runID)
+		a.ai.mu.Unlock()
+		cancel()
+	}
+
 	go func() {
-		ctx, cancel := context.WithTimeout(a.ctx, 3*time.Minute)
-		defer cancel()
+		defer finish()
 		stream, err := tasks.Explain(ctx, responder, instructions, repo.Path, hash, budget)
 		if err != nil {
 			a.emit("explain:error", ExplainError{RunID: runID, Message: err.Error()})
@@ -373,6 +397,20 @@ func (a *App) ExplainCommit(repoID, hash, provider, runID string) error {
 		}
 		a.emit("explain:done", ExplainDone{RunID: runID})
 	}()
+	return nil
+}
+
+// CancelExplain cancels a running explain by its run ID. It is a no-op if
+// no such run is active (already finished, or never started).
+func (a *App) CancelExplain(runID string) error {
+	if a.ai == nil {
+		return ErrAIDisabled
+	}
+	a.ai.mu.Lock()
+	defer a.ai.mu.Unlock()
+	if run, ok := a.ai.explains[runID]; ok {
+		run.cancel()
+	}
 	return nil
 }
 

@@ -12,6 +12,8 @@ export function AIStatus():Promise<app.AIStatus>;
 
 export function AddRepo():Promise<repos.Repo>;
 
+export function CancelExplain(arg1:string):Promise<void>;
+
 export function CancelPull():Promise<void>;
 
 export function Checkout(arg1:string,arg2:string):Promise<void>;
