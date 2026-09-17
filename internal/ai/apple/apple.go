@@ -116,13 +116,19 @@ func (c *Client) Respond(ctx context.Context, instructions, prompt string) (<-ch
 			}
 			switch {
 			case line.Error != "":
-				ch <- ai.Chunk{Err: errors.New(line.Error)}
 				finished = true
+				if !send(ctx, ch, ai.Chunk{Err: errors.New(line.Error)}) {
+					return
+				}
 			case line.Done:
-				ch <- ai.Chunk{Done: true}
 				finished = true
+				if !send(ctx, ch, ai.Chunk{Done: true}) {
+					return
+				}
 			case line.Delta != "":
-				ch <- ai.Chunk{Delta: line.Delta}
+				if !send(ctx, ch, ai.Chunk{Delta: line.Delta}) {
+					return
+				}
 			}
 		}
 		waitErr := cmd.Wait()
@@ -139,4 +145,13 @@ func (c *Client) Respond(ctx context.Context, instructions, prompt string) (<-ch
 		ch <- ai.Chunk{Err: err}
 	}()
 	return ch, nil
+}
+
+func send(ctx context.Context, ch chan<- ai.Chunk, c ai.Chunk) bool {
+	select {
+	case ch <- c:
+		return true
+	case <-ctx.Done():
+		return false
+	}
 }
