@@ -1,5 +1,136 @@
+export namespace ai {
+	
+	export class ToolCall {
+	    id: string;
+	    name: string;
+	    args: Record<string, any>;
+	
+	    static createFrom(source: any = {}) {
+	        return new ToolCall(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.args = source["args"];
+	    }
+	}
+	export class Message {
+	    role: string;
+	    content: string;
+	    toolCalls?: ToolCall[];
+	    toolName?: string;
+	    stopped?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Message(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.role = source["role"];
+	        this.content = source["content"];
+	        this.toolCalls = this.convertValues(source["toolCalls"], ToolCall);
+	        this.toolName = source["toolName"];
+	        this.stopped = source["stopped"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace app {
 	
+	export class OllamaStatus {
+	    running: boolean;
+	    url: string;
+	    chatModel: string;
+	    models: ollama.Model[];
+	    chatModelInstalled: boolean;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new OllamaStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.running = source["running"];
+	        this.url = source["url"];
+	        this.chatModel = source["chatModel"];
+	        this.models = this.convertValues(source["models"], ollama.Model);
+	        this.chatModelInstalled = source["chatModelInstalled"];
+	        this.error = source["error"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class AIStatus {
+	    ollama: OllamaStatus;
+	    apple: apple.Availability;
+	
+	    static createFrom(source: any = {}) {
+	        return new AIStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ollama = this.convertValues(source["ollama"], OllamaStatus);
+	        this.apple = this.convertValues(source["apple"], apple.Availability);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class LogRow {
 	    hash: string;
 	    short: string;
@@ -90,6 +221,7 @@ export namespace app {
 		}
 	}
 	
+	
 	export class RepoItem {
 	    id: string;
 	    name: string;
@@ -108,6 +240,25 @@ export namespace app {
 	        this.path = source["path"];
 	        this.missing = source["missing"];
 	        this.branch = source["branch"];
+	    }
+	}
+
+}
+
+export namespace apple {
+	
+	export class Availability {
+	    available: boolean;
+	    reason?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Availability(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.available = source["available"];
+	        this.reason = source["reason"];
 	    }
 	}
 
@@ -252,6 +403,44 @@ export namespace graph {
 
 }
 
+export namespace ollama {
+	
+	export class Model {
+	    name: string;
+	    size: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Model(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.size = source["size"];
+	    }
+	}
+
+}
+
+export namespace prompts {
+	
+	export class Info {
+	    name: string;
+	    customized: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Info(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.customized = source["customized"];
+	    }
+	}
+
+}
+
 export namespace refs {
 	
 	export class Branch {
@@ -382,6 +571,29 @@ export namespace repos {
 	        this.name = source["name"];
 	        this.path = source["path"];
 	        this.missing = source["missing"];
+	    }
+	}
+
+}
+
+export namespace settings {
+	
+	export class Settings {
+	    ollamaURL: string;
+	    chatModel: string;
+	    taskProvider: string;
+	    taskModel: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Settings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ollamaURL = source["ollamaURL"];
+	        this.chatModel = source["chatModel"];
+	        this.taskProvider = source["taskProvider"];
+	        this.taskModel = source["taskModel"];
 	    }
 	}
 

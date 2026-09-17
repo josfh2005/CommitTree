@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { relativeDate, untilDisplayValue, untilFilterValue } from './format'
+import { formatBytes, percent, relativeDate, untilDisplayValue, untilFilterValue } from './format'
 
 describe('relativeDate', () => {
   const now = new Date('2026-09-16T12:00:00Z')
@@ -34,5 +34,21 @@ describe('untilDisplayValue', () => {
 
   it('passes an empty stored value through unchanged', () => {
     expect(untilDisplayValue('')).toBe('')
+  })
+})
+
+describe('formatBytes', () => {
+  it('uses binary units with one decimal for GB', () => {
+    expect(formatBytes(0)).toBe('0 B')
+    expect(formatBytes(512 * 1024 * 1024)).toBe('512 MB')
+    expect(formatBytes(4683087332)).toBe('4.4 GB')
+  })
+})
+
+describe('percent', () => {
+  it('clamps and rounds', () => {
+    expect(percent(50, 200)).toBe(25)
+    expect(percent(5, 0)).toBe(0)
+    expect(percent(300, 200)).toBe(100)
   })
 })

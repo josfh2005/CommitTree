@@ -1,8 +1,12 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte'
   import { api } from '../lib/api'
   import { jumpTo } from '../lib/stores'
   import type { Details, FileChange } from '../lib/types'
   import { copyText, errorMessage } from '../lib/ui'
+  import { EventsOn } from '../../wailsjs/runtime/runtime'
+  import { renderMarkdown } from '../lib/markdown'
+  import type { ExplainDeltaEvent, ExplainDoneEvent, ExplainErrorEvent } from '../lib/types'
 
   export let repoId: string
   export let hash: string
@@ -15,15 +19,72 @@
   let diff = ''
   let request = 0
 
+  let explainRun: string | null = null
+  let explainText = ''
+  let explainError = ''
+  let explaining = false
+  // Provider that actually produced explainError. The fallback button only
+  // makes sense when Apple Intelligence failed; if we can't determine the
+  // provider (e.g. settings lookup failed), it stays hidden.
+  let explainProvider: '' | 'apple' | 'ollama' = ''
+
+  const offs = [
+    EventsOn('explain:delta', (p: ExplainDeltaEvent) => {
+      if (p.runID === explainRun) explainText += p.text
+    }),
+    EventsOn('explain:done', (p: ExplainDoneEvent) => {
+      if (p.runID === explainRun) explaining = false
+    }),
+    EventsOn('explain:error', (p: ExplainErrorEvent) => {
+      if (p.runID !== explainRun) return
+      explaining = false
+      explainError = p.message
+    }),
+  ]
+  onDestroy(() => offs.forEach((off) => off()))
+
+  async function explain(provider: '' | 'apple' | 'ollama' = '') {
+    if (!details) return
+    if (explainRun) api.cancelExplain(explainRun).catch(() => {})
+    const runID = crypto.randomUUID()
+    explainRun = runID
+    explainText = ''
+    explainError = ''
+    explaining = true
+    explainProvider = provider
+    if (!provider) {
+      try {
+        const s = await api.getAISettings()
+        if (explainRun === runID) explainProvider = s.taskProvider
+      } catch {
+        // Leave explainProvider as '': the fallback stays hidden.
+      }
+    }
+    try {
+      await api.explainCommit(repoId, details.hash, provider, runID)
+    } catch (e) {
+      if (explainRun === runID) {
+        explaining = false
+        explainError = errorMessage(e)
+      }
+    }
+  }
+
   $: load(repoId, hash)
   $: lines = diff.split('\n')
 
   async function load(id: string, h: string) {
     const current = ++request
+    if (explainRun) api.cancelExplain(explainRun).catch(() => {})
     details = null
     error = ''
     file = null
     diff = ''
+    explainRun = null
+    explainText = ''
+    explainError = ''
+    explaining = false
+    explainProvider = ''
     try {
       const d = await api.getDetails(id, h)
       if (current !== request) return
@@ -55,6 +116,13 @@
     if (line.startsWith('-')) return 'del'
     return ''
   }
+
+  function onExplanationClick(e: MouseEvent) {
+    const link = (e.target as HTMLElement).closest('a[data-hash]') as HTMLElement | null
+    if (!link) return
+    e.preventDefault()
+    jumpTo.set(link.dataset.hash ?? '')
+  }
 </script>
 
 <div class="details">
@@ -73,6 +141,20 @@
             <button class="mono link" title="Go to parent" on:click={() => jumpTo.set(parent)}>↑ {parent.slice(0, 7)}</button>
           {/each}
         </span>
+      </div>
+      <div class="explain">
+        <button class="btn" disabled={explaining} on:click={() => explain()}>✨ {explaining ? 'Explaining…' : 'Explain'}</button>
+        {#if explainText}
+          <div class="explanation" on:click={onExplanationClick} role="presentation">{@html renderMarkdown(explainText)}</div>
+        {/if}
+        {#if explainError}
+          <div class="explain-error">
+            {explainError}
+            {#if explainProvider === 'apple'}
+              <button class="btn" on:click={() => explain('ollama')}>Try with Ollama</button>
+            {/if}
+          </div>
+        {/if}
       </div>
       <div class="files">
         {#each details.files as f (f.path)}
@@ -123,4 +205,10 @@
   .hunk { color: #3f7fbf; }
   .meta { color: var(--faint); }
   .error { padding: 12px; color: var(--danger); white-space: pre-wrap; }
+  .explain { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-bottom: 10px; }
+  .explanation { user-select: text; line-height: 1.5; }
+  .explanation :global(p) { margin: 0 0 6px; }
+  .explanation :global(ul) { margin: 0; padding-left: 18px; }
+  .explanation :global(code) { font-family: var(--mono); font-size: 12px; background: var(--hover); padding: 0 4px; border-radius: 4px; }
+  .explain-error { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; font-size: 12px; color: var(--danger); }
 </style>

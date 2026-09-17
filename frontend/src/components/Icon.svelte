@@ -18,6 +18,7 @@
     send: 'M8 13V3M4 7l4-4 4 4',
     sparkle: 'M8 2l1.5 4.5L14 8l-4.5 1.5L8 14l-1.5-4.5L2 8l4.5-1.5z',
     copy: 'M5.5 5.5h7v8h-7zM3.5 10.5v-8h7',
+    stop: 'M4.5 4.5h7v7h-7z',
   }
 </script>
 
