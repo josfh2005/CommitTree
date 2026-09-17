@@ -23,6 +23,10 @@
   let explainText = ''
   let explainError = ''
   let explaining = false
+  // Provider that actually produced explainError. The fallback button only
+  // makes sense when Apple Intelligence failed; if we can't determine the
+  // provider (e.g. settings lookup failed), it stays hidden.
+  let explainProvider: '' | 'apple' | 'ollama' = ''
 
   const offs = [
     EventsOn('explain:delta', (p: ExplainDeltaEvent) => {
@@ -47,6 +51,15 @@
     explainText = ''
     explainError = ''
     explaining = true
+    explainProvider = provider
+    if (!provider) {
+      try {
+        const s = await api.getAISettings()
+        if (explainRun === runID) explainProvider = s.taskProvider
+      } catch {
+        // Leave explainProvider as '': the fallback stays hidden.
+      }
+    }
     try {
       await api.explainCommit(repoId, details.hash, provider, runID)
     } catch (e) {
@@ -71,6 +84,7 @@
     explainText = ''
     explainError = ''
     explaining = false
+    explainProvider = ''
     try {
       const d = await api.getDetails(id, h)
       if (current !== request) return
@@ -129,7 +143,9 @@
         {#if explainError}
           <div class="explain-error">
             {explainError}
-            <button class="btn" on:click={() => explain('ollama')}>Try with Ollama</button>
+            {#if explainProvider === 'apple'}
+              <button class="btn" on:click={() => explain('ollama')}>Try with Ollama</button>
+            {/if}
           </div>
         {/if}
       </div>
