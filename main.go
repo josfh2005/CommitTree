@@ -17,6 +17,8 @@ import (
 var assets embed.FS
 
 func main() {
+	app.FixPath()
+
 	path, err := repos.DefaultPath()
 	if err != nil {
 		log.Fatal(err)
