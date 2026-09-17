@@ -219,7 +219,7 @@
   .row input { flex: 1; }
   .status { display: flex; align-items: center; gap: 6px; }
   .dot { width: 8px; height: 8px; border-radius: 50%; }
-  .dot.ok { background: #4f9d4f; }
+  .dot.ok { background: var(--ok); }
   .dot.bad { background: var(--danger); }
   .warn { margin: 0; font-size: 12px; color: var(--danger); }
   .hint { font-size: 12px; color: var(--muted); }
