@@ -116,6 +116,13 @@
     if (line.startsWith('-')) return 'del'
     return ''
   }
+
+  function onExplanationClick(e: MouseEvent) {
+    const link = (e.target as HTMLElement).closest('a[data-hash]') as HTMLElement | null
+    if (!link) return
+    e.preventDefault()
+    jumpTo.set(link.dataset.hash ?? '')
+  }
 </script>
 
 <div class="details">
@@ -138,7 +145,7 @@
       <div class="explain">
         <button class="btn" disabled={explaining} on:click={() => explain()}>✨ {explaining ? 'Explaining…' : 'Explain'}</button>
         {#if explainText}
-          <div class="explanation">{@html renderMarkdown(explainText)}</div>
+          <div class="explanation" on:click={onExplanationClick} role="presentation">{@html renderMarkdown(explainText)}</div>
         {/if}
         {#if explainError}
           <div class="explain-error">
