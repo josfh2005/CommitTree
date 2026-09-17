@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -324,6 +325,52 @@ func TestExplainCommitCancelsPreviousRunForSameRepo(t *testing.T) {
 		if d, ok := e.data.(ExplainDelta); ok && d.RunID == "exp-1" {
 			t.Fatalf("run exp-1 kept emitting deltas after the second run started: %#v", e)
 		}
+	}
+}
+
+func TestAIStatusCachesAppleAvailabilityAfterFirstProbe(t *testing.T) {
+	srv := fakeOllama(t, nil)
+	a, _ := newTestApp(t)
+	dir := t.TempDir()
+
+	callsPath := filepath.Join(dir, "calls")
+	helperPath := filepath.Join(dir, "git-ui-apple")
+	script := "#!/bin/sh\nprintf x >> " + callsPath + "\necho '{\"available\":true}'\n"
+	if err := os.WriteFile(helperPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	WithAI(a, AIDeps{
+		SettingsPath: filepath.Join(dir, "ai.json"),
+		Chats:        chatstore.New(filepath.Join(dir, "chats")),
+		Prompts:      prompts.New(filepath.Join(dir, "prompts")),
+		Apple:        apple.New(helperPath),
+		Emit:         func(string, any) {},
+	})
+	// GetAISettings triggers the first Apple probe (no settings file yet, so
+	// Load asks appleAvailable() to pick the default task provider).
+	s, err := a.GetAISettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.OllamaURL = srv.URL
+	if err := a.SaveAISettings(s); err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < 3; i++ {
+		st := a.AIStatus()
+		if !st.Apple.Available {
+			t.Fatalf("status[%d] = %+v", i, st)
+		}
+	}
+
+	data, err := os.ReadFile(callsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(data) != 1 {
+		t.Fatalf("apple helper invoked %d times, want 1 (cached after the first probe)", len(data))
 	}
 }
 

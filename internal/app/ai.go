@@ -44,6 +44,7 @@ type aiState struct {
 	runs       map[string]context.CancelFunc // repo ID → running chat
 	pullCancel context.CancelFunc
 	explains   map[string]*explainRun // run ID → running explain
+	appleAvail *apple.Availability    // cached after the first successful probe
 }
 
 // explainRun tracks a running ExplainCommit so a later run for the same
@@ -112,7 +113,29 @@ func (a *App) aiSettings() (settings.Settings, error) {
 	if a.ai == nil {
 		return settings.Settings{}, ErrAIDisabled
 	}
-	return settings.Load(a.ai.deps.SettingsPath, func() bool { return a.ai.deps.Apple.Status(a.ctx).Available })
+	return settings.Load(a.ai.deps.SettingsPath, func() bool { return a.appleAvailability().Available })
+}
+
+// appleAvailability probes the Apple Intelligence helper, caching the result
+// in aiState after the first successful probe so AIStatus (polled on window
+// focus, etc.) doesn't spawn the helper process every call. A probe that
+// merely failed to run (helperFailed) is not cached, so it's retried.
+func (a *App) appleAvailability() apple.Availability {
+	a.ai.mu.Lock()
+	if a.ai.appleAvail != nil {
+		cached := *a.ai.appleAvail
+		a.ai.mu.Unlock()
+		return cached
+	}
+	a.ai.mu.Unlock()
+
+	st := a.ai.deps.Apple.Status(a.ctx)
+	if st.Reason != "helperFailed" {
+		a.ai.mu.Lock()
+		a.ai.appleAvail = &st
+		a.ai.mu.Unlock()
+	}
+	return st
 }
 
 func (a *App) GetAISettings() (settings.Settings, error) { return a.aiSettings() }
@@ -145,7 +168,7 @@ func (a *App) AIStatus() AIStatus {
 			}
 		}
 	}
-	st.Apple = a.ai.deps.Apple.Status(a.ctx)
+	st.Apple = a.appleAvailability()
 	return st
 }
 
