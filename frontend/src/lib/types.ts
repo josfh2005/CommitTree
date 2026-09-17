@@ -155,6 +155,7 @@ export interface ModelProgress {
 export interface ModelDone {
   name: string
   error?: string
+  canceled?: boolean
 }
 
 export interface ChatDeltaEvent { repoID: string; runID: string; text: string }

@@ -28,7 +28,7 @@
   const offProgress = EventsOn('model:progress', (p: ModelProgress) => (pull = p))
   const offDone = EventsOn('model:done', async (p: ModelDone) => {
     pull = null
-    if (p.error && !p.error.includes('context canceled')) toast(p.error, 'error')
+    if (p.error && !p.canceled) toast(p.error, 'error')
     else if (!p.error) toast(`Downloaded ${p.name}`)
     await refresh()
   })

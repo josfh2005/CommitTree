@@ -374,6 +374,27 @@ func TestAIStatusCachesAppleAvailabilityAfterFirstProbe(t *testing.T) {
 	}
 }
 
+func TestPullModelReportsCanceled(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeLines(w, `{"status":"pulling manifest"}`)
+		<-r.Context().Done()
+	}))
+	defer srv.Close()
+	a, _, ev := newAIApp(t, srv.URL)
+
+	if err := a.PullModel("qwen2.5:7b"); err != nil {
+		t.Fatal(err)
+	}
+	ev.wait(t, "model:progress")
+	if err := a.CancelPull(); err != nil {
+		t.Fatal(err)
+	}
+	done := ev.wait(t, "model:done").data.(ModelDone)
+	if !done.Canceled || done.Error == "" {
+		t.Fatalf("done = %#v, want Canceled=true with a non-empty error", done)
+	}
+}
+
 func TestAIStatusAndPull(t *testing.T) {
 	srv := fakeOllama(t, nil)
 	a, _, ev := newAIApp(t, srv.URL)

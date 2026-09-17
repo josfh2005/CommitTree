@@ -76,8 +76,9 @@ type ModelProgress struct {
 }
 
 type ModelDone struct {
-	Name  string `json:"name"`
-	Error string `json:"error,omitempty"`
+	Name     string `json:"name"`
+	Error    string `json:"error,omitempty"`
+	Canceled bool   `json:"canceled,omitempty"`
 }
 
 type ExplainDelta struct {
@@ -209,6 +210,7 @@ func (a *App) PullModel(name string) error {
 		done := ModelDone{Name: name}
 		if err != nil {
 			done.Error = err.Error()
+			done.Canceled = errors.Is(err, context.Canceled)
 		}
 		a.emit("model:done", done)
 	}()
