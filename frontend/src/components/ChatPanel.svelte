@@ -3,7 +3,7 @@
   import { EventsOn } from '../../wailsjs/runtime/runtime'
   import Icon from './Icon.svelte'
   import { api } from '../lib/api'
-  import { applyEvent, emptyChat, errorText, fromMessages, startRun, toolLabel, type ChatState } from '../lib/chat'
+  import { applyEvent, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, type ChatState } from '../lib/chat'
   import { renderMarkdown } from '../lib/markdown'
   import { chatOpen, jumpTo, selectedRepo, settingsOpen } from '../lib/stores'
   import type { AIStatus } from '../lib/types'
@@ -31,9 +31,10 @@
   $: ready = !!status?.ollama.running && !!status?.ollama.chatModelInstalled
 
   async function load(repoID: string) {
+    refreshStatus()
+    if (!shouldReloadChat(state, repoID)) return
     state = emptyChat(repoID)
     loadError = ''
-    refreshStatus()
     if (!repoID) return
     try {
       const messages = await api.getChat(repoID)

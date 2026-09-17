@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyEvent, emptyChat, errorText, fromMessages, startRun, toolLabel } from './chat'
+import { applyEvent, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel } from './chat'
 import type { AIMessage } from './types'
 
 describe('fromMessages', () => {
@@ -65,6 +65,21 @@ describe('applyEvent', () => {
     expect(applyEvent(s, 'chat:delta', { repoID: 'r2', runID: 'run1', text: 'x' })).toBe(s)
     expect(applyEvent(s, 'chat:delta', { repoID: 'r1', runID: 'old', text: 'x' })).toBe(s)
     expect(applyEvent(emptyChat('r1'), 'chat:done', { repoID: 'r1', runID: 'run1' }).items).toEqual([])
+  })
+})
+
+describe('shouldReloadChat', () => {
+  it('is false when the repo id is unchanged, running or idle', () => {
+    expect(shouldReloadChat(emptyChat('r1'), 'r1')).toBe(false)
+    expect(shouldReloadChat(startRun(emptyChat('r1'), 'hola', 'run1'), 'r1')).toBe(false)
+  })
+
+  it('is true when the repo id changes', () => {
+    expect(shouldReloadChat(emptyChat('r1'), 'r2')).toBe(true)
+  })
+
+  it('is true when the target repo id is empty', () => {
+    expect(shouldReloadChat(emptyChat('r1'), '')).toBe(true)
   })
 })
 

@@ -22,6 +22,14 @@ export interface ChatState {
 
 export const emptyChat = (repoID: string): ChatState => ({ repoID, runID: null, items: [] })
 
+// shouldReloadChat decides whether ChatPanel should reload state for repoID.
+// It is false only when repoID is the same non-empty repo already loaded,
+// so a repos-list refresh (which produces a new selectedRepo object with
+// the same id) doesn't wipe an in-flight or already-loaded chat.
+export function shouldReloadChat(state: ChatState, repoID: string): boolean {
+  return repoID !== state.repoID || repoID === ''
+}
+
 const firstLine = (s: string) => s.split('\n')[0].slice(0, 120)
 
 // fromMessages turns stored messages into display items: consecutive
