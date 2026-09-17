@@ -73,7 +73,7 @@ func (s *Store) Get(name string, v Vars) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if data, err := os.ReadFile(s.userFile(name)); err == nil {
+	if data, err := os.ReadFile(s.userFile(name)); err == nil && strings.TrimSpace(string(data)) != "" {
 		text = string(data)
 	}
 	r := strings.NewReplacer("{{repo}}", v.Repo, "{{path}}", v.Path, "{{branch}}", v.Branch, "{{date}}", v.Date)

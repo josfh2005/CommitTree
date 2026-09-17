@@ -85,3 +85,22 @@ func TestUserOverrideListAndReset(t *testing.T) {
 		t.Fatalf("reset unknown: %v", err)
 	}
 }
+
+func TestGetFallsBackToDefaultWhenUserFileIsBlank(t *testing.T) {
+	dir := t.TempDir()
+	s := prompts.New(dir)
+	if err := os.WriteFile(filepath.Join(dir, "chat.md"), []byte("   \n\t\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Get(prompts.Chat, vars)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := prompts.New(t.TempDir()).Get(prompts.Chat, vars)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("blank override should fall back to the embedded default: got %q, want %q", got, want)
+	}
+}
