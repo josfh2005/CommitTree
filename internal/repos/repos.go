@@ -95,7 +95,7 @@ func (s *Store) Add(ctx context.Context, path string) (Repo, error) {
 			return r, nil
 		}
 	}
-	r := Repo{ID: idFor(top), Name: filepath.Base(top), Path: top}
+	r := Repo{ID: s.uniqueID(top), Name: filepath.Base(top), Path: top}
 	s.repos = append(s.repos, r)
 	if err := s.save(); err != nil {
 		s.repos = s.repos[:len(s.repos)-1]
@@ -176,4 +176,24 @@ func isRepo(path string) bool {
 func idFor(path string) string {
 	sum := sha1.Sum([]byte(path))
 	return hex.EncodeToString(sum[:])[:12]
+}
+
+// uniqueID derives an ID for path, disambiguating it from any existing
+// entry's ID (e.g. a Relocate that left the old ID pointing elsewhere).
+// Callers must hold s.mu.
+func (s *Store) uniqueID(path string) string {
+	id := idFor(path)
+	for n := 1; s.idInUse(id); n++ {
+		id = idFor(fmt.Sprintf("%s#%d", path, n))
+	}
+	return id
+}
+
+func (s *Store) idInUse(id string) bool {
+	for _, r := range s.repos {
+		if r.ID == id {
+			return true
+		}
+	}
+	return false
 }

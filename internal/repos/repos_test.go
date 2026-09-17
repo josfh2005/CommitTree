@@ -95,6 +95,45 @@ func TestListFlagsMissing(t *testing.T) {
 	}
 }
 
+func TestAddAfterRelocateGetsUniqueID(t *testing.T) {
+	dir1 := testrepo.New(t)
+	dir2 := testrepo.New(t)
+	s, _ := repos.Open(filepath.Join(t.TempDir(), "repos.json"))
+
+	added, err := s.Add(ctx, dir1.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	relocated, err := s.Relocate(ctx, added.ID, dir2.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if relocated.ID != added.ID {
+		t.Fatalf("relocate changed ID: %+v", relocated)
+	}
+
+	readded, err := s.Add(ctx, dir1.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if readded.ID == relocated.ID {
+		t.Fatalf("re-added entry reused ID %q", readded.ID)
+	}
+
+	list := s.List()
+	if len(list) != 2 {
+		t.Fatalf("want 2 entries, got %+v", list)
+	}
+	gotRelocated, ok := s.Get(relocated.ID)
+	if !ok || gotRelocated.Path != relocated.Path {
+		t.Fatalf("Get(relocated) = %+v %v", gotRelocated, ok)
+	}
+	gotReadded, ok := s.Get(readded.ID)
+	if !ok || gotReadded.Path != readded.Path {
+		t.Fatalf("Get(readded) = %+v %v", gotReadded, ok)
+	}
+}
+
 func TestRelocateKeepsID(t *testing.T) {
 	a := testrepo.New(t)
 	b := testrepo.New(t)
