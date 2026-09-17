@@ -26,6 +26,8 @@ export const chatWidth = persisted('chatWidth', 340)
 export const detailsHeight = persisted('detailsHeight', 280)
 export const chatOpen = persisted('chatOpen', true)
 export const selectedRepoId = persisted('selectedRepoId', '')
+/** Ids of the repos whose refs are unfolded in the sidebar. */
+export const expandedRepos = persisted<string[]>('expandedRepos', [])
 
 export const repos = writable<Repo[]>([])
 export const refs = writable<Refs | null>(null)
@@ -67,5 +69,11 @@ export function selectRepo(id: string) {
     selectedHash.set('')
   }
   selectedRepoId.set(id)
+  // Selecting a folded repo unfolds it; folding it later keeps it selected.
+  expandedRepos.update((ids) => (ids.includes(id) ? ids : [...ids, id]))
   loadRefs()
+}
+
+export function toggleRepoExpanded(id: string) {
+  expandedRepos.update((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]))
 }

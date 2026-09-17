@@ -2,7 +2,7 @@
   import Icon from './Icon.svelte'
   import RepoRefs from './RepoRefs.svelte'
   import { addRepo, fetchRepo, pullRepo, relocateRepo, removeRepo } from '../lib/actions'
-  import { busy, repos, selectRepo, selectedRepoId, settingsOpen } from '../lib/stores'
+  import { busy, expandedRepos, repos, selectRepo, selectedRepoId, settingsOpen, toggleRepoExpanded } from '../lib/stores'
   import type { Repo } from '../lib/types'
   import { openMenu } from '../lib/ui'
 
@@ -25,10 +25,18 @@
   <div class="list">
     {#each $repos as repo (repo.id)}
       {@const active = repo.id === $selectedRepoId}
+      {@const expanded = $expandedRepos.includes(repo.id) && !repo.missing}
       <div class="repo row-item" class:active class:missing={repo.missing} on:contextmenu={(e) => repoMenu(e, repo)}>
+        <button
+          class="fold icon-btn"
+          title={expanded ? 'Collapse' : 'Expand'}
+          disabled={repo.missing}
+          on:click={() => toggleRepoExpanded(repo.id)}
+        >
+          <Icon name={expanded ? 'chevron-down' : 'chevron-right'} size={12} />
+        </button>
         <button class="select" on:click={() => selectRepo(repo.id)}>
-          <Icon name={active ? 'chevron-down' : 'chevron-right'} size={12} />
-          <span class="name ellipsis">{repo.name}</span>
+          <span class="name ellipsis" class:selected={active}>{repo.name}</span>
           {#if repo.missing}
             <span class="badge">missing</span>
           {:else}
@@ -42,7 +50,7 @@
           </span>
         {/if}
       </div>
-      {#if active && !repo.missing}
+      {#if expanded}
         <RepoRefs repoId={repo.id} />
       {/if}
     {:else}
@@ -62,9 +70,12 @@
   .add { font-weight: 500; margin-bottom: 16px; }
   .heading { padding: 0 10px 6px; }
   .list { flex: 1; overflow-y: auto; min-height: 0; }
-  .repo { padding: 0 4px 0 0; }
-  .select { flex: 1; min-width: 0; height: 100%; display: flex; align-items: center; gap: 8px; padding-left: 10px; color: var(--muted); }
+  .repo { padding: 0 4px 0 4px; gap: 4px; }
+  .fold { width: 20px; height: 20px; flex: none; }
+  .fold:disabled { opacity: 0; }
+  .select { flex: 1; min-width: 0; height: 100%; display: flex; align-items: center; gap: 8px; color: var(--muted); }
   .name { color: var(--text); flex: none; max-width: 60%; }
+  .name.selected { font-weight: 600; }
   .branch { margin-left: auto; font-size: 12px; color: var(--muted); }
   .missing .name { color: var(--faint); }
   .badge { margin-left: auto; font-size: 11px; padding: 0 6px; border-radius: 4px; background: var(--hover); color: var(--muted); }
