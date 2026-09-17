@@ -66,7 +66,7 @@ func (f Filters) GraphVisible() bool {
 }
 
 func Args(f Filters, skip, limit int) []string {
-	args := []string{"log", "--topo-order", "--decorate=full", "--format=" + Format,
+	args := []string{"log", "--topo-order", "--parents", "--decorate=full", "--format=" + Format,
 		fmt.Sprintf("--skip=%d", skip), fmt.Sprintf("-n%d", limit)}
 	if f.Author != "" {
 		args = append(args, "--author="+f.Author)

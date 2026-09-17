@@ -14,7 +14,7 @@ var ctx = context.Background()
 
 func TestArgsDefaultsToAllRefs(t *testing.T) {
 	got := gitlog.Args(gitlog.Filters{}, 0, 500)
-	want := []string{"log", "--topo-order", "--decorate=full", "--format=" + gitlog.Format,
+	want := []string{"log", "--topo-order", "--parents", "--decorate=full", "--format=" + gitlog.Format,
 		"--skip=0", "-n500", "--all"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got  %q\nwant %q", got, want)
@@ -25,7 +25,7 @@ func TestArgsWithAllFilters(t *testing.T) {
 	f := gitlog.Filters{Text: "fix", Branch: "refs/heads/develop", Author: "ana",
 		Since: "2026-01-01", Until: "2026-02-01", Paths: []string{"a.go", "b/"}}
 	got := gitlog.Args(f, 500, 500)
-	want := []string{"log", "--topo-order", "--decorate=full", "--format=" + gitlog.Format,
+	want := []string{"log", "--topo-order", "--parents", "--decorate=full", "--format=" + gitlog.Format,
 		"--skip=500", "-n500", "--author=ana", "--grep=fix", "-i", "--fixed-strings",
 		"--since=2026-01-01", "--until=2026-02-01",
 		"--end-of-options", "refs/heads/develop", "--", "a.go", "b/"}
@@ -146,6 +146,37 @@ func TestGetReadsRealRepo(t *testing.T) {
 	onlyFeature, err := gitlog.Get(ctx, r.Dir, gitlog.Filters{Branch: "refs/heads/feature"}, 0, 100)
 	if err != nil || len(onlyFeature) != 2 || onlyFeature[0].Hash != feat {
 		t.Fatalf("feature log = %+v, err %v", onlyFeature, err)
+	}
+}
+
+func TestGetWithPathFilterRewritesParents(t *testing.T) {
+	r := testrepo.New(t)
+	r.WriteFile("a", "1\n")
+	r.Git("add", "a")
+	r.Git("commit", "-q", "-m", "commit1")
+	c1 := r.Git("rev-parse", "HEAD")
+
+	r.WriteFile("b", "1\n")
+	r.Git("add", "b")
+	r.Git("commit", "-q", "-m", "commit2")
+
+	r.WriteFile("a", "2\n")
+	r.Git("add", "a")
+	r.Git("commit", "-q", "-m", "commit3")
+	c3 := r.Git("rev-parse", "HEAD")
+
+	got, err := gitlog.Get(ctx, r.Dir, gitlog.Filters{Paths: []string{"a"}}, 0, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d commits, want 2: %+v", len(got), got)
+	}
+	if got[0].Hash != c3 || got[1].Hash != c1 {
+		t.Fatalf("got hashes %s, %s; want %s, %s", got[0].Hash, got[1].Hash, c3, c1)
+	}
+	if len(got[0].Parents) != 1 || got[0].Parents[0] != c1 {
+		t.Fatalf("newer commit parents = %+v, want [%s]", got[0].Parents, c1)
 	}
 }
 
