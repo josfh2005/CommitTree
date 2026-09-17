@@ -21,3 +21,16 @@ export function relativeDate(iso: string, now = new Date()): string {
   if (date.getFullYear() !== now.getFullYear()) options.year = 'numeric'
   return date.toLocaleDateString('en-US', options)
 }
+
+export function formatBytes(n: number): string {
+  if (n <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.min(units.length - 1, Math.floor(Math.log(n) / Math.log(1024)))
+  const value = n / 1024 ** i
+  return `${i >= 3 ? value.toFixed(1) : Math.round(value)} ${units[i]}`
+}
+
+export function percent(completed: number, total: number): number {
+  if (total <= 0) return 0
+  return Math.max(0, Math.min(100, Math.round((completed / total) * 100)))
+}

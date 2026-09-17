@@ -34,6 +34,7 @@ export const selectedHash = writable('')
 export const jumpTo = writable('')
 export const logVersion = writable(0)
 export const busy = writable('')
+export const settingsOpen = writable(false)
 
 export const selectedRepo = derived([repos, selectedRepoId], ([$repos, $id]) => $repos.find((r) => r.id === $id) ?? null)
 

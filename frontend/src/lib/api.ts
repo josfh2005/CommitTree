@@ -1,5 +1,5 @@
 import * as Go from '../../wailsjs/go/app/App'
-import type { Details, Filters, LogPage, Refs, Repo } from './types'
+import type { AIMessage, AISettings, AIStatus, Details, Filters, LogPage, PromptInfo, Refs, Repo } from './types'
 
 // The generated bindings use Wails model classes; the JSON is identical to our
 // interfaces, so cast at this single boundary.
@@ -32,4 +32,19 @@ export const api = {
   deleteRemoteBranch: (id: string, remote: string, name: string) => call<void>(Go.DeleteRemoteBranch(id, remote, name)),
   createTag: (id: string, name: string, target: string, message: string) => call<void>(Go.CreateTag(id, name, target, message)),
   deleteTag: (id: string, name: string) => call<void>(Go.DeleteTag(id, name)),
+
+  aiStatus: () => call<AIStatus>(Go.AIStatus()),
+  getAISettings: () => call<AISettings>(Go.GetAISettings()),
+  saveAISettings: (s: AISettings) => call<void>(Go.SaveAISettings(s as any)),
+  pullModel: (name: string) => call<void>(Go.PullModel(name)),
+  cancelPull: () => call<void>(Go.CancelPull()),
+  getChat: (repoID: string) => call<AIMessage[]>(Go.GetChat(repoID)),
+  sendChat: (repoID: string, text: string, runID: string) => call<void>(Go.SendChat(repoID, text, runID)),
+  stopChat: (repoID: string) => call<void>(Go.StopChat(repoID)),
+  clearChat: (repoID: string) => call<void>(Go.ClearChat(repoID)),
+  explainCommit: (repoID: string, hash: string, provider: '' | 'apple' | 'ollama', runID: string) =>
+    call<void>(Go.ExplainCommit(repoID, hash, provider, runID)),
+  listPrompts: () => call<PromptInfo[]>(Go.ListPrompts()),
+  openPromptsFolder: () => call<void>(Go.OpenPromptsFolder()),
+  resetPrompt: (name: string) => call<void>(Go.ResetPrompt(name)),
 }
