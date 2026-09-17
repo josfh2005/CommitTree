@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fbfaf8"/>
+      <stop offset="1" stop-color="#e9e7e2"/>
+    </linearGradient>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <g fill="none" stroke-width="36" stroke-linecap="round">
+    <path d="M290 180 V844" stroke="#4f9d4f"/>
+    <path d="M290 290 C290 380 734 350 734 450 V590 C734 690 290 670 290 770" stroke="#a4478f"/>
+    <path d="M734 520 C734 470 560 470 560 410 V180" stroke="#3f7fbf"/>
+  </g>
+  <circle cx="290" cy="290" r="40" fill="#4f9d4f"/>
+  <circle cx="734" cy="520" r="40" fill="#a4478f"/>
+  <circle cx="290" cy="770" r="40" fill="#4f9d4f"/>
+  <text x="540" y="700" text-anchor="middle" font-family="-apple-system, 'SF Pro Display', Helvetica, sans-serif" font-weight="800" font-size="400" fill="#1f1e1c" stroke="#f4f3f0" stroke-width="28" paint-order="stroke">ai</text>
+</svg>
