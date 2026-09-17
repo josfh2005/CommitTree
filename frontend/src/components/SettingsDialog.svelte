@@ -106,7 +106,7 @@
   const close = () => settingsOpen.set(false)
 </script>
 
-<svelte:window on:keydown={(e) => $settingsOpen && e.key === 'Escape' && close()} on:focus={() => $settingsOpen && load()} />
+<svelte:window on:keydown={(e) => $settingsOpen && e.key === 'Escape' && close()} on:focus={() => $settingsOpen && refresh()} />
 
 {#if $settingsOpen && settings}
   <div class="backdrop" on:click|self={close} role="presentation">
