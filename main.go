@@ -9,6 +9,10 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
 
+	"git-ui/internal/ai/apple"
+	"git-ui/internal/ai/chatstore"
+	"git-ui/internal/ai/prompts"
+	"git-ui/internal/ai/settings"
 	"git-ui/internal/app"
 	"git-ui/internal/repos"
 )
@@ -28,6 +32,25 @@ func main() {
 		log.Fatal(err)
 	}
 	api := app.New(store)
+
+	settingsPath, err := settings.DefaultPath()
+	if err != nil {
+		log.Fatal(err)
+	}
+	chatsDir, err := chatstore.DefaultDir()
+	if err != nil {
+		log.Fatal(err)
+	}
+	promptsDir, err := prompts.DefaultDir()
+	if err != nil {
+		log.Fatal(err)
+	}
+	api.EnableAI(app.AIDeps{
+		SettingsPath: settingsPath,
+		Chats:        chatstore.New(chatsDir),
+		Prompts:      prompts.New(promptsDir),
+		Apple:        apple.New(apple.Locate()),
+	})
 
 	err = wails.Run(&options.App{
 		Title:            "git-ui",

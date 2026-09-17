@@ -53,6 +53,7 @@ type App struct {
 	mu     sync.Mutex
 	logs   map[string]*logState
 	writes sync.Map // repo ID → *sync.Mutex
+	ai     *aiState
 }
 
 func New(store *repos.Store) *App {
