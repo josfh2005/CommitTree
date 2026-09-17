@@ -4,6 +4,7 @@
   import ContextMenu from './components/ContextMenu.svelte'
   import DialogHost from './components/DialogHost.svelte'
   import LogView from './components/LogView.svelte'
+  import SettingsDialog from './components/SettingsDialog.svelte'
   import Sidebar from './components/Sidebar.svelte'
   import Splitter from './components/Splitter.svelte'
   import Toasts from './components/Toasts.svelte'
@@ -31,6 +32,7 @@
 <ContextMenu />
 <DialogHost />
 <Toasts />
+<SettingsDialog />
 
 <style>
   .app { display: flex; height: 100%; }

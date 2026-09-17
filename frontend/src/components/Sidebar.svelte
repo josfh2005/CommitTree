@@ -2,11 +2,9 @@
   import Icon from './Icon.svelte'
   import RepoRefs from './RepoRefs.svelte'
   import { addRepo, fetchRepo, pullRepo, relocateRepo, removeRepo } from '../lib/actions'
-  import { busy, repos, selectRepo, selectedRepoId } from '../lib/stores'
+  import { busy, repos, selectRepo, selectedRepoId, settingsOpen } from '../lib/stores'
   import type { Repo } from '../lib/types'
   import { openMenu } from '../lib/ui'
-
-  let settingsOpen = false
 
   function repoMenu(event: MouseEvent, repo: Repo) {
     openMenu(event, [
@@ -54,10 +52,7 @@
 
   <div class="footer">
     {#if $busy}<div class="note">{$busy}</div>{/if}
-    <button class="row-item" on:click={() => (settingsOpen = !settingsOpen)}><Icon name="settings" /> Settings</button>
-    {#if settingsOpen}
-      <div class="note">git-ui 0.1 · AI providers arrive in a later version.</div>
-    {/if}
+    <button class="row-item" on:click={() => settingsOpen.set(true)}><Icon name="settings" /> Settings</button>
   </div>
 </div>
 
