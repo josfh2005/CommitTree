@@ -57,7 +57,7 @@
     } catch (e) {
       if (gen !== generation) return
       const message = errorMessage(e)
-      if (message.includes('stale')) reload()
+      if (message === 'log page is stale; reload from the start') reload()
       else error = message
     } finally {
       if (loadingGen === gen) loadingGen = -1

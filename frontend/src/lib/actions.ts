@@ -1,8 +1,18 @@
 import { get } from 'svelte/store'
 import { api } from './api'
-import { busy, loadRefs, loadRepos, logVersion, refreshRepo, selectRepo, selectedRepoId } from './stores'
+import { busy, filters, loadRefs, loadRepos, logVersion, refreshRepo, selectRepo, selectedRepoId } from './stores'
 import type { Branch, Repo } from './types'
 import { confirmDialog, errorMessage, promptDialog, toast } from './ui'
+
+function branchRef(branch: Branch): string {
+  return branch.remote ? `refs/remotes/${branch.remote}/${branch.name}` : `refs/heads/${branch.name}`
+}
+
+// Clears the branch filter when it points at a ref that was just deleted, so
+// the log doesn't keep asking the backend for a ref that no longer exists.
+function clearBranchFilter(ref: string) {
+  filters.update((f) => (f.branch === ref ? { ...f, branch: '' } : f))
+}
 
 async function run(label: string, fn: () => Promise<unknown>): Promise<boolean> {
   busy.set(label)
@@ -93,7 +103,10 @@ export async function deleteBranch(id: string, branch: Branch) {
       confirmLabel: 'Delete on remote',
       danger: true,
     })
-    if (ok) await run('Deleting remote branch…', () => api.deleteRemoteBranch(id, branch.remote, branch.name))
+    if (ok) {
+      const deleted = await run('Deleting remote branch…', () => api.deleteRemoteBranch(id, branch.remote, branch.name))
+      if (deleted) clearBranchFilter(branchRef(branch))
+    }
     return
   }
 
@@ -120,11 +133,15 @@ export async function deleteBranch(id: string, branch: Branch) {
       confirmLabel: 'Force delete',
       danger: true,
     })
-    if (force) await run('Deleting branch…', () => api.deleteBranch(id, branch.name, true))
+    if (force) {
+      const deleted = await run('Deleting branch…', () => api.deleteBranch(id, branch.name, true))
+      if (deleted) clearBranchFilter(branchRef(branch))
+    }
     return
   } finally {
     busy.set('')
   }
+  clearBranchFilter(branchRef(branch))
   await refreshRepo()
 }
 
@@ -147,7 +164,10 @@ export async function deleteTag(id: string, name: string) {
     confirmLabel: 'Delete',
     danger: true,
   })
-  if (ok) await run('Deleting tag…', () => api.deleteTag(id, name))
+  if (ok) {
+    const deleted = await run('Deleting tag…', () => api.deleteTag(id, name))
+    if (deleted) clearBranchFilter(`refs/tags/${name}`)
+  }
 }
 
 // Reloads refs and log when the repo changed outside the app while the window
