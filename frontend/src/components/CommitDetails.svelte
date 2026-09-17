@@ -1,8 +1,12 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte'
   import { api } from '../lib/api'
   import { jumpTo } from '../lib/stores'
   import type { Details, FileChange } from '../lib/types'
   import { copyText, errorMessage } from '../lib/ui'
+  import { EventsOn } from '../../wailsjs/runtime/runtime'
+  import { renderMarkdown } from '../lib/markdown'
+  import type { ExplainDeltaEvent, ExplainDoneEvent, ExplainErrorEvent } from '../lib/types'
 
   export let repoId: string
   export let hash: string
@@ -15,6 +19,43 @@
   let diff = ''
   let request = 0
 
+  let explainRun: string | null = null
+  let explainText = ''
+  let explainError = ''
+  let explaining = false
+
+  const offs = [
+    EventsOn('explain:delta', (p: ExplainDeltaEvent) => {
+      if (p.runID === explainRun) explainText += p.text
+    }),
+    EventsOn('explain:done', (p: ExplainDoneEvent) => {
+      if (p.runID === explainRun) explaining = false
+    }),
+    EventsOn('explain:error', (p: ExplainErrorEvent) => {
+      if (p.runID !== explainRun) return
+      explaining = false
+      explainError = p.message
+    }),
+  ]
+  onDestroy(() => offs.forEach((off) => off()))
+
+  async function explain(provider: '' | 'apple' | 'ollama' = '') {
+    if (!details) return
+    const runID = crypto.randomUUID()
+    explainRun = runID
+    explainText = ''
+    explainError = ''
+    explaining = true
+    try {
+      await api.explainCommit(repoId, details.hash, provider, runID)
+    } catch (e) {
+      if (explainRun === runID) {
+        explaining = false
+        explainError = errorMessage(e)
+      }
+    }
+  }
+
   $: load(repoId, hash)
   $: lines = diff.split('\n')
 
@@ -24,6 +65,10 @@
     error = ''
     file = null
     diff = ''
+    explainRun = null
+    explainText = ''
+    explainError = ''
+    explaining = false
     try {
       const d = await api.getDetails(id, h)
       if (current !== request) return
@@ -74,6 +119,18 @@
           {/each}
         </span>
       </div>
+      <div class="explain">
+        <button class="btn" disabled={explaining} on:click={() => explain()}>✨ {explaining ? 'Explaining…' : 'Explain'}</button>
+        {#if explainText}
+          <div class="explanation">{@html renderMarkdown(explainText)}</div>
+        {/if}
+        {#if explainError}
+          <div class="explain-error">
+            {explainError}
+            <button class="btn" on:click={() => explain('ollama')}>Try with Ollama</button>
+          </div>
+        {/if}
+      </div>
       <div class="files">
         {#each details.files as f (f.path)}
           <button
@@ -123,4 +180,10 @@
   .hunk { color: #3f7fbf; }
   .meta { color: var(--faint); }
   .error { padding: 12px; color: var(--danger); white-space: pre-wrap; }
+  .explain { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-bottom: 10px; }
+  .explanation { user-select: text; line-height: 1.5; }
+  .explanation :global(p) { margin: 0 0 6px; }
+  .explanation :global(ul) { margin: 0; padding-left: 18px; }
+  .explanation :global(code) { font-family: var(--mono); font-size: 12px; background: var(--hover); padding: 0 4px; border-radius: 4px; }
+  .explain-error { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; font-size: 12px; color: var(--danger); }
 </style>
