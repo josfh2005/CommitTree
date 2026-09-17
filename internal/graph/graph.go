@@ -42,11 +42,11 @@ type lane struct {
 	color  int
 	from   []int // columns on the previous row that feed this line
 	run    int   // rows passed without arriving
-	hidden bool  // cut: slot reserved, nothing drawn
 }
 
 type Layout struct {
 	lanes     []*lane
+	parked    []*lane // cut lines: no column, nothing drawn until they arrive
 	nextColor int
 }
 
@@ -68,47 +68,52 @@ func (l *Layout) add(n Node) Row {
 			targets = append(targets, j)
 		}
 	}
+	arriving := l.unpark(n.Hash)
 	var col, color int
-	if len(targets) > 0 {
+	switch {
+	case len(targets) > 0:
 		col, color = targets[0], l.lanes[targets[0]].color
-	} else {
+	case len(arriving) > 0:
+		col, color = l.freeSlot(nil), arriving[0].color
+	default:
 		col, color = l.freeSlot(nil), l.newColor()
 	}
 
 	edges := []Edge{}
+	freed := make(map[int]bool, len(targets))
 	for j, ln := range l.lanes {
 		if ln == nil {
 			continue
 		}
-		switch {
-		case ln.want == n.Hash && ln.hidden:
-			edges = append(edges, Edge{From: col, To: col, Color: ln.color, Kind: ArrowUp, Target: ln.source})
-		case ln.want == n.Hash:
+		if ln.want == n.Hash {
 			for _, f := range ln.from {
 				edges = append(edges, Edge{From: f, To: col, Color: ln.color, Kind: Line})
 			}
-		case ln.hidden:
-			// Cut line: the slot stays reserved but nothing is drawn.
-		default:
-			ln.run++
-			if ln.run > MaxStraight {
-				ln.hidden = true
-				edges = append(edges, Edge{From: j, To: j, Color: ln.color, Kind: ArrowDown, Target: ln.want})
-				continue
-			}
-			for _, f := range ln.from {
-				edges = append(edges, Edge{From: f, To: j, Color: ln.color, Kind: Line})
-			}
+			continue
+		}
+		ln.run++
+		if ln.run > MaxStraight {
+			// Cut the line: draw an arrow and give its column back.
+			edges = append(edges, Edge{From: j, To: j, Color: ln.color, Kind: ArrowDown, Target: ln.want})
+			l.lanes[j] = nil
+			l.parked = append(l.parked, ln)
+			freed[j] = true
+			continue
+		}
+		for _, f := range ln.from {
+			edges = append(edges, Edge{From: f, To: j, Color: ln.color, Kind: Line})
 		}
 	}
+	for _, ln := range arriving {
+		edges = append(edges, Edge{From: col, To: col, Color: ln.color, Kind: ArrowUp, Target: ln.source})
+	}
 
-	freed := make(map[int]bool, len(targets))
 	for _, j := range targets {
 		l.lanes[j] = nil
 		freed[j] = true
 	}
 	for j, ln := range l.lanes {
-		if ln != nil && !ln.hidden {
+		if ln != nil {
 			ln.from = []int{j}
 		}
 	}
@@ -121,18 +126,37 @@ func (l *Layout) add(n Node) Row {
 			}
 			if j := l.find(p); j >= 0 {
 				ln := l.lanes[j]
-				if ln.hidden {
-					ln.hidden, ln.from = false, nil
-				}
 				ln.from = append(ln.from, col)
 				ln.run = 0
 				continue
 			}
-			l.set(l.freeSlot(freed), &lane{want: p, source: n.Hash, color: l.newColor(), from: []int{col}})
+			ln := &lane{want: p, source: n.Hash, from: []int{col}}
+			if parked := l.unpark(p); len(parked) > 0 {
+				// A merge reaches a cut line: bring it back next to this commit.
+				ln.source, ln.color = parked[0].source, parked[0].color
+			} else {
+				ln.color = l.newColor()
+			}
+			l.set(l.freeSlot(freed), ln)
 		}
 	}
 	l.trim()
 	return Row{Lane: col, Color: color, Edges: edges}
+}
+
+// unpark removes and returns the cut lines waiting for hash.
+func (l *Layout) unpark(hash string) []*lane {
+	var found []*lane
+	kept := l.parked[:0]
+	for _, ln := range l.parked {
+		if ln.want == hash {
+			found = append(found, ln)
+		} else {
+			kept = append(kept, ln)
+		}
+	}
+	l.parked = kept
+	return found
 }
 
 func (l *Layout) freeSlot(exclude map[int]bool) int {

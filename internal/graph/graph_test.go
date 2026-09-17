@@ -147,6 +147,39 @@ func TestLongLaneIsCutWithArrows(t *testing.T) {
 	}
 }
 
+func TestCutLaneFreesItsColumn(t *testing.T) {
+	specs := []string{"M:c1,F"}
+	for i := 1; i <= 35; i++ {
+		parent := fmt.Sprintf("c%d", i+1)
+		if i == 35 {
+			parent = "R"
+		}
+		specs = append(specs, fmt.Sprintf("c%d:%s", i, parent))
+		if i == 32 {
+			specs = append(specs, "N:c33")
+		}
+	}
+	specs = append(specs, "F:R", "R")
+	rows := graph.New().Add(nodes(specs...))
+
+	// Lane 1 (waiting for F) is cut at row MaxStraight+1; the new branch tip N
+	// two rows later must reuse that column instead of opening column 2.
+	n := rows[33]
+	if n.Lane != 1 {
+		t.Fatalf("N lane = %d, want 1 (freed by the cut line)", n.Lane)
+	}
+	up := graph.Edge{Kind: graph.ArrowUp, Target: "M"}
+	found := false
+	for _, e := range rows[37].Edges {
+		if e.Kind == up.Kind && e.Target == up.Target {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("F row missing arrow up: %+v", rows[37])
+	}
+}
+
 func TestLayoutResumesAcrossPages(t *testing.T) {
 	all := nodes("M:B1,F1", "F1:B0", "B1:B0", "B0")
 	want := graph.New().Add(all)

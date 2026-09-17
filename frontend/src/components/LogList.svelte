@@ -72,7 +72,9 @@
   }
 
   $: range = visibleRange(scrollTop, viewport, rows.length)
-  $: width = graphVisible ? graphWidth(rows) : 12
+  // Size the graph column to the rows on screen so one wide stretch of history
+  // doesn't squeeze the messages everywhere else.
+  $: width = graphVisible ? graphWidth(rows.slice(range.start, Math.min(rows.length, range.end + 1))) : 12
   $: draw(canvas, rows, range, width, viewport, scrollTop, graphVisible)
 
   function draw(..._deps: unknown[]) {
@@ -80,8 +82,6 @@
     const dpr = window.devicePixelRatio || 1
     canvas.width = width * dpr
     canvas.height = viewport * dpr
-    canvas.style.width = `${width}px`
-    canvas.style.height = `${viewport}px`
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     ctx.setTransform(dpr, 0, 0, dpr, 0, -scrollTop * dpr)
@@ -205,7 +205,7 @@
       {#if graphVisible}
         <canvas
           bind:this={canvas}
-          style="top: {scrollTop}px"
+          style="top: {scrollTop}px; width: {width}px; height: {viewport}px"
           on:mousemove={onGraphMove}
           on:mouseleave={() => (hover = null)}
           on:click={onGraphClick}
