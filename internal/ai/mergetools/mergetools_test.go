@@ -87,6 +87,46 @@ func TestResolveHunkWritesTheFile(t *testing.T) {
 	}
 }
 
+// A path with `-merge` in .gitattributes gets no text merge at all: git
+// leaves OUR side in the worktree with no markers. merge.Status must file it
+// under Manual, so stage_file (which only opens Conflicts paths) must refuse
+// it rather than silently staging OUR side over THEIRS.
+func TestStageFileRefusesANoMergeAttributePath(t *testing.T) {
+	r := testrepo.New(t)
+	r.WriteFile(".gitattributes", "*.lock -merge\n")
+	r.WriteFile("deps.lock", "base\n")
+	r.Git("add", ".gitattributes", "deps.lock")
+	r.Git("commit", "-q", "-m", "add deps.lock")
+	r.Git("switch", "-q", "-c", "feature")
+	r.WriteFile("deps.lock", "theirs\n")
+	r.Git("commit", "-q", "-am", "their lock")
+	r.Git("switch", "-q", "main")
+	r.WriteFile("deps.lock", "ours\n")
+	r.Git("commit", "-q", "-am", "our lock")
+	if _, err := merge.Start(context.Background(), r.Dir, "feature"); err != nil {
+		t.Fatal(err)
+	}
+
+	out, changed := mergetools.Run(context.Background(), r.Dir, call("stage_file", map[string]any{"path": "deps.lock"}))
+	if changed {
+		t.Errorf("changed = true, want stage_file to refuse a Manual path; out = %q", out)
+	}
+
+	st, err := merge.Status(context.Background(), r.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, p := range st.Manual {
+		if p == "deps.lock" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("manual = %v, conflicts = %v, want deps.lock still unmerged in manual", st.Manual, st.Conflicts)
+	}
+}
+
 func TestResolveHunkRefusesMarkers(t *testing.T) {
 	r := conflicted(t)
 	out, changed := mergetools.Run(context.Background(), r.Dir,

@@ -43,8 +43,16 @@ func Status(ctx context.Context, dir string) (State, error) {
 	if err != nil {
 		return State{}, err
 	}
+	paths := make([]string, 0, len(entries))
+	for path := range entries {
+		paths = append(paths, path)
+	}
+	attrs, err := checkAttrs(ctx, dir, paths)
+	if err != nil {
+		return State{}, err
+	}
 	for path, e := range entries {
-		if e.needsHuman() || !isText(filepath.Join(dir, path)) {
+		if e.needsHuman() || !isText(filepath.Join(dir, path)) || needsHumanForAttrs(attrs[path]) {
 			st.Manual = append(st.Manual, path)
 			continue
 		}
@@ -102,6 +110,58 @@ func unmergedEntries(ctx context.Context, dir string) (map[string]unmerged, erro
 		entries[path] = e
 	}
 	return entries, nil
+}
+
+// checkAttrs asks git for the merge and conflict-marker-size attributes of
+// every candidate path in one call, keyed by path then attribute name. An
+// empty paths slice makes no git call.
+func checkAttrs(ctx context.Context, dir string, paths []string) (map[string]map[string]string, error) {
+	if len(paths) == 0 {
+		return map[string]map[string]string{}, nil
+	}
+	args := append([]string{"check-attr", "-z", "merge", "conflict-marker-size", "--"}, paths...)
+	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, args...)
+	if err != nil {
+		return nil, err
+	}
+	return parseCheckAttrZ(out), nil
+}
+
+// parseCheckAttrZ parses the -z output of `git check-attr`: a flat sequence
+// of NUL-terminated fields in triples of path, attribute, value. A trailing
+// empty field from the final terminator is ignored.
+func parseCheckAttrZ(raw string) map[string]map[string]string {
+	fields := strings.Split(raw, "\x00")
+	if n := len(fields); n > 0 && fields[n-1] == "" {
+		fields = fields[:n-1]
+	}
+	result := map[string]map[string]string{}
+	for i := 0; i+2 < len(fields); i += 3 {
+		path, attr, value := fields[i], fields[i+1], fields[i+2]
+		if result[path] == nil {
+			result[path] = map[string]string{}
+		}
+		result[path][attr] = value
+	}
+	return result
+}
+
+// needsHumanForAttrs reports whether a path's merge/conflict-marker-size
+// attributes mean our marker parser does not apply, so an otherwise-text
+// conflict there cannot be trusted as resolved just because it has no
+// markers our parser recognises.
+func needsHumanForAttrs(attrs map[string]string) bool {
+	switch attrs["merge"] {
+	case "", "unspecified", "set", "text":
+	default:
+		return true
+	}
+	switch attrs["conflict-marker-size"] {
+	case "", "unspecified", "7":
+	default:
+		return true
+	}
+	return false
 }
 
 // binaryProbe is how much of a file git itself inspects for a NUL byte when

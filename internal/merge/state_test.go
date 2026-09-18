@@ -211,3 +211,94 @@ func TestStatusDoesNotReadAFifo(t *testing.T) {
 		t.Fatal("Status did not return within 5s: it is blocked reading the FIFO")
 	}
 }
+
+// A path with `-merge` (or `merge=binary`) in .gitattributes gets no text
+// merge at all: git leaves OUR side in the worktree, writes no markers, and
+// records the path as unmerged. Without markers to prove it, it must not be
+// treated as resolved, so it belongs in Manual, not Conflicts.
+func TestStatusPutsANoMergeAttributeConflictInManual(t *testing.T) {
+	for _, attr := range []string{"*.lock -merge", "*.lock merge=binary"} {
+		t.Run(attr, func(t *testing.T) {
+			r := testrepo.New(t)
+			r.WriteFile(".gitattributes", attr+"\n")
+			r.WriteFile("deps.lock", "base\n")
+			r.Git("add", ".gitattributes", "deps.lock")
+			r.Git("commit", "-q", "-m", "add deps.lock")
+			r.Git("switch", "-q", "-c", "feature")
+			r.WriteFile("deps.lock", "theirs\n")
+			r.Git("commit", "-q", "-am", "their lock")
+			r.Git("switch", "-q", "main")
+			r.WriteFile("deps.lock", "ours\n")
+			r.Git("commit", "-q", "-am", "our lock")
+
+			if _, err := Start(context.Background(), r.Dir, "feature"); err != nil {
+				t.Fatal(err)
+			}
+			st, err := Status(context.Background(), r.Dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(st.Manual) != 1 || st.Manual[0] != "deps.lock" {
+				t.Fatalf("manual = %v, conflicts = %v, want deps.lock in manual", st.Manual, st.Conflicts)
+			}
+			if len(st.Conflicts) != 0 {
+				t.Errorf("conflicts = %v, want none", st.Conflicts)
+			}
+		})
+	}
+}
+
+// A custom conflict-marker-size writes markers our parser does not
+// recognise (only the standard 7-character form is), so the file parses as
+// having zero hunks even though it is still full of markers. It must land
+// in Manual.
+func TestStatusPutsACustomMarkerSizeConflictInManual(t *testing.T) {
+	r := testrepo.New(t)
+	r.WriteFile(".gitattributes", "*.txt conflict-marker-size=10\n")
+	r.WriteFile("greeting.txt", "hello\n")
+	r.Git("add", ".gitattributes", "greeting.txt")
+	r.Git("commit", "-q", "-m", "add greeting")
+	r.Git("switch", "-q", "-c", "feature")
+	r.WriteFile("greeting.txt", "hola\n")
+	r.Git("commit", "-q", "-am", "spanish")
+	r.Git("switch", "-q", "main")
+	r.WriteFile("greeting.txt", "hi\n")
+	r.Git("commit", "-q", "-am", "informal")
+
+	if _, err := Start(context.Background(), r.Dir, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	st, err := Status(context.Background(), r.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(st.Manual) != 1 || st.Manual[0] != "greeting.txt" {
+		t.Fatalf("manual = %v, conflicts = %v, want greeting.txt in manual", st.Manual, st.Conflicts)
+	}
+	if len(st.Conflicts) != 0 {
+		t.Errorf("conflicts = %v, want none", st.Conflicts)
+	}
+}
+
+func TestParseCheckAttrZ(t *testing.T) {
+	// path\0attr\0value\0, in triples, with a path that itself contains a
+	// space to make sure the split is by NUL, not whitespace.
+	raw := "a b.txt\x00merge\x00unset\x00a b.txt\x00conflict-marker-size\x00unspecified\x00" +
+		"plain.txt\x00merge\x00text\x00plain.txt\x00conflict-marker-size\x00" + "10\x00"
+	got := parseCheckAttrZ(raw)
+	want := map[string]map[string]string{
+		"a b.txt":   {"merge": "unset", "conflict-marker-size": "unspecified"},
+		"plain.txt": {"merge": "text", "conflict-marker-size": "10"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d paths, want %d: %+v", len(got), len(want), got)
+	}
+	for path, attrs := range want {
+		for k, v := range attrs {
+			if got[path][k] != v {
+				t.Errorf("got[%q][%q] = %q, want %q", path, k, got[path][k], v)
+			}
+		}
+	}
+}
+
