@@ -417,8 +417,16 @@ func TestSettingsValidationAndPrompts(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 	list, err := a.ListPrompts()
-	if err != nil || len(list) != 2 || list[0].Customized {
-		t.Fatalf("prompts = %+v, err %v", list, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != len(prompts.Names()) {
+		t.Fatalf("prompts = %+v, want one per %v", list, prompts.Names())
+	}
+	for _, p := range list {
+		if p.Customized {
+			t.Fatalf("%s is customized on a fresh prompts directory", p.Name)
+		}
 	}
 	if err := a.ResetPrompt("explain-commit"); err != nil {
 		t.Fatal(err)
