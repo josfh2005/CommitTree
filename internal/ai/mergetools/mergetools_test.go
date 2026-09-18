@@ -174,3 +174,61 @@ func TestToolsRefuseAnUnmergedSymlink(t *testing.T) {
 		t.Fatalf("the file outside the repository was modified: %q", data)
 	}
 }
+
+// A conflicted file may be named like a glob. Staging it must stage exactly
+// that file: git reads a bare path as a pattern, so "*.txt" would otherwise
+// sweep in every other .txt file — conflicted or untracked — and end the
+// conflict on them without anyone resolving it.
+func TestStageFileTreatsThePathLiterally(t *testing.T) {
+	r := testrepo.New(t)
+	glob := filepath.Join(r.Dir, "*.txt")
+	write := func(globText, otherText string) {
+		t.Helper()
+		if err := os.WriteFile(glob, []byte(globText), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		r.WriteFile("other.txt", otherText)
+	}
+	write("base glob\n", "base other\n")
+	r.Git("add", "-A")
+	r.Git("commit", "-q", "-m", "base")
+	r.Git("switch", "-q", "-c", "feature")
+	write("their glob\n", "their other\n")
+	r.Git("commit", "-q", "-am", "theirs")
+	r.Git("switch", "-q", "main")
+	write("our glob\n", "our other\n")
+	r.Git("commit", "-q", "-am", "ours")
+	if _, err := merge.Start(context.Background(), r.Dir, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	r.WriteFile("untracked.txt", "not part of the merge\n")
+
+	if _, changed := mergetools.Run(context.Background(), r.Dir,
+		call("resolve_hunk", map[string]any{"path": "*.txt", "hunk": float64(0), "resolved": "merged glob\n"})); !changed {
+		t.Fatal("resolve_hunk on *.txt changed nothing")
+	}
+	if data, _ := os.ReadFile(glob); string(data) != "merged glob\n" {
+		t.Fatalf("*.txt = %q", data)
+	}
+	out, changed := mergetools.Run(context.Background(), r.Dir, call("stage_file", map[string]any{"path": "*.txt"}))
+	if !changed {
+		t.Fatalf("stage_file(*.txt) changed = false: %q", out)
+	}
+
+	st, err := merge.Status(context.Background(), r.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stillConflicted := false
+	for _, p := range append(append([]string{}, st.Conflicts...), st.Manual...) {
+		if p == "other.txt" {
+			stillConflicted = true
+		}
+	}
+	if !stillConflicted {
+		t.Errorf("other.txt is no longer a conflict (conflicts = %v, manual = %v): staging *.txt swept it in", st.Conflicts, st.Manual)
+	}
+	if staged := r.Git("diff", "--cached", "--name-only"); strings.Contains(staged, "untracked.txt") {
+		t.Errorf("staged = %q: staging *.txt added untracked.txt", staged)
+	}
+}

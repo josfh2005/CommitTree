@@ -182,7 +182,9 @@ func stageFile(ctx context.Context, dir string, args map[string]any) (string, bo
 	if merge.HasMarkers(string(data)) {
 		return path + " still contains conflict markers; resolve every region before staging it.", false
 	}
-	if _, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "add", "--", path); err != nil {
+	// git reads a bare path as a pattern; a file named "*.txt" would stage every
+	// .txt file. --literal-pathspecs makes it name exactly one file.
+	if _, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "--literal-pathspecs", "add", "--", path); err != nil {
 		return "Could not stage " + path + ": " + err.Error(), false
 	}
 	return "Staged " + path + ".", true

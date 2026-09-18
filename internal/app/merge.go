@@ -116,7 +116,8 @@ func (a *App) GetConflictFile(id, path string) (ConflictFile, error) {
 		}
 	}
 	// Otherwise it is staged into the merge: return the diff.
-	out, err := gitcmd.Run(a.ctx, dir, gitcmd.ReadTimeout, "diff", "--cached", "--", path)
+	// --literal-pathspecs: the path is a filename, never a glob or magic pathspec.
+	out, err := gitcmd.Run(a.ctx, dir, gitcmd.ReadTimeout, "--literal-pathspecs", "diff", "--cached", "--", path)
 	if err != nil {
 		return ConflictFile{}, err
 	}
