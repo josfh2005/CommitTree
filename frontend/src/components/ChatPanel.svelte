@@ -153,12 +153,12 @@
               {#if tool.summary}<span class="summary ellipsis">· {tool.summary}</span>{/if}
             </div>
           {/each}
-          {#each item.notices ?? [] as notice}<div class="note">{notice}</div>{/each}
           {#if item.text}
             <div class="md">{@html renderMarkdown(item.text)}</div>
           {:else if running && i === state.items.length - 1 && !item.error}
             <div class="typing">Thinking…</div>
           {/if}
+          {#each item.notices ?? [] as notice}<div class="notice">{notice}</div>{/each}
           {#if item.stopped}<div class="note">Stopped</div>{/if}
           {#if item.error}<div class="error">{errorText(item.error)}</div>{/if}
         </div>
@@ -205,6 +205,8 @@
   .md :global(pre code) { padding: 0; background: none; }
   .md :global(a) { color: var(--accent); cursor: pointer; }
   .typing, .note { font-size: 12px; color: var(--faint); }
+  /* The app's own word, not the model's: after the text, and marked apart. */
+  .notice { margin-top: 6px; padding: 4px 8px; border-left: 2px solid var(--accent); font-size: 12px; color: var(--muted); }
   .error { font-size: 12px; color: var(--danger); }
   .composer { display: flex; align-items: flex-end; gap: 6px; margin: 12px; padding: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
   textarea { flex: 1; resize: none; border: 0; padding: 2px 4px; background: transparent; }

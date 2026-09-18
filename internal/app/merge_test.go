@@ -395,3 +395,51 @@ func TestResolveConflictsRefusesToEditADifferentMerge(t *testing.T) {
 		t.Errorf("history = %#v, want the tool call refused as a different merge", history)
 	}
 }
+
+func TestResolveSummary(t *testing.T) {
+	cases := []struct {
+		name string
+		st   merge.State
+		want []string
+	}{
+		{"not merging", merge.State{}, nil},
+		{"nothing left", merge.State{Merging: true, Staged: []string{"a.go"}}, []string{"nothing left to resolve", "Staged"}},
+		{"conflicts and manual", merge.State{Merging: true, Conflicts: []string{"greet.go"}, Manual: []string{"deps.lock"}}, []string{"Still conflicted: greet.go", "Needs you: deps.lock"}},
+		{"manual only", merge.State{Merging: true, Manual: []string{"deps.lock"}}, []string{"Needs you: deps.lock"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := resolveSummary(tc.st)
+			if tc.want == nil && got != "" {
+				t.Errorf("got %q, want no summary", got)
+			}
+			for _, w := range tc.want {
+				if !strings.Contains(got, w) {
+					t.Errorf("got %q, want it to contain %q", got, w)
+				}
+			}
+		})
+	}
+	if got := resolveSummary(merge.State{Merging: true, Manual: []string{"deps.lock"}}); strings.Contains(got, "Still conflicted") {
+		t.Errorf("got %q, lists an empty conflicts part", got)
+	}
+}
+
+// The model's own closing words can claim success; the run ends with git's
+// account of what is left, before chat:done.
+func TestResolveConflictsEndsWithGitsSummary(t *testing.T) {
+	srv := fakeOllama(t, nil)
+	a, _, id, ev := newAIMergeApp(t, srv.URL)
+	if _, err := a.MergeBranch(id, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.ResolveConflicts(id, "run1"); err != nil {
+		t.Fatal(err)
+	}
+	notice := ev.wait(t, agent.EventNotice)
+	n, ok := notice.data.(agent.NoticeEvent)
+	if !ok || n.RunID != "run1" || n.RepoID != id || !strings.Contains(n.Text, "Still conflicted: greeting.txt") {
+		t.Fatalf("notice = %#v", notice.data)
+	}
+	ev.wait(t, agent.EventDone)
+}

@@ -255,6 +255,14 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 		// sent, or the merge acted on, as soon as the frontend sees done/error.
 		finish()
 		a.emit(EventMergeChanged, MergeChangedEvent{RepoID: repoID})
+		// The model's closing words can claim success whatever happened; end
+		// with git's own account. It goes before done/error, which close the
+		// run the frontend attaches notices to.
+		if st, err := merge.Status(a.ctx, repo.Path); err == nil {
+			if summary := resolveSummary(st); summary != "" {
+				a.emit(agent.EventNotice, agent.NoticeEvent{RepoID: repoID, RunID: runID, Text: summary})
+			}
+		}
 		switch {
 		case runErr != nil && !errors.Is(runErr, context.Canceled):
 			a.emit(agent.EventError, agent.ErrorEvent{RepoID: repoID, RunID: runID, Message: runErr.Error(), Code: chatErrorCode(runErr)})
@@ -265,6 +273,25 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 		}
 	}()
 	return nil
+}
+
+// resolveSummary is what git says is left once a resolve run ends, or ""
+// when the repository is no longer merging (aborted or committed meanwhile).
+func resolveSummary(st merge.State) string {
+	if !st.Merging {
+		return ""
+	}
+	if len(st.Conflicts) == 0 && len(st.Manual) == 0 {
+		return "Checked with git: nothing left to resolve. Review the Staged files before committing."
+	}
+	parts := []string{"Checked with git."}
+	if len(st.Conflicts) > 0 {
+		parts = append(parts, "Still conflicted: "+strings.Join(st.Conflicts, ", ")+".")
+	}
+	if len(st.Manual) > 0 {
+		parts = append(parts, "Needs you: "+strings.Join(st.Manual, ", ")+".")
+	}
+	return strings.Join(parts, " ")
 }
 
 // runMergeTool runs one mergetools call under the repository's write lock,
