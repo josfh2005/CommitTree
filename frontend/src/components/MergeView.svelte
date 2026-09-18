@@ -16,7 +16,11 @@
   let error = ''
   let request = 0
 
-  const off = EventsOn('merge:changed', () => loadMergeState())
+  const off = EventsOn('merge:changed', async (payload: { repoID: string }) => {
+    if (payload?.repoID !== repoId) return
+    await loadMergeState()
+    refresh()
+  })
   onDestroy(off)
 
   $: files = mergeFiles($mergeState ?? { merging: false, from: '', into: '', conflicts: [], manual: [] }, $mergeStarted)
@@ -34,6 +38,23 @@
       if (current !== request) return
       text = f.text
       resolved = f.resolved
+    } catch (e) {
+      if (current === request) error = errorMessage(e)
+    }
+  }
+
+  // Re-reads the open file in place — no blank flash — after the agent
+  // changed the working tree.
+  async function refresh() {
+    if (!selected) return
+    const current = ++request
+    const path = selected
+    try {
+      const f = await api.getConflictFile(repoId, path)
+      if (current !== request) return
+      text = f.text
+      resolved = f.resolved
+      error = ''
     } catch (e) {
       if (current === request) error = errorMessage(e)
     }
