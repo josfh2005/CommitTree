@@ -110,3 +110,39 @@ func splitLines(s string) []string {
 	}
 	return lines
 }
+
+var (
+	// ErrNoSuchHunk means the file no longer has a conflict at that index —
+	// usually because it was already resolved.
+	ErrNoSuchHunk = errors.New("merge: no such conflict")
+	// ErrMarkersLeft means a proposed resolution still contains markers,
+	// which would leave the file conflicted after staging.
+	ErrMarkersLeft = errors.New("merge: the resolution still contains conflict markers")
+)
+
+// Splice replaces the marker block of hunk index with resolved and returns
+// the new content. Every other byte of content is preserved, including line
+// endings and a missing final newline. It re-parses content on each call, so
+// resolving hunks one at a time needs no offset bookkeeping from the caller.
+func Splice(content string, index int, resolved string) (string, error) {
+	hunks, err := Parse(content)
+	if err != nil {
+		return "", err
+	}
+	if index < 0 || index >= len(hunks) {
+		return "", fmt.Errorf("%w: asked for %d, the file has %d", ErrNoSuchHunk, index, len(hunks))
+	}
+	if HasMarkers(resolved) {
+		return "", ErrMarkersLeft
+	}
+	lines := splitLines(content)
+	h := hunks[index]
+	tail := strings.Join(lines[h.end:], "")
+	body := resolved
+	// The block replaced whole lines, so the replacement ends a line too —
+	// unless it sits at the end of a file that never had a final newline.
+	if body != "" && !strings.HasSuffix(body, "\n") && (tail != "" || strings.HasSuffix(content, "\n")) {
+		body += "\n"
+	}
+	return strings.Join(lines[:h.start], "") + body + tail, nil
+}

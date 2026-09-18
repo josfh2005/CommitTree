@@ -1,6 +1,7 @@
 package merge
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -112,5 +113,95 @@ func TestHasMarkers(t *testing.T) {
 	}
 	if HasMarkers("a\n========\nb\n") {
 		t.Error("want false for a markdown underline")
+	}
+}
+
+func TestSpliceReplacesOnlyTheMarkerBlock(t *testing.T) {
+	out, err := Splice(threeWay, 0, "\tfmt.Println(\"both\")\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("both")
+}
+`
+	if out != want {
+		t.Errorf("got:\n%q\nwant:\n%q", out, want)
+	}
+}
+
+// The guarantee the whole design rests on: bytes outside the replaced block
+// are untouched.
+func TestSpliceLeavesTheRestByteIdentical(t *testing.T) {
+	content := "head\r\n<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> x\ntail\twith\ttabs\n"
+	out, err := Splice(content, 0, "fixed\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != "head\r\nfixed\ntail\twith\ttabs\n" {
+		t.Errorf("got %q", out)
+	}
+}
+
+func TestSpliceSecondHunkUsesFreshIndexes(t *testing.T) {
+	content := "<<<<<<< HEAD\n1\n=======\n2\n>>>>>>> x\nmiddle\n<<<<<<< HEAD\n3\n=======\n4\n>>>>>>> x\n"
+	once, err := Splice(content, 0, "one\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// After resolving hunk 0 the remaining conflict is hunk 0 again.
+	twice, err := Splice(once, 0, "two\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if twice != "one\nmiddle\ntwo\n" {
+		t.Errorf("got %q", twice)
+	}
+}
+
+func TestSpliceAddsTheMissingNewline(t *testing.T) {
+	out, err := Splice("<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> x\nafter\n", 0, "no newline")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != "no newline\nafter\n" {
+		t.Errorf("got %q", out)
+	}
+}
+
+func TestSpliceKeepsAFileWithNoTrailingNewline(t *testing.T) {
+	out, err := Splice("<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> x", 0, "end")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != "end" {
+		t.Errorf("got %q", out)
+	}
+}
+
+func TestSpliceEmptyResolutionDropsTheBlock(t *testing.T) {
+	out, err := Splice("a\n<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> x\nb\n", 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != "a\nb\n" {
+		t.Errorf("got %q", out)
+	}
+}
+
+func TestSpliceRejectsAResolutionWithMarkers(t *testing.T) {
+	_, err := Splice(threeWay, 0, "<<<<<<< HEAD\nstill conflicted\n")
+	if !errors.Is(err, ErrMarkersLeft) {
+		t.Fatalf("err = %v, want ErrMarkersLeft", err)
+	}
+}
+
+func TestSpliceRejectsAnOutOfRangeHunk(t *testing.T) {
+	if _, err := Splice(threeWay, 3, "x\n"); !errors.Is(err, ErrNoSuchHunk) {
+		t.Fatalf("err = %v, want ErrNoSuchHunk", err)
 	}
 }
