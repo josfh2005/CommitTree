@@ -16,15 +16,18 @@
   let error = ''
   let request = 0
 
-  const off = EventsOn('merge:changed', async (payload: { repoID: string }) => {
+  // The pane follows $mergeState (below), so the handler only reloads it.
+  const off = EventsOn('merge:changed', (payload: { repoID: string }) => {
     if (payload?.repoID !== repoId) return
-    await loadMergeState()
-    refresh()
+    loadMergeState()
   })
   onDestroy(off)
 
   $: files = mergeFiles($mergeState ?? { merging: false, from: '', into: '', conflicts: [], manual: [] }, $mergeStarted)
   $: pending = ($mergeState?.conflicts.length ?? 0) + ($mergeState?.manual.length ?? 0)
+  // Re-read the open file whenever the merge state reloads — after an agent
+  // edit, an action, or a focus that caught a change made in a terminal.
+  $: if ($mergeState) refresh()
   // Keep a selection valid as the agent resolves files underneath it.
   $: if (files.length && !files.some((f) => f.path === selected)) open(files[0])
 
@@ -43,8 +46,8 @@
     }
   }
 
-  // Re-reads the open file in place — no blank flash — after the agent
-  // changed the working tree.
+  // Re-reads the open file in place — no blank flash — after the merge state
+  // changed.
   async function refresh() {
     if (!selected) return
     const current = ++request

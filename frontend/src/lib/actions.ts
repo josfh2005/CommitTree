@@ -1,6 +1,6 @@
 import { get } from 'svelte/store'
 import { api } from './api'
-import { busy, chatOpen, filters, loadRefs, loadRepos, logVersion, mergeStarted, refreshRepo, selectRepo, selectedRepoId } from './stores'
+import { busy, chatOpen, filters, loadMergeState, loadRefs, loadRepos, logVersion, mergeStarted, refreshRepo, selectRepo, selectedRepoId } from './stores'
 import type { Branch, Repo } from './types'
 import { CONFLICTED, UP_TO_DATE } from './types'
 import { confirmDialog, errorMessage, promptDialog, toast } from './ui'
@@ -172,7 +172,9 @@ export async function deleteTag(id: string, name: string) {
 }
 
 // Reloads refs and log when the repo changed outside the app while the window
-// was in the background.
+// was in the background. The merge state is reloaded on every focus: the
+// fingerprint covers refs and HEAD only, so a `git add` or `git merge --abort`
+// in a terminal would never reach the merge view through it.
 export function startFocusRefresh(): () => void {
   let known = ''
   let knownId = ''
@@ -191,6 +193,7 @@ export function startFocusRefresh(): () => void {
   const onFocus = async () => {
     const id = get(selectedRepoId)
     if (!id) return
+    loadMergeState()
     try {
       const current = await api.fingerprint(id)
       if (id === knownId && known && current !== known) await refreshRepo()
