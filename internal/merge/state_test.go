@@ -2,6 +2,7 @@ package merge
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"git-ui/internal/testrepo"
@@ -86,5 +87,23 @@ func TestStatusAfterStagingTheResolution(t *testing.T) {
 	}
 	if len(st.Conflicts) != 0 {
 		t.Errorf("conflicts = %v, want none left", st.Conflicts)
+	}
+}
+
+func TestStatusNamesTheSourceByHashWhenTheMessageHasNoBranch(t *testing.T) {
+	r := conflicting(t)
+	hash := strings.TrimSpace(r.Git("rev-parse", "feature"))
+	// Merging a raw commit gives a MERGE_MSG with no quoted branch name.
+	Start(context.Background(), r.Dir, hash)
+
+	st, err := Status(context.Background(), r.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Merging {
+		t.Fatal("merging = false, want true")
+	}
+	if st.From == "" || !strings.HasPrefix(hash, st.From) {
+		t.Errorf("from = %q, want a short prefix of %s", st.From, hash)
 	}
 }
