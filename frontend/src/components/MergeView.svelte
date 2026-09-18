@@ -23,7 +23,7 @@
   })
   onDestroy(off)
 
-  $: files = mergeFiles($mergeState ?? { merging: false, from: '', into: '', conflicts: [], manual: [] }, $mergeStarted)
+  $: files = mergeFiles($mergeState ?? { merging: false, from: '', into: '', conflicts: [], manual: [] }, $mergeStarted[repoId] ?? [])
   $: pending = ($mergeState?.conflicts.length ?? 0) + ($mergeState?.manual.length ?? 0)
   // Re-read the open file whenever the merge state reloads — after an agent
   // edit, an action, or a focus that caught a change made in a terminal.

@@ -226,7 +226,7 @@ export async function mergeBranch(id: string, branch: Branch, into: string) {
   try {
     const result = await api.mergeBranch(id, label)
     if (result.outcome === UP_TO_DATE) toast(`${into} is already up to date with ${label}.`, 'info')
-    else if (result.outcome === CONFLICTED) mergeStarted.set(result.conflicts)
+    else if (result.outcome === CONFLICTED) mergeStarted.update((m) => ({ ...m, [id]: result.conflicts }))
   } catch (e) {
     toast(errorMessage(e), 'error')
   } finally {
