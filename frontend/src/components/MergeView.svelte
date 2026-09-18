@@ -139,6 +139,7 @@
   .row .file { padding-right: 64px; }
   .act { position: absolute; right: 4px; top: 2px; height: 20px; padding: 0 8px; font-size: 11px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); visibility: hidden; }
   .row:hover .act, .row.active .act, .act:focus-visible { visibility: visible; }
+  .act:hover:not(:disabled) { background: var(--hover); }
   .status { width: 14px; flex: none; font-family: var(--mono); font-weight: 600; color: var(--muted); }
   .s-staged { color: var(--ok); }
   .s-manual { color: var(--danger); }

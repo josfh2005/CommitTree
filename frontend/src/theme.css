@@ -100,6 +100,10 @@ pre { margin: 0; font: inherit; white-space: pre-wrap; }
 .btn:disabled { opacity: 0.45; cursor: default; }
 .btn.primary { background: var(--text); color: var(--bg); border-color: var(--text); }
 .btn.danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+/* .btn:hover above outranks .btn.primary/.danger and would swap in the light
+   hover background under their white label; keep their fill and dim it. */
+.btn.primary:hover:not(:disabled) { background: var(--text); opacity: 0.85; }
+.btn.danger:hover:not(:disabled) { background: var(--danger); opacity: 0.85; }
 .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .mono { font-family: var(--mono); font-size: 12px; }
 .drag { --wails-draggable: drag; }
