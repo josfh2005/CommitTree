@@ -89,4 +89,8 @@ export function SaveAISettings(arg1:settings.Settings):Promise<void>;
 
 export function SendChat(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function StageMergeFile(arg1:string,arg2:string):Promise<void>;
+
 export function StopChat(arg1:string):Promise<void>;
+
+export function UnstageMergeFile(arg1:string,arg2:string):Promise<void>;

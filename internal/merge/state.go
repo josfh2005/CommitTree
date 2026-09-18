@@ -24,12 +24,16 @@ type State struct {
 	Into      string   `json:"into"`
 	Conflicts []string `json:"conflicts"`
 	Manual    []string `json:"manual"`
+	// Staged and Unstaged are the merge's settled files: in the index for
+	// the merge commit, or changed in the worktree but not yet added.
+	Staged   []string `json:"staged"`
+	Unstaged []string `json:"unstaged"`
 }
 
 // Status reports whether dir is mid-merge and what is still unresolved. A
 // repository that is not merging yields the zero State and no error.
 func Status(ctx context.Context, dir string) (State, error) {
-	st := State{Conflicts: []string{}, Manual: []string{}}
+	st := State{Conflicts: []string{}, Manual: []string{}, Staged: []string{}, Unstaged: []string{}}
 	// rev-parse --quiet exits non-zero when MERGE_HEAD is absent, which is
 	// the ordinary "not merging" case rather than a failure.
 	if _, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--verify", "--quiet", "MERGE_HEAD"); err != nil {
@@ -60,6 +64,12 @@ func Status(ctx context.Context, dir string) (State, error) {
 	}
 	sort.Strings(st.Conflicts)
 	sort.Strings(st.Manual)
+	if st.Staged, err = changedPaths(ctx, dir, entries, "--cached", "HEAD"); err != nil {
+		return State{}, err
+	}
+	if st.Unstaged, err = changedPaths(ctx, dir, entries); err != nil {
+		return State{}, err
+	}
 	return st, nil
 }
 

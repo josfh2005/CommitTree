@@ -441,6 +441,8 @@ export namespace merge {
 	    into: string;
 	    conflicts: string[];
 	    manual: string[];
+	    staged: string[];
+	    unstaged: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new State(source);
@@ -453,6 +455,8 @@ export namespace merge {
 	        this.into = source["into"];
 	        this.conflicts = source["conflicts"];
 	        this.manual = source["manual"];
+	        this.staged = source["staged"];
+	        this.unstaged = source["unstaged"];
 	    }
 	}
 
