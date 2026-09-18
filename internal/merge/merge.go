@@ -2,7 +2,7 @@ package merge
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"sort"
 	"strings"
 
@@ -25,7 +25,11 @@ type Result struct {
 }
 
 // ErrInvalidRef guards against a ref that git would read as an option.
-var ErrInvalidRef = fmt.Errorf("merge: invalid ref")
+var ErrInvalidRef = errors.New("merge: invalid ref")
+
+// ErrMergeInProgress reports a merge that was never concluded; git refuses to
+// start another one, and its conflicts are not this merge's.
+var ErrMergeInProgress = errors.New("merge: a merge is already in progress")
 
 // Start merges branch into the current one. It always creates a merge commit
 // (--no-ff) so an integrated branch stays visible in the graph, and asks for
@@ -35,10 +39,21 @@ func Start(ctx context.Context, dir, branch string) (Result, error) {
 	if err := checkRef(branch); err != nil {
 		return Result{}, err
 	}
-	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout,
+	if _, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--verify", "--quiet", "MERGE_HEAD"); err == nil {
+		return Result{}, ErrMergeInProgress
+	}
+	before, err := head(ctx, dir)
+	if err != nil {
+		return Result{}, err
+	}
+	_, err = gitcmd.Run(ctx, dir, gitcmd.ReadTimeout,
 		"-c", "merge.conflictStyle=zdiff3", "merge", "--no-ff", "--no-edit", branch)
 	if err == nil {
-		if strings.Contains(out, "Already up to date") {
+		after, err := head(ctx, dir)
+		if err != nil {
+			return Result{}, err
+		}
+		if after == before {
 			return Result{Outcome: UpToDate}, nil
 		}
 		return Result{Outcome: Merged}, nil
@@ -82,7 +97,20 @@ func Unmerged(ctx context.Context, dir string) ([]string, error) {
 // guard; a four-line check is worth repeating to keep the packages apart.
 func checkRef(ref string) error {
 	if ref == "" || strings.HasPrefix(ref, "-") {
-		return fmt.Errorf("%w: %q", ErrInvalidRef, ref)
+		return errors.New(ErrInvalidRef.Error() + ": " + ref)
 	}
 	return nil
+}
+
+// head returns the current commit, or "" in a repository with no commits yet.
+func head(ctx context.Context, dir string) (string, error) {
+	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--verify", "--quiet", "HEAD")
+	if err != nil {
+		var gerr *gitcmd.Error
+		if errors.As(err, &gerr) && gerr.ExitCode == 1 {
+			return "", nil // no commits yet
+		}
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
 }

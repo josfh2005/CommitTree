@@ -2,6 +2,7 @@ package merge
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -121,5 +122,23 @@ func TestCommitClosesTheMerge(t *testing.T) {
 	parents := r.Git("rev-list", "--parents", "-n", "1", "HEAD")
 	if len(strings.Fields(parents)) != 3 {
 		t.Errorf("want two parents, got %q", parents)
+	}
+}
+
+func TestStartFailsOnAnUnknownBranch(t *testing.T) {
+	r := testrepo.New(t)
+	r.Commit("base")
+	if _, err := Start(context.Background(), r.Dir, "no-such-branch"); err == nil {
+		t.Fatal("want an error for a branch that does not exist")
+	}
+}
+
+func TestStartRefusesWhenAMergeIsAlreadyInProgress(t *testing.T) {
+	r := conflicting(t)
+	if _, err := Start(context.Background(), r.Dir, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Start(context.Background(), r.Dir, "feature"); !errors.Is(err, ErrMergeInProgress) {
+		t.Fatalf("err = %v, want ErrMergeInProgress", err)
 	}
 }
