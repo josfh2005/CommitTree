@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -67,8 +68,24 @@ func Status(ctx context.Context, dir string) (State, error) {
 	if st.Staged, err = changedPaths(ctx, dir, entries, "--cached", "HEAD"); err != nil {
 		return State{}, err
 	}
-	if st.Unstaged, err = changedPaths(ctx, dir, entries); err != nil {
+	// Unstaged is limited to what the merge brings in: a merge may start with
+	// unrelated uncommitted work, which is not the merge's to stage.
+	theirs, err := changedPaths(ctx, dir, nil, "HEAD...MERGE_HEAD")
+	if err != nil {
+		// Unrelated histories have no merge base; everything differing
+		// between the two sides is then the merge's.
+		if theirs, err = changedPaths(ctx, dir, nil, "HEAD", "MERGE_HEAD"); err != nil {
+			return State{}, err
+		}
+	}
+	dirty, err := changedPaths(ctx, dir, entries)
+	if err != nil {
 		return State{}, err
+	}
+	for _, p := range dirty {
+		if slices.Contains(theirs, p) {
+			st.Unstaged = append(st.Unstaged, p)
+		}
 	}
 	return st, nil
 }

@@ -23,7 +23,8 @@ var ErrSubmodule = errors.New("merge: a submodule conflict must be settled in a 
 
 // Take settles one of the merge's Manual files by taking one side's version
 // whole and staging it. When that side deleted the file, taking it deletes
-// the file. The result is staged, so Unstage undoes it.
+// the file. It overwrites whatever is in the worktree, hand edits included,
+// and Unstage does not bring those back: the caller confirms first.
 func Take(ctx context.Context, dir, path string, side Side) error {
 	stage := map[Side]int{Ours: 2, Theirs: 3}[side]
 	if stage == 0 {
@@ -33,8 +34,8 @@ func Take(ctx context.Context, dir, path string, side Side) error {
 	if err != nil {
 		return err
 	}
-	if !slices.Contains(st.Manual, path) {
-		return fmt.Errorf("%w: %q is not a file to settle by hand", ErrNotInMerge, path)
+	if err := settled(st, st.Manual, path, "a file to settle by hand"); err != nil {
+		return err
 	}
 	entries, err := unmergedEntries(ctx, dir)
 	if err != nil {
