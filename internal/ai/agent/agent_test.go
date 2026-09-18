@@ -175,6 +175,40 @@ func TestStreamErrorIsReturned(t *testing.T) {
 	}
 }
 
+func TestExecuteRespectsAPerRunStepLimit(t *testing.T) {
+	// A provider that always asks for another tool call, so only the step
+	// limit can end the run.
+	p := &scripted{turns: [][]ai.Chunk{
+		{{ToolCalls: []ai.ToolCall{{ID: "c", Name: "list_refs", Args: map[string]any{}}}}, {Done: true}},
+	}}
+	run := baseRun(p, &recorder{})
+	run.MaxSteps = 2
+
+	if _, err := agent.Execute(context.Background(), run, user); err != nil {
+		t.Fatal(err)
+	}
+	if len(p.requests) != 2 {
+		t.Fatalf("provider called %d times, want 2 (MaxSteps)", len(p.requests))
+	}
+}
+
+func TestExecuteDefaultsToTheGlobalStepLimit(t *testing.T) {
+	// A provider that always asks for another tool call, so only the step
+	// limit can end the run.
+	p := &scripted{turns: [][]ai.Chunk{
+		{{ToolCalls: []ai.ToolCall{{ID: "c", Name: "list_refs", Args: map[string]any{}}}}, {Done: true}},
+	}}
+	run := baseRun(p, &recorder{})
+	// MaxSteps left at 0
+
+	if _, err := agent.Execute(context.Background(), run, user); err != nil {
+		t.Fatal(err)
+	}
+	if len(p.requests) != agent.MaxSteps {
+		t.Fatalf("provider called %d times, want the default %d", len(p.requests), agent.MaxSteps)
+	}
+}
+
 func TestTrim(t *testing.T) {
 	var msgs []ai.Message
 	for i := 0; i < 25; i++ {

@@ -75,13 +75,20 @@ type Run struct {
 	Tools         []ai.ToolSpec
 	RunTool       func(ctx context.Context, call ai.ToolCall) string
 	Emit          func(name string, data any)
+	// MaxSteps caps the model/tool rounds for this run; 0 uses MaxSteps.
+	// Resolving a merge takes many more rounds than answering a question.
+	MaxSteps int
 }
 
 // Execute continues history (which ends with the user's message) and
 // returns the updated history.
 func Execute(ctx context.Context, r Run, history []ai.Message) ([]ai.Message, error) {
+	steps := r.MaxSteps
+	if steps <= 0 {
+		steps = MaxSteps
+	}
 	msgs := append([]ai.Message(nil), history...)
-	for step := 0; step < MaxSteps; step++ {
+	for step := 0; step < steps; step++ {
 		stream, err := r.Provider.Chat(ctx, ai.Request{Model: r.Model, System: r.System, Messages: Trim(msgs), Tools: r.Tools})
 		if err != nil {
 			if ctx.Err() != nil {
