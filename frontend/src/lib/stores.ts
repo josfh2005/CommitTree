@@ -1,6 +1,6 @@
 import { derived, get, writable, type Writable } from 'svelte/store'
 import { api } from './api'
-import { emptyFilters, type Filters, type Refs, type Repo } from './types'
+import { emptyFilters, type Filters, type MergeState, type Refs, type Repo } from './types'
 
 function persisted<T>(key: string, initial: T): Writable<T> {
   let start = initial
@@ -37,6 +37,9 @@ export const jumpTo = writable('')
 export const logVersion = writable(0)
 export const busy = writable('')
 export const settingsOpen = writable(false)
+export const mergeState = writable<MergeState | null>(null)
+/** Conflicts the current merge started with, so resolved files stay listed. */
+export const mergeStarted = writable<string[]>([])
 
 export const selectedRepo = derived([repos, selectedRepoId], ([$repos, $id]) => $repos.find((r) => r.id === $id) ?? null)
 
@@ -57,9 +60,25 @@ export async function loadRefs() {
   }
 }
 
+export async function loadMergeState() {
+  const repo = get(selectedRepo)
+  if (!repo || repo.missing) {
+    mergeState.set(null)
+    return
+  }
+  try {
+    const state = await api.getMergeState(repo.id)
+    mergeState.set(state)
+    if (!state.merging) mergeStarted.set([])
+  } catch {
+    mergeState.set(null)
+  }
+}
+
 export async function refreshRepo() {
   await loadRepos()
   await loadRefs()
+  await loadMergeState()
   logVersion.update((v) => v + 1)
 }
 
@@ -72,6 +91,7 @@ export function selectRepo(id: string) {
   // Selecting a folded repo unfolds it; folding it later keeps it selected.
   expandedRepos.update((ids) => (ids.includes(id) ? ids : [...ids, id]))
   loadRefs()
+  loadMergeState()
 }
 
 export function toggleRepoExpanded(id: string) {

@@ -150,6 +150,10 @@ export function ResolveCommit(arg1, arg2) {
   return window['go']['app']['App']['ResolveCommit'](arg1, arg2);
 }
 
+export function ResolveConflicts(arg1, arg2) {
+  return window['go']['app']['App']['ResolveConflicts'](arg1, arg2);
+}
+
 export function SaveAISettings(arg1) {
   return window['go']['app']['App']['SaveAISettings'](arg1);
 }

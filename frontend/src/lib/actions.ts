@@ -1,7 +1,8 @@
 import { get } from 'svelte/store'
 import { api } from './api'
-import { busy, filters, loadRefs, loadRepos, logVersion, refreshRepo, selectRepo, selectedRepoId } from './stores'
+import { busy, chatOpen, filters, loadRefs, loadRepos, logVersion, mergeStarted, refreshRepo, selectRepo, selectedRepoId } from './stores'
 import type { Branch, Repo } from './types'
+import { CONFLICTED, UP_TO_DATE } from './types'
 import { confirmDialog, errorMessage, promptDialog, toast } from './ui'
 
 function branchRef(branch: Branch): string {
@@ -207,5 +208,47 @@ export function startFocusRefresh(): () => void {
     stopVersion()
     stopRepo()
     window.removeEventListener('focus', onFocus)
+  }
+}
+
+export async function mergeBranch(id: string, branch: Branch, into: string) {
+  const label = branch.remote ? `${branch.remote}/${branch.name}` : branch.name
+  const ok = await confirmDialog({
+    title: 'Merge branch',
+    message: `Merge ${label} into ${into}? A merge commit is always created.`,
+    confirmLabel: 'Merge',
+  })
+  if (!ok) return
+  busy.set('Merging…')
+  try {
+    const result = await api.mergeBranch(id, label)
+    if (result.outcome === UP_TO_DATE) toast(`${into} is already up to date with ${label}.`, 'info')
+    else if (result.outcome === CONFLICTED) mergeStarted.set(result.conflicts)
+  } catch (e) {
+    toast(errorMessage(e), 'error')
+  } finally {
+    busy.set('')
+    await refreshRepo()
+  }
+}
+
+export async function abortMerge(id: string) {
+  const ok = await confirmDialog({
+    title: 'Abort merge',
+    message: 'Throw away every resolution from this merge and go back to where the branch was?',
+    confirmLabel: 'Abort merge',
+    danger: true,
+  })
+  if (ok) await run('Aborting merge…', () => api.abortMerge(id))
+}
+
+export const commitMerge = (id: string) => run('Committing merge…', () => api.commitMerge(id))
+
+export async function resolveConflicts(id: string) {
+  chatOpen.set(true)
+  try {
+    await api.resolveConflicts(id, crypto.randomUUID())
+  } catch (e) {
+    toast(errorMessage(e), 'error')
   }
 }

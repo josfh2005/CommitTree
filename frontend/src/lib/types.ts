@@ -167,3 +167,28 @@ export interface ChatErrorEvent { repoID: string; runID: string; message: string
 export interface ExplainDeltaEvent { runID: string; text: string }
 export interface ExplainDoneEvent { runID: string }
 export interface ExplainErrorEvent { runID: string; message: string }
+
+export interface MergeState {
+  merging: boolean
+  from: string
+  into: string
+  conflicts: string[]
+  manual: string[]
+}
+
+export const MERGED = 0
+export const CONFLICTED = 1
+export const UP_TO_DATE = 2
+
+export interface MergeResult {
+  outcome: number
+  conflicts: string[]
+}
+
+export interface ConflictFile {
+  path: string
+  resolved: boolean
+  text: string
+}
+
+export interface MergeChangedEvent { repoID: string }

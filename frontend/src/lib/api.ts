@@ -1,5 +1,5 @@
 import * as Go from '../../wailsjs/go/app/App'
-import type { AIMessage, AISettings, AIStatus, Details, Filters, LogPage, PromptInfo, Refs, Repo } from './types'
+import type { AIMessage, AISettings, AIStatus, ConflictFile, Details, Filters, LogPage, MergeResult, MergeState, PromptInfo, Refs, Repo } from './types'
 
 // The generated bindings use Wails model classes; the JSON is identical to our
 // interfaces, so cast at this single boundary.
@@ -32,6 +32,13 @@ export const api = {
   deleteRemoteBranch: (id: string, remote: string, name: string) => call<void>(Go.DeleteRemoteBranch(id, remote, name)),
   createTag: (id: string, name: string, target: string, message: string) => call<void>(Go.CreateTag(id, name, target, message)),
   deleteTag: (id: string, name: string) => call<void>(Go.DeleteTag(id, name)),
+
+  mergeBranch: (id: string, branch: string) => call<MergeResult>(Go.MergeBranch(id, branch)),
+  getMergeState: (id: string) => call<MergeState>(Go.GetMergeState(id)),
+  abortMerge: (id: string) => call<void>(Go.AbortMerge(id)),
+  commitMerge: (id: string) => call<void>(Go.CommitMerge(id)),
+  resolveConflicts: (repoID: string, runID: string) => call<void>(Go.ResolveConflicts(repoID, runID)),
+  getConflictFile: (id: string, path: string) => call<ConflictFile>(Go.GetConflictFile(id, path)),
 
   aiStatus: () => call<AIStatus>(Go.AIStatus()),
   getAISettings: () => call<AISettings>(Go.GetAISettings()),
