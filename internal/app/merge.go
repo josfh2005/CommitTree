@@ -47,12 +47,32 @@ func (a *App) GetMergeState(id string) (merge.State, error) {
 	return merge.Status(a.ctx, dir)
 }
 
+// AbortMerge stops any agent run on the repository first, so it can't go on
+// resolving a merge that no longer exists — or the next one.
 func (a *App) AbortMerge(id string) error {
+	a.stopRun(id)
 	return a.write(id, func(ctx context.Context, dir string) error { return merge.Abort(ctx, dir) })
 }
 
+// CommitMerge stops any agent run on the repository first, as AbortMerge does.
 func (a *App) CommitMerge(id string) error {
+	a.stopRun(id)
 	return a.write(id, func(ctx context.Context, dir string) error { return merge.Commit(ctx, dir) })
+}
+
+// stopRun cancels the repository's running agent, if any. StopChat's only
+// error is ErrAIDisabled, and with AI off there is no run to stop.
+func (a *App) stopRun(id string) {
+	_ = a.StopChat(id)
+}
+
+// mergeHead returns the commit being merged in, or "" when not merging.
+func mergeHead(ctx context.Context, dir string) string {
+	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--verify", "--quiet", "MERGE_HEAD")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
 }
 
 // mergePaths lists every path this merge touches: the ones still unmerged,
@@ -158,6 +178,11 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 	if !st.Merging {
 		return errors.New("this repository is not merging")
 	}
+	// The run belongs to this merge; its tools refuse to act on any other.
+	startedFor := mergeHead(a.ctx, repo.Path)
+	if startedFor == "" {
+		return errors.New("this repository is not merging")
+	}
 	cfg, err := a.aiSettings()
 	if err != nil {
 		return err
@@ -205,11 +230,7 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 			MaxSteps: MergeMaxSteps,
 			RunTool: func(ctx context.Context, call ai.ToolCall) string {
 				if isMergeTool(call.Name) {
-					out, changed := mergetools.Run(ctx, repo.Path, call)
-					if changed {
-						a.emit(EventMergeChanged, MergeChangedEvent{RepoID: repoID})
-					}
-					return out
+					return a.runMergeTool(ctx, repoID, startedFor, call)
 				}
 				return tools.Run(ctx, repo.Path, call)
 			},
@@ -231,6 +252,34 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 		}
 	}()
 	return nil
+}
+
+// runMergeTool runs one mergetools call under the repository's write lock,
+// so an agent edit and an abort or commit can never interleave, and only
+// while the merge the run was started for is still the one in progress. It
+// uses the run's ctx rather than the lock's, so stopping the run still
+// reaches the tool.
+func (a *App) runMergeTool(ctx context.Context, repoID, startedFor string, call ai.ToolCall) string {
+	var out string
+	var changed bool
+	err := a.write(repoID, func(_ context.Context, dir string) error {
+		if mergeHead(ctx, dir) != startedFor {
+			out = "The merge this run was started for is no longer in progress; stop."
+			return nil
+		}
+		out, changed = mergetools.Run(ctx, dir, call)
+		return nil
+	})
+	switch {
+	case errors.Is(err, ErrBusy):
+		return "The repository is busy with another operation; stop and report."
+	case err != nil:
+		return "Could not run " + call.Name + ": " + err.Error()
+	}
+	if changed {
+		a.emit(EventMergeChanged, MergeChangedEvent{RepoID: repoID})
+	}
+	return out
 }
 
 func isMergeTool(name string) bool {
