@@ -7,7 +7,7 @@
   export let active = false
   export let depth = 0
   export let title = ''
-  export let onSelect: (b: Branch) => void
+  export let onSelect: ((b: Branch) => void) | undefined = undefined
   export let onCheckout: (b: Branch) => void
   export let onMenu: (event: MouseEvent, b: Branch) => void
 </script>
@@ -17,7 +17,7 @@
   class:active
   style="padding-left: {10 + depth * 16}px"
   title={title || text}
-  on:click={() => onSelect(branch)}
+  on:click={() => onSelect?.(branch)}
   on:dblclick={() => onCheckout(branch)}
   on:contextmenu={(e) => onMenu(e, branch)}
 >

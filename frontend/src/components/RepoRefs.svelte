@@ -43,8 +43,6 @@
     filters.update((f) => ({ ...f, branch: f.branch === ref ? '' : ref }))
   }
 
-  const selectBranch = (b: Branch) => toggleFilter(branchRef(b))
-
   function checkout(b: Branch) {
     if (!b.current && !$busy) checkoutBranch(repoId, b)
   }
@@ -91,7 +89,6 @@
         text={b.name}
         active={$filters.branch === branchRef(b)}
         title={b.upstream ? `${b.name} → ${b.upstream}` : b.name}
-        onSelect={selectBranch}
         onCheckout={checkout}
         onMenu={branchMenu}
       />
@@ -112,7 +109,6 @@
             depth={1}
             active={$filters.branch === branchRef(b)}
             title={b.upstream ? `${b.name} → ${b.upstream}` : b.name}
-            onSelect={selectBranch}
             onCheckout={checkout}
             onMenu={branchMenu}
           />
@@ -140,7 +136,6 @@
                 depth={1}
                 active={$filters.branch === branchRef(b)}
                 title={branchLabel(b)}
-                onSelect={selectBranch}
                 onCheckout={checkout}
                 onMenu={branchMenu}
               />
@@ -161,7 +156,6 @@
                     depth={2}
                     active={$filters.branch === branchRef(b)}
                     title={branchLabel(b)}
-                    onSelect={selectBranch}
                     onCheckout={checkout}
                     onMenu={branchMenu}
                   />
