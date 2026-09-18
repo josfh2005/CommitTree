@@ -71,7 +71,7 @@ func Unstage(ctx context.Context, dir, path string) error {
 		return err
 	}
 	if !touched[path] {
-		return fmt.Errorf("%w: %q is not a file this merge brings in; unstaging it would take it out of view", ErrNotInMerge, path)
+		return fmt.Errorf("%w: %q would drop out of the merge view if unstaged; unstage it in a terminal if you need to", ErrNotInMerge, path)
 	}
 	inHead, err := fileInHead(ctx, dir, path)
 	if err != nil {
