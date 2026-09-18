@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -442,4 +443,55 @@ func TestResolveConflictsEndsWithGitsSummary(t *testing.T) {
 		t.Fatalf("notice = %#v", notice.data)
 	}
 	ev.wait(t, agent.EventDone)
+}
+
+func countEvents(ev *events, name string) int {
+	n := 0
+	for _, got := range ev.names() {
+		if got == name {
+			n++
+		}
+	}
+	return n
+}
+
+// The merge-writing wrappers refuse a path git did not list, changing nothing
+// and announcing nothing; a real change is announced as merge:changed.
+func TestMergeFileActionsRejectOrAnnounce(t *testing.T) {
+	a, r, id, ev := newAIMergeApp(t, "http://127.0.0.1:0")
+	if _, err := a.MergeBranch(id, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	r.WriteFile("greeting.txt", "hi there\n")
+	r.Git("add", "greeting.txt")
+
+	for _, err := range []error{
+		a.StageMergeFile(id, ":(glob)*"),
+		a.UnstageMergeFile(id, "*"),
+		a.TakeMergeSide(id, "greeting.txt", "theirs"), // a text file, not Manual
+	} {
+		if !errors.Is(err, merge.ErrNotInMerge) {
+			t.Errorf("err = %v, want ErrNotInMerge", err)
+		}
+	}
+	if n := countEvents(ev, EventMergeChanged); n != 0 {
+		t.Fatalf("%d merge:changed events after refusals, want 0", n)
+	}
+
+	if err := a.UnstageMergeFile(id, "greeting.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.StageMergeFile(id, "greeting.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if n := countEvents(ev, EventMergeChanged); n != 2 {
+		t.Errorf("%d merge:changed events, want one per change", n)
+	}
+	st, err := a.GetMergeState(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(st.Staged, []string{"greeting.txt"}) {
+		t.Errorf("staged = %v, want greeting.txt back", st.Staged)
+	}
 }

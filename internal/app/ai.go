@@ -82,7 +82,8 @@ func WithAI(a *App, d AIDeps) {
 }
 
 func (a *App) emit(name string, data any) {
-	if a.ai.deps.Emit != nil {
+	// a.ai is nil when AI is off; merge and log events still go out.
+	if a.ai != nil && a.ai.deps.Emit != nil {
 		a.ai.deps.Emit(name, data)
 		return
 	}
