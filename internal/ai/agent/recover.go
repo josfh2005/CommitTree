@@ -32,13 +32,14 @@ func recoverCalls(text string, tools []ai.ToolSpec) (calls []ai.ToolCall, attemp
 		known[t.Name] = true
 	}
 
+	budget := retryBudget
 	i := 0
 	for i < len(text) {
 		if text[i] != '{' {
 			i++
 			continue
 		}
-		v, n, ok := decodeObject(text[i:])
+		v, n, ok := decodeObject(text[i:], &budget)
 		if !ok {
 			i++
 			continue
@@ -86,16 +87,20 @@ func asCall(m map[string]any) (name string, args map[string]any, ok bool) {
 // raw tabs and newlines inside strings, which JSON forbids; when the plain
 // decode fails and s starts like an object with a key, it retries with those
 // control characters escaped, mapping the length back onto the original s.
-func decodeObject(s string) (map[string]any, int, bool) {
+//
+// Each retry spends the bytes it escaped from budget, and none is tried once
+// it is spent, so a long reply full of broken objects stays linear.
+func decodeObject(s string, budget *int) (map[string]any, int, bool) {
 	var v map[string]any
 	dec := json.NewDecoder(strings.NewReader(s))
 	if err := dec.Decode(&v); err == nil {
 		return v, int(dec.InputOffset()), true
 	}
-	if !strings.HasPrefix(strings.TrimLeft(s[1:], " \t\r\n"), `"`) {
+	if *budget <= 0 || !strings.HasPrefix(strings.TrimLeft(s[1:], " \t\r\n"), `"`) {
 		return nil, 0, false
 	}
 	fixed, origin := escapeControlInStrings(s)
+	*budget -= len(fixed)
 	v = nil
 	dec = json.NewDecoder(strings.NewReader(fixed))
 	if err := dec.Decode(&v); err != nil {
@@ -104,30 +109,53 @@ func decodeObject(s string) (map[string]any, int, bool) {
 	return v, origin[dec.InputOffset()], true
 }
 
+// retryBudget caps the bytes escapeControlInStrings may produce across one
+// reply; a real tool call, even one carrying a large resolved region, fits
+// many times over.
+const retryBudget = 4 << 20
+
 // escapeControlInStrings escapes control characters found inside JSON string
-// literals. origin[j] is the index in s of the byte that produced fixed[j];
-// origin[len(fixed)] is len(s).
+// literals, and stops after the object that s starts with closes: nothing
+// past it is decoded. origin[j] is the index in s of the byte that produced
+// fixed[j]; origin[len(fixed)] is the index just past the last byte used.
 func escapeControlInStrings(s string) (string, []int) {
 	var b strings.Builder
-	origin := make([]int, 0, len(s)+1)
+	var origin []int
 	emit := func(str string, at int) {
 		b.WriteString(str)
 		for range len(str) {
 			origin = append(origin, at)
 		}
 	}
-	inString, escaped := false, false
+	inString, escaped, afterString, depth := false, false, false, 0
+	end := len(s)
 	for i := 0; i < len(s); i++ {
 		c := s[i]
+		// In JSON a string is followed by ':', ',', '}' or ']'. Anything else
+		// means the object is already broken; escaping further is waste.
+		if afterString && c != ' ' && c != '\t' && c != '\r' && c != '\n' {
+			if c != ':' && c != ',' && c != '}' && c != ']' {
+				end = i
+				break
+			}
+			afterString = false
+		}
 		switch {
 		case !inString:
-			inString = c == '"'
+			switch c {
+			case '"':
+				inString = true
+			case '{', '[':
+				depth++
+			case '}', ']':
+				depth--
+			}
 		case escaped:
 			escaped = false
 		case c == '\\':
 			escaped = true
 		case c == '"':
-			inString = false
+			inString, afterString = false, true
 		case c < 0x20:
 			switch c {
 			case '\t':
@@ -143,7 +171,11 @@ func escapeControlInStrings(s string) (string, []int) {
 		}
 		b.WriteByte(c)
 		origin = append(origin, i)
+		if !inString && depth == 0 {
+			end = i + 1
+			break
+		}
 	}
-	origin = append(origin, len(s))
+	origin = append(origin, end)
 	return b.String(), origin
 }

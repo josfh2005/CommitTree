@@ -2,7 +2,9 @@ package agent
 
 import (
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"git-ui/internal/ai"
 )
@@ -103,5 +105,27 @@ func TestRecoverCalls(t *testing.T) {
 				t.Errorf("attempted = %v, want %v", gotAttempted, tc.attempted)
 			}
 		})
+	}
+}
+
+// Each '{"' that fails to decode used to re-escape the whole rest of the
+// text, which is quadratic: a 64 KiB reply of broken objects took over a
+// second. The retry is bounded, so a long reply scans in linear time.
+func TestRecoverCallsIsNotQuadratic(t *testing.T) {
+	text := strings.Repeat("{\"k\n", 32*1024) // 128 KiB
+	start := time.Now()
+	recoverCalls(text, recoverTools)
+	if d := time.Since(start); d > time.Second {
+		t.Errorf("took %v on 128 KiB of broken objects", d)
+	}
+}
+
+// Bounding the retry must not cost the real case: a valid call after a lot
+// of prose is still recovered.
+func TestRecoverCallsFindsACallAfterLongProse(t *testing.T) {
+	text := strings.Repeat("{\"k\n", 8*1024) + "{\"name\": \"resolve_hunk\", \"arguments\": {\"resolved\": \"\tx\"}}"
+	calls, _ := recoverCalls(text, recoverTools)
+	if len(calls) != 1 || calls[0].Args["resolved"] != "\tx" {
+		t.Errorf("calls = %#v, want the trailing call", calls)
 	}
 }
