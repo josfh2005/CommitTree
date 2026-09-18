@@ -96,7 +96,8 @@ pre { margin: 0; font: inherit; white-space: pre-wrap; }
 }
 .icon-btn:hover:not(:disabled) { background: var(--hover); color: var(--text); }
 .btn { height: 28px; padding: 0 12px; border-radius: 7px; border: 1px solid var(--border); background: var(--surface); }
-.btn:hover { background: var(--hover); }
+.btn:hover:not(:disabled) { background: var(--hover); }
+.btn:disabled { opacity: 0.45; cursor: default; }
 .btn.primary { background: var(--text); color: var(--bg); border-color: var(--text); }
 .btn.danger { background: var(--danger); color: #fff; border-color: var(--danger); }
 .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
