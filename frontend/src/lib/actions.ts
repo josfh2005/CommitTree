@@ -5,7 +5,7 @@ import type { Branch, Repo, ResetInfo, ResetMode } from './types'
 import { UP_TO_DATE } from './types'
 import { commitWarning } from './merge'
 import { resetMessage } from './reset'
-import { confirmDialog, errorMessage, promptDialog, toast } from './ui'
+import { choiceDialog, confirmDialog, errorMessage, promptDialog, toast } from './ui'
 
 export function branchRef(branch: Branch): string {
   return branch.remote ? `refs/remotes/${branch.remote}/${branch.name}` : `refs/heads/${branch.name}`
@@ -85,7 +85,7 @@ export async function checkoutCommit(id: string, hash: string) {
   if (ok) await run('Checking out…', () => api.checkoutDetached(id, hash))
 }
 
-export async function resetBranch(id: string, hash: string, short: string, branch: string, mode: ResetMode) {
+export async function resetBranch(id: string, hash: string, short: string, branch: string) {
   let info: ResetInfo
   try {
     info = await api.getResetPreview(id, hash)
@@ -93,13 +93,20 @@ export async function resetBranch(id: string, hash: string, short: string, branc
     toast(errorMessage(e), 'error')
     return
   }
-  const ok = await confirmDialog({
-    title: `Reset ${branch} (${mode})`,
-    message: resetMessage(mode, branch, short, info),
-    confirmLabel: mode === 'hard' ? 'Reset and discard' : 'Reset',
-    danger: mode === 'hard',
+  const mode = await choiceDialog<ResetMode>({
+    title: `Reset ${branch} to ${short}`,
+    label: 'Mode',
+    options: [
+      { value: 'soft', label: 'Soft — keep the changes staged' },
+      { value: 'mixed', label: 'Mixed — keep the changes unstaged' },
+      { value: 'hard', label: 'Hard — discard the changes' },
+    ],
+    value: 'soft',
+    message: (m) => resetMessage(m, branch, short, info),
+    confirmLabel: (m) => (m === 'hard' ? 'Reset and discard' : 'Reset'),
+    danger: (m) => m === 'hard',
   })
-  if (ok) await run('Resetting…', () => api.resetBranch(id, hash, mode))
+  if (mode) await run('Resetting…', () => api.resetBranch(id, hash, mode))
 }
 
 export async function newBranch(id: string, target: string, targetLabel: string) {

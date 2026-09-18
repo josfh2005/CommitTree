@@ -49,9 +49,21 @@ export interface PromptResult {
   checked: boolean
 }
 
+/** A confirmation whose message and button follow a choice made in it. */
+export interface ChoiceOptions<T extends string = string> {
+  title: string
+  label: string
+  options: { value: T; label: string }[]
+  value: T
+  message: (value: T) => string
+  confirmLabel: (value: T) => string
+  danger?: (value: T) => boolean
+}
+
 export type Dialog =
   | (ConfirmOptions & { kind: 'confirm'; resolve: (ok: boolean) => void })
   | (PromptOptions & { kind: 'prompt'; resolve: (result: PromptResult | null) => void })
+  | (ChoiceOptions & { kind: 'choice'; resolve: (value: string | null) => void })
 
 export const dialog = writable<Dialog | null>(null)
 
@@ -60,6 +72,11 @@ export const confirmDialog = (options: ConfirmOptions) =>
 
 export const promptDialog = (options: PromptOptions) =>
   new Promise<PromptResult | null>((resolve) => dialog.set({ ...options, kind: 'prompt', resolve }))
+
+export const choiceDialog = <T extends string>(options: ChoiceOptions<T>) =>
+  new Promise<T | null>((resolve) =>
+    dialog.set({ ...(options as unknown as ChoiceOptions), kind: 'choice', resolve: resolve as (value: string | null) => void }),
+  )
 
 export interface MenuItem {
   label: string

@@ -178,15 +178,13 @@
 
   // Reset moves the checked-out branch, so it needs one, and not mid-merge:
   // a hard reset would abort the merge without asking.
-  function resetItems(row: LogRow) {
+  function resetItem(row: LogRow) {
     const branch = $refs?.head ?? ''
-    const disabled = !branch || !!$refs?.detached || !!$mergeState?.merging || row.hash === $refs?.headHash || !!$busy
-    return (['soft', 'mixed', 'hard'] as const).map((mode) => ({
-      label: `Reset ${branch || 'branch'} to here — ${mode}…`,
-      action: () => resetBranch(repoId, row.hash, row.short, branch, mode),
-      danger: mode === 'hard',
-      disabled,
-    }))
+    return {
+      label: `Reset ${branch || 'branch'} to here…`,
+      action: () => resetBranch(repoId, row.hash, row.short, branch),
+      disabled: !branch || !!$refs?.detached || !!$mergeState?.merging || row.hash === $refs?.headHash || !!$busy,
+    }
   }
 
   function commitMenu(event: MouseEvent, row: LogRow) {
@@ -196,7 +194,7 @@
       { label: 'Check out (detached)…', action: () => checkoutCommit(repoId, row.hash) },
       { label: 'New branch here…', action: () => newBranch(repoId, row.hash, row.short) },
       { label: 'New tag here…', action: () => newTag(repoId, row.hash, row.short) },
-      ...resetItems(row),
+      resetItem(row),
       { label: 'Copy hash', action: () => copyText(row.hash) },
     ])
   }
