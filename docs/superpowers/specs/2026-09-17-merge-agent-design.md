@@ -76,18 +76,23 @@ type State struct {
     Merging   bool     `json:"merging"`
     From      string   `json:"from"`      // branch being merged in
     Into      string   `json:"into"`      // current branch
-    Conflicts []string `json:"conflicts"` // still unmerged, sorted
-    Resolved  []string `json:"resolved"`  // staged during this merge
-    Manual    []string `json:"manual"`    // no markers: binary, add/add, delete/modify
+    Conflicts []string `json:"conflicts"` // unmerged and carrying markers
+    Manual    []string `json:"manual"`    // unmerged with no markers to splice
 }
 ```
 
 `Merging` is `.git/MERGE_HEAD` existing. `From` comes from
-`.git/MERGE_MSG`'s first line, falling back to the short hash of
-`MERGE_HEAD`. Unmerged paths come from `git status --porcelain=v2`, whose
-`u` records also carry the stage modes — a path whose stage 1, 2 or 3 is
-missing (delete/modify, add/add) or whose blob is binary goes to `Manual`,
-because there are no markers to splice.
+`.git/MERGE_MSG`'s first line. Unmerged paths come from `git diff
+--name-only --diff-filter=U`, and each is then classified by reading it:
+a file whose content has no conflict markers goes to `Manual`. That single
+test covers binaries, delete/modify and add/add together, and it asks
+exactly the question the tools care about — is there a marker block to
+splice — instead of inferring it from stage modes.
+
+There is no `Resolved` list. What the user resolved during this merge is the
+difference between the conflicts reported when the merge started and the ones
+still unmerged, which the frontend already has; deriving it in git would mean
+listing every auto-merged file as though the agent had touched it.
 
 `conflict.go` — the text surgery, pure functions over strings, no git:
 
