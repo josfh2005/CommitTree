@@ -87,13 +87,19 @@ func TestGetConflictFileShowsMarkersThenTheDiff(t *testing.T) {
 	}
 }
 
-func TestGetConflictFileRefusesAPathOutsideTheMerge(t *testing.T) {
-	a, _, id := newMergeApp(t)
+func TestGetConflictFileRefusesPathsOutsideTheMerge(t *testing.T) {
+	a, r, id := newMergeApp(t)
 	if _, err := a.MergeBranch(id, "feature"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.GetConflictFile(id, "../escape.txt"); err == nil {
-		t.Fatal("want an error for a path that is not part of the merge")
+	// A file in the repository that this merge never touched.
+	r.WriteFile("secret.txt", "not part of the merge\n")
+
+	for _, path := range []string{"secret.txt", ":(glob)*", ":/", "../escape.txt"} {
+		got, err := a.GetConflictFile(id, path)
+		if err == nil {
+			t.Errorf("%s: no error, got %+v", path, got)
+		}
 	}
 }
 
