@@ -3,6 +3,7 @@ package merge
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -97,7 +98,7 @@ func Unmerged(ctx context.Context, dir string) ([]string, error) {
 // guard; a four-line check is worth repeating to keep the packages apart.
 func checkRef(ref string) error {
 	if ref == "" || strings.HasPrefix(ref, "-") {
-		return errors.New(ErrInvalidRef.Error() + ": " + ref)
+		return fmt.Errorf("%w: %q", ErrInvalidRef, ref)
 	}
 	return nil
 }

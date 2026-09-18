@@ -87,8 +87,9 @@ func TestStartAlreadyUpToDate(t *testing.T) {
 func TestStartRejectsAnOptionLikeRef(t *testing.T) {
 	r := testrepo.New(t)
 	r.Commit("base")
-	if _, err := Start(context.Background(), r.Dir, "--exec=rm -rf /"); err == nil {
-		t.Fatal("want an error for a ref starting with a dash")
+	_, err := Start(context.Background(), r.Dir, "--exec=rm -rf /")
+	if !errors.Is(err, ErrInvalidRef) {
+		t.Fatalf("err = %v, want ErrInvalidRef", err)
 	}
 }
 
