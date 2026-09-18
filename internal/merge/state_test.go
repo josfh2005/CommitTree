@@ -302,3 +302,67 @@ func TestParseCheckAttrZ(t *testing.T) {
 	}
 }
 
+// B: OUR side had `-merge` when git wrote the conflicted file (so it kept
+// OUR content with no markers), but the incoming branch also deleted that
+// .gitattributes line. Checking only the post-merge worktree attributes
+// would miss the rule that was actually in effect, so the path must still
+// land in Manual.
+func TestStatusPutsANoMergeAttributeConflictInManualWhenTheirsDropsTheAttribute(t *testing.T) {
+	r := testrepo.New(t)
+	r.WriteFile(".gitattributes", "*.lock -merge\n")
+	r.WriteFile("deps.lock", "base\n")
+	r.Git("add", ".gitattributes", "deps.lock")
+	r.Git("commit", "-q", "-m", "add deps.lock")
+	r.Git("switch", "-q", "-c", "feature")
+	r.WriteFile(".gitattributes", "")
+	r.WriteFile("deps.lock", "theirs\n")
+	r.Git("commit", "-q", "-am", "drop the -merge rule and change deps.lock")
+	r.Git("switch", "-q", "main")
+	r.WriteFile("deps.lock", "ours\n")
+	r.Git("commit", "-q", "-am", "our lock")
+
+	if _, err := Start(context.Background(), r.Dir, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	st, err := Status(context.Background(), r.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(st.Manual) != 1 || st.Manual[0] != "deps.lock" {
+		t.Fatalf("manual = %v, conflicts = %v, want deps.lock in manual", st.Manual, st.Conflicts)
+	}
+	if len(st.Conflicts) != 0 {
+		t.Errorf("conflicts = %v, want none", st.Conflicts)
+	}
+}
+
+// B4: same shape as B, but with conflict-marker-size=10 instead of -merge.
+func TestStatusPutsACustomMarkerSizeConflictInManualWhenTheirsDropsTheAttribute(t *testing.T) {
+	r := testrepo.New(t)
+	r.WriteFile(".gitattributes", "*.txt conflict-marker-size=10\n")
+	r.WriteFile("greeting.txt", "hello\n")
+	r.Git("add", ".gitattributes", "greeting.txt")
+	r.Git("commit", "-q", "-m", "add greeting")
+	r.Git("switch", "-q", "-c", "feature")
+	r.WriteFile(".gitattributes", "")
+	r.WriteFile("greeting.txt", "hola\n")
+	r.Git("commit", "-q", "-am", "drop the marker-size rule and change greeting")
+	r.Git("switch", "-q", "main")
+	r.WriteFile("greeting.txt", "hi\n")
+	r.Git("commit", "-q", "-am", "informal")
+
+	if _, err := Start(context.Background(), r.Dir, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	st, err := Status(context.Background(), r.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(st.Manual) != 1 || st.Manual[0] != "greeting.txt" {
+		t.Fatalf("manual = %v, conflicts = %v, want greeting.txt in manual", st.Manual, st.Conflicts)
+	}
+	if len(st.Conflicts) != 0 {
+		t.Errorf("conflicts = %v, want none", st.Conflicts)
+	}
+}
+

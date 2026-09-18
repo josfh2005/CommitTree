@@ -127,6 +127,48 @@ func TestStageFileRefusesANoMergeAttributePath(t *testing.T) {
 	}
 }
 
+// B: OUR side had `-merge` in effect when git wrote the conflicted file, but
+// the incoming branch dropped that .gitattributes line, so the post-merge
+// worktree attributes alone would say the path is an ordinary text conflict.
+// merge.Status must still union in HEAD's attributes and file it under
+// Manual, so stage_file must refuse it.
+func TestStageFileRefusesANoMergeAttributePathEvenWhenTheirsDropsTheAttribute(t *testing.T) {
+	r := testrepo.New(t)
+	r.WriteFile(".gitattributes", "*.lock -merge\n")
+	r.WriteFile("deps.lock", "base\n")
+	r.Git("add", ".gitattributes", "deps.lock")
+	r.Git("commit", "-q", "-m", "add deps.lock")
+	r.Git("switch", "-q", "-c", "feature")
+	r.WriteFile(".gitattributes", "")
+	r.WriteFile("deps.lock", "theirs\n")
+	r.Git("commit", "-q", "-am", "drop the -merge rule and change deps.lock")
+	r.Git("switch", "-q", "main")
+	r.WriteFile("deps.lock", "ours\n")
+	r.Git("commit", "-q", "-am", "our lock")
+	if _, err := merge.Start(context.Background(), r.Dir, "feature"); err != nil {
+		t.Fatal(err)
+	}
+
+	out, changed := mergetools.Run(context.Background(), r.Dir, call("stage_file", map[string]any{"path": "deps.lock"}))
+	if changed {
+		t.Errorf("changed = true, want stage_file to refuse a Manual path; out = %q", out)
+	}
+
+	st, err := merge.Status(context.Background(), r.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, p := range st.Manual {
+		if p == "deps.lock" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("manual = %v, conflicts = %v, want deps.lock still unmerged in manual", st.Manual, st.Conflicts)
+	}
+}
+
 func TestResolveHunkRefusesMarkers(t *testing.T) {
 	r := conflicted(t)
 	out, changed := mergetools.Run(context.Background(), r.Dir,

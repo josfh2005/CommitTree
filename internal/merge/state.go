@@ -47,12 +47,12 @@ func Status(ctx context.Context, dir string) (State, error) {
 	for path := range entries {
 		paths = append(paths, path)
 	}
-	attrs, err := checkAttrs(ctx, dir, paths)
+	manualByAttrs, err := attrsCallForManual(ctx, dir, paths)
 	if err != nil {
 		return State{}, err
 	}
 	for path, e := range entries {
-		if e.needsHuman() || !isText(filepath.Join(dir, path)) || needsHumanForAttrs(attrs[path]) {
+		if e.needsHuman() || !isText(filepath.Join(dir, path)) || manualByAttrs[path] {
 			st.Manual = append(st.Manual, path)
 			continue
 		}
@@ -112,19 +112,41 @@ func unmergedEntries(ctx context.Context, dir string) (map[string]unmerged, erro
 	return entries, nil
 }
 
-// checkAttrs asks git for the merge and conflict-marker-size attributes of
-// every candidate path in one call, keyed by path then attribute name. An
-// empty paths slice makes no git call.
-func checkAttrs(ctx context.Context, dir string, paths []string) (map[string]map[string]string, error) {
+// attrsCallForManual asks git for the merge and conflict-marker-size
+// attributes of every candidate path and reports, per path, whether any of
+// them mean our marker parser does not apply. It unions the answer over
+// three sources: the worktree's own .gitattributes (source ""), and HEAD's
+// and MERGE_HEAD's (source "HEAD"/"MERGE_HEAD") — the attributes each side
+// actually had when git wrote the conflicted file, which is what decided
+// whether it wrote markers. The worktree's post-merge .gitattributes can
+// differ from both — the incoming branch may have changed or removed the
+// very rule that was in effect — so checking it alone is not enough. A path
+// is reported true (Manual) as soon as any one of the three sources calls
+// for it; that is fail-safe by construction, since an attribute any side
+// ever had wins. An empty paths slice makes no git calls.
+func attrsCallForManual(ctx context.Context, dir string, paths []string) (map[string]bool, error) {
+	result := map[string]bool{}
 	if len(paths) == 0 {
-		return map[string]map[string]string{}, nil
+		return result, nil
 	}
-	args := append([]string{"check-attr", "-z", "merge", "conflict-marker-size", "--"}, paths...)
-	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, args...)
-	if err != nil {
-		return nil, err
+	for _, source := range []string{"", "HEAD", "MERGE_HEAD"} {
+		args := []string{"check-attr"}
+		if source != "" {
+			args = append(args, "--source", source)
+		}
+		args = append(args, "-z", "merge", "conflict-marker-size", "--")
+		args = append(args, paths...)
+		out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, args...)
+		if err != nil {
+			return nil, err
+		}
+		for path, attrs := range parseCheckAttrZ(out) {
+			if needsHumanForAttrs(attrs) {
+				result[path] = true
+			}
+		}
 	}
-	return parseCheckAttrZ(out), nil
+	return result, nil
 }
 
 // parseCheckAttrZ parses the -z output of `git check-attr`: a flat sequence
