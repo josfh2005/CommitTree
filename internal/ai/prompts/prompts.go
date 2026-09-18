@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	Chat          = "chat"
-	ExplainCommit = "explain-commit"
+	Chat             = "chat"
+	ExplainCommit    = "explain-commit"
+	ResolveConflicts = "resolve-conflicts"
 )
 
 var ErrUnknownPrompt = errors.New("unknown prompt")

@@ -32,7 +32,7 @@ func TestDefaultsRenderVariables(t *testing.T) {
 	if err != nil || !strings.Contains(explain, "3 to 6") {
 		t.Fatalf("explain = %q, err %v", explain, err)
 	}
-	if !reflect.DeepEqual(prompts.Names(), []string{"chat", "explain-commit"}) {
+	if !reflect.DeepEqual(prompts.Names(), []string{"chat", "explain-commit", "resolve-conflicts"}) {
 		t.Fatalf("names = %v", prompts.Names())
 	}
 }
@@ -68,7 +68,7 @@ func TestUserOverrideListAndReset(t *testing.T) {
 	if again, _ := s.Get(prompts.ExplainCommit, vars); again != got {
 		t.Fatal("EnsureFiles overwrote a user file")
 	}
-	want := []prompts.Info{{Name: "chat"}, {Name: "explain-commit", Customized: true}}
+	want := []prompts.Info{{Name: "chat"}, {Name: "explain-commit", Customized: true}, {Name: "resolve-conflicts"}}
 	if !reflect.DeepEqual(s.List(), want) {
 		t.Fatalf("list = %+v", s.List())
 	}
@@ -102,5 +102,26 @@ func TestGetFallsBackToDefaultWhenUserFileIsBlank(t *testing.T) {
 	}
 	if got != want {
 		t.Fatalf("blank override should fall back to the embedded default: got %q, want %q", got, want)
+	}
+}
+
+func TestResolveConflictsPromptIsAvailable(t *testing.T) {
+	found := false
+	for _, name := range prompts.Names() {
+		if name == prompts.ResolveConflicts {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("Names() = %v, want it to include %q", prompts.Names(), prompts.ResolveConflicts)
+	}
+
+	s := prompts.New(t.TempDir())
+	text, err := s.Get(prompts.ResolveConflicts, prompts.Vars{Repo: "acme", Branch: "main"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, "acme") {
+		t.Errorf("prompt did not expand {{repo}}: %q", text)
 	}
 }
