@@ -6,6 +6,7 @@ package mergetools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -143,8 +144,24 @@ func resolveHunk(ctx context.Context, dir string, args map[string]any) (string, 
 	if err != nil {
 		return "Could not read the file mode of " + path + ": " + err.Error(), false
 	}
-	if err := os.WriteFile(full, []byte(out), info.Mode().Perm()); err != nil {
+	tmp, err := os.CreateTemp(filepath.Dir(full), ".git-ui-merge-*")
+	if err != nil {
 		return "Could not write " + path + ": " + err.Error(), false
+	}
+	name := tmp.Name()
+	_, writeErr := tmp.WriteString(out)
+	closeErr := tmp.Close()
+	if writeErr != nil || closeErr != nil {
+		os.Remove(name)
+		return "Could not write " + path + ": " + errors.Join(writeErr, closeErr).Error(), false
+	}
+	if err := os.Chmod(name, info.Mode().Perm()); err != nil {
+		os.Remove(name)
+		return "Could not set the file mode of " + path + ": " + err.Error(), false
+	}
+	if err := os.Rename(name, full); err != nil {
+		os.Remove(name)
+		return "Could not replace " + path + ": " + err.Error(), false
 	}
 	left, err := merge.Parse(out)
 	if err != nil {
@@ -190,7 +207,15 @@ func open(ctx context.Context, dir string, args map[string]any) (path string, hu
 	if !conflicted {
 		return "", nil, fmt.Sprintf("%q is not a conflicted file in this merge. Call list_conflicts to see which files are.", path)
 	}
-	data, err := os.ReadFile(filepath.Join(dir, path))
+	full := filepath.Join(dir, path)
+	info, err := os.Lstat(full)
+	if err != nil {
+		return "", nil, "Could not read " + path + ": " + err.Error()
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return "", nil, path + " is a symbolic link; resolve it by hand."
+	}
+	data, err := os.ReadFile(full)
 	if err != nil {
 		return "", nil, "Could not read " + path + ": " + err.Error()
 	}

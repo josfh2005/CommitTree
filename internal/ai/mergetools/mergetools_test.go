@@ -146,3 +146,31 @@ func TestStageFileAfterResolving(t *testing.T) {
 		t.Errorf("conflicts = %v, want none", st.Conflicts)
 	}
 }
+
+func TestToolsRefuseAnUnmergedSymlink(t *testing.T) {
+	r := conflicted(t)
+	outside := filepath.Join(t.TempDir(), "outside.txt")
+	if err := os.WriteFile(outside, []byte("do not touch\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Stand greeting.txt's path on a symlink pointing out of the repository.
+	link := filepath.Join(r.Dir, "greeting.txt")
+	if err := os.Remove(link); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, link); err != nil {
+		t.Fatal(err)
+	}
+
+	out, changed := mergetools.Run(context.Background(), r.Dir,
+		call("resolve_hunk", map[string]any{"path": "greeting.txt", "hunk": float64(0), "resolved": "pwned\n"}))
+	if changed {
+		t.Error("changed = true, want false")
+	}
+	if !strings.Contains(out, "symbolic link") {
+		t.Errorf("out = %q, want a refusal naming the symlink", out)
+	}
+	if data, _ := os.ReadFile(outside); string(data) != "do not touch\n" {
+		t.Fatalf("the file outside the repository was modified: %q", data)
+	}
+}
