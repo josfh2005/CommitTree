@@ -95,6 +95,10 @@ func listConflicts(ctx context.Context, dir string) string {
 				n = len(hunks)
 			}
 		}
+		if n == 0 {
+			fmt.Fprintf(&b, "%s — 0 conflict(s) left; call stage_file\n", path)
+			continue
+		}
 		fmt.Fprintf(&b, "%s — %d conflict(s)\n", path, n)
 	}
 	for _, path := range st.Manual {
@@ -199,8 +203,10 @@ func open(ctx context.Context, dir string, args map[string]any) (path string, hu
 	if err != nil {
 		return "", nil, "Could not read the merge state: " + err.Error()
 	}
+	// Conflicts only: a Manual path (delete/modify, binary, symlink) is a
+	// human's to settle, and accepting it here would let stage_file settle it.
 	conflicted := false
-	for _, p := range append(append([]string{}, st.Conflicts...), st.Manual...) {
+	for _, p := range st.Conflicts {
 		if p == path {
 			conflicted = true
 			break
@@ -214,6 +220,7 @@ func open(ctx context.Context, dir string, args map[string]any) (path string, hu
 	if err != nil {
 		return "", nil, "Could not read " + path + ": " + err.Error()
 	}
+	// Status already files a symlink under Manual; this is defence in depth.
 	if info.Mode()&os.ModeSymlink != 0 {
 		return "", nil, path + " is a symbolic link; resolve it by hand."
 	}

@@ -167,8 +167,12 @@ func TestToolsRefuseAnUnmergedSymlink(t *testing.T) {
 	if changed {
 		t.Error("changed = true, want false")
 	}
-	if !strings.Contains(out, "symbolic link") {
-		t.Errorf("out = %q, want a refusal naming the symlink", out)
+	// Status now files a symlinked path under Manual, so the membership check
+	// refuses it ("not a conflicted file") before open's own symlink check
+	// ("symbolic link") is reached. Either refusal is correct; what matters is
+	// that nothing was written and the file outside is untouched.
+	if !strings.Contains(out, "not a conflicted file") && !strings.Contains(out, "symbolic link") {
+		t.Errorf("out = %q, want a refusal", out)
 	}
 	if data, _ := os.ReadFile(outside); string(data) != "do not touch\n" {
 		t.Fatalf("the file outside the repository was modified: %q", data)
@@ -230,5 +234,54 @@ func TestStageFileTreatsThePathLiterally(t *testing.T) {
 	}
 	if staged := r.Git("diff", "--cached", "--name-only"); strings.Contains(staged, "untracked.txt") {
 		t.Errorf("staged = %q: staging *.txt added untracked.txt", staged)
+	}
+}
+
+// A modify/delete conflict has no markers, but staging it would still settle
+// it — keeping one side and dropping the other on the model's say-so. Only a
+// human decides that.
+func TestStageFileRefusesAModifyDeleteConflict(t *testing.T) {
+	r := testrepo.New(t)
+	r.WriteFile("gone.txt", "base\n")
+	r.Git("add", "gone.txt")
+	r.Git("commit", "-q", "-m", "add gone")
+	r.Git("switch", "-q", "-c", "feature")
+	r.WriteFile("gone.txt", "edited on feature\n")
+	r.Git("commit", "-q", "-am", "edit gone")
+	r.Git("switch", "-q", "main")
+	r.Git("rm", "-q", "gone.txt")
+	r.Git("commit", "-q", "-m", "delete gone")
+	if _, err := merge.Start(context.Background(), r.Dir, "feature"); err != nil {
+		t.Fatal(err)
+	}
+
+	out, changed := mergetools.Run(context.Background(), r.Dir, call("stage_file", map[string]any{"path": "gone.txt"}))
+	if changed {
+		t.Error("changed = true, want false")
+	}
+	if !strings.Contains(out, "not a conflicted file") {
+		t.Errorf("out = %q, want a refusal", out)
+	}
+	st, err := merge.Status(context.Background(), r.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(st.Manual) != 1 || st.Manual[0] != "gone.txt" {
+		t.Errorf("manual = %v, want gone.txt still unmerged", st.Manual)
+	}
+}
+
+// Once every region is resolved, the file is still the agent's to stage, and
+// list_conflicts must say so rather than telling it to leave the file alone.
+func TestListConflictsAsksToStageAResolvedFile(t *testing.T) {
+	r := conflicted(t)
+	mergetools.Run(context.Background(), r.Dir,
+		call("resolve_hunk", map[string]any{"path": "greeting.txt", "hunk": float64(0), "resolved": "hi / hola\n"}))
+	out, _ := mergetools.Run(context.Background(), r.Dir, call("list_conflicts", nil))
+	if !strings.Contains(out, "greeting.txt — 0 conflict(s) left; call stage_file") {
+		t.Errorf("out = %q, want greeting.txt listed as ready to stage", out)
+	}
+	if strings.Contains(out, "leave it for the user") {
+		t.Errorf("out = %q, the agent's own resolved file is described as the user's", out)
 	}
 }
