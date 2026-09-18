@@ -44,6 +44,27 @@ func TestRecoverCalls(t *testing.T) {
 			attempted: true,
 		},
 		{
+			name:      "raw tab and newline inside a string, as models write indented code",
+			text:      "```json\n{\"name\": \"resolve_hunk\", \"arguments\": {\"path\": \"greet.go\", \"resolved\": \"\treturn \\\"goodbye\\\"\n}\"}}\n```",
+			wantCalls: []ai.ToolCall{{Name: "resolve_hunk", Args: map[string]any{"path": "greet.go", "resolved": "\treturn \"goodbye\"\n}"}}},
+			attempted: true,
+		},
+		{
+			name:      "raw tab next to non-ASCII text keeps the UTF-8 intact",
+			text:      "{\"name\": \"resolve_hunk\", \"arguments\": {\"resolved\": \"\treturn \\\"adiós\\\"\"}}",
+			wantCalls: []ai.ToolCall{{Name: "resolve_hunk", Args: map[string]any{"resolved": "\treturn \"adiós\""}}},
+			attempted: true,
+		},
+		{
+			name: "raw tab in the first call does not hide the second",
+			text: "{\"name\": \"resolve_hunk\", \"arguments\": {\"resolved\": \"\tx\"}} {\"name\": \"read_conflict\", \"arguments\": {\"path\": \"b.go\"}}",
+			wantCalls: []ai.ToolCall{
+				{Name: "resolve_hunk", Args: map[string]any{"resolved": "\tx"}},
+				{Name: "read_conflict", Args: map[string]any{"path": "b.go"}},
+			},
+			attempted: true,
+		},
+		{
 			name:      "unknown tool name",
 			text:      `{"name": "delete_repo", "arguments": {"path": "a.go"}}`,
 			wantCalls: nil,

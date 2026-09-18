@@ -2,6 +2,7 @@ package agent
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"git-ui/internal/ai"
@@ -37,9 +38,8 @@ func recoverCalls(text string, tools []ai.ToolSpec) (calls []ai.ToolCall, attemp
 			i++
 			continue
 		}
-		dec := json.NewDecoder(strings.NewReader(text[i:]))
-		var v map[string]any
-		if err := dec.Decode(&v); err != nil {
+		v, n, ok := decodeObject(text[i:])
+		if !ok {
 			i++
 			continue
 		}
@@ -49,7 +49,7 @@ func recoverCalls(text string, tools []ai.ToolSpec) (calls []ai.ToolCall, attemp
 				calls = append(calls, ai.ToolCall{Name: name, Args: args})
 			}
 		}
-		i += int(dec.InputOffset())
+		i += n
 	}
 
 	if len(calls) == 0 && !attempted {
@@ -79,4 +79,71 @@ func asCall(m map[string]any) (name string, args map[string]any, ok bool) {
 		return "", nil, false
 	}
 	return n, a, true
+}
+
+// decodeObject decodes the JSON object at the start of s and returns it with
+// the number of bytes of s it used. Models writing code into a call often put
+// raw tabs and newlines inside strings, which JSON forbids; when the plain
+// decode fails and s starts like an object with a key, it retries with those
+// control characters escaped, mapping the length back onto the original s.
+func decodeObject(s string) (map[string]any, int, bool) {
+	var v map[string]any
+	dec := json.NewDecoder(strings.NewReader(s))
+	if err := dec.Decode(&v); err == nil {
+		return v, int(dec.InputOffset()), true
+	}
+	if !strings.HasPrefix(strings.TrimLeft(s[1:], " \t\r\n"), `"`) {
+		return nil, 0, false
+	}
+	fixed, origin := escapeControlInStrings(s)
+	v = nil
+	dec = json.NewDecoder(strings.NewReader(fixed))
+	if err := dec.Decode(&v); err != nil {
+		return nil, 0, false
+	}
+	return v, origin[dec.InputOffset()], true
+}
+
+// escapeControlInStrings escapes control characters found inside JSON string
+// literals. origin[j] is the index in s of the byte that produced fixed[j];
+// origin[len(fixed)] is len(s).
+func escapeControlInStrings(s string) (string, []int) {
+	var b strings.Builder
+	origin := make([]int, 0, len(s)+1)
+	emit := func(str string, at int) {
+		b.WriteString(str)
+		for range len(str) {
+			origin = append(origin, at)
+		}
+	}
+	inString, escaped := false, false
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case !inString:
+			inString = c == '"'
+		case escaped:
+			escaped = false
+		case c == '\\':
+			escaped = true
+		case c == '"':
+			inString = false
+		case c < 0x20:
+			switch c {
+			case '\t':
+				emit(`\t`, i)
+			case '\n':
+				emit(`\n`, i)
+			case '\r':
+				emit(`\r`, i)
+			default:
+				emit(fmt.Sprintf(`\u%04x`, c), i)
+			}
+			continue
+		}
+		b.WriteByte(c)
+		origin = append(origin, i)
+	}
+	origin = append(origin, len(s))
+	return b.String(), origin
 }
