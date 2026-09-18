@@ -1,9 +1,9 @@
 <script lang="ts">
   import BranchRow from './BranchRow.svelte'
   import Icon from './Icon.svelte'
-  import { checkoutBranch, deleteBranch, deleteTag, newBranch, newTag } from '../lib/actions'
+  import { checkoutBranch, deleteBranch, deleteTag, mergeBranch, newBranch, newTag } from '../lib/actions'
   import { groupBranches, leafName, type BranchGroup } from '../lib/branches'
-  import { busy, filters, refs } from '../lib/stores'
+  import { busy, filters, mergeState, refs } from '../lib/stores'
   import type { Branch, Tag } from '../lib/types'
   import { openMenu } from '../lib/ui'
 
@@ -52,6 +52,11 @@
   function branchMenu(event: MouseEvent, b: Branch) {
     openMenu(event, [
       { label: 'Check out', action: () => checkoutBranch(repoId, b), disabled: b.current || !!$busy },
+      {
+        label: `Merge ${branchLabel(b)} into ${$refs?.head ?? ''}`,
+        action: () => mergeBranch(repoId, b, $refs?.head ?? ''),
+        disabled: b.current || !!$busy || !!$refs?.detached || !!$mergeState?.merging,
+      },
       { label: 'New branch from here…', action: () => newBranch(repoId, branchLabel(b), branchLabel(b)) },
       { label: 'New tag here…', action: () => newTag(repoId, branchLabel(b), branchLabel(b)) },
       { label: b.remote ? 'Delete on remote…' : 'Delete…', action: () => deleteBranch(repoId, b), danger: true, disabled: b.current },

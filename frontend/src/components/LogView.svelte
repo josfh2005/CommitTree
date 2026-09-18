@@ -3,8 +3,9 @@
   import FilterBar from './FilterBar.svelte'
   import Icon from './Icon.svelte'
   import LogList from './LogList.svelte'
+  import MergeView from './MergeView.svelte'
   import Splitter from './Splitter.svelte'
-  import { chatOpen, detailsHeight, selectedHash, selectedRepo } from '../lib/stores'
+  import { chatOpen, detailsHeight, mergeState, selectedHash, selectedRepo } from '../lib/stores'
 </script>
 
 <div class="log-view">
@@ -24,10 +25,14 @@
     {#key $selectedRepo.id}
       <FilterBar repoId={$selectedRepo.id} />
       <div class="list"><LogList repoId={$selectedRepo.id} /></div>
-      {#if $selectedHash}
+      {#if $mergeState?.merging || $selectedHash}
         <Splitter direction="horizontal" on:drag={(e) => detailsHeight.set(Math.min(720, Math.max(120, $detailsHeight - e.detail)))} />
         <div class="details" style="height: {$detailsHeight}px">
-          <CommitDetails repoId={$selectedRepo.id} hash={$selectedHash} />
+          {#if $mergeState?.merging}
+            <MergeView repoId={$selectedRepo.id} />
+          {:else if $selectedHash}
+            <CommitDetails repoId={$selectedRepo.id} hash={$selectedHash} />
+          {/if}
         </div>
       {/if}
     {/key}

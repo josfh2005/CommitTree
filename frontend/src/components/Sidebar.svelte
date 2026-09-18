@@ -2,7 +2,7 @@
   import Icon from './Icon.svelte'
   import RepoRefs from './RepoRefs.svelte'
   import { addRepo, fetchRepo, pullRepo, relocateRepo, removeRepo } from '../lib/actions'
-  import { busy, expandedRepos, repos, selectRepo, selectedRepoId, settingsOpen, toggleRepoExpanded } from '../lib/stores'
+  import { busy, expandedRepos, mergeState, repos, selectRepo, selectedRepoId, settingsOpen, toggleRepoExpanded } from '../lib/stores'
   import type { Repo } from '../lib/types'
   import { openMenu } from '../lib/ui'
 
@@ -40,6 +40,7 @@
           {#if repo.missing}
             <span class="badge">missing</span>
           {:else}
+            {#if active && $mergeState?.merging}<span class="badge">merging</span>{/if}
             <span class="branch ellipsis">{repo.branch}</span>
           {/if}
         </button>
