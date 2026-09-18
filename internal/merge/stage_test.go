@@ -270,3 +270,54 @@ func TestStatusWorksWithoutAMergeBase(t *testing.T) {
 		t.Errorf("state = %+v, want merging with b.txt staged", st)
 	}
 }
+
+// ourRenameTheirEdit is a merge where our side renamed old.txt to moved.txt
+// and theirs edited old.txt, so git puts their edit into moved.txt — a path
+// their side's own diff never mentions.
+func ourRenameTheirEdit(t *testing.T) *testrepo.Repo {
+	t.Helper()
+	r := testrepo.New(t)
+	r.WriteFile("greeting.txt", "hello\n")
+	r.WriteFile("old.txt", "line 1\nline 2\nline 3\nline 4\nline 5\n")
+	r.Git("add", "-A")
+	r.Git("commit", "-q", "-m", "base")
+	r.Git("switch", "-q", "-c", "feature")
+	r.WriteFile("greeting.txt", "hola\n")
+	r.WriteFile("old.txt", "line 1\nline 2\nline 3\nline 4\nline 5 edited by theirs\n")
+	r.Git("commit", "-q", "-am", "theirs")
+	r.Git("switch", "-q", "main")
+	r.WriteFile("greeting.txt", "hi\n")
+	r.Git("mv", "old.txt", "moved.txt")
+	r.Git("commit", "-q", "-am", "ours: rename")
+	if _, err := Start(context.Background(), r.Dir, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
+func TestUnstageKeepsAFileOurSideRenamedListed(t *testing.T) {
+	r := ourRenameTheirEdit(t)
+	if st := status(t, r.Dir); !slices.Contains(st.Staged, "moved.txt") {
+		t.Fatalf("staged = %v, want moved.txt carrying their edit", st.Staged)
+	}
+	if err := Unstage(context.Background(), r.Dir, "moved.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if st := status(t, r.Dir); !slices.Contains(st.Unstaged, "moved.txt") {
+		t.Errorf("unstaged = %v, want moved.txt listed so their edit can't leave the commit unseen", st.Unstaged)
+	}
+}
+
+// Whatever the merge paths miss, Unstage must never move a file out of
+// every list: here, a new file of the user's own staged during the merge.
+func TestUnstageRefusesWhatWouldDropOutOfView(t *testing.T) {
+	r := resolvedMerge(t)
+	r.WriteFile("mine.txt", "my own new file\n")
+	r.Git("add", "mine.txt")
+	if err := Unstage(context.Background(), r.Dir, "mine.txt"); !errors.Is(err, ErrNotInMerge) {
+		t.Errorf("err = %v, want a refusal", err)
+	}
+	if st := status(t, r.Dir); !slices.Contains(st.Staged, "mine.txt") {
+		t.Errorf("staged = %v, want mine.txt still staged", st.Staged)
+	}
+}

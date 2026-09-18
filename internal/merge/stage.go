@@ -52,7 +52,8 @@ func Stage(ctx context.Context, dir, path string) error {
 }
 
 // Unstage takes one of the merge's staged files out of the index and keeps
-// its content in the worktree. A file HEAD doesn't have would become
+// its content in the worktree. It refuses a path the merge doesn't touch,
+// which would drop out of every list. A file HEAD doesn't have would become
 // untracked, and so vanish from the merge view and from the merge commit
 // unseen; it is re-added as intent-to-add so it stays listed as unstaged.
 func Unstage(ctx context.Context, dir, path string) error {
@@ -62,6 +63,15 @@ func Unstage(ctx context.Context, dir, path string) error {
 	}
 	if err := settled(st, st.Staged, path, "a staged file"); err != nil {
 		return err
+	}
+	// Once unstaged, a path is listed only if the merge touches it; anything
+	// else would leave every list, and the merge commit, unseen.
+	touched, err := mergeTouched(ctx, dir)
+	if err != nil {
+		return err
+	}
+	if !touched[path] {
+		return fmt.Errorf("%w: %q is not a file this merge brings in; unstaging it would take it out of view", ErrNotInMerge, path)
 	}
 	inHead, err := fileInHead(ctx, dir, path)
 	if err != nil {

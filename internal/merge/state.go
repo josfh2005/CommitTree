@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 
@@ -70,24 +69,68 @@ func Status(ctx context.Context, dir string) (State, error) {
 	}
 	// Unstaged is limited to what the merge brings in: a merge may start with
 	// unrelated uncommitted work, which is not the merge's to stage.
-	theirs, err := changedPaths(ctx, dir, nil, "HEAD...MERGE_HEAD")
+	touched, err := mergeTouched(ctx, dir)
 	if err != nil {
-		// Unrelated histories have no merge base; everything differing
-		// between the two sides is then the merge's.
-		if theirs, err = changedPaths(ctx, dir, nil, "HEAD", "MERGE_HEAD"); err != nil {
-			return State{}, err
-		}
+		return State{}, err
 	}
 	dirty, err := changedPaths(ctx, dir, entries)
 	if err != nil {
 		return State{}, err
 	}
 	for _, p := range dirty {
-		if slices.Contains(theirs, p) {
+		if touched[p] {
 			st.Unstaged = append(st.Unstaged, p)
 		}
 	}
 	return st, nil
+}
+
+// mergeTouched is the set of paths the incoming side can change: what it
+// changed since the merge base, plus the new name of each file our side
+// renamed whose old name it changed — git puts their edit there, a path
+// their own diff never mentions.
+func mergeTouched(ctx context.Context, dir string) (map[string]bool, error) {
+	touched := map[string]bool{}
+	base, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "merge-base", "HEAD", "MERGE_HEAD")
+	if err != nil {
+		// Unrelated histories have no merge base; everything differing
+		// between the two sides is then the merge's.
+		paths, err := changedPaths(ctx, dir, nil, "HEAD", "MERGE_HEAD")
+		for _, p := range paths {
+			touched[p] = true
+		}
+		return touched, err
+	}
+	base = strings.TrimSpace(base)
+	theirs, err := changedPaths(ctx, dir, nil, base, "MERGE_HEAD")
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range theirs {
+		touched[p] = true
+	}
+	// -z --name-status: a status field, then one path, or two (old, new)
+	// for a rename or copy.
+	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "diff", "-z", "--name-status", "-M", base, "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	fields := strings.Split(out, "\x00")
+	for i := 0; i < len(fields); {
+		status := fields[i]
+		if status == "" {
+			break
+		}
+		if (status[0] == 'R' || status[0] == 'C') && i+2 < len(fields) {
+			if status[0] == 'R' && touched[fields[i+1]] {
+				touched[fields[i+2]] = true
+			}
+			i += 3
+			continue
+		}
+		i += 2
+	}
+	return touched, nil
 }
 
 // unmerged is what git's index says about one unmerged path: which of the
