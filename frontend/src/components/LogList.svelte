@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte'
   import { api } from '../lib/api'
-  import { checkoutCommit, newBranch, newTag } from '../lib/actions'
+  import { checkoutCommit, newBranch, newTag, resetBranch } from '../lib/actions'
   import { relativeDate } from '../lib/format'
   import {
     arrowAt, DOT_RADIUS, edgeSegment, graphWidth, laneColor, laneX, ROW_HEIGHT, rowCenterY, visibleRange,
   } from '../lib/geometry'
-  import { chatOpen, filters, jumpTo, logVersion, selectedHash } from '../lib/stores'
+  import { busy, chatOpen, filters, jumpTo, logVersion, mergeState, refs, selectedHash } from '../lib/stores'
   import type { LogRow } from '../lib/types'
   import { copyText, errorMessage, openMenu, toast } from '../lib/ui'
 
@@ -176,6 +176,19 @@
     }
   }
 
+  // Reset moves the checked-out branch, so it needs one, and not mid-merge:
+  // a hard reset would abort the merge without asking.
+  function resetItems(row: LogRow) {
+    const branch = $refs?.head ?? ''
+    const disabled = !branch || !!$refs?.detached || !!$mergeState?.merging || row.hash === $refs?.headHash || !!$busy
+    return (['soft', 'mixed', 'hard'] as const).map((mode) => ({
+      label: `Reset ${branch || 'branch'} to here — ${mode}…`,
+      action: () => resetBranch(repoId, row.hash, row.short, branch, mode),
+      danger: mode === 'hard',
+      disabled,
+    }))
+  }
+
   function commitMenu(event: MouseEvent, row: LogRow) {
     selectedHash.set(row.hash)
     openMenu(event, [
@@ -183,6 +196,7 @@
       { label: 'Check out (detached)…', action: () => checkoutCommit(repoId, row.hash) },
       { label: 'New branch here…', action: () => newBranch(repoId, row.hash, row.short) },
       { label: 'New tag here…', action: () => newTag(repoId, row.hash, row.short) },
+      ...resetItems(row),
       { label: 'Copy hash', action: () => copyText(row.hash) },
     ])
   }

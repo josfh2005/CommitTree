@@ -106,6 +106,10 @@ export function GetRefs(arg1) {
   return window['go']['app']['App']['GetRefs'](arg1);
 }
 
+export function GetResetPreview(arg1, arg2) {
+  return window['go']['app']['App']['GetResetPreview'](arg1, arg2);
+}
+
 export function IsShallow(arg1) {
   return window['go']['app']['App']['IsShallow'](arg1);
 }
@@ -140,6 +144,10 @@ export function RelocateRepo(arg1) {
 
 export function RemoveRepo(arg1) {
   return window['go']['app']['App']['RemoveRepo'](arg1);
+}
+
+export function ResetBranch(arg1, arg2, arg3) {
+  return window['go']['app']['App']['ResetBranch'](arg1, arg2, arg3);
 }
 
 export function ResetPrompt(arg1) {

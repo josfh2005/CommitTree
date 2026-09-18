@@ -1,5 +1,5 @@
 import * as Go from '../../wailsjs/go/app/App'
-import type { AIMessage, AISettings, AIStatus, ConflictFile, Details, Filters, LogPage, MergeResult, MergeState, PromptInfo, Refs, Repo } from './types'
+import type { AIMessage, AISettings, AIStatus, ConflictFile, Details, Filters, LogPage, MergeResult, MergeState, PromptInfo, Refs, Repo, ResetInfo, ResetMode } from './types'
 
 // The generated bindings use Wails model classes; the JSON is identical to our
 // interfaces, so cast at this single boundary.
@@ -24,6 +24,8 @@ export const api = {
   checkout: (id: string, branch: string) => call<void>(Go.Checkout(id, branch)),
   checkoutRemote: (id: string, remote: string, name: string) => call<void>(Go.CheckoutRemote(id, remote, name)),
   checkoutDetached: (id: string, hash: string) => call<void>(Go.CheckoutDetached(id, hash)),
+  resetBranch: (id: string, hash: string, mode: ResetMode) => call<void>(Go.ResetBranch(id, hash, mode)),
+  getResetPreview: (id: string, hash: string) => call<ResetInfo>(Go.GetResetPreview(id, hash)),
   fetch: (id: string) => call<void>(Go.Fetch(id)),
   pull: (id: string) => call<void>(Go.Pull(id)),
   createBranch: (id: string, name: string, target: string, checkout: boolean) =>

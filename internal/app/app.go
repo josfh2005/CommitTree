@@ -248,6 +248,21 @@ func (a *App) CheckoutDetached(id, hash string) error {
 	return a.write(id, func(ctx context.Context, dir string) error { return ops.CheckoutDetached(ctx, dir, hash) })
 }
 
+// ResetBranch moves the current branch to hash; mode is soft, mixed or hard.
+func (a *App) ResetBranch(id, hash, mode string) error {
+	return a.write(id, func(ctx context.Context, dir string) error { return ops.Reset(ctx, dir, hash, ops.ResetMode(mode)) })
+}
+
+// GetResetPreview counts what ResetBranch to hash would undo, for its
+// confirmation.
+func (a *App) GetResetPreview(id, hash string) (ops.ResetInfo, error) {
+	dir, err := a.dir(id)
+	if err != nil {
+		return ops.ResetInfo{}, err
+	}
+	return ops.ResetPreview(a.ctx, dir, hash)
+}
+
 func (a *App) Fetch(id string) error {
 	return a.write(id, func(ctx context.Context, dir string) error { return ops.Fetch(ctx, dir) })
 }

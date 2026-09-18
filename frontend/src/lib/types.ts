@@ -195,3 +195,6 @@ export interface ConflictFile {
 }
 
 export interface MergeChangedEvent { repoID: string }
+
+export type ResetMode = 'soft' | 'mixed' | 'hard'
+export interface ResetInfo { undone: number; pushed: number; upstream: string }

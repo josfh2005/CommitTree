@@ -481,6 +481,27 @@ export namespace ollama {
 
 }
 
+export namespace ops {
+	
+	export class ResetInfo {
+	    undone: number;
+	    pushed: number;
+	    upstream: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ResetInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.undone = source["undone"];
+	        this.pushed = source["pushed"];
+	        this.upstream = source["upstream"];
+	    }
+	}
+
+}
+
 export namespace prompts {
 	
 	export class Info {
