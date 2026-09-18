@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mergeFiles } from './merge'
+import { commitWarning, mergeSections } from './merge'
 import type { MergeState } from './types'
 
 const state = (over: Partial<MergeState> = {}): MergeState => ({
@@ -8,33 +8,40 @@ const state = (over: Partial<MergeState> = {}): MergeState => ({
   into: 'main',
   conflicts: [],
   manual: [],
+  staged: [],
+  unstaged: [],
   ...over,
 })
 
-describe('mergeFiles', () => {
-  it('splits the files the merge started with into resolved and pending', () => {
-    const rows = mergeFiles(state({ conflicts: ['b.ts'] }), ['a.ts', 'b.ts'])
-    expect(rows).toEqual([
-      { path: 'b.ts', status: 'conflict' },
-      { path: 'a.ts', status: 'resolved' },
+describe('mergeSections', () => {
+  it('groups conflicts (manual last), unstaged and staged files', () => {
+    const sections = mergeSections(state({ conflicts: ['b.ts'], manual: ['logo.png'], unstaged: ['c.ts'], staged: ['a.ts'] }))
+    expect(sections).toEqual([
+      { title: 'Conflicts', files: [{ path: 'b.ts', status: 'conflict' }, { path: 'logo.png', status: 'manual' }] },
+      { title: 'Unstaged', files: [{ path: 'c.ts', status: 'unstaged' }] },
+      { title: 'Staged', files: [{ path: 'a.ts', status: 'staged' }] },
     ])
   })
 
-  it('lists files with no markers as manual, after the conflicts', () => {
-    const rows = mergeFiles(state({ conflicts: ['b.ts'], manual: ['logo.png'] }), ['b.ts', 'logo.png'])
-    expect(rows).toEqual([
-      { path: 'b.ts', status: 'conflict' },
-      { path: 'logo.png', status: 'manual' },
-    ])
-  })
-
-  // After a restart there is no record of how the merge began, so only what
-  // git still reports can be shown.
-  it('works without the starting list', () => {
-    expect(mergeFiles(state({ conflicts: ['b.ts'] }), [])).toEqual([{ path: 'b.ts', status: 'conflict' }])
+  it('leaves out empty sections', () => {
+    expect(mergeSections(state({ staged: ['a.ts'] }))).toEqual([{ title: 'Staged', files: [{ path: 'a.ts', status: 'staged' }] }])
   })
 
   it('is empty when nothing is merging', () => {
-    expect(mergeFiles(state({ merging: false }), ['a.ts'])).toEqual([])
+    expect(mergeSections(state({ merging: false, staged: ['a.ts'] }))).toEqual([])
+  })
+})
+
+describe('commitWarning', () => {
+  it('is null when every settled file is staged', () => {
+    expect(commitWarning(state({ staged: ['a.ts'] }))).toBeNull()
+  })
+
+  it('names a single unstaged file', () => {
+    expect(commitWarning(state({ unstaged: ['greet.go'] }))).toMatch(/^greet\.go is not staged/)
+  })
+
+  it('counts several unstaged files', () => {
+    expect(commitWarning(state({ unstaged: ['a.ts', 'b.ts'] }))).toMatch(/^2 files are not staged/)
   })
 })

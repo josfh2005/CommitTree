@@ -39,6 +39,8 @@ export const api = {
   commitMerge: (id: string) => call<void>(Go.CommitMerge(id)),
   resolveConflicts: (repoID: string, runID: string) => call<void>(Go.ResolveConflicts(repoID, runID)),
   getConflictFile: (id: string, path: string) => call<ConflictFile>(Go.GetConflictFile(id, path)),
+  stageMergeFile: (id: string, path: string) => call<void>(Go.StageMergeFile(id, path)),
+  unstageMergeFile: (id: string, path: string) => call<void>(Go.UnstageMergeFile(id, path)),
 
   aiStatus: () => call<AIStatus>(Go.AIStatus()),
   getAISettings: () => call<AISettings>(Go.GetAISettings()),

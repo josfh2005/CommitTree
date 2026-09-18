@@ -175,6 +175,8 @@ export interface MergeState {
   into: string
   conflicts: string[]
   manual: string[]
+  staged: string[]
+  unstaged: string[]
 }
 
 export const MERGED = 0

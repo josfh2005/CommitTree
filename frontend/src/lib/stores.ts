@@ -38,9 +38,6 @@ export const logVersion = writable(0)
 export const busy = writable('')
 export const settingsOpen = writable(false)
 export const mergeState = writable<MergeState | null>(null)
-/** Conflicts each repository's merge started with, keyed by repo id, so
- *  resolved files stay listed while the user visits other repositories. */
-export const mergeStarted = writable<Record<string, string[]>>({})
 
 export const selectedRepo = derived([repos, selectedRepoId], ([$repos, $id]) => $repos.find((r) => r.id === $id) ?? null)
 
@@ -73,12 +70,6 @@ export async function loadMergeState() {
     // overwrite the one now on screen.
     if (get(selectedRepoId) !== repo.id) return
     mergeState.set(state)
-    if (!state.merging && repo.id in get(mergeStarted)) {
-      mergeStarted.update((m) => {
-        const { [repo.id]: _, ...rest } = m
-        return rest
-      })
-    }
   } catch {
     if (get(selectedRepoId) === repo.id) mergeState.set(null)
   }

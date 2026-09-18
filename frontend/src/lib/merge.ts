@@ -1,24 +1,41 @@
 import type { MergeState } from './types'
 
-export type MergeFileStatus = 'conflict' | 'manual' | 'resolved'
+export type MergeFileStatus = 'conflict' | 'manual' | 'unstaged' | 'staged'
 
 export interface MergeFile {
   path: string
   status: MergeFileStatus
 }
 
+export interface MergeSection {
+  title: string
+  files: MergeFile[]
+}
+
 /**
- * mergeFiles lists the merge's files for the panel: what is still conflicted,
- * what needs a human, and what has already been resolved. `started` is the
- * conflict list from when the merge began, which is the only way to know a
- * file was resolved during it; after a restart it is empty and only the
- * outstanding files are shown.
+ * mergeSections groups the merge's files for the panel, all read from git so
+ * they survive a restart: what is still conflicted or needs a human, what is
+ * settled but not staged, and what is staged for the merge commit. Empty
+ * sections are left out.
  */
-export function mergeFiles(state: MergeState, started: string[]): MergeFile[] {
+export function mergeSections(state: MergeState): MergeSection[] {
   if (!state.merging) return []
-  const rows: MergeFile[] = state.conflicts.map((path) => ({ path, status: 'conflict' as const }))
-  rows.push(...state.manual.map((path) => ({ path, status: 'manual' as const })))
-  const outstanding = new Set([...state.conflicts, ...state.manual])
-  rows.push(...started.filter((path) => !outstanding.has(path)).map((path) => ({ path, status: 'resolved' as const })))
-  return rows
+  const rows = (paths: string[], status: MergeFileStatus) => paths.map((path) => ({ path, status }))
+  return [
+    { title: 'Conflicts', files: [...rows(state.conflicts, 'conflict'), ...rows(state.manual, 'manual')] },
+    { title: 'Unstaged', files: rows(state.unstaged, 'unstaged') },
+    { title: 'Staged', files: rows(state.staged, 'staged') },
+  ].filter((s) => s.files.length > 0)
+}
+
+/**
+ * commitWarning is the question to ask before committing the merge, or null
+ * when there is nothing to warn about. An unstaged file keeps our side in the
+ * merge commit, silently dropping theirs.
+ */
+export function commitWarning(state: MergeState): string | null {
+  const n = state.unstaged.length
+  if (n === 0) return null
+  const files = n === 1 ? `${state.unstaged[0]} is` : `${n} files are`
+  return `${files} not staged and won't be in the merge commit, which keeps this branch's version instead. Commit anyway?`
 }

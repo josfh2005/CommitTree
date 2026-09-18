@@ -1,8 +1,9 @@
 import { get } from 'svelte/store'
 import { api } from './api'
-import { busy, chatOpen, filters, loadMergeState, loadRefs, loadRepos, logVersion, mergeStarted, refreshRepo, selectRepo, selectedRepoId } from './stores'
+import { busy, chatOpen, filters, loadMergeState, loadRefs, loadRepos, logVersion, mergeState, refreshRepo, selectRepo, selectedRepoId } from './stores'
 import type { Branch, Repo } from './types'
-import { CONFLICTED, UP_TO_DATE } from './types'
+import { UP_TO_DATE } from './types'
+import { commitWarning } from './merge'
 import { confirmDialog, errorMessage, promptDialog, toast } from './ui'
 
 export function branchRef(branch: Branch): string {
@@ -226,7 +227,6 @@ export async function mergeBranch(id: string, branch: Branch, into: string) {
   try {
     const result = await api.mergeBranch(id, label)
     if (result.outcome === UP_TO_DATE) toast(`${into} is already up to date with ${label}.`, 'info')
-    else if (result.outcome === CONFLICTED) mergeStarted.update((m) => ({ ...m, [id]: result.conflicts }))
   } catch (e) {
     toast(errorMessage(e), 'error')
   } finally {
@@ -245,7 +245,18 @@ export async function abortMerge(id: string) {
   if (ok) await run('Aborting merge…', () => api.abortMerge(id))
 }
 
-export const commitMerge = (id: string) => run('Committing merge…', () => api.commitMerge(id))
+export async function commitMerge(id: string) {
+  const state = get(mergeState)
+  const warning = state ? commitWarning(state) : null
+  if (warning) {
+    const ok = await confirmDialog({ title: 'Commit merge', message: warning, confirmLabel: 'Commit anyway', danger: true })
+    if (!ok) return
+  }
+  await run('Committing merge…', () => api.commitMerge(id))
+}
+
+export const stageMergeFile = (id: string, path: string) => run('Staging…', () => api.stageMergeFile(id, path))
+export const unstageMergeFile = (id: string, path: string) => run('Unstaging…', () => api.unstageMergeFile(id, path))
 
 export async function resolveConflicts(id: string) {
   chatOpen.set(true)
