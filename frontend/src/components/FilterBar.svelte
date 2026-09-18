@@ -3,7 +3,8 @@
   import Icon from './Icon.svelte'
   import { api } from '../lib/api'
   import { untilDisplayValue, untilFilterValue } from '../lib/format'
-  import { filters, jumpTo } from '../lib/stores'
+  import { branchRef } from '../lib/actions'
+  import { filters, jumpTo, refs } from '../lib/stores'
 
   export let repoId: string
 
@@ -40,7 +41,13 @@
 
   onDestroy(() => clearTimeout(timer))
 
-  const update = (key: 'author' | 'since') => (event: Event) =>
+  $: localRefs = ($refs?.local ?? []).map(branchRef)
+  $: remoteGroups = ($refs?.remotes ?? []).map((r) => ({ name: r.name, refs: r.branches.map(branchRef) }))
+  // A filter set elsewhere (a tag click, or a branch since deleted) still has
+  // to show as the selected option rather than silently reading "All branches".
+  $: listed = $filters.branch === '' || localRefs.includes($filters.branch) || remoteGroups.some((g) => g.refs.includes($filters.branch))
+
+  const update = (key: 'author' | 'since' | 'branch') => (event: Event) =>
     filters.update((f) => ({ ...f, [key]: (event.target as HTMLInputElement | HTMLSelectElement).value }))
 
   function updateUntil(event: Event) {
@@ -60,14 +67,24 @@
     <Icon name="search" size={14} />
     <input placeholder="Text or hash" bind:value={text} on:input={onText} />
   </label>
-  {#if $filters.branch}
-    <button class="chip" title="Show all branches" on:click={() => filters.update((f) => ({ ...f, branch: '' }))}>
-      <span class="ellipsis">{shortRef($filters.branch)}</span>
-      <Icon name="x" size={12} />
-    </button>
-  {:else}
-    <span class="chip idle">All branches</span>
-  {/if}
+  <select value={$filters.branch} on:change={update('branch')} title="Branch">
+    <option value="">All branches</option>
+    {#if !listed}
+      <option value={$filters.branch}>{shortRef($filters.branch)}</option>
+    {/if}
+    {#if localRefs.length}
+      <optgroup label="Local">
+        {#each localRefs as ref}<option value={ref}>{shortRef(ref)}</option>{/each}
+      </optgroup>
+    {/if}
+    {#each remoteGroups as group}
+      {#if group.refs.length}
+        <optgroup label={group.name}>
+          {#each group.refs as ref}<option value={ref}>{shortRef(ref)}</option>{/each}
+        </optgroup>
+      {/if}
+    {/each}
+  </select>
   <select value={$filters.author} on:change={update('author')} title="User">
     <option value="">All users</option>
     {#each authors as author}
@@ -83,8 +100,6 @@
   .bar { display: flex; align-items: center; gap: 8px; padding: 0 12px 10px; flex-wrap: wrap; }
   .search { display: flex; align-items: center; gap: 6px; padding-left: 8px; border: 1px solid var(--border); border-radius: 7px; color: var(--muted); background: var(--surface); }
   .search input { border: 0; padding-left: 0; width: 180px; }
-  .chip { display: inline-flex; align-items: center; gap: 4px; max-width: 220px; height: 26px; padding: 0 8px; border-radius: 13px; background: var(--active); }
-  .chip.idle { background: none; color: var(--muted); }
   select { height: 28px; max-width: 160px; }
   input[type='date'] { height: 28px; }
   .paths { flex: 1; min-width: 140px; }

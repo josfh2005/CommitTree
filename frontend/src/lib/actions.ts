@@ -5,7 +5,7 @@ import type { Branch, Repo } from './types'
 import { CONFLICTED, UP_TO_DATE } from './types'
 import { confirmDialog, errorMessage, promptDialog, toast } from './ui'
 
-function branchRef(branch: Branch): string {
+export function branchRef(branch: Branch): string {
   return branch.remote ? `refs/remotes/${branch.remote}/${branch.name}` : `refs/heads/${branch.name}`
 }
 
