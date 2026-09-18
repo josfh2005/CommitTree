@@ -67,6 +67,11 @@ export function startRun(state: ChatState, text: string, runID: string): ChatSta
   }
 }
 
+// CHAT_EVENTS are every event applyEvent understands. The panel subscribes
+// to this list, so a new event added to the reducer reaches the UI instead of
+// being silently dropped.
+export const CHAT_EVENTS = ['chat:start', 'chat:delta', 'chat:tool', 'chat:tool_result', 'chat:done', 'chat:error'] as const
+
 type Payload = ChatStartEvent | ChatDeltaEvent | ChatToolEvent | ChatToolResultEvent | ChatErrorEvent | { repoID: string; runID: string }
 
 export function applyEvent(state: ChatState, name: string, payload: Payload): ChatState {

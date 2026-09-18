@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyEvent, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel } from './chat'
+import { applyEvent, CHAT_EVENTS, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, type ChatState } from './chat'
 import type { AIMessage } from './types'
 
 describe('fromMessages', () => {
@@ -108,5 +108,26 @@ describe('labels', () => {
   it('explains known error codes', () => {
     expect(errorText({ code: 'no_tool_support', message: 'x' })).toContain('qwen2.5')
     expect(errorText({ code: 'other', message: 'boom' })).toBe('boom')
+  })
+})
+
+describe('CHAT_EVENTS', () => {
+  // The panel subscribes to CHAT_EVENTS and ignores anything else, so an
+  // event applyEvent handles but the list omits is dropped on the floor.
+  // That is how "Explain in chat" lost its answer: chat:start was missing.
+  it('carries a run started elsewhere, from start to answer', () => {
+    const deliver = (state: ChatState, name: string, payload: Parameters<typeof applyEvent>[2]) =>
+      (CHAT_EVENTS as readonly string[]).includes(name) ? applyEvent(state, name, payload) : state
+
+    let state = emptyChat('r1')
+    state = deliver(state, 'chat:start', { repoID: 'r1', runID: 'exp1', text: 'Explain commit abc1234: Fix login' })
+    state = deliver(state, 'chat:delta', { repoID: 'r1', runID: 'exp1', text: 'It repairs the session cookie.' })
+    state = deliver(state, 'chat:done', { repoID: 'r1', runID: 'exp1' })
+
+    expect(state.items).toEqual([
+      { role: 'user', text: 'Explain commit abc1234: Fix login', tools: [] },
+      { role: 'assistant', text: 'It repairs the session cookie.', tools: [] },
+    ])
+    expect(state.runID).toBeNull()
   })
 })

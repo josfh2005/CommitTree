@@ -3,7 +3,7 @@
   import { EventsOn } from '../../wailsjs/runtime/runtime'
   import Icon from './Icon.svelte'
   import { api } from '../lib/api'
-  import { applyEvent, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, type ChatState } from '../lib/chat'
+  import { applyEvent, CHAT_EVENTS, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, type ChatState } from '../lib/chat'
   import { renderMarkdown } from '../lib/markdown'
   import { chatOpen, jumpTo, selectedRepo, settingsOpen } from '../lib/stores'
   import type { AIStatus } from '../lib/types'
@@ -15,7 +15,7 @@
   let list: HTMLDivElement
   let loadError = ''
 
-  const offs = ['chat:delta', 'chat:tool', 'chat:tool_result', 'chat:done', 'chat:error'].map((name) =>
+  const offs = CHAT_EVENTS.map((name) =>
     EventsOn(name, (payload) => {
       const next = applyEvent(state, name, payload)
       if (next !== state) {
