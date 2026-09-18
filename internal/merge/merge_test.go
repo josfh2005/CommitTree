@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -141,5 +142,31 @@ func TestStartRefusesWhenAMergeIsAlreadyInProgress(t *testing.T) {
 	}
 	if _, err := Start(context.Background(), r.Dir, "feature"); !errors.Is(err, ErrMergeInProgress) {
 		t.Fatalf("err = %v, want ErrMergeInProgress", err)
+	}
+}
+
+// A cherry-pick that stopped on a conflict leaves unmerged paths but no
+// MERGE_HEAD. git then refuses the merge, and Start must say so rather than
+// hand back the cherry-pick's conflicts as this merge's.
+func TestStartDoesNotClaimSomeoneElsesConflicts(t *testing.T) {
+	r := conflicting(t)
+	r.Git("switch", "-q", "-c", "unrelated", "main")
+	r.Commit("unrelated work")
+	r.Git("switch", "-q", "main")
+	pick := exec.Command("git", "-C", r.Dir, "cherry-pick", "feature")
+	pick.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1", "GIT_EDITOR=true")
+	if out, err := pick.CombinedOutput(); err == nil {
+		t.Fatalf("cherry-pick applied cleanly, want a conflict:\n%s", out)
+	}
+	if u, _ := Unmerged(context.Background(), r.Dir); len(u) == 0 {
+		t.Fatal("the cherry-pick left no unmerged paths")
+	}
+
+	got, err := Start(context.Background(), r.Dir, "unrelated")
+	if err == nil {
+		t.Fatalf("result = %+v, want an error: the unmerged paths belong to the cherry-pick", got)
+	}
+	if got.Outcome == Conflicted {
+		t.Errorf("outcome = Conflicted with %v, want no result", got.Conflicts)
 	}
 }

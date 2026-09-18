@@ -60,7 +60,12 @@ func Start(ctx context.Context, dir, branch string) (Result, error) {
 		return Result{Outcome: Merged}, nil
 	}
 	// git exits non-zero both for conflicts and for real failures (a dirty
-	// worktree, an unknown ref). Unmerged paths are what tells them apart.
+	// worktree, an unknown ref). A merge that stopped on conflicts leaves
+	// MERGE_HEAD; without it, unmerged paths belong to something else (a
+	// cherry-pick, a rebase) and git refused this merge outright.
+	if _, headErr := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--verify", "--quiet", "MERGE_HEAD"); headErr != nil {
+		return Result{}, err
+	}
 	if conflicts, listErr := Unmerged(ctx, dir); listErr == nil && len(conflicts) > 0 {
 		return Result{Outcome: Conflicted, Conflicts: conflicts}, nil
 	}
