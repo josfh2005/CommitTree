@@ -1,4 +1,4 @@
-import type { AIMessage, ChatDeltaEvent, ChatErrorEvent, ChatStartEvent, ChatToolEvent, ChatToolResultEvent } from './types'
+import type { AIMessage, ChatDeltaEvent, ChatErrorEvent, ChatNoticeEvent, ChatStartEvent, ChatToolEvent, ChatToolResultEvent } from './types'
 
 export interface ChatToolUse {
   name: string
@@ -12,6 +12,7 @@ export interface ChatItem {
   tools: ChatToolUse[]
   stopped?: boolean
   error?: { message: string; code: string }
+  notices?: string[]
 }
 
 export interface ChatState {
@@ -70,9 +71,9 @@ export function startRun(state: ChatState, text: string, runID: string): ChatSta
 // CHAT_EVENTS are every event applyEvent understands. The panel subscribes
 // to this list, so a new event added to the reducer reaches the UI instead of
 // being silently dropped.
-export const CHAT_EVENTS = ['chat:start', 'chat:delta', 'chat:tool', 'chat:tool_result', 'chat:done', 'chat:error'] as const
+export const CHAT_EVENTS = ['chat:start', 'chat:delta', 'chat:tool', 'chat:tool_result', 'chat:notice', 'chat:done', 'chat:error'] as const
 
-type Payload = ChatStartEvent | ChatDeltaEvent | ChatToolEvent | ChatToolResultEvent | ChatErrorEvent | { repoID: string; runID: string }
+type Payload = ChatStartEvent | ChatDeltaEvent | ChatToolEvent | ChatToolResultEvent | ChatNoticeEvent | ChatErrorEvent | { repoID: string; runID: string }
 
 export function applyEvent(state: ChatState, name: string, payload: Payload): ChatState {
   if (payload.repoID !== state.repoID) return state
@@ -99,6 +100,11 @@ export function applyEvent(state: ChatState, name: string, payload: Payload): Ch
       const p = payload as ChatToolResultEvent
       const i = last.tools.findIndex((t) => t.name === p.name && t.summary === undefined)
       if (i >= 0) last.tools[i] = { ...last.tools[i], summary: p.summary }
+      return { ...state, items }
+    }
+    case 'chat:notice': {
+      const p = payload as ChatNoticeEvent
+      last.notices = [...(last.notices ?? []), p.text]
       return { ...state, items }
     }
     case 'chat:done':

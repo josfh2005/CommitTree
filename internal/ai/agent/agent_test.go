@@ -209,6 +209,122 @@ func TestExecuteDefaultsToTheGlobalStepLimit(t *testing.T) {
 	}
 }
 
+func TestRecoveredCallRunsAndNoticesThenContinues(t *testing.T) {
+	p := &scripted{turns: [][]ai.Chunk{
+		{{Delta: `{"name": "list_refs", "arguments": {}}`}, {Done: true}},
+		{{Delta: "On main."}, {Done: true}},
+	}}
+	rec := &recorder{}
+
+	got, err := agent.Execute(context.Background(), baseRun(p, rec), user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.requests) != 2 {
+		t.Fatalf("provider called %d times, want 2 (the run must continue)", len(p.requests))
+	}
+	assistant := got[1]
+	if len(assistant.ToolCalls) != 1 || assistant.ToolCalls[0].Name != "list_refs" || assistant.ToolCalls[0].ID == "" {
+		t.Fatalf("recovered call not in history: %#v", assistant)
+	}
+	toolMsg := got[2]
+	if toolMsg.Role != ai.RoleTool || toolMsg.ToolName != "list_refs" || toolMsg.Content != "main\nfeature" {
+		t.Fatalf("RunTool result not in history: %#v", toolMsg)
+	}
+	if last := got[len(got)-1]; last.Content != "On main." {
+		t.Fatalf("run did not continue to a final answer: %#v", last)
+	}
+	var haveNotice, haveTool, haveToolResult bool
+	for _, n := range rec.names {
+		switch n {
+		case agent.EventNotice:
+			haveNotice = true
+		case agent.EventTool:
+			haveTool = true
+		case agent.EventToolResult:
+			haveToolResult = true
+		}
+	}
+	if !haveNotice || !haveTool || !haveToolResult {
+		t.Fatalf("events = %v, want chat:notice, chat:tool and chat:tool_result", rec.names)
+	}
+}
+
+func TestRecoveredUnknownToolEndsRunWithNotice(t *testing.T) {
+	p := &scripted{turns: [][]ai.Chunk{
+		{{Delta: `{"name": "delete_repo", "arguments": {}}`}, {Done: true}},
+	}}
+	rec := &recorder{}
+
+	got, err := agent.Execute(context.Background(), baseRun(p, rec), user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.requests) != 1 {
+		t.Fatalf("provider called %d times, want 1 (the run must end)", len(p.requests))
+	}
+	for _, n := range rec.names {
+		if n == agent.EventTool || n == agent.EventToolResult {
+			t.Fatalf("RunTool must not run for an unrecoverable call: events = %v", rec.names)
+		}
+	}
+	var haveNotice bool
+	for _, n := range rec.names {
+		if n == agent.EventNotice {
+			haveNotice = true
+		}
+	}
+	if !haveNotice {
+		t.Fatalf("events = %v, want a chat:notice", rec.names)
+	}
+	if last := got[len(got)-1]; last.Role != ai.RoleAssistant || len(last.ToolCalls) != 0 {
+		t.Fatalf("last = %#v", last)
+	}
+}
+
+func TestStructuredCallWinsOverTextualCall(t *testing.T) {
+	p := &scripted{turns: [][]ai.Chunk{
+		{
+			{ToolCalls: []ai.ToolCall{{ID: "c1", Name: "list_refs", Args: map[string]any{}}}, Delta: `{"name": "list_refs", "arguments": {}}`},
+			{Done: true},
+		},
+		{{Delta: "On main."}, {Done: true}},
+	}}
+	rec := &recorder{}
+
+	got, err := agent.Execute(context.Background(), baseRun(p, rec), user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assistant := got[1]
+	if len(assistant.ToolCalls) != 1 || assistant.ToolCalls[0].ID != "c1" {
+		t.Fatalf("only the structured call should run: %#v", assistant.ToolCalls)
+	}
+	for _, n := range rec.names {
+		if n == agent.EventNotice {
+			t.Fatalf("no notice expected when a structured call is present: events = %v", rec.names)
+		}
+	}
+}
+
+func TestPlainTextNoJSONIsUnchanged(t *testing.T) {
+	p := &scripted{turns: [][]ai.Chunk{{{Delta: "Hello there."}, {Done: true}}}}
+	rec := &recorder{}
+
+	got, err := agent.Execute(context.Background(), baseRun(p, rec), user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if last := got[len(got)-1]; last.Content != "Hello there." || len(last.ToolCalls) != 0 {
+		t.Fatalf("last = %#v", last)
+	}
+	for _, n := range rec.names {
+		if n == agent.EventNotice {
+			t.Fatalf("no notice expected for plain text: events = %v", rec.names)
+		}
+	}
+}
+
 func TestTrim(t *testing.T) {
 	var msgs []ai.Message
 	for i := 0; i < 25; i++ {

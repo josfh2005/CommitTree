@@ -25,6 +25,10 @@ const (
 	EventToolResult = "chat:tool_result"
 	EventDone       = "chat:done"
 	EventError      = "chat:error"
+	EventNotice     = "chat:notice"
+
+	noticeRecovered   = "The model wrote a tool call as text; git-ui ran it."
+	noticeUnrecovered = "The model wrote a tool call as text that git-ui could not run. Try a model with reliable tool calling."
 )
 
 // StartEvent announces a new answer, so the chat can show the question and an
@@ -66,6 +70,15 @@ type ErrorEvent struct {
 	RunID   string `json:"runID"`
 	Message string `json:"message"`
 	Code    string `json:"code"`
+}
+
+// NoticeEvent is a transient, informational aside about the run - e.g. that
+// the model wrote a tool call as text. It is never added to the message
+// history, so it is never fed back to the model.
+type NoticeEvent struct {
+	RepoID string `json:"repoID"`
+	RunID  string `json:"runID"`
+	Text   string `json:"text"`
 }
 
 type Run struct {
@@ -127,6 +140,22 @@ func Execute(ctx context.Context, r Run, history []ai.Message) ([]ai.Message, er
 				msgs = append(msgs, ai.Message{Role: ai.RoleAssistant, Content: text.String()})
 			}
 			return msgs, streamErr
+		}
+
+		// Some models write a tool call into the text instead of returning
+		// it structured. Only look when the model returned no structured
+		// calls at all - a structured call always wins over scanning the
+		// text.
+		if len(calls) == 0 {
+			if recovered, attempted := recoverCalls(text.String(), r.Tools); len(recovered) > 0 {
+				for i := range recovered {
+					recovered[i].ID = fmt.Sprintf("recovered_%d_%d", step, i)
+				}
+				calls = recovered
+				r.Emit(EventNotice, NoticeEvent{RepoID: r.RepoID, RunID: r.RunID, Text: noticeRecovered})
+			} else if attempted {
+				r.Emit(EventNotice, NoticeEvent{RepoID: r.RepoID, RunID: r.RunID, Text: noticeUnrecovered})
+			}
 		}
 
 		for i := range calls {

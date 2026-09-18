@@ -153,6 +153,7 @@
               {#if tool.summary}<span class="summary ellipsis">· {tool.summary}</span>{/if}
             </div>
           {/each}
+          {#each item.notices ?? [] as notice}<div class="note">{notice}</div>{/each}
           {#if item.text}
             <div class="md">{@html renderMarkdown(item.text)}</div>
           {:else if running && i === state.items.length - 1 && !item.error}

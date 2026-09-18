@@ -84,6 +84,24 @@ describe('applyEvent', () => {
   })
 })
 
+describe('chat:notice', () => {
+  it('is in CHAT_EVENTS, so the panel subscribes to it', () => {
+    expect(CHAT_EVENTS).toContain('chat:notice')
+  })
+
+  it('appends the text to the running assistant item', () => {
+    let s = startRun(emptyChat('r1'), 'hola', 'run1')
+    s = applyEvent(s, 'chat:notice', { repoID: 'r1', runID: 'run1', text: 'The model wrote a tool call as text; git-ui ran it.' })
+    expect(s.items[1].notices).toEqual(['The model wrote a tool call as text; git-ui ran it.'])
+  })
+
+  it('ignores a notice for another runID', () => {
+    const s = startRun(emptyChat('r1'), 'hola', 'run1')
+    const next = applyEvent(s, 'chat:notice', { repoID: 'r1', runID: 'old', text: 'ignored' })
+    expect(next).toBe(s)
+  })
+})
+
 describe('shouldReloadChat', () => {
   it('is false when the repo id is unchanged, running or idle', () => {
     expect(shouldReloadChat(emptyChat('r1'), 'r1')).toBe(false)
