@@ -2,11 +2,19 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"git-ui/internal/ai"
+	"git-ui/internal/ai/agent"
+	"git-ui/internal/ai/mergetools"
+	"git-ui/internal/ai/ollama"
+	"git-ui/internal/ai/prompts"
+	"git-ui/internal/ai/tools"
 	"git-ui/internal/gitcmd"
 	"git-ui/internal/merge"
 )
@@ -113,4 +121,122 @@ func (a *App) GetConflictFile(id, path string) (ConflictFile, error) {
 		return ConflictFile{}, err
 	}
 	return ConflictFile{Path: path, Resolved: true, Text: out}, nil
+}
+
+// EventMergeChanged tells the frontend the working tree moved during a merge,
+// so the merge view can refresh while the agent works.
+const EventMergeChanged = "merge:changed"
+
+type MergeChangedEvent struct {
+	RepoID string `json:"repoID"`
+}
+
+// MergeMaxSteps is generous because each conflicted file costs several tool
+// rounds; history trimming keeps the context bounded regardless.
+const MergeMaxSteps = 30
+
+// ResolveConflicts runs the conflict agent over the merge in progress. It
+// shares the repository's chat slot with SendChat and ExplainInChat, so a
+// resolve run and a chat can never interleave, and it stops before
+// committing: staging is as far as the agent goes.
+func (a *App) ResolveConflicts(repoID, runID string) error {
+	if a.ai == nil {
+		return ErrAIDisabled
+	}
+	if runID == "" {
+		return errors.New("run id is required")
+	}
+	repo, ok := a.store.Get(repoID)
+	if !ok {
+		return fmt.Errorf("unknown repository %q", repoID)
+	}
+	st, err := merge.Status(a.ctx, repo.Path)
+	if err != nil {
+		return err
+	}
+	if !st.Merging {
+		return errors.New("this repository is not merging")
+	}
+	cfg, err := a.aiSettings()
+	if err != nil {
+		return err
+	}
+
+	a.ai.mu.Lock()
+	if _, busy := a.ai.runs[repoID]; busy {
+		a.ai.mu.Unlock()
+		return ErrChatBusy
+	}
+	ctx, cancel := context.WithCancel(a.ctx)
+	a.ai.runs[repoID] = cancel
+	a.ai.mu.Unlock()
+	finish := func() {
+		a.ai.mu.Lock()
+		delete(a.ai.runs, repoID)
+		a.ai.mu.Unlock()
+		cancel()
+	}
+
+	text := fmt.Sprintf("Resolve the conflicts from merging %s into %s", st.From, st.Into)
+	history, err := a.ai.deps.Chats.Load(repoID)
+	if err == nil {
+		history = append(history, ai.Message{Role: ai.RoleUser, Content: text})
+		err = a.ai.deps.Chats.Save(repoID, history)
+	}
+	var system string
+	if err == nil {
+		system, err = a.ai.deps.Prompts.Get(prompts.ResolveConflicts, prompts.Vars{
+			Repo: repo.Name, Path: repo.Path, Branch: st.Into, Date: time.Now().Format("2006-01-02"),
+		})
+	}
+	if err != nil {
+		finish()
+		return err
+	}
+
+	a.emit(agent.EventStart, agent.StartEvent{RepoID: repoID, RunID: runID, Text: text})
+
+	go func() {
+		run := agent.Run{
+			RepoID: repoID, RunID: runID,
+			Provider: ollama.New(cfg.OllamaURL), Model: cfg.ChatModel, System: system,
+			Tools:    append(mergetools.Specs(), tools.Specs()...),
+			MaxSteps: MergeMaxSteps,
+			RunTool: func(ctx context.Context, call ai.ToolCall) string {
+				if isMergeTool(call.Name) {
+					out, changed := mergetools.Run(ctx, repo.Path, call)
+					if changed {
+						a.emit(EventMergeChanged, MergeChangedEvent{RepoID: repoID})
+					}
+					return out
+				}
+				return tools.Run(ctx, repo.Path, call)
+			},
+			Emit: a.emit,
+		}
+		updated, runErr := agent.Execute(ctx, run, history)
+		saveErr := a.ai.deps.Chats.Save(repoID, updated)
+		// Release the repo before announcing the end so a new message can be
+		// sent, or the merge acted on, as soon as the frontend sees done/error.
+		finish()
+		a.emit(EventMergeChanged, MergeChangedEvent{RepoID: repoID})
+		switch {
+		case runErr != nil && !errors.Is(runErr, context.Canceled):
+			a.emit(agent.EventError, agent.ErrorEvent{RepoID: repoID, RunID: runID, Message: runErr.Error(), Code: chatErrorCode(runErr)})
+		case saveErr != nil:
+			a.emit(agent.EventError, agent.ErrorEvent{RepoID: repoID, RunID: runID, Message: saveErr.Error(), Code: "other"})
+		default:
+			a.emit(agent.EventDone, agent.DoneEvent{RepoID: repoID, RunID: runID})
+		}
+	}()
+	return nil
+}
+
+func isMergeTool(name string) bool {
+	for _, spec := range mergetools.Specs() {
+		if spec.Name == name {
+			return true
+		}
+	}
+	return false
 }

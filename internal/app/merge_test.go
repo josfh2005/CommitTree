@@ -2,11 +2,19 @@ package app
 
 import (
 	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"git-ui/internal/ai"
+	"git-ui/internal/ai/agent"
+	"git-ui/internal/ai/apple"
+	"git-ui/internal/ai/chatstore"
+	"git-ui/internal/ai/prompts"
 	"git-ui/internal/merge"
 	"git-ui/internal/repos"
 	"git-ui/internal/testrepo"
@@ -136,4 +144,87 @@ func TestCommitMergeCreatesTheMergeCommit(t *testing.T) {
 	if err != nil || st.Merging {
 		t.Errorf("state = %+v, err = %v", st, err)
 	}
+}
+
+// newAIMergeApp is newMergeApp with AI wired in, modelled on newAIApp in
+// ai_test.go: a conflicting repository plus an event recorder and a
+// settings/chats/prompts directory pointed at ollamaURL.
+func newAIMergeApp(t *testing.T, ollamaURL string) (*App, *testrepo.Repo, string, *events) {
+	t.Helper()
+	a, r, id := newMergeApp(t)
+	dir := t.TempDir()
+	ev := newEvents()
+	WithAI(a, AIDeps{
+		SettingsPath: filepath.Join(dir, "ai.json"),
+		Chats:        chatstore.New(filepath.Join(dir, "chats")),
+		Prompts:      prompts.New(filepath.Join(dir, "prompts")),
+		Apple:        apple.New(""),
+		Emit:         ev.emit,
+	})
+	s, err := a.GetAISettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.OllamaURL = ollamaURL
+	if err := a.SaveAISettings(s); err != nil {
+		t.Fatal(err)
+	}
+	return a, r, id, ev
+}
+
+func TestResolveConflictsStreamsIntoTheConversation(t *testing.T) {
+	srv := fakeOllama(t, nil)
+	a, _, id, ev := newAIMergeApp(t, srv.URL)
+	if _, err := a.MergeBranch(id, "feature"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := a.ResolveConflicts(id, "run1"); err != nil {
+		t.Fatal(err)
+	}
+	ev.wait(t, agent.EventDone)
+
+	messages, err := a.GetChat(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(messages) < 2 || messages[0].Role != ai.RoleUser {
+		t.Fatalf("messages = %+v", messages)
+	}
+	if !strings.Contains(messages[0].Content, "feature") || !strings.Contains(messages[0].Content, "main") {
+		t.Errorf("the question should name both branches: %q", messages[0].Content)
+	}
+}
+
+func TestResolveConflictsRefusesWhenNotMerging(t *testing.T) {
+	srv := fakeOllama(t, nil)
+	a, _, id, _ := newAIMergeApp(t, srv.URL)
+	err := a.ResolveConflicts(id, "run1")
+	if err == nil {
+		t.Fatal("want an error when the repository is not merging")
+	}
+}
+
+func TestResolveConflictsIsBusyWhileChatting(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeLines(w, `{"message":{"role":"assistant","content":"Pensando"},"done":false}`)
+		<-r.Context().Done()
+	}))
+	defer srv.Close()
+	a, _, id, ev := newAIMergeApp(t, srv.URL)
+	if _, err := a.MergeBranch(id, "feature"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := a.SendChat(id, "hola", "run1"); err != nil {
+		t.Fatal(err)
+	}
+	ev.wait(t, agent.EventDelta)
+	if err := a.ResolveConflicts(id, "run2"); !errors.Is(err, ErrChatBusy) {
+		t.Fatalf("err = %v, want ErrChatBusy", err)
+	}
+	if err := a.StopChat(id); err != nil {
+		t.Fatal(err)
+	}
+	ev.wait(t, agent.EventDone)
 }
