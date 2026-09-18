@@ -118,7 +118,7 @@ func (a *App) GetConflictFile(id, path string) (ConflictFile, error) {
 	// Check if the path is in the Manual list.
 	for _, p := range st.Manual {
 		if p == path {
-			return ConflictFile{Path: path, Text: "This file has no conflict markers to edit here. Resolve it in your editor."}, nil
+			return ConflictFile{Path: path, Text: "This file has no conflict markers to edit here. Right-click it in the list to take ours or theirs, or resolve it in your editor."}, nil
 		}
 	}
 	// Otherwise it is settled: show what the merge commit changes against
@@ -144,6 +144,12 @@ func (a *App) StageMergeFile(id, path string) error {
 // keeping its content.
 func (a *App) UnstageMergeFile(id, path string) error {
 	return a.writeMerge(id, func(ctx context.Context, dir string) error { return merge.Unstage(ctx, dir, path) })
+}
+
+// TakeMergeSide settles one of the merge's Manual files with one side's
+// version, "ours" or "theirs", and stages it.
+func (a *App) TakeMergeSide(id, path, side string) error {
+	return a.writeMerge(id, func(ctx context.Context, dir string) error { return merge.Take(ctx, dir, path, merge.Side(side)) })
 }
 
 // writeMerge runs fn under the repository's write lock, so it can't

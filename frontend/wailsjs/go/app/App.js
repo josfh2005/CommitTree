@@ -170,6 +170,10 @@ export function StopChat(arg1) {
   return window['go']['app']['App']['StopChat'](arg1);
 }
 
+export function TakeMergeSide(arg1, arg2, arg3) {
+  return window['go']['app']['App']['TakeMergeSide'](arg1, arg2, arg3);
+}
+
 export function UnstageMergeFile(arg1, arg2) {
   return window['go']['app']['App']['UnstageMergeFile'](arg1, arg2);
 }

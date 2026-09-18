@@ -2,10 +2,10 @@
   import { EventsOn } from '../../wailsjs/runtime/runtime'
   import Icon from './Icon.svelte'
   import { api } from '../lib/api'
-  import { abortMerge, commitMerge, resolveConflicts, stageMergeFile, unstageMergeFile } from '../lib/actions'
+  import { abortMerge, commitMerge, resolveConflicts, stageMergeFile, takeMergeSide, unstageMergeFile } from '../lib/actions'
   import { mergeSections, type MergeFile } from '../lib/merge'
   import { busy, loadMergeState, mergeState } from '../lib/stores'
-  import { errorMessage } from '../lib/ui'
+  import { errorMessage, openMenu } from '../lib/ui'
   import { onDestroy } from 'svelte'
 
   export let repoId: string
@@ -64,6 +64,18 @@
     }
   }
 
+  // A Manual file is settled by taking one side whole; the result is staged,
+  // so Unstage undoes it.
+  function manualMenu(event: MouseEvent, file: MergeFile) {
+    if (file.status !== 'manual') return
+    const into = $mergeState?.into ?? ''
+    const from = $mergeState?.from ?? ''
+    openMenu(event, [
+      { label: `Take ours (${into})`, action: () => takeMergeSide(repoId, file.path, 'ours'), disabled: !!$busy },
+      { label: `Take theirs (${from})`, action: () => takeMergeSide(repoId, file.path, 'theirs'), disabled: !!$busy },
+    ])
+  }
+
   function lineClass(line: string): string {
     if (!resolved) {
       if (line.startsWith('<<<<<<<') || line.startsWith('>>>>>>>') || line.startsWith('|||||||') || line.startsWith('=======')) return 'marker'
@@ -95,7 +107,7 @@
         <div class="section">{section.title}</div>
         {#each section.files as f (f.path)}
           <div class="row" class:active={selected === f.path}>
-            <button class="row-item file" class:active={selected === f.path} on:click={() => open(f)}>
+            <button class="row-item file" class:active={selected === f.path} on:click={() => open(f)} on:contextmenu|preventDefault={(e) => manualMenu(e, f)}>
               <span class="status s-{f.status}">
                 {#if f.status === 'staged'}<Icon name="check" size={12} />{:else if f.status === 'manual'}!{:else if f.status === 'unstaged'}M{:else}·{/if}
               </span>

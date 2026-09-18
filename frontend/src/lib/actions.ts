@@ -257,6 +257,8 @@ export async function commitMerge(id: string) {
 
 export const stageMergeFile = (id: string, path: string) => run('Staging…', () => api.stageMergeFile(id, path))
 export const unstageMergeFile = (id: string, path: string) => run('Unstaging…', () => api.unstageMergeFile(id, path))
+export const takeMergeSide = (id: string, path: string, side: 'ours' | 'theirs') =>
+  run(side === 'ours' ? 'Taking ours…' : 'Taking theirs…', () => api.takeMergeSide(id, path, side))
 
 export async function resolveConflicts(id: string) {
   chatOpen.set(true)

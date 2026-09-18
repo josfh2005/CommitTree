@@ -41,6 +41,7 @@ export const api = {
   getConflictFile: (id: string, path: string) => call<ConflictFile>(Go.GetConflictFile(id, path)),
   stageMergeFile: (id: string, path: string) => call<void>(Go.StageMergeFile(id, path)),
   unstageMergeFile: (id: string, path: string) => call<void>(Go.UnstageMergeFile(id, path)),
+  takeMergeSide: (id: string, path: string, side: 'ours' | 'theirs') => call<void>(Go.TakeMergeSide(id, path, side)),
 
   aiStatus: () => call<AIStatus>(Go.AIStatus()),
   getAISettings: () => call<AISettings>(Go.GetAISettings()),
