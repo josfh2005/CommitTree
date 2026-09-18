@@ -6,6 +6,10 @@ export function AIStatus() {
   return window['go']['app']['App']['AIStatus']();
 }
 
+export function AbortMerge(arg1) {
+  return window['go']['app']['App']['AbortMerge'](arg1);
+}
+
 export function AddRepo() {
   return window['go']['app']['App']['AddRepo']();
 }
@@ -28,6 +32,10 @@ export function CheckoutRemote(arg1, arg2, arg3) {
 
 export function ClearChat(arg1) {
   return window['go']['app']['App']['ClearChat'](arg1);
+}
+
+export function CommitMerge(arg1) {
+  return window['go']['app']['App']['CommitMerge'](arg1);
 }
 
 export function CreateBranch(arg1, arg2, arg3, arg4) {
@@ -74,6 +82,10 @@ export function GetChat(arg1) {
   return window['go']['app']['App']['GetChat'](arg1);
 }
 
+export function GetConflictFile(arg1, arg2) {
+  return window['go']['app']['App']['GetConflictFile'](arg1, arg2);
+}
+
 export function GetDetails(arg1, arg2) {
   return window['go']['app']['App']['GetDetails'](arg1, arg2);
 }
@@ -84,6 +96,10 @@ export function GetDiff(arg1, arg2, arg3, arg4) {
 
 export function GetLog(arg1, arg2, arg3, arg4) {
   return window['go']['app']['App']['GetLog'](arg1, arg2, arg3, arg4);
+}
+
+export function GetMergeState(arg1) {
+  return window['go']['app']['App']['GetMergeState'](arg1);
 }
 
 export function GetRefs(arg1) {
@@ -100,6 +116,10 @@ export function ListPrompts() {
 
 export function ListRepos() {
   return window['go']['app']['App']['ListRepos']();
+}
+
+export function MergeBranch(arg1, arg2) {
+  return window['go']['app']['App']['MergeBranch'](arg1, arg2);
 }
 
 export function OpenPromptsFolder() {

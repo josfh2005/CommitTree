@@ -131,6 +131,22 @@ export namespace app {
 		    return a;
 		}
 	}
+	export class ConflictFile {
+	    path: string;
+	    resolved: boolean;
+	    text: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ConflictFile(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.resolved = source["resolved"];
+	        this.text = source["text"];
+	    }
+	}
 	export class LogRow {
 	    hash: string;
 	    short: string;
@@ -398,6 +414,45 @@ export namespace graph {
 	        this.color = source["color"];
 	        this.kind = source["kind"];
 	        this.target = source["target"];
+	    }
+	}
+
+}
+
+export namespace merge {
+	
+	export class Result {
+	    outcome: number;
+	    conflicts: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Result(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.outcome = source["outcome"];
+	        this.conflicts = source["conflicts"];
+	    }
+	}
+	export class State {
+	    merging: boolean;
+	    from: string;
+	    into: string;
+	    conflicts: string[];
+	    manual: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new State(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.merging = source["merging"];
+	        this.from = source["from"];
+	        this.into = source["into"];
+	        this.conflicts = source["conflicts"];
+	        this.manual = source["manual"];
 	    }
 	}
 

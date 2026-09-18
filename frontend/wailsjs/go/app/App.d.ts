@@ -5,10 +5,13 @@ import {repos} from '../models';
 import {settings} from '../models';
 import {ai} from '../models';
 import {gitlog} from '../models';
+import {merge} from '../models';
 import {refs} from '../models';
 import {prompts} from '../models';
 
 export function AIStatus():Promise<app.AIStatus>;
+
+export function AbortMerge(arg1:string):Promise<void>;
 
 export function AddRepo():Promise<repos.Repo>;
 
@@ -21,6 +24,8 @@ export function CheckoutDetached(arg1:string,arg2:string):Promise<void>;
 export function CheckoutRemote(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function ClearChat(arg1:string):Promise<void>;
+
+export function CommitMerge(arg1:string):Promise<void>;
 
 export function CreateBranch(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<void>;
 
@@ -44,11 +49,15 @@ export function GetAuthors(arg1:string):Promise<Array<string>>;
 
 export function GetChat(arg1:string):Promise<Array<ai.Message>>;
 
+export function GetConflictFile(arg1:string,arg2:string):Promise<app.ConflictFile>;
+
 export function GetDetails(arg1:string,arg2:string):Promise<gitlog.Details>;
 
 export function GetDiff(arg1:string,arg2:string,arg3:string,arg4:Array<string>):Promise<string>;
 
 export function GetLog(arg1:string,arg2:gitlog.Filters,arg3:number,arg4:number):Promise<app.LogPage>;
+
+export function GetMergeState(arg1:string):Promise<merge.State>;
 
 export function GetRefs(arg1:string):Promise<refs.Refs>;
 
@@ -57,6 +66,8 @@ export function IsShallow(arg1:string):Promise<boolean>;
 export function ListPrompts():Promise<Array<prompts.Info>>;
 
 export function ListRepos():Promise<Array<app.RepoItem>>;
+
+export function MergeBranch(arg1:string,arg2:string):Promise<merge.Result>;
 
 export function OpenPromptsFolder():Promise<void>;
 
