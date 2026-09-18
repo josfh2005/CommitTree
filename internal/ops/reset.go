@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -22,9 +24,14 @@ const (
 )
 
 var (
-	ErrDetached = errors.New("HEAD is detached: there is no branch to reset")
-	ErrMerging  = errors.New("a merge is in progress: finish or abort it before resetting")
+	ErrDetached   = errors.New("HEAD is detached: there is no branch to reset")
+	ErrMerging    = errors.New("a merge is in progress: finish or abort it before resetting")
+	ErrInProgress = errors.New("a rebase, cherry-pick or revert is in progress: finish or abort it before resetting")
 )
+
+// inProgress are the files and directories git keeps while a rebase,
+// cherry-pick or revert is stopped; a reset would throw that state away.
+var inProgress = []string{"CHERRY_PICK_HEAD", "REVERT_HEAD", "sequencer", "rebase-merge", "rebase-apply"}
 
 // fullHash is a whole SHA-1 or SHA-256 object name. Anything shorter could be
 // a ref, a range or an option; the log always has the full hash.
@@ -48,6 +55,19 @@ func Reset(ctx context.Context, dir, hash string, mode ResetMode) error {
 	if _, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--verify", "--quiet", "MERGE_HEAD"); err == nil {
 		return ErrMerging
 	}
+	for _, name := range inProgress {
+		out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--git-path", name)
+		if err != nil {
+			return err
+		}
+		p := strings.TrimSpace(out)
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(dir, p)
+		}
+		if _, err := os.Lstat(p); err == nil {
+			return ErrInProgress
+		}
+	}
 	_, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "reset", "-q", "--"+string(mode), hash, "--")
 	return err
 }
@@ -55,6 +75,7 @@ func Reset(ctx context.Context, dir, hash string, mode ResetMode) error {
 // ResetInfo is what the confirmation shows before a reset to a commit.
 type ResetInfo struct {
 	Undone   int    `json:"undone"`   // commits on HEAD that the branch would no longer contain
+	Gained   int    `json:"gained"`   // commits the branch would newly contain, when hash is not behind HEAD
 	Pushed   int    `json:"pushed"`   // of those, how many the upstream already has
 	Upstream string `json:"upstream"` // e.g. "origin/main"; "" when the branch has none
 }
@@ -70,12 +91,16 @@ func ResetPreview(ctx context.Context, dir, hash string) (ResetInfo, error) {
 		return info, err
 	}
 	info.Undone = undone
+	if info.Gained, err = count(ctx, dir, hash, "^HEAD"); err != nil {
+		return info, err
+	}
 	up, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
 	if err != nil {
 		return info, nil // no upstream: nothing can have been pushed
 	}
 	info.Upstream = strings.TrimSpace(up)
-	local, err := count(ctx, dir, "HEAD", "^"+hash, "^"+info.Upstream)
+	// ^@{upstream}, not the abbreviated name, which a local branch could share.
+	local, err := count(ctx, dir, "HEAD", "^"+hash, "^@{upstream}")
 	if err != nil {
 		return info, err
 	}

@@ -19,6 +19,9 @@ export function resetMessage(mode: ResetMode, branch: string, short: string, inf
   } else {
     parts.push(`${undone}; ${its} changes stay in the working tree, unstaged.`)
   }
+  if (info.gained > 0) {
+    parts.push(`${branch} also gains ${info.gained === 1 ? '1 commit' : `${info.gained} commits`} it does not have now.`)
+  }
   if (info.pushed > 0) {
     parts.push(`${info.pushed} of them are already on ${info.upstream}; pushing afterwards will need a force push.`)
   }

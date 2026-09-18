@@ -64,15 +64,15 @@
     }
   }
 
-  // A Manual file is settled by taking one side whole; the result is staged,
-  // so Unstage undoes it.
+  // A Manual file is settled by taking one side whole, after a confirmation:
+  // it overwrites the worktree copy, which Unstage does not restore.
   function manualMenu(event: MouseEvent, file: MergeFile) {
     if (file.status !== 'manual') return
     const into = $mergeState?.into ?? ''
     const from = $mergeState?.from ?? ''
     openMenu(event, [
-      { label: `Take ours (${into})`, action: () => takeMergeSide(repoId, file.path, 'ours'), disabled: !!$busy },
-      { label: `Take theirs (${from})`, action: () => takeMergeSide(repoId, file.path, 'theirs'), disabled: !!$busy },
+      { label: `Take ours (${into})`, action: () => takeMergeSide(repoId, file.path, 'ours', into), disabled: !!$busy },
+      { label: `Take theirs (${from})`, action: () => takeMergeSide(repoId, file.path, 'theirs', from), disabled: !!$busy },
     ])
   }
 

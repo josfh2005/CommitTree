@@ -39,3 +39,11 @@ export function commitWarning(state: MergeState): string | null {
   const files = n === 1 ? `${state.unstaged[0]} is` : `${n} files are`
   return `${files} not staged and won't be in the merge commit, which keeps this branch's version instead. Commit anyway?`
 }
+
+/**
+ * takeMessage is the confirmation before taking one side of a Manual file.
+ * Taking overwrites the worktree copy, and Unstage does not bring it back.
+ */
+export function takeMessage(path: string, branch: string): string {
+  return `Replace ${path} with ${branch}'s version, or delete it if ${branch} deleted it? Edits you made to it are lost; Unstage won't bring them back.`
+}

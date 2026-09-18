@@ -3,7 +3,7 @@ import { api } from './api'
 import { busy, chatOpen, filters, loadMergeState, loadRefs, loadRepos, logVersion, mergeState, refreshRepo, selectRepo, selectedRepoId } from './stores'
 import type { Branch, Repo, ResetInfo, ResetMode } from './types'
 import { UP_TO_DATE } from './types'
-import { commitWarning } from './merge'
+import { commitWarning, takeMessage } from './merge'
 import { resetMessage } from './reset'
 import { choiceDialog, confirmDialog, errorMessage, promptDialog, toast } from './ui'
 
@@ -282,8 +282,15 @@ export async function commitMerge(id: string) {
 
 export const stageMergeFile = (id: string, path: string) => run('Staging…', () => api.stageMergeFile(id, path))
 export const unstageMergeFile = (id: string, path: string) => run('Unstaging…', () => api.unstageMergeFile(id, path))
-export const takeMergeSide = (id: string, path: string, side: 'ours' | 'theirs') =>
-  run(side === 'ours' ? 'Taking ours…' : 'Taking theirs…', () => api.takeMergeSide(id, path, side))
+export async function takeMergeSide(id: string, path: string, side: 'ours' | 'theirs', branch: string) {
+  const ok = await confirmDialog({
+    title: side === 'ours' ? 'Take ours' : 'Take theirs',
+    message: takeMessage(path, branch),
+    confirmLabel: side === 'ours' ? 'Take ours' : 'Take theirs',
+    danger: true,
+  })
+  if (ok) await run(side === 'ours' ? 'Taking ours…' : 'Taking theirs…', () => api.takeMergeSide(id, path, side))
+}
 
 export async function resolveConflicts(id: string) {
   chatOpen.set(true)

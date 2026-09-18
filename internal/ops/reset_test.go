@@ -149,3 +149,39 @@ func TestResetPreviewCountsPushedCommits(t *testing.T) {
 		t.Errorf("preview = %+v, want 2 undone, 1 pushed to origin/main", p)
 	}
 }
+
+// A mixed or hard reset mid-cherry-pick would throw away its state; git
+// itself only stops the soft one.
+func TestResetRefusesDuringACherryPick(t *testing.T) {
+	r, h := threeCommits(t)
+	r.Git("switch", "-q", "-c", "other", h[0])
+	r.WriteFile("a.txt", "other\n")
+	r.Git("commit", "-q", "-am", "other")
+	pick := r.Git("rev-parse", "HEAD")
+	r.Git("switch", "-q", "main")
+	_, _ = gitcmd.Run(ctx, r.Dir, gitcmd.ReadTimeout, "cherry-pick", pick) // conflicts
+	for _, mode := range []ops.ResetMode{ops.ResetSoft, ops.ResetMixed, ops.ResetHard} {
+		if err := ops.Reset(ctx, r.Dir, h[0], mode); !errors.Is(err, ops.ErrInProgress) {
+			t.Errorf("%s: err = %v, want ErrInProgress", mode, err)
+		}
+	}
+}
+
+// Resetting to a commit on another line of history also brings its commits
+// in; the preview must say so, not only what is undone.
+func TestResetPreviewCountsCommitsGained(t *testing.T) {
+	r, h := threeCommits(t)
+	r.Git("switch", "-q", "-c", "other", h[0])
+	r.WriteFile("b.txt", "b\n")
+	r.Git("add", "b.txt")
+	r.Git("commit", "-q", "-m", "other")
+	target := r.Git("rev-parse", "HEAD")
+	r.Git("switch", "-q", "main")
+	p, err := ops.ResetPreview(ctx, r.Dir, target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Undone != 2 || p.Gained != 1 {
+		t.Errorf("preview = %+v, want 2 undone and 1 gained", p)
+	}
+}

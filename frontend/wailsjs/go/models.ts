@@ -485,6 +485,7 @@ export namespace ops {
 	
 	export class ResetInfo {
 	    undone: number;
+	    gained: number;
 	    pushed: number;
 	    upstream: string;
 	
@@ -495,6 +496,7 @@ export namespace ops {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.undone = source["undone"];
+	        this.gained = source["gained"];
 	        this.pushed = source["pushed"];
 	        this.upstream = source["upstream"];
 	    }
