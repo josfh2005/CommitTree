@@ -68,10 +68,13 @@ export async function loadMergeState() {
   }
   try {
     const state = await api.getMergeState(repo.id)
+    // A slower answer for a repository the user has already left must not
+    // overwrite the one now on screen.
+    if (get(selectedRepoId) !== repo.id) return
     mergeState.set(state)
     if (!state.merging) mergeStarted.set([])
   } catch {
-    mergeState.set(null)
+    if (get(selectedRepoId) === repo.id) mergeState.set(null)
   }
 }
 
