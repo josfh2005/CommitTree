@@ -75,7 +75,7 @@ func TestResolveHunkWritesTheFile(t *testing.T) {
 	if !changed {
 		t.Error("changed = false, want true")
 	}
-	if !strings.Contains(out, "0 conflict") {
+	if !strings.Contains(out, "no conflicts left") {
 		t.Errorf("out = %q, want it to report none left", out)
 	}
 	data, err := os.ReadFile(filepath.Join(r.Dir, "greeting.txt"))
@@ -365,5 +365,64 @@ func TestListConflictsAsksToStageAResolvedFile(t *testing.T) {
 	}
 	if strings.Contains(out, "leave it for the user") {
 		t.Errorf("out = %q, the agent's own resolved file is described as the user's", out)
+	}
+}
+
+// twoRegions is a merge whose one conflicted file, pair.txt, has two regions
+// far enough apart that git keeps them separate.
+func twoRegions(t *testing.T) *testrepo.Repo {
+	t.Helper()
+	r := testrepo.New(t)
+	middle := "1\n2\n3\n4\n5\n6\n7\n8\n"
+	r.WriteFile("pair.txt", "a\n"+middle+"b\n")
+	r.Git("add", "pair.txt")
+	r.Git("commit", "-q", "-m", "add pair")
+	r.Git("switch", "-q", "-c", "feature")
+	r.WriteFile("pair.txt", "a-theirs\n"+middle+"b-theirs\n")
+	r.Git("commit", "-q", "-am", "theirs")
+	r.Git("switch", "-q", "main")
+	r.WriteFile("pair.txt", "a-ours\n"+middle+"b-ours\n")
+	r.Git("commit", "-q", "-am", "ours")
+	if _, err := merge.Start(context.Background(), r.Dir, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
+// Regions renumber after each resolve. A model that asks for region 1 once
+// region 0 is gone must be told the one left is now region 0.
+func TestResolveHunkSaysTheNextRegionIsZero(t *testing.T) {
+	r := twoRegions(t)
+	out, _ := mergetools.Run(context.Background(), r.Dir, call("resolve_hunk", map[string]any{"path": "pair.txt", "hunk": 0, "resolved": "a\n"}))
+	if !strings.Contains(out, "1 conflict(s) left") || !strings.Contains(out, "region 0") {
+		t.Errorf("out = %q, want the count and that the next one is region 0", out)
+	}
+}
+
+func TestReadConflictPastTheEndNamesTheValidRegions(t *testing.T) {
+	r := twoRegions(t)
+	mergetools.Run(context.Background(), r.Dir, call("resolve_hunk", map[string]any{"path": "pair.txt", "hunk": 0, "resolved": "a\n"}))
+	out, _ := mergetools.Run(context.Background(), r.Dir, call("read_conflict", map[string]any{"path": "pair.txt", "hunk": 1}))
+	if !strings.Contains(out, "no region 1") || !strings.Contains(out, "numbered 0 to 0") {
+		t.Errorf("out = %q, want it to name the valid range", out)
+	}
+}
+
+func TestResolveHunkPastTheEndNamesTheValidRegions(t *testing.T) {
+	r := twoRegions(t)
+	out, changed := mergetools.Run(context.Background(), r.Dir, call("resolve_hunk", map[string]any{"path": "pair.txt", "hunk": 2, "resolved": "x\n"}))
+	if changed {
+		t.Error("changed = true for a region that does not exist")
+	}
+	if !strings.Contains(out, "no region 2") || !strings.Contains(out, "numbered 0 to 1") {
+		t.Errorf("out = %q, want it to name the valid range", out)
+	}
+}
+
+func TestResolveHunkOnTheLastRegionSaysToStage(t *testing.T) {
+	r := conflicted(t)
+	out, _ := mergetools.Run(context.Background(), r.Dir, call("resolve_hunk", map[string]any{"path": "greeting.txt", "hunk": 0, "resolved": "hi\n"}))
+	if !strings.Contains(out, "no conflicts left") || !strings.Contains(out, "stage_file") {
+		t.Errorf("out = %q, want it to say to stage the file", out)
 	}
 }

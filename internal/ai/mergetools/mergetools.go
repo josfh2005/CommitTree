@@ -114,7 +114,7 @@ func readConflict(ctx context.Context, dir string, args map[string]any) string {
 	}
 	index := argInt(args, "hunk")
 	if index < 0 || index >= len(hunks) {
-		return fmt.Sprintf("%s has %d conflict(s); there is no region %d.", path, len(hunks), index)
+		return fmt.Sprintf("There is no region %d. %s", index, regionsLeft(path, len(hunks)))
 	}
 	h := hunks[index]
 	var b strings.Builder
@@ -140,7 +140,12 @@ func resolveHunk(ctx context.Context, dir string, args map[string]any) (string, 
 		return "Could not read " + path + ": " + err.Error(), false
 	}
 	resolved, _ := args["resolved"].(string)
-	out, err := merge.Splice(string(data), argInt(args, "hunk"), resolved)
+	index := argInt(args, "hunk")
+	out, err := merge.Splice(string(data), index, resolved)
+	if errors.Is(err, merge.ErrNoSuchHunk) {
+		hunks, _ := merge.Parse(string(data))
+		return fmt.Sprintf("There is no region %d. %s", index, regionsLeft(path, len(hunks))), false
+	}
 	if err != nil {
 		return "Could not apply the resolution: " + err.Error(), false
 	}
@@ -171,7 +176,17 @@ func resolveHunk(ctx context.Context, dir string, args map[string]any) (string, 
 	if err != nil {
 		return "Wrote " + path + ", but it no longer parses: " + err.Error(), true
 	}
-	return fmt.Sprintf("Applied. %s now has %d conflict(s) left.", path, len(left)), true
+	return "Applied. " + regionsLeft(path, len(left)), true
+}
+
+// regionsLeft tells the model where a file's remaining regions are. Regions
+// renumber after every resolve, which models miss: having resolved region 0
+// of two, they ask for region 1, which no longer exists.
+func regionsLeft(path string, n int) string {
+	if n == 0 {
+		return path + " has no conflicts left; call stage_file."
+	}
+	return fmt.Sprintf("%s has %d conflict(s) left, numbered 0 to %d; regions renumber after each resolve, so the next one is region 0.", path, n, n-1)
 }
 
 func stageFile(ctx context.Context, dir string, args map[string]any) (string, bool) {
