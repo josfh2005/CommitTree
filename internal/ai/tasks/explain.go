@@ -13,7 +13,6 @@ import (
 
 const (
 	OllamaDiffBudget = 6000
-	AppleDiffBudget  = 3000
 )
 
 // ExplainContext describes a commit for the model, with the diff against its

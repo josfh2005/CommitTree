@@ -29,26 +29,26 @@ func TestExplainContextTruncatesPerBudget(t *testing.T) {
 	r, hash := bigCommit(t)
 	ctx := context.Background()
 
-	apple, err := tasks.ExplainContext(ctx, r.Dir, hash, tasks.AppleDiffBudget)
+	small, err := tasks.ExplainContext(ctx, r.Dir, hash, 3000)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ollama, err := tasks.ExplainContext(ctx, r.Dir, hash, tasks.OllamaDiffBudget)
+	large, err := tasks.ExplainContext(ctx, r.Dir, hash, tasks.OllamaDiffBudget)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{"Commit " + hash[:7], "Subject: feat: add config", "Needed for NEXO-7.", "A config.txt", "Diff:", "[truncated]"} {
-		if !strings.Contains(apple, want) {
+		if !strings.Contains(small, want) {
 			t.Errorf("context missing %q", want)
 		}
 	}
-	appleDiff := apple[strings.Index(apple, "Diff:"):]
-	ollamaDiff := ollama[strings.Index(ollama, "Diff:"):]
-	if len(appleDiff) > tasks.AppleDiffBudget+40 || len(ollamaDiff) > tasks.OllamaDiffBudget+40 {
-		t.Fatalf("diff over budget: apple %d, ollama %d", len(appleDiff), len(ollamaDiff))
+	smallDiff := small[strings.Index(small, "Diff:"):]
+	largeDiff := large[strings.Index(large, "Diff:"):]
+	if len(smallDiff) > 3040 || len(largeDiff) > tasks.OllamaDiffBudget+40 {
+		t.Fatalf("diff over budget: small %d, large %d", len(smallDiff), len(largeDiff))
 	}
-	if len(ollamaDiff) <= len(appleDiff) {
-		t.Fatal("Ollama budget should include more of the diff")
+	if len(largeDiff) <= len(smallDiff) {
+		t.Fatal("Large budget should include more of the diff")
 	}
 }
 
