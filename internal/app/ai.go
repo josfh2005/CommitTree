@@ -94,7 +94,7 @@ func (a *App) aiSettings() (settings.Settings, error) {
 	if a.ai == nil {
 		return settings.Settings{}, ErrAIDisabled
 	}
-	return settings.Load(a.ai.deps.SettingsPath, func() bool { return a.appleAvailability().Available })
+	return settings.Load(a.ai.deps.SettingsPath)
 }
 
 // appleAvailability probes the Apple Intelligence helper, caching the result

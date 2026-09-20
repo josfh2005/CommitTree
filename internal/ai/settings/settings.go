@@ -12,16 +12,23 @@ import (
 )
 
 const (
-	ProviderApple    = "apple"
-	ProviderOllama   = "ollama"
-	DefaultOllamaURL = "http://localhost:11434"
-	DefaultModel     = "qwen2.5:7b"
+	ProviderOllama    = "ollama"
+	ProviderOpenAI    = "openai"
+	ProviderAnthropic = "anthropic"
+	// ProviderApple is only recognised when reading a settings file written
+	// by an older version; a later task removes this constant.
+	ProviderApple = "apple"
+
+	DefaultOllamaURL      = "http://localhost:11434"
+	DefaultModel          = "qwen2.5:7b"
+	DefaultAnthropicModel = "claude-opus-5"
 )
 
 var ErrInvalid = errors.New("invalid AI settings")
 
 type Settings struct {
 	OllamaURL    string `json:"ollamaURL"`
+	ChatProvider string `json:"chatProvider"`
 	ChatModel    string `json:"chatModel"`
 	TaskProvider string `json:"taskProvider"`
 	TaskModel    string `json:"taskModel"`
@@ -35,27 +42,37 @@ func DefaultPath() (string, error) {
 	return filepath.Join(dir, "git-ui", "ai.json"), nil
 }
 
-func Defaults(appleAvailable bool) Settings {
-	s := Settings{OllamaURL: DefaultOllamaURL, ChatModel: DefaultModel, TaskProvider: ProviderOllama, TaskModel: DefaultModel}
-	if appleAvailable {
-		s.TaskProvider = ProviderApple
+func Defaults() Settings {
+	return Settings{
+		OllamaURL:    DefaultOllamaURL,
+		ChatProvider: ProviderOllama,
+		ChatModel:    DefaultModel,
+		TaskProvider: ProviderOllama,
+		TaskModel:    DefaultModel,
 	}
-	return s
 }
 
-// Load reads the settings file. When it doesn't exist, defaults are returned
-// and appleAvailable is called to pick the task provider.
-func Load(path string, appleAvailable func() bool) (Settings, error) {
+// Load reads the settings file, returning defaults when it doesn't exist.
+// A provider this version no longer supports — Apple Intelligence, which had
+// no tool calling — becomes Ollama, so an upgrade never lands on a
+// configuration Save would reject.
+func Load(path string) (Settings, error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return Defaults(appleAvailable()), nil
+		return Defaults(), nil
 	}
 	if err != nil {
 		return Settings{}, err
 	}
-	s := Defaults(false)
+	s := Defaults()
 	if err := json.Unmarshal(data, &s); err != nil {
 		return Settings{}, fmt.Errorf("settings: parse %s: %w", path, err)
+	}
+	if s.ChatProvider == ProviderApple || s.ChatProvider == "" {
+		s.ChatProvider = ProviderOllama
+	}
+	if s.TaskProvider == ProviderApple || s.TaskProvider == "" {
+		s.TaskProvider = ProviderOllama
 	}
 	return s, nil
 }
@@ -86,8 +103,12 @@ func validate(s Settings) error {
 	if s.ChatModel == "" || s.TaskModel == "" {
 		return fmt.Errorf("%w: model names must not be empty", ErrInvalid)
 	}
-	if s.TaskProvider != ProviderApple && s.TaskProvider != ProviderOllama {
-		return fmt.Errorf("%w: unknown task provider %q", ErrInvalid, s.TaskProvider)
+	for _, p := range []string{s.ChatProvider, s.TaskProvider} {
+		switch p {
+		case ProviderOllama, ProviderOpenAI, ProviderAnthropic:
+		default:
+			return fmt.Errorf("%w: unknown provider %q", ErrInvalid, p)
+		}
 	}
 	return nil
 }
