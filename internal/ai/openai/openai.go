@@ -183,7 +183,13 @@ func messages(system string, history []ai.Message) []sdk.ChatCompletionMessagePa
 					},
 				})
 			}
-			out = append(out, sdk.ChatCompletionMessageParamUnion{OfAssistant: &msg})
+			// An assistant message with neither content nor tool calls
+			// serializes as a bare {"role":"assistant"}; the agent saves
+			// exactly that when a run is stopped before the first delta.
+			// Skip it rather than send it.
+			if m.Content != "" || len(m.ToolCalls) > 0 {
+				out = append(out, sdk.ChatCompletionMessageParamUnion{OfAssistant: &msg})
+			}
 		}
 	}
 	return out
@@ -222,8 +228,13 @@ func (c *Client) ListModels(ctx context.Context) ([]string, error) {
 }
 
 // isChatModel keeps the families that can hold a conversation with tools.
+// o1 and o3 are excluded even though they can chat: messages() always emits
+// a "system" role message when req.System is set, and the older o-series
+// rejects that role outright (it wants "developer" or no system message at
+// all), so listing them here would only offer a model that errors on the
+// first turn. o4 accepts "system" and stays.
 func isChatModel(id string) bool {
-	for _, prefix := range []string{"gpt-", "o1", "o3", "o4", "chatgpt-"} {
+	for _, prefix := range []string{"gpt-", "o4", "chatgpt-"} {
 		if strings.HasPrefix(id, prefix) {
 			return true
 		}
@@ -237,6 +248,11 @@ func classify(err error) error {
 	var apierr *sdk.Error
 	if !errors.As(err, &apierr) {
 		return fmt.Errorf("openai: %w", err)
+	}
+	// Out of credit arrives as a 429 like a rate limit, but "try again in a
+	// moment" is wrong for something that never resolves on its own.
+	if apierr.Code == "insufficient_quota" {
+		return errors.New("openai reports no available credit.")
 	}
 	switch apierr.StatusCode {
 	case 401, 403:

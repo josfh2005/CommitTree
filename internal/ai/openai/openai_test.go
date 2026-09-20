@@ -234,3 +234,113 @@ func TestChatPairsToolResultsByIDPositionally(t *testing.T) {
 		t.Errorf("second tool message = %#v", toolMsgs[1])
 	}
 }
+
+// An assistant message with no content and no tool calls is what
+// agent.Execute saves when a run is stopped before the first delta arrives.
+// It must never reach the API: the SDK serializes it as a bare
+// {"role":"assistant"}, and this guards that Anthropic's `len(blocks) > 0`
+// treatment has an OpenAI equivalent.
+func TestChatOmitsEmptyAssistantMessage(t *testing.T) {
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(raw, &body); err != nil {
+			t.Fatal(err)
+		}
+		chunks(w, `{"id":"1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`)
+	}))
+	defer srv.Close()
+
+	history := []ai.Message{
+		{Role: ai.RoleUser, Content: "resolve"},
+		{Role: ai.RoleAssistant, Stopped: true},
+	}
+	ch, err := openai.New("sk-test", openai.WithBaseURL(srv.URL)).Chat(context.Background(), ai.Request{
+		Model:    "gpt-4.1",
+		Messages: history,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := collect(t, ch); err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, ok := body["messages"].([]any)
+	if !ok {
+		t.Fatalf("body[messages] = %#v", body["messages"])
+	}
+	for _, m := range msgs {
+		mm := m.(map[string]any)
+		if mm["role"] == "assistant" {
+			t.Fatalf("empty assistant message reached the request: %#v", mm)
+		}
+	}
+}
+
+// TestChatReportsNoCredit guards against "try again in a moment" being shown
+// for insufficient_quota, which never resolves by itself no matter how many
+// times the user retries.
+func TestChatReportsNoCredit(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		fmt.Fprint(w, `{"error":{"message":"You exceeded your current quota","type":"insufficient_quota","code":"insufficient_quota"}}`)
+	}))
+	defer srv.Close()
+
+	ch, err := openai.New("sk-test", openai.WithBaseURL(srv.URL)).Chat(context.Background(), ai.Request{
+		Model:    "gpt-4.1",
+		Messages: []ai.Message{{Role: ai.RoleUser, Content: "hola"}},
+	})
+	if err == nil {
+		_, _, _, err = collect(t, ch)
+	}
+	if err == nil || err.Error() != "openai reports no available credit." {
+		t.Fatalf("err = %v, want the no-credit message", err)
+	}
+}
+
+// Two tool calls streamed with their indices interleaved across chunks (the
+// order a real completion arrives in when the model asks for both at once)
+// must each keep their own id, name and full accumulated arguments.
+func TestChatAccumulatesTwoInboundToolCalls(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		chunks(w,
+			`{"id":"1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"read_file","arguments":"{\"path\""}}]}}]}`,
+			`{"id":"1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"id":"call_2","type":"function","function":{"name":"read_file","arguments":"{\"path\""}}]}}]}`,
+			`{"id":"1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":":\"a.go\"}"}}]}}]}`,
+			`{"id":"1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":":\"b.go\"}"}}]}}]}`,
+			`{"id":"1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}`,
+		)
+	}))
+	defer srv.Close()
+
+	ch, err := openai.New("sk-test", openai.WithBaseURL(srv.URL)).Chat(context.Background(), ai.Request{
+		Model:    "gpt-4.1",
+		Messages: []ai.Message{{Role: ai.RoleUser, Content: "check both files"}},
+		Tools:    []ai.ToolSpec{{Name: "read_file", Description: "read", Parameters: map[string]any{"type": "object"}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, calls, done, err := collect(t, ch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !done {
+		t.Fatal("done = false")
+	}
+	if len(calls) != 2 {
+		t.Fatalf("calls = %#v, want 2", calls)
+	}
+	if calls[0].ID != "call_1" || calls[0].Name != "read_file" || calls[0].Args["path"] != "a.go" {
+		t.Errorf("first call = %#v", calls[0])
+	}
+	if calls[1].ID != "call_2" || calls[1].Name != "read_file" || calls[1].Args["path"] != "b.go" {
+		t.Errorf("second call = %#v", calls[1])
+	}
+}

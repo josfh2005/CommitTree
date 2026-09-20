@@ -116,7 +116,7 @@ func Mask(key string) string {
 	if key == "" {
 		return ""
 	}
-	if len(key) < 8 {
+	if len(key) < 12 {
 		return "…"
 	}
 	return key[:3] + "…" + key[len(key)-4:]

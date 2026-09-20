@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	sdk "github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
@@ -151,6 +152,22 @@ func toolCall(m sdk.Message, index int) (ai.ToolCall, bool) {
 	return ai.ToolCall{ID: block.ID, Name: block.Name, Args: args}, true
 }
 
+// leadWithUser drops any leading messages before the first RoleUser message.
+// agent.Trim caps the history at a fixed window and only skips leading
+// RoleTool messages, so once a conversation passes that window the window
+// routinely starts on RoleAssistant; the Messages API rejects a request
+// whose first message is not from the user with a 400. Slicing at the first
+// RoleUser also drops a leading assistant's now-orphaned tool calls and
+// their RoleTool results, which have nothing before them to answer.
+func leadWithUser(history []ai.Message) []ai.Message {
+	for i, m := range history {
+		if m.Role == ai.RoleUser {
+			return history[i:]
+		}
+	}
+	return nil
+}
+
 // messages converts the app's history. Every tool result for one assistant
 // turn goes into a single user message, which is what the API expects. A
 // RoleTool message carries only the tool's name (see ai.Message), so its
@@ -158,6 +175,7 @@ func toolCall(m sdk.Message, index int) (ai.ToolCall, bool) {
 // message that precedes it — the agent always appends results in call
 // order, immediately after that assistant turn.
 func messages(history []ai.Message) []sdk.MessageParam {
+	history = leadWithUser(history)
 	var out []sdk.MessageParam
 	var pendingResults []sdk.ContentBlockParamUnion
 	var pendingCalls []ai.ToolCall
@@ -241,6 +259,11 @@ func classify(err error) error {
 	var apierr *sdk.Error
 	if !errors.As(err, &apierr) {
 		return fmt.Errorf("anthropic: %w", err)
+	}
+	// Out of credit arrives as a 400 like any other rejected request, whose
+	// raw body would otherwise be pasted into the chat verbatim.
+	if strings.Contains(strings.ToLower(apierr.Error()), "credit balance") {
+		return errors.New("anthropic reports no available credit.")
 	}
 	switch apierr.StatusCode {
 	case 401, 403:

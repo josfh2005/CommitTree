@@ -97,6 +97,8 @@ func TestMask(t *testing.T) {
 		"":                  "",
 		"sk-abcdefghijklmn": "sk-…klmn",
 		"tiny":              "…",
+		"sk-abcdefgh":       "…",        // 11 chars: below the 12-char threshold, fully masked
+		"sk-abcdefghi":      "sk-…fghi", // 12 chars: at the threshold, shown partially
 	}
 	for in, want := range cases {
 		if got := keys.Mask(in); got != want {

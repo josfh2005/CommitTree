@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"git-ui/internal/ai"
+	"git-ui/internal/ai/agent"
 	"git-ui/internal/ai/anthropic"
 )
 
@@ -250,5 +251,147 @@ func TestChatEmitsToolCallWithoutContentBlockStop(t *testing.T) {
 	}
 	if !done {
 		t.Error("done = false")
+	}
+}
+
+// agentShapedHistory builds a history of user / assistant-with-tool-call /
+// tool-result messages, the shape agent.Execute actually produces, long
+// enough that agent.Trim's window (HistoryLimit messages, only leading
+// RoleTool messages skipped) starts on a RoleAssistant message rather than
+// RoleUser.
+func agentShapedHistory(n int) []ai.Message {
+	var msgs []ai.Message
+	for i := 0; len(msgs) < n; i++ {
+		msgs = append(msgs, ai.Message{Role: ai.RoleUser, Content: fmt.Sprintf("question %d", i)})
+		if len(msgs) == n {
+			break
+		}
+		msgs = append(msgs, ai.Message{Role: ai.RoleAssistant, ToolCalls: []ai.ToolCall{
+			{ID: fmt.Sprintf("call_%d", i), Name: "list_conflicts", Args: map[string]any{}},
+		}})
+		if len(msgs) == n {
+			break
+		}
+		msgs = append(msgs, ai.Message{Role: ai.RoleTool, ToolName: "list_conflicts", Content: fmt.Sprintf("result %d", i)})
+	}
+	return msgs
+}
+
+// TestChatSendsUserFirstAfterTrim guards against the 400 "messages: first
+// message must use the user role" the real API returns once a long-running
+// agent conversation (e.g. merge conflict resolution, whose MergeMaxSteps
+// appends ~60 messages a run) pushes agent.Trim's window past its
+// HistoryLimit and the window starts on an assistant turn. Trim only skips
+// leading RoleTool messages; the user-role constraint is Anthropic-specific,
+// so the fix lives in this package's messages(), not in the shared Trim.
+func TestChatSendsUserFirstAfterTrim(t *testing.T) {
+	full := agentShapedHistory(50)
+	trimmed := agent.Trim(full)
+	if trimmed[0].Role == ai.RoleUser {
+		t.Fatalf("test setup: want Trim's window to start on a non-user role, got %v", trimmed[0].Role)
+	}
+
+	var captured []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captured, _ = io.ReadAll(r.Body)
+		textStream(w)
+	}))
+	defer srv.Close()
+
+	c := anthropic.New("sk-test", anthropic.WithBaseURL(srv.URL))
+	ch, err := c.Chat(context.Background(), ai.Request{Model: "claude-opus-5", Messages: trimmed})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := collect(t, ch); err != nil {
+		t.Fatal(err)
+	}
+
+	var body struct {
+		Messages []struct {
+			Role string `json:"role"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(captured, &body); err != nil {
+		t.Fatalf("unmarshal request body: %v (body: %s)", err, captured)
+	}
+	if len(body.Messages) == 0 || body.Messages[0].Role != "user" {
+		t.Fatalf("first message = %+v, want the first one to have role user", body.Messages)
+	}
+}
+
+// twoToolCallStream is a reply with a text block at index 0 and two tool_use
+// blocks at indices 1 and 2, streamed the way the API interleaves partial
+// JSON across chunks for concurrent blocks.
+func twoToolCallStream(w http.ResponseWriter) {
+	sse(w,
+		`message_start {"type":"message_start","message":{"id":"msg_4","type":"message","role":"assistant","model":"claude-opus-5","content":[],"stop_reason":null,"usage":{"input_tokens":1,"output_tokens":1}}}`,
+		`content_block_start {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`,
+		`content_block_delta {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Checking both files."}}`,
+		`content_block_stop {"type":"content_block_stop","index":0}`,
+		`content_block_start {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_a","name":"read_file","input":{}}}`,
+		`content_block_start {"type":"content_block_start","index":2,"content_block":{"type":"tool_use","id":"toolu_b","name":"read_file","input":{}}}`,
+		`content_block_delta {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"path\":\"a.go\"}"}}`,
+		`content_block_delta {"type":"content_block_delta","index":2,"delta":{"type":"input_json_delta","partial_json":"{\"path\":\"b.go\"}"}}`,
+		`content_block_stop {"type":"content_block_stop","index":1}`,
+		`content_block_stop {"type":"content_block_stop","index":2}`,
+		`message_delta {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":2}}`,
+		`message_stop {"type":"message_stop"}`,
+	)
+}
+
+// TestChatAccumulatesTwoInboundToolCalls guards the accumulator logic for
+// concurrent tool_use blocks, which is where a per-index mix-up would be
+// least visible: two calls whose deltas interleave across chunks must still
+// arrive with their own ids, names and full arguments.
+func TestChatAccumulatesTwoInboundToolCalls(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { twoToolCallStream(w) }))
+	defer srv.Close()
+
+	c := anthropic.New("sk-test", anthropic.WithBaseURL(srv.URL))
+	ch, err := c.Chat(context.Background(), ai.Request{
+		Model:    "claude-opus-5",
+		Messages: []ai.Message{{Role: ai.RoleUser, Content: "check both files"}},
+		Tools:    []ai.ToolSpec{{Name: "read_file", Description: "read", Parameters: map[string]any{"type": "object"}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, calls, done, err := collect(t, ch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !done {
+		t.Fatal("done = false")
+	}
+	if len(calls) != 2 {
+		t.Fatalf("calls = %#v, want 2", calls)
+	}
+	if calls[0].ID != "toolu_a" || calls[0].Name != "read_file" || calls[0].Args["path"] != "a.go" {
+		t.Errorf("first call = %#v", calls[0])
+	}
+	if calls[1].ID != "toolu_b" || calls[1].Name != "read_file" || calls[1].Args["path"] != "b.go" {
+		t.Errorf("second call = %#v", calls[1])
+	}
+}
+
+// TestChatReportsNoCredit guards against the raw API body (which names the
+// account's plan and billing URL) being pasted verbatim into the chat, and
+// against the message being mistaken for an ordinary rejected request.
+func TestChatReportsNoCredit(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, `{"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Claude API. Please go to Plans & Billing to upgrade or purchase credits."}}`)
+	}))
+	defer srv.Close()
+
+	c := anthropic.New("sk-test", anthropic.WithBaseURL(srv.URL))
+	ch, err := c.Chat(context.Background(), ai.Request{Model: "claude-opus-5", Messages: []ai.Message{{Role: ai.RoleUser, Content: "hola"}}})
+	if err == nil {
+		_, _, _, err = collect(t, ch)
+	}
+	if err == nil || err.Error() != "anthropic reports no available credit." {
+		t.Fatalf("err = %v, want the no-credit message", err)
 	}
 }
