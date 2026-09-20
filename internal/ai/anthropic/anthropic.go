@@ -152,20 +152,45 @@ func toolCall(m sdk.Message, index int) (ai.ToolCall, bool) {
 	return ai.ToolCall{ID: block.ID, Name: block.Name, Args: args}, true
 }
 
-// leadWithUser drops any leading messages before the first RoleUser message.
-// agent.Trim caps the history at a fixed window and only skips leading
-// RoleTool messages, so once a conversation passes that window the window
-// routinely starts on RoleAssistant; the Messages API rejects a request
-// whose first message is not from the user with a 400. Slicing at the first
-// RoleUser also drops a leading assistant's now-orphaned tool calls and
-// their RoleTool results, which have nothing before them to answer.
+// leadWithUser makes sure the list handed to the API starts with a user
+// message, as the Messages API requires. agent.Trim caps history at a fixed
+// window and only skips leading RoleTool messages; one agent run has
+// exactly one RoleUser message followed by ~2*MergeMaxSteps
+// assistant/tool-result messages, so once a run is long enough (a merge
+// resolution, whose MergeMaxSteps appends ~60 messages), Trim's window
+// slides past that single RoleUser entirely and starts on RoleAssistant -
+// there is no RoleUser left to slice to. If one survives, start there,
+// dropping anything before it (a leading assistant's now-orphaned tool
+// calls included - their RoleTool results are dropped separately in
+// messages, since they'd otherwise reference a tool_use no longer sent).
+// If none survives, synthesize a leading user turn rather than send an
+// empty or user-less list, both of which the API also rejects.
 func leadWithUser(history []ai.Message) []ai.Message {
 	for i, m := range history {
 		if m.Role == ai.RoleUser {
 			return history[i:]
 		}
 	}
-	return nil
+	if len(history) == 0 {
+		return history
+	}
+	return append([]ai.Message{syntheticLead(history)}, history...)
+}
+
+// syntheticLead stands in for a RoleUser message that Trim's window no
+// longer contains. It is deterministic - no summarizing - and just quotes
+// the first remaining assistant text (if any) so the model has some anchor
+// for what it was doing, plus a note that earlier turns were trimmed.
+func syntheticLead(history []ai.Message) ai.Message {
+	for _, m := range history {
+		if m.Role == ai.RoleAssistant && m.Content != "" {
+			return ai.Message{Role: ai.RoleUser, Content: fmt.Sprintf(
+				"[Earlier turns were trimmed from this conversation. The assistant had last said: %q. Continue the work.]",
+				m.Content,
+			)}
+		}
+	}
+	return ai.Message{Role: ai.RoleUser, Content: "[Earlier turns were trimmed from this conversation. Continue the work.]"}
 }
 
 // messages converts the app's history. Every tool result for one assistant
@@ -188,11 +213,16 @@ func messages(history []ai.Message) []sdk.MessageParam {
 	for _, m := range history {
 		switch m.Role {
 		case ai.RoleTool:
-			id := m.ToolName
-			if len(pendingCalls) > 0 {
-				id = pendingCalls[0].ID
-				pendingCalls = pendingCalls[1:]
+			// A tool result with no pending call means its assistant turn
+			// was dropped from the window (or, now, replaced by the
+			// synthetic lead) - sending it would reference a tool_use id
+			// the request never includes, which the API rejects. Drop it
+			// rather than guess an id from the tool's name.
+			if len(pendingCalls) == 0 {
+				continue
 			}
+			id := pendingCalls[0].ID
+			pendingCalls = pendingCalls[1:]
 			pendingResults = append(pendingResults, sdk.NewToolResultBlock(id, m.Content, false))
 		case ai.RoleUser:
 			flush()

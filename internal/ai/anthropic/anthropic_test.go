@@ -254,38 +254,71 @@ func TestChatEmitsToolCallWithoutContentBlockStop(t *testing.T) {
 	}
 }
 
-// agentShapedHistory builds a history of user / assistant-with-tool-call /
-// tool-result messages, the shape agent.Execute actually produces, long
-// enough that agent.Trim's window (HistoryLimit messages, only leading
-// RoleTool messages skipped) starts on a RoleAssistant message rather than
-// RoleUser.
-func agentShapedHistory(n int) []ai.Message {
-	var msgs []ai.Message
-	for i := 0; len(msgs) < n; i++ {
-		msgs = append(msgs, ai.Message{Role: ai.RoleUser, Content: fmt.Sprintf("question %d", i)})
-		if len(msgs) == n {
-			break
-		}
-		msgs = append(msgs, ai.Message{Role: ai.RoleAssistant, ToolCalls: []ai.ToolCall{
-			{ID: fmt.Sprintf("call_%d", i), Name: "list_conflicts", Args: map[string]any{}},
-		}})
-		if len(msgs) == n {
-			break
-		}
-		msgs = append(msgs, ai.Message{Role: ai.RoleTool, ToolName: "list_conflicts", Content: fmt.Sprintf("result %d", i)})
+// agentShapedHistory builds a history the way agent.Execute actually
+// produces one: exactly one RoleUser message at the start, followed by
+// `steps` rounds of an assistant turn with a tool call and its matching
+// RoleTool result - never a user message every few turns, which the real
+// agent loop never emits. 30 steps (agent.MergeMaxSteps) yields 61
+// messages, comfortably past agent.HistoryLimit (40), so Trim's window
+// slides past the single leading user message.
+func agentShapedHistory(steps int) []ai.Message {
+	msgs := []ai.Message{{Role: ai.RoleUser, Content: "resolve the merge conflicts"}}
+	for i := 0; i < steps; i++ {
+		msgs = append(msgs,
+			ai.Message{Role: ai.RoleAssistant, Content: fmt.Sprintf("working on step %d", i), ToolCalls: []ai.ToolCall{
+				{ID: fmt.Sprintf("call_%d", i), Name: "list_conflicts", Args: map[string]any{}},
+			}},
+			ai.Message{Role: ai.RoleTool, ToolName: "list_conflicts", Content: fmt.Sprintf("result %d", i)},
+		)
 	}
 	return msgs
+}
+
+// requestMessages captures a Chat request's body shape: each message's role
+// and the tool_use / tool_result ids its content blocks carry.
+type requestMessages struct {
+	Messages []struct {
+		Role    string `json:"role"`
+		Content []struct {
+			Type      string `json:"type"`
+			ID        string `json:"id"`
+			ToolUseID string `json:"tool_use_id"`
+		} `json:"content"`
+	} `json:"messages"`
+}
+
+// assertNoOrphanToolResults fails the test if any tool_result block's
+// tool_use_id does not match a tool_use block sent earlier in the list -
+// exactly what the real API rejects with a 400.
+func assertNoOrphanToolResults(t *testing.T, body requestMessages) {
+	t.Helper()
+	seen := map[string]bool{}
+	for _, m := range body.Messages {
+		for _, block := range m.Content {
+			switch block.Type {
+			case "tool_use":
+				seen[block.ID] = true
+			case "tool_result":
+				if !seen[block.ToolUseID] {
+					t.Errorf("tool_result references tool_use_id %q with no preceding tool_use", block.ToolUseID)
+				}
+			}
+		}
+	}
 }
 
 // TestChatSendsUserFirstAfterTrim guards against the 400 "messages: first
 // message must use the user role" the real API returns once a long-running
 // agent conversation (e.g. merge conflict resolution, whose MergeMaxSteps
-// appends ~60 messages a run) pushes agent.Trim's window past its
-// HistoryLimit and the window starts on an assistant turn. Trim only skips
-// leading RoleTool messages; the user-role constraint is Anthropic-specific,
-// so the fix lives in this package's messages(), not in the shared Trim.
+// appends ~60 messages in one run) pushes agent.Trim's window past the
+// run's single leading RoleUser message entirely - there is then no
+// RoleUser left in the window to slice to, so the converter must synthesize
+// one rather than send an empty or user-less list (the API rejects both).
+// Trim only skips leading RoleTool messages; the user-role requirement is
+// Anthropic-specific, so the fix lives in this package's messages(), not in
+// the shared Trim.
 func TestChatSendsUserFirstAfterTrim(t *testing.T) {
-	full := agentShapedHistory(50)
+	full := agentShapedHistory(30)
 	trimmed := agent.Trim(full)
 	if trimmed[0].Role == ai.RoleUser {
 		t.Fatalf("test setup: want Trim's window to start on a non-user role, got %v", trimmed[0].Role)
@@ -307,17 +340,57 @@ func TestChatSendsUserFirstAfterTrim(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var body struct {
-		Messages []struct {
-			Role string `json:"role"`
-		} `json:"messages"`
+	var body requestMessages
+	if err := json.Unmarshal(captured, &body); err != nil {
+		t.Fatalf("unmarshal request body: %v (body: %s)", err, captured)
 	}
+	if len(body.Messages) == 0 {
+		t.Fatal("messages = [], want a non-empty list")
+	}
+	if body.Messages[0].Role != "user" {
+		t.Fatalf("first message role = %q, want %q", body.Messages[0].Role, "user")
+	}
+	assertNoOrphanToolResults(t, body)
+}
+
+// TestChatKeepsSurvivingUserFirst covers the case Trim usually produces: a
+// short enough history that the run's leading RoleUser message is still
+// inside the window. The converter must start there rather than synthesize
+// anything.
+func TestChatKeepsSurvivingUserFirst(t *testing.T) {
+	full := agentShapedHistory(3)
+	trimmed := agent.Trim(full)
+	if trimmed[0].Role != ai.RoleUser {
+		t.Fatalf("test setup: want Trim's window to still start on RoleUser, got %v", trimmed[0].Role)
+	}
+
+	var captured []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captured, _ = io.ReadAll(r.Body)
+		textStream(w)
+	}))
+	defer srv.Close()
+
+	c := anthropic.New("sk-test", anthropic.WithBaseURL(srv.URL))
+	ch, err := c.Chat(context.Background(), ai.Request{Model: "claude-opus-5", Messages: trimmed})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := collect(t, ch); err != nil {
+		t.Fatal(err)
+	}
+
+	var body requestMessages
 	if err := json.Unmarshal(captured, &body); err != nil {
 		t.Fatalf("unmarshal request body: %v (body: %s)", err, captured)
 	}
 	if len(body.Messages) == 0 || body.Messages[0].Role != "user" {
 		t.Fatalf("first message = %+v, want the first one to have role user", body.Messages)
 	}
+	if len(body.Messages[0].Content) == 0 || body.Messages[0].Content[0].Type != "text" {
+		t.Errorf("first message content = %+v, want the original text turn (no synthesis)", body.Messages[0].Content)
+	}
+	assertNoOrphanToolResults(t, body)
 }
 
 // twoToolCallStream is a reply with a text block at index 0 and two tool_use
