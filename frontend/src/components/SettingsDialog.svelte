@@ -4,7 +4,7 @@
   import Icon from './Icon.svelte'
   import { api } from '../lib/api'
   import { formatBytes, percent } from '../lib/format'
-  import { modelForProvider, modelHint, needsKey, PROVIDERS } from '../lib/providers'
+  import { modelForProvider, modelHint, needsKey, processingNotice, PROVIDERS, settingsHaveModels, usesOllama } from '../lib/providers'
   import { settingsOpen } from '../lib/stores'
   import type { AISettings, AIStatus, ModelDone, ModelProgress, ProviderName, PromptInfo } from '../lib/types'
   import { errorMessage, toast } from '../lib/ui'
@@ -39,6 +39,7 @@
 
   $: if ($settingsOpen) load()
   $: remote = !!settings && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/.test(settings.ollamaURL)
+  $: ollamaSelected = !!settings && usesOllama(settings.chatProvider, settings.taskProvider)
   $: models = status?.ollama.models ?? []
   $: chatHint = (settings && status ? modelHint(settings.chatProvider, status) : '') || (settings ? modelErrors[settings.chatProvider] : '') || ''
   $: taskHint = (settings && status ? modelHint(settings.taskProvider, status) : '') || (settings ? modelErrors[settings.taskProvider] : '') || ''
@@ -130,7 +131,11 @@
       await api.setProviderKey(provider, keyInput[provider])
       await refresh()
       await syncModels()
-      await save()
+      // syncModels() can clear a model to "" (its provider's list no longer
+      // has the current value); saving that fails validation even though
+      // the key operation itself succeeded, so skip it until a model is
+      // picked.
+      if (settings && settingsHaveModels(settings)) await save()
     } catch (e) {
       toast(errorMessage(e), 'error')
     } finally {
@@ -143,7 +148,7 @@
       await api.deleteProviderKey(provider)
       await refresh()
       await syncModels()
-      await save()
+      if (settings && settingsHaveModels(settings)) await save()
     } catch (e) {
       toast(errorMessage(e), 'error')
     }
@@ -209,35 +214,37 @@
           </div>
         </label>
         {#if remote}<p class="warn">Diffs will be sent over the network to this host.</p>{/if}
-        <label>
-          <span>Chat model</span>
-          <select bind:value={settings.chatModel} on:change={save}>
-            {#each models as m}
-              <option value={m.name}>{m.name} · {formatBytes(m.size)}</option>
-            {/each}
-            {#if !models.some((m) => m.name === settings?.chatModel)}
-              <option value={settings.chatModel}>{settings.chatModel} (not installed)</option>
+        {#if ollamaSelected}
+          <label>
+            <span>Chat model</span>
+            <select bind:value={settings.chatModel} on:change={save}>
+              {#each models as m}
+                <option value={m.name}>{m.name} · {formatBytes(m.size)}</option>
+              {/each}
+              {#if !models.some((m) => m.name === settings?.chatModel)}
+                <option value={settings.chatModel}>{settings.chatModel} (not installed)</option>
+              {/if}
+            </select>
+          </label>
+          {#if pull}
+            <div class="pull">
+              <div class="bar"><div style="width: {percent(pull.completed, pull.total)}%"></div></div>
+              <span class="hint">
+                {pull.name}: {pull.status}{#if pull.total} · {formatBytes(pull.completed)} / {formatBytes(pull.total)}{/if}
+              </span>
+              <button class="btn" on:click={() => api.cancelPull()}>Cancel</button>
+            </div>
+          {:else if status?.ollama.running}
+            {#if !status.ollama.chatModelInstalled}
+              <button class="btn primary" on:click={() => startPull(settings?.chatModel ?? RECOMMENDED)}>
+                Download {settings.chatModel}{settings.chatModel === RECOMMENDED ? ' (~4.7 GB)' : ''}
+              </button>
             {/if}
-          </select>
-        </label>
-        {#if pull}
-          <div class="pull">
-            <div class="bar"><div style="width: {percent(pull.completed, pull.total)}%"></div></div>
-            <span class="hint">
-              {pull.name}: {pull.status}{#if pull.total} · {formatBytes(pull.completed)} / {formatBytes(pull.total)}{/if}
-            </span>
-            <button class="btn" on:click={() => api.cancelPull()}>Cancel</button>
-          </div>
-        {:else if status?.ollama.running}
-          {#if !status.ollama.chatModelInstalled}
-            <button class="btn primary" on:click={() => startPull(settings?.chatModel ?? RECOMMENDED)}>
-              Download {settings.chatModel}{settings.chatModel === RECOMMENDED ? ' (~4.7 GB)' : ''}
-            </button>
+            <div class="row">
+              <input placeholder="Other model, e.g. llama3.1:8b" bind:value={otherModel} />
+              <button class="btn" disabled={!otherModel.trim()} on:click={() => startPull(otherModel)}>Download</button>
+            </div>
           {/if}
-          <div class="row">
-            <input placeholder="Other model, e.g. llama3.1:8b" bind:value={otherModel} />
-            <button class="btn" disabled={!otherModel.trim()} on:click={() => startPull(otherModel)}>Download</button>
-          </div>
         {/if}
       </section>
 
@@ -327,7 +334,7 @@
         <button class="btn" on:click={openFolder}>Open prompts folder</button>
       </section>
 
-      <footer>Everything is processed on this Mac.</footer>
+      <footer>{processingNotice(settings.chatProvider, settings.taskProvider, remote)}</footer>
     </div>
   </div>
 {/if}
