@@ -59,6 +59,24 @@ export namespace ai {
 
 export namespace app {
 	
+	export class ProviderStatus {
+	    provider: string;
+	    hasKey: boolean;
+	    keyHint: string;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProviderStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.provider = source["provider"];
+	        this.hasKey = source["hasKey"];
+	        this.keyHint = source["keyHint"];
+	        this.error = source["error"];
+	    }
+	}
 	export class OllamaStatus {
 	    running: boolean;
 	    url: string;
@@ -101,7 +119,8 @@ export namespace app {
 	}
 	export class AIStatus {
 	    ollama: OllamaStatus;
-	    apple: apple.Availability;
+	    providers: ProviderStatus[];
+	    keyStore?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AIStatus(source);
@@ -110,7 +129,8 @@ export namespace app {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.ollama = this.convertValues(source["ollama"], OllamaStatus);
-	        this.apple = this.convertValues(source["apple"], apple.Availability);
+	        this.providers = this.convertValues(source["providers"], ProviderStatus);
+	        this.keyStore = source["keyStore"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -238,6 +258,7 @@ export namespace app {
 	}
 	
 	
+	
 	export class RepoItem {
 	    id: string;
 	    name: string;
@@ -256,25 +277,6 @@ export namespace app {
 	        this.path = source["path"];
 	        this.missing = source["missing"];
 	        this.branch = source["branch"];
-	    }
-	}
-
-}
-
-export namespace apple {
-	
-	export class Availability {
-	    available: boolean;
-	    reason?: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new Availability(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.available = source["available"];
-	        this.reason = source["reason"];
 	    }
 	}
 
@@ -662,6 +664,7 @@ export namespace settings {
 	
 	export class Settings {
 	    ollamaURL: string;
+	    chatProvider: string;
 	    chatModel: string;
 	    taskProvider: string;
 	    taskModel: string;
@@ -673,6 +676,7 @@ export namespace settings {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.ollamaURL = source["ollamaURL"];
+	        this.chatProvider = source["chatProvider"];
 	        this.chatModel = source["chatModel"];
 	        this.taskProvider = source["taskProvider"];
 	        this.taskModel = source["taskModel"];

@@ -13,9 +13,11 @@ import (
 
 	"git-ui/internal/ai"
 	"git-ui/internal/ai/agent"
-	"git-ui/internal/ai/apple"
+	"git-ui/internal/ai/anthropic"
 	"git-ui/internal/ai/chatstore"
+	"git-ui/internal/ai/keys"
 	"git-ui/internal/ai/ollama"
+	"git-ui/internal/ai/openai"
 	"git-ui/internal/ai/prompts"
 	"git-ui/internal/ai/settings"
 	"git-ui/internal/ai/tasks"
@@ -34,7 +36,6 @@ type AIDeps struct {
 	SettingsPath string
 	Chats        *chatstore.Store
 	Prompts      *prompts.Store
-	Apple        *apple.Client
 	// Emit sends an event to the frontend; nil uses the Wails runtime.
 	Emit func(name string, data any)
 }
@@ -44,7 +45,6 @@ type aiState struct {
 	mu         sync.Mutex
 	runs       map[string]context.CancelFunc // repo ID → running chat
 	pullCancel context.CancelFunc
-	appleAvail *apple.Availability // cached after the first successful probe
 }
 
 type OllamaStatus struct {
@@ -56,9 +56,18 @@ type OllamaStatus struct {
 	Error              string         `json:"error,omitempty"`
 }
 
+type ProviderStatus struct {
+	Provider string `json:"provider"`
+	HasKey   bool   `json:"hasKey"`
+	KeyHint  string `json:"keyHint"`
+	Error    string `json:"error,omitempty"`
+}
+
 type AIStatus struct {
-	Ollama OllamaStatus       `json:"ollama"`
-	Apple  apple.Availability `json:"apple"`
+	Ollama    OllamaStatus     `json:"ollama"`
+	Providers []ProviderStatus `json:"providers"`
+	// KeyStore is why keys cannot be saved on this system, when they cannot.
+	KeyStore string `json:"keyStore,omitempty"`
 }
 
 type ModelProgress struct {
@@ -97,28 +106,6 @@ func (a *App) aiSettings() (settings.Settings, error) {
 	return settings.Load(a.ai.deps.SettingsPath)
 }
 
-// appleAvailability probes the Apple Intelligence helper, caching the result
-// in aiState after the first successful probe so AIStatus (polled on window
-// focus, etc.) doesn't spawn the helper process every call. A probe that
-// merely failed to run (helperFailed) is not cached, so it's retried.
-func (a *App) appleAvailability() apple.Availability {
-	a.ai.mu.Lock()
-	if a.ai.appleAvail != nil {
-		cached := *a.ai.appleAvail
-		a.ai.mu.Unlock()
-		return cached
-	}
-	a.ai.mu.Unlock()
-
-	st := a.ai.deps.Apple.Status(a.ctx)
-	if st.Reason != "helperFailed" {
-		a.ai.mu.Lock()
-		a.ai.appleAvail = &st
-		a.ai.mu.Unlock()
-	}
-	return st
-}
-
 func (a *App) GetAISettings() (settings.Settings, error) { return a.aiSettings() }
 
 func (a *App) SaveAISettings(s settings.Settings) error {
@@ -129,11 +116,10 @@ func (a *App) SaveAISettings(s settings.Settings) error {
 }
 
 func (a *App) AIStatus() AIStatus {
-	st := AIStatus{Ollama: OllamaStatus{Models: []ollama.Model{}}}
+	st := AIStatus{Ollama: OllamaStatus{Models: []ollama.Model{}}, Providers: []ProviderStatus{}}
 	cfg, err := a.aiSettings()
 	if err != nil {
 		st.Ollama.Error = err.Error()
-		st.Apple = apple.Availability{Reason: "unknown"}
 		return st
 	}
 	st.Ollama.URL, st.Ollama.ChatModel = cfg.OllamaURL, cfg.ChatModel
@@ -149,7 +135,19 @@ func (a *App) AIStatus() AIStatus {
 			}
 		}
 	}
-	st.Apple = a.appleAvailability()
+	if err := keys.Available(); err != nil {
+		st.KeyStore = err.Error()
+	}
+	for _, p := range []string{settings.ProviderOpenAI, settings.ProviderAnthropic} {
+		ps := ProviderStatus{Provider: p}
+		switch key, err := keys.Get(p); {
+		case err != nil:
+			ps.Error = err.Error()
+		case key != "":
+			ps.HasKey, ps.KeyHint = true, keys.Mask(key)
+		}
+		st.Providers = append(st.Providers, ps)
+	}
 	return st
 }
 
@@ -209,6 +207,92 @@ func (a *App) CancelPull() error {
 	return nil
 }
 
+// chatProvider builds the provider for the chat and agent features from the
+// settings, reading the API key of a hosted provider from the OS store.
+func (a *App) chatProvider(cfg settings.Settings) (ai.Provider, error) {
+	switch cfg.ChatProvider {
+	case settings.ProviderOllama:
+		return ollama.New(cfg.OllamaURL), nil
+	case settings.ProviderOpenAI, settings.ProviderAnthropic:
+		key, err := keys.Get(cfg.ChatProvider)
+		if err != nil {
+			return nil, err
+		}
+		if key == "" {
+			return nil, fmt.Errorf("add an API key for %s in Settings", cfg.ChatProvider)
+		}
+		if cfg.ChatProvider == settings.ProviderOpenAI {
+			return openai.New(key), nil
+		}
+		return anthropic.New(key), nil
+	}
+	return nil, fmt.Errorf("unknown provider %q", cfg.ChatProvider)
+}
+
+// responderFor builds the one-shot responder for tasks: commit messages and
+// explanations.
+func (a *App) responderFor(provider, model string, cfg settings.Settings) (ai.Responder, error) {
+	switch provider {
+	case settings.ProviderOllama:
+		return ollama.New(cfg.OllamaURL).Responder(model), nil
+	case settings.ProviderOpenAI, settings.ProviderAnthropic:
+		key, err := keys.Get(provider)
+		if err != nil {
+			return nil, err
+		}
+		if key == "" {
+			return nil, fmt.Errorf("add an API key for %s in Settings", provider)
+		}
+		if provider == settings.ProviderOpenAI {
+			return openai.New(key).Responder(model), nil
+		}
+		return anthropic.New(key).Responder(model), nil
+	}
+	return nil, fmt.Errorf("unknown provider %q", provider)
+}
+
+// SetProviderKey stores an API key for a hosted provider. The key is never
+// written to the settings file and never returned to the frontend.
+func (a *App) SetProviderKey(provider, key string) error { return keys.Set(provider, key) }
+
+func (a *App) DeleteProviderKey(provider string) error { return keys.Delete(provider) }
+
+// ListModels returns the models the given provider offers. Ollama lists what
+// is installed; a hosted provider needs its key.
+func (a *App) ListModels(provider string) ([]string, error) {
+	cfg, err := a.aiSettings()
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+	switch provider {
+	case settings.ProviderOllama:
+		models, err := ollama.New(cfg.OllamaURL).ListModels(ctx)
+		if err != nil {
+			return nil, err
+		}
+		out := []string{}
+		for _, m := range models {
+			out = append(out, m.Name)
+		}
+		return out, nil
+	case settings.ProviderOpenAI, settings.ProviderAnthropic:
+		key, err := keys.Get(provider)
+		if err != nil {
+			return nil, err
+		}
+		if key == "" {
+			return nil, fmt.Errorf("add an API key for %s in Settings", provider)
+		}
+		if provider == settings.ProviderOpenAI {
+			return openai.New(key).ListModels(ctx)
+		}
+		return anthropic.New(key).ListModels(ctx)
+	}
+	return nil, fmt.Errorf("unknown provider %q", provider)
+}
+
 func (a *App) GetChat(repoID string) ([]ai.Message, error) {
 	if a.ai == nil {
 		return nil, ErrAIDisabled
@@ -229,6 +313,10 @@ func (a *App) SendChat(repoID, text, runID string) error {
 		return fmt.Errorf("unknown repository %q", repoID)
 	}
 	cfg, err := a.aiSettings()
+	if err != nil {
+		return err
+	}
+	provider, err := a.chatProvider(cfg)
 	if err != nil {
 		return err
 	}
@@ -269,7 +357,7 @@ func (a *App) SendChat(repoID, text, runID string) error {
 	go func() {
 		run := agent.Run{
 			RepoID: repoID, RunID: runID,
-			Provider: ollama.New(cfg.OllamaURL), Model: cfg.ChatModel, System: system,
+			Provider: provider, Model: cfg.ChatModel, System: system,
 			Tools:   tools.Specs(),
 			RunTool: func(ctx context.Context, call ai.ToolCall) string { return tools.Run(ctx, repo.Path, call) },
 			Emit:    a.emit,
@@ -330,7 +418,8 @@ func (a *App) ClearChat(repoID string) error {
 
 // ExplainInChat explains a commit and writes the answer into the repository's
 // chat, so the question and the answer stay in the conversation. provider is
-// "" (use settings), settings.ProviderApple or settings.ProviderOllama.
+// "" (use settings), settings.ProviderOllama, settings.ProviderOpenAI or
+// settings.ProviderAnthropic.
 func (a *App) ExplainInChat(repoID, hash, provider, runID string) error {
 	if a.ai == nil {
 		return ErrAIDisabled
@@ -349,16 +438,11 @@ func (a *App) ExplainInChat(repoID, hash, provider, runID string) error {
 	if provider == "" {
 		provider = cfg.TaskProvider
 	}
-	var responder ai.Responder
-	budget := tasks.OllamaDiffBudget
-	switch provider {
-	case settings.ProviderApple:
-		responder, budget = a.ai.deps.Apple, tasks.AppleDiffBudget
-	case settings.ProviderOllama:
-		responder = ollama.New(cfg.OllamaURL).Responder(cfg.TaskModel)
-	default:
-		return fmt.Errorf("unknown provider %q", provider)
+	responder, err := a.responderFor(provider, cfg.TaskModel, cfg)
+	if err != nil {
+		return err
 	}
+	budget := tasks.OllamaDiffBudget
 	instructions, err := a.ai.deps.Prompts.Get(prompts.ExplainCommit, prompts.Vars{
 		Repo: repo.Name, Path: repo.Path, Branch: refs.CurrentLabel(a.ctx, repo.Path), Date: time.Now().Format("2006-01-02"),
 	})

@@ -13,7 +13,6 @@ import (
 	"git-ui/internal/ai"
 	"git-ui/internal/ai/agent"
 	"git-ui/internal/ai/mergetools"
-	"git-ui/internal/ai/ollama"
 	"git-ui/internal/ai/prompts"
 	"git-ui/internal/ai/tools"
 	"git-ui/internal/gitcmd"
@@ -206,6 +205,10 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 	if err != nil {
 		return err
 	}
+	provider, err := a.chatProvider(cfg)
+	if err != nil {
+		return err
+	}
 
 	a.ai.mu.Lock()
 	if _, busy := a.ai.runs[repoID]; busy {
@@ -244,7 +247,7 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 	go func() {
 		run := agent.Run{
 			RepoID: repoID, RunID: runID,
-			Provider: ollama.New(cfg.OllamaURL), Model: cfg.ChatModel, System: system,
+			Provider: provider, Model: cfg.ChatModel, System: system,
 			Tools:    append(mergetools.Specs(), tools.Specs()...),
 			MaxSteps: MergeMaxSteps,
 			RunTool: func(ctx context.Context, call ai.ToolCall) string {

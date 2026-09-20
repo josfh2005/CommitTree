@@ -34,6 +34,8 @@ export function CreateTag(arg1:string,arg2:string,arg3:string,arg4:string):Promi
 
 export function DeleteBranch(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
+export function DeleteProviderKey(arg1:string):Promise<void>;
+
 export function DeleteRemoteBranch(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function DeleteTag(arg1:string,arg2:string):Promise<void>;
@@ -66,6 +68,8 @@ export function GetResetPreview(arg1:string,arg2:string):Promise<ops.ResetInfo>;
 
 export function IsShallow(arg1:string):Promise<boolean>;
 
+export function ListModels(arg1:string):Promise<Array<string>>;
+
 export function ListPrompts():Promise<Array<prompts.Info>>;
 
 export function ListRepos():Promise<Array<app.RepoItem>>;
@@ -93,6 +97,8 @@ export function ResolveConflicts(arg1:string,arg2:string):Promise<void>;
 export function SaveAISettings(arg1:settings.Settings):Promise<void>;
 
 export function SendChat(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function SetProviderKey(arg1:string,arg2:string):Promise<void>;
 
 export function StageMergeFile(arg1:string,arg2:string):Promise<void>;
 

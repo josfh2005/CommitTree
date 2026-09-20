@@ -50,6 +50,10 @@ export function DeleteBranch(arg1, arg2, arg3) {
   return window['go']['app']['App']['DeleteBranch'](arg1, arg2, arg3);
 }
 
+export function DeleteProviderKey(arg1) {
+  return window['go']['app']['App']['DeleteProviderKey'](arg1);
+}
+
 export function DeleteRemoteBranch(arg1, arg2, arg3) {
   return window['go']['app']['App']['DeleteRemoteBranch'](arg1, arg2, arg3);
 }
@@ -114,6 +118,10 @@ export function IsShallow(arg1) {
   return window['go']['app']['App']['IsShallow'](arg1);
 }
 
+export function ListModels(arg1) {
+  return window['go']['app']['App']['ListModels'](arg1);
+}
+
 export function ListPrompts() {
   return window['go']['app']['App']['ListPrompts']();
 }
@@ -168,6 +176,10 @@ export function SaveAISettings(arg1) {
 
 export function SendChat(arg1, arg2, arg3) {
   return window['go']['app']['App']['SendChat'](arg1, arg2, arg3);
+}
+
+export function SetProviderKey(arg1, arg2) {
+  return window['go']['app']['App']['SetProviderKey'](arg1, arg2);
 }
 
 export function StageMergeFile(arg1, arg2) {

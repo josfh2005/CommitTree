@@ -14,7 +14,6 @@ import (
 
 	"git-ui/internal/ai"
 	"git-ui/internal/ai/agent"
-	"git-ui/internal/ai/apple"
 	"git-ui/internal/ai/chatstore"
 	"git-ui/internal/ai/prompts"
 	"git-ui/internal/merge"
@@ -160,7 +159,6 @@ func newAIMergeApp(t *testing.T, ollamaURL string) (*App, *testrepo.Repo, string
 		SettingsPath: filepath.Join(dir, "ai.json"),
 		Chats:        chatstore.New(filepath.Join(dir, "chats")),
 		Prompts:      prompts.New(filepath.Join(dir, "prompts")),
-		Apple:        apple.New(""),
 		Emit:         ev.emit,
 	})
 	s, err := a.GetAISettings()

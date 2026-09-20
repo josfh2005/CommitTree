@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -15,12 +14,47 @@ import (
 
 	"git-ui/internal/ai"
 	"git-ui/internal/ai/agent"
-	"git-ui/internal/ai/apple"
 	"git-ui/internal/ai/chatstore"
+	"git-ui/internal/ai/keys"
 	"git-ui/internal/ai/prompts"
 	"git-ui/internal/ai/settings"
 	"git-ui/internal/gitlog"
 )
+
+// fakeKeys is an in-memory keys.Store standing in for the OS secret store.
+// It repeats internal/ai/keys/keys_test.go's fake because it can't be
+// imported across packages.
+type fakeKeys struct {
+	items map[string]string
+	err   error
+}
+
+func (f *fakeKeys) Get(service, user string) (string, error) {
+	if f.err != nil {
+		return "", f.err
+	}
+	v, ok := f.items[service+"/"+user]
+	if !ok {
+		return "", keys.ErrNotFound
+	}
+	return v, nil
+}
+
+func (f *fakeKeys) Set(service, user, password string) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.items[service+"/"+user] = password
+	return nil
+}
+
+func (f *fakeKeys) Delete(service, user string) error {
+	if f.err != nil {
+		return f.err
+	}
+	delete(f.items, service+"/"+user)
+	return nil
+}
 
 type event struct {
 	name string
@@ -77,7 +111,6 @@ func newAIApp(t *testing.T, ollamaURL string) (*App, string, *events) {
 		SettingsPath: filepath.Join(dir, "ai.json"),
 		Chats:        chatstore.New(filepath.Join(dir, "chats")),
 		Prompts:      prompts.New(filepath.Join(dir, "prompts")),
-		Apple:        apple.New(""),
 		Emit:         ev.emit,
 	})
 	s, err := a.GetAISettings()
@@ -269,17 +302,13 @@ func TestExplainInChatWritesTheAnswerToTheConversation(t *testing.T) {
 	}
 }
 
-func TestExplainInChatWithMissingAppleHelper(t *testing.T) {
+func TestExplainInChatWithUnknownProvider(t *testing.T) {
 	srv := fakeOllama(t, nil)
-	a, id, ev := newAIApp(t, srv.URL)
+	a, id, _ := newAIApp(t, srv.URL)
 	head, _ := a.GetLog(id, gitlog.Filters{}, 0, 1)
 
-	if err := a.ExplainInChat(id, head.Rows[0].Hash, "apple", "exp-2"); err != nil {
-		t.Fatal(err)
-	}
-	got := ev.wait(t, agent.EventError).data.(agent.ErrorEvent)
-	if got.RunID != "exp-2" || !strings.Contains(got.Message, "helper not found") {
-		t.Fatalf("error = %#v", got)
+	if err := a.ExplainInChat(id, head.Rows[0].Hash, "acme", "exp-2"); err == nil {
+		t.Fatal("want an error for an unknown provider")
 	}
 	if err := a.ExplainInChat(id, head.Rows[0].Hash, "ollama", "exp-3"); err != nil {
 		t.Fatalf("repo still busy after a failed explain: %v", err)
@@ -323,52 +352,6 @@ func TestSendChatEmitsStart(t *testing.T) {
 	ev.wait(t, agent.EventDone)
 }
 
-func TestAIStatusCachesAppleAvailabilityAfterFirstProbe(t *testing.T) {
-	srv := fakeOllama(t, nil)
-	a, _ := newTestApp(t)
-	dir := t.TempDir()
-
-	callsPath := filepath.Join(dir, "calls")
-	helperPath := filepath.Join(dir, "git-ui-apple")
-	script := "#!/bin/sh\nprintf x >> " + callsPath + "\necho '{\"available\":true}'\n"
-	if err := os.WriteFile(helperPath, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	WithAI(a, AIDeps{
-		SettingsPath: filepath.Join(dir, "ai.json"),
-		Chats:        chatstore.New(filepath.Join(dir, "chats")),
-		Prompts:      prompts.New(filepath.Join(dir, "prompts")),
-		Apple:        apple.New(helperPath),
-		Emit:         func(string, any) {},
-	})
-	// GetAISettings triggers the first Apple probe (no settings file yet, so
-	// Load asks appleAvailable() to pick the default task provider).
-	s, err := a.GetAISettings()
-	if err != nil {
-		t.Fatal(err)
-	}
-	s.OllamaURL = srv.URL
-	if err := a.SaveAISettings(s); err != nil {
-		t.Fatal(err)
-	}
-
-	for i := 0; i < 3; i++ {
-		st := a.AIStatus()
-		if !st.Apple.Available {
-			t.Fatalf("status[%d] = %+v", i, st)
-		}
-	}
-
-	data, err := os.ReadFile(callsPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(data) != 1 {
-		t.Fatalf("apple helper invoked %d times, want 1 (cached after the first probe)", len(data))
-	}
-}
-
 func TestPullModelReportsCanceled(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeLines(w, `{"status":"pulling manifest"}`)
@@ -395,7 +378,7 @@ func TestAIStatusAndPull(t *testing.T) {
 	a, _, ev := newAIApp(t, srv.URL)
 
 	st := a.AIStatus()
-	if !st.Ollama.Running || !st.Ollama.ChatModelInstalled || len(st.Ollama.Models) != 1 || st.Apple.Reason != "helperNotFound" {
+	if !st.Ollama.Running || !st.Ollama.ChatModelInstalled || len(st.Ollama.Models) != 1 {
 		t.Fatalf("status = %+v", st)
 	}
 
@@ -446,5 +429,69 @@ func TestSendChatValidatesInput(t *testing.T) {
 	}
 	if err := a.SendChat("unknown", "hola", "run"); err == nil {
 		t.Fatal("unknown repo accepted")
+	}
+}
+
+// A hosted provider with no stored key must fail before any request, with a
+// message telling the user where to fix it.
+func TestChatWithoutAKeyAsksForOne(t *testing.T) {
+	a, id, _ := newAIApp(t, "http://127.0.0.1:0")
+	cfg, err := a.GetAISettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.ChatProvider, cfg.ChatModel = settings.ProviderAnthropic, "claude-opus-5"
+	if err := a.SaveAISettings(cfg); err != nil {
+		t.Fatal(err)
+	}
+	restore := keys.UseStore(&fakeKeys{items: map[string]string{}})
+	defer restore()
+
+	err = a.SendChat(id, "hola", "run1")
+	if err == nil || !strings.Contains(err.Error(), "API key") {
+		t.Fatalf("err = %v, want it to ask for an API key", err)
+	}
+}
+
+func TestSetAndDeleteProviderKey(t *testing.T) {
+	a, _, _ := newAIApp(t, "http://127.0.0.1:0")
+	restore := keys.UseStore(&fakeKeys{items: map[string]string{}})
+	defer restore()
+
+	if err := a.SetProviderKey("openai", "sk-test-abcd1234"); err != nil {
+		t.Fatal(err)
+	}
+	st := a.AIStatus()
+	var found bool
+	for _, p := range st.Providers {
+		if p.Provider == "openai" {
+			found = true
+			if !p.HasKey || p.KeyHint != "sk-…1234" {
+				t.Errorf("status = %+v, want a masked hint", p)
+			}
+			if strings.Contains(p.KeyHint, "test") {
+				t.Error("the status leaks the key")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("openai missing from the status")
+	}
+	if err := a.DeleteProviderKey("openai"); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range st2Providers(a) {
+		if p.Provider == "openai" && p.HasKey {
+			t.Error("the key is still reported after Delete")
+		}
+	}
+}
+
+func st2Providers(a *App) []ProviderStatus { return a.AIStatus().Providers }
+
+func TestListModelsRefusesAnUnknownProvider(t *testing.T) {
+	a, _, _ := newAIApp(t, "http://127.0.0.1:0")
+	if _, err := a.ListModels("acme"); err == nil {
+		t.Error("want an error for an unknown provider")
 	}
 }

@@ -9,7 +9,6 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
 
-	"git-ui/internal/ai/apple"
 	"git-ui/internal/ai/chatstore"
 	"git-ui/internal/ai/prompts"
 	"git-ui/internal/ai/settings"
@@ -49,7 +48,6 @@ func main() {
 		SettingsPath: settingsPath,
 		Chats:        chatstore.New(chatsDir),
 		Prompts:      prompts.New(promptsDir),
-		Apple:        apple.New(apple.Locate()),
 	})
 
 	err = wails.Run(&options.App{
