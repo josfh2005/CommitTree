@@ -1,7 +1,7 @@
 # git-ui — Sub-project 3b: Hosted AI providers (OpenAI, Anthropic) — Design
 
 Date: 2026-09-20
-Status: Draft for review
+Status: Implemented
 Builds on: `2026-09-17-ai-foundation-design.md` (AI foundation) and
 `2026-09-17-merge-agent-design.md` (conflict agent), both merged to `main`.
 
