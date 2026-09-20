@@ -4,7 +4,7 @@
   import Icon from './Icon.svelte'
   import { api } from '../lib/api'
   import { formatBytes, percent } from '../lib/format'
-  import { modelHint, needsKey, PROVIDERS } from '../lib/providers'
+  import { modelForProvider, modelHint, needsKey, PROVIDERS } from '../lib/providers'
   import { settingsOpen } from '../lib/stores'
   import type { AISettings, AIStatus, ModelDone, ModelProgress, ProviderName, PromptInfo } from '../lib/types'
   import { errorMessage, toast } from '../lib/ui'
@@ -20,6 +20,10 @@
   let keyInput: Record<string, string> = { openai: '', anthropic: '' }
   let chatModels: string[] = []
   let taskModels: string[] = []
+  // modelErrors[provider] is set when api.listModels(provider) itself fails
+  // (e.g. a stored key is invalid or expired) — distinct from modelHint,
+  // which only reflects the backend's aiStatus snapshot (no key stored).
+  let modelErrors: Record<string, string> = {}
 
   const offProgress = EventsOn('model:progress', (p: ModelProgress) => (pull = p))
   const offDone = EventsOn('model:done', async (p: ModelDone) => {
@@ -36,8 +40,8 @@
   $: if ($settingsOpen) load()
   $: remote = !!settings && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/.test(settings.ollamaURL)
   $: models = status?.ollama.models ?? []
-  $: chatHint = settings && status ? modelHint(settings.chatProvider, status) : ''
-  $: taskHint = settings && status ? modelHint(settings.taskProvider, status) : ''
+  $: chatHint = (settings && status ? modelHint(settings.chatProvider, status) : '') || (settings ? modelErrors[settings.chatProvider] : '') || ''
+  $: taskHint = (settings && status ? modelHint(settings.taskProvider, status) : '') || (settings ? modelErrors[settings.taskProvider] : '') || ''
 
   async function load() {
     try {
@@ -47,7 +51,7 @@
       toast(errorMessage(e), 'error')
     }
     await refresh()
-    await loadModels()
+    await syncModels()
   }
 
   async function refresh() {
@@ -58,20 +62,45 @@
     }
   }
 
+  // modelsFor loads a provider's models. Ollama's list comes from the
+  // already-fetched status; a hosted provider is asked directly, and a
+  // failure (e.g. an invalid or expired key) is kept in modelErrors instead
+  // of being swallowed, so the dialog can explain the empty dropdown.
   async function modelsFor(provider: ProviderName): Promise<string[]> {
     if (provider === 'ollama') return (status?.ollama.models ?? []).map((m) => m.name)
-    if (!status || modelHint(provider, status)) return []
+    if (!status || modelHint(provider, status)) {
+      // The backend already explains the empty list (no key, no key store);
+      // drop any stale listModels() failure so it doesn't linger on screen.
+      if (modelErrors[provider]) {
+        const { [provider]: _dropped, ...rest } = modelErrors
+        modelErrors = rest
+      }
+      return []
+    }
     try {
-      return await api.listModels(provider)
-    } catch {
+      const list = await api.listModels(provider)
+      if (modelErrors[provider]) {
+        delete modelErrors[provider]
+        modelErrors = modelErrors
+      }
+      return list
+    } catch (e) {
+      modelErrors = { ...modelErrors, [provider]: errorMessage(e) }
       return []
     }
   }
 
-  async function loadModels() {
+  // syncModels reloads both providers' model lists and, for each, replaces
+  // the selected model with one that is actually on the new list — keeping
+  // the current choice when it is still valid, otherwise the list's first
+  // model, or "" when the list is empty. It does not save; callers save
+  // afterwards once the settings object holds a valid model.
+  async function syncModels() {
     if (!settings) return
     chatModels = await modelsFor(settings.chatProvider)
+    settings.chatModel = modelForProvider(settings.chatModel, chatModels)
     taskModels = settings.taskProvider === settings.chatProvider ? chatModels : await modelsFor(settings.taskProvider)
+    settings.taskModel = modelForProvider(settings.taskModel, taskModels)
   }
 
   async function save() {
@@ -87,19 +116,25 @@
     }
   }
 
-  async function saveAndReload() {
+  // onProviderChange loads the newly chosen provider's models and picks a
+  // valid one BEFORE saving, so a provider switch never persists the old
+  // provider's model (e.g. an Ollama model name saved under chatProvider:
+  // "openai") for the backend to fail on later.
+  async function onProviderChange() {
+    await syncModels()
     await save()
-    await loadModels()
   }
 
   async function saveKey(provider: string) {
     try {
       await api.setProviderKey(provider, keyInput[provider])
-      keyInput[provider] = ''
       await refresh()
-      await loadModels()
+      await syncModels()
+      await save()
     } catch (e) {
       toast(errorMessage(e), 'error')
+    } finally {
+      keyInput[provider] = ''
     }
   }
 
@@ -107,7 +142,8 @@
     try {
       await api.deleteProviderKey(provider)
       await refresh()
-      await loadModels()
+      await syncModels()
+      await save()
     } catch (e) {
       toast(errorMessage(e), 'error')
     }
@@ -209,7 +245,7 @@
         <h4>Chat &amp; agent</h4>
         <label>
           <span>Provider</span>
-          <select bind:value={settings.chatProvider} on:change={saveAndReload}>
+          <select bind:value={settings.chatProvider} on:change={onProviderChange}>
             {#each PROVIDERS as p}
               <option value={p.value}>{p.label}</option>
             {/each}
@@ -236,7 +272,7 @@
         <h4>Explain commit</h4>
         <label>
           <span>Provider</span>
-          <select bind:value={settings.taskProvider} on:change={saveAndReload}>
+          <select bind:value={settings.taskProvider} on:change={onProviderChange}>
             {#each PROVIDERS as p}
               <option value={p.value}>{p.label}</option>
             {/each}

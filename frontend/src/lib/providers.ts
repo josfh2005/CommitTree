@@ -22,3 +22,14 @@ export function modelHint(p: ProviderName, status: AIStatus): string {
   if (found?.error) return found.error
   return found?.hasKey ? '' : 'Add a key to see the models'
 }
+
+/**
+ * modelForProvider picks the model to select after a provider's model list
+ * changes (on a provider switch, or once its models finish loading): the
+ * current value when the new list still has it, otherwise the list's first
+ * entry, or "" when the list is empty.
+ */
+export function modelForProvider(current: string, models: string[]): string {
+  if (models.includes(current)) return current
+  return models[0] ?? ''
+}
