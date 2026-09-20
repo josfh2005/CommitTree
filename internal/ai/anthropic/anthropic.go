@@ -7,8 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
-	"strings"
 
 	sdk "github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
@@ -20,35 +18,23 @@ import (
 // request streams, so a large ceiling costs nothing when unused.
 const MaxTokens = 64000
 
-// defaultBaseURL is the production Anthropic API host; WithBaseURL overrides
-// it for tests.
-const defaultBaseURL = "https://api.anthropic.com"
-
 type Client struct {
-	sdk     sdk.Client
-	apiKey  string
-	baseURL string
-	http    *http.Client
+	sdk sdk.Client
 }
 
-type Option func(*Client, *[]option.RequestOption)
+type Option func(*[]option.RequestOption)
 
 // WithBaseURL points the client at another host; tests use it.
 func WithBaseURL(u string) Option {
-	return func(c *Client, opts *[]option.RequestOption) {
-		c.baseURL = strings.TrimRight(u, "/")
-		*opts = append(*opts, option.WithBaseURL(u))
-	}
+	return func(opts *[]option.RequestOption) { *opts = append(*opts, option.WithBaseURL(u)) }
 }
 
 func New(apiKey string, opts ...Option) *Client {
-	c := &Client{apiKey: apiKey, baseURL: defaultBaseURL, http: &http.Client{}}
 	req := []option.RequestOption{option.WithAPIKey(apiKey)}
 	for _, o := range opts {
-		o(c, &req)
+		o(&req)
 	}
-	c.sdk = sdk.NewClient(req...)
-	return c
+	return &Client{sdk: sdk.NewClient(req...)}
 }
 
 // Chat streams one assistant turn. Text arrives as deltas; a tool call is
@@ -68,7 +54,10 @@ func (c *Client) Chat(ctx context.Context, req ai.Request) (<-chan ai.Chunk, err
 		params.Tools = append(params.Tools, sdk.ToolUnionParam{OfTool: &sdk.ToolParam{
 			Name:        t.Name,
 			Description: sdk.String(t.Description),
-			InputSchema: sdk.ToolInputSchemaParam{Properties: t.Parameters["properties"]},
+			InputSchema: sdk.ToolInputSchemaParam{
+				Properties: t.Parameters["properties"],
+				Required:   requiredFields(t.Parameters),
+			},
 		}})
 	}
 
@@ -76,7 +65,9 @@ func (c *Client) Chat(ctx context.Context, req ai.Request) (<-chan ai.Chunk, err
 	ch := make(chan ai.Chunk)
 	go func() {
 		defer close(ch)
+		defer stream.Close()
 		message := sdk.Message{}
+		emitted := map[int]bool{}
 		for stream.Next() {
 			event := stream.Current()
 			if err := message.Accumulate(event); err != nil {
@@ -92,6 +83,7 @@ func (c *Client) Chat(ctx context.Context, req ai.Request) (<-chan ai.Chunk, err
 				}
 			case sdk.ContentBlockStopEvent:
 				if call, ok := toolCall(message, int(e.Index)); ok {
+					emitted[int(e.Index)] = true
 					if !send(ctx, ch, ai.Chunk{ToolCalls: []ai.ToolCall{call}}) {
 						return
 					}
@@ -102,9 +94,42 @@ func (c *Client) Chat(ctx context.Context, req ai.Request) (<-chan ai.Chunk, err
 			send(ctx, ch, ai.Chunk{Err: classify(err)})
 			return
 		}
+		// A tool_use block whose content_block_stop never arrived (the
+		// stream ended right after message_stop) would otherwise be
+		// silently dropped; emit it here from the accumulated message.
+		for i := range message.Content {
+			if emitted[i] {
+				continue
+			}
+			if call, ok := toolCall(message, i); ok {
+				if !send(ctx, ch, ai.Chunk{ToolCalls: []ai.ToolCall{call}}) {
+					return
+				}
+			}
+		}
 		send(ctx, ch, ai.Chunk{Done: true})
 	}()
 	return ch, nil
+}
+
+// requiredFields reads the "required" entry of a JSON Schema parameters
+// object. Callers populate it as []string (internal/ai/tools) or []any (a
+// schema decoded from JSON), so both are handled.
+func requiredFields(params map[string]any) []string {
+	switch v := params["required"].(type) {
+	case []string:
+		return v
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, e := range v {
+			if s, ok := e.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
 }
 
 // toolCall reads the accumulated block at index when it is a completed tool
@@ -127,10 +152,15 @@ func toolCall(m sdk.Message, index int) (ai.ToolCall, bool) {
 }
 
 // messages converts the app's history. Every tool result for one assistant
-// turn goes into a single user message, which is what the API expects.
+// turn goes into a single user message, which is what the API expects. A
+// RoleTool message carries only the tool's name (see ai.Message), so its
+// tool_use_id is recovered positionally from the ToolCalls of the assistant
+// message that precedes it — the agent always appends results in call
+// order, immediately after that assistant turn.
 func messages(history []ai.Message) []sdk.MessageParam {
 	var out []sdk.MessageParam
 	var pendingResults []sdk.ContentBlockParamUnion
+	var pendingCalls []ai.ToolCall
 	flush := func() {
 		if len(pendingResults) > 0 {
 			out = append(out, sdk.NewUserMessage(pendingResults...))
@@ -140,12 +170,23 @@ func messages(history []ai.Message) []sdk.MessageParam {
 	for _, m := range history {
 		switch m.Role {
 		case ai.RoleTool:
-			pendingResults = append(pendingResults, sdk.NewToolResultBlock(m.ToolName, m.Content, false))
+			id := m.ToolName
+			if len(pendingCalls) > 0 {
+				id = pendingCalls[0].ID
+				pendingCalls = pendingCalls[1:]
+			}
+			pendingResults = append(pendingResults, sdk.NewToolResultBlock(id, m.Content, false))
 		case ai.RoleUser:
 			flush()
-			out = append(out, sdk.NewUserMessage(sdk.NewTextBlock(m.Content)))
+			pendingCalls = nil
+			// The API rejects an empty text block; drop an empty user turn
+			// rather than send one.
+			if m.Content != "" {
+				out = append(out, sdk.NewUserMessage(sdk.NewTextBlock(m.Content)))
+			}
 		case ai.RoleAssistant:
 			flush()
+			pendingCalls = append([]ai.ToolCall(nil), m.ToolCalls...)
 			blocks := []sdk.ContentBlockParamUnion{}
 			if m.Content != "" {
 				blocks = append(blocks, sdk.NewTextBlock(m.Content))
@@ -181,45 +222,15 @@ func (r responder) Respond(ctx context.Context, instructions, prompt string) (<-
 }
 
 // ListModels returns the model ids the key can use, newest first as the API
-// returns them.
-//
-// This bypasses the SDK's typed Models.List call: the SDK's JSON decoder
-// requires an exact "application/json" content-type header, which the real
-// API always sends but which is not guaranteed by every proxy or test
-// double in front of it. A plain HTTP GET decoded by hand is more robust.
+// returns them. It pages through the full list via the SDK's auto-pager.
 func (c *Client) ListModels(ctx context.Context) ([]string, error) {
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/v1/models", nil)
-	if err != nil {
-		return nil, fmt.Errorf("anthropic: %w", err)
-	}
-	httpReq.Header.Set("x-api-key", c.apiKey)
-	httpReq.Header.Set("anthropic-version", "2023-06-01")
-
-	resp, err := c.http.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("anthropic: %w", err)
-	}
-	defer resp.Body.Close()
-
-	var body struct {
-		Data []struct {
-			ID string `json:"id"`
-		} `json:"data"`
-		Error struct {
-			Type    string `json:"type"`
-			Message string `json:"message"`
-		} `json:"error"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		return nil, fmt.Errorf("anthropic: decode models: %w", err)
-	}
-	if resp.StatusCode >= 400 {
-		return nil, classifyStatus(resp.StatusCode, body.Error.Message)
-	}
-
 	out := []string{}
-	for _, m := range body.Data {
-		out = append(out, m.ID)
+	iter := c.sdk.Models.ListAutoPaging(ctx, sdk.ModelListParams{})
+	for iter.Next() {
+		out = append(out, iter.Current().ID)
+	}
+	if err := iter.Err(); err != nil {
+		return nil, classify(err)
 	}
 	return out, nil
 }
@@ -240,21 +251,6 @@ func classify(err error) error {
 		return fmt.Errorf("anthropic rejected the request: %s", apierr.Error())
 	default:
 		return fmt.Errorf("anthropic returned %d", apierr.StatusCode)
-	}
-}
-
-// classifyStatus turns a raw HTTP status and API error message into an
-// error the chat can show without leaking the request or the key.
-func classifyStatus(statusCode int, msg string) error {
-	switch statusCode {
-	case 401, 403:
-		return errors.New("anthropic rejected the API key")
-	case 429:
-		return errors.New("anthropic is rate limiting; try again in a moment")
-	case 400:
-		return fmt.Errorf("anthropic rejected the request: %s", msg)
-	default:
-		return fmt.Errorf("anthropic returned %d", statusCode)
 	}
 }
 
