@@ -4,19 +4,12 @@
   import Icon from './Icon.svelte'
   import { api } from '../lib/api'
   import { formatBytes, percent } from '../lib/format'
+  import { modelHint, needsKey, PROVIDERS } from '../lib/providers'
   import { settingsOpen } from '../lib/stores'
-  import type { AISettings, AIStatus, ModelDone, ModelProgress, PromptInfo } from '../lib/types'
+  import type { AISettings, AIStatus, ModelDone, ModelProgress, ProviderName, PromptInfo } from '../lib/types'
   import { errorMessage, toast } from '../lib/ui'
 
   const RECOMMENDED = 'qwen2.5:7b'
-  const appleReasons: Record<string, string> = {
-    deviceNotEligible: 'This Mac does not support Apple Intelligence.',
-    appleIntelligenceNotEnabled: 'Turn on Apple Intelligence in System Settings.',
-    modelNotReady: 'The Apple Intelligence model is still downloading.',
-    helperNotFound: 'Helper not found. Build the app with "make build".',
-    helperFailed: 'The Apple Intelligence helper failed to start.',
-    unknown: 'Apple Intelligence is unavailable.',
-  }
 
   let settings: AISettings | null = null
   let status: AIStatus | null = null
@@ -24,6 +17,9 @@
   let pull: ModelProgress | null = null
   let otherModel = ''
   let saving = false
+  let keyInput: Record<string, string> = { openai: '', anthropic: '' }
+  let chatModels: string[] = []
+  let taskModels: string[] = []
 
   const offProgress = EventsOn('model:progress', (p: ModelProgress) => (pull = p))
   const offDone = EventsOn('model:done', async (p: ModelDone) => {
@@ -40,7 +36,8 @@
   $: if ($settingsOpen) load()
   $: remote = !!settings && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/.test(settings.ollamaURL)
   $: models = status?.ollama.models ?? []
-  $: appleText = status?.apple.available ? 'Available on this Mac' : appleReasons[status?.apple.reason ?? 'unknown'] ?? appleReasons.unknown
+  $: chatHint = settings && status ? modelHint(settings.chatProvider, status) : ''
+  $: taskHint = settings && status ? modelHint(settings.taskProvider, status) : ''
 
   async function load() {
     try {
@@ -50,6 +47,7 @@
       toast(errorMessage(e), 'error')
     }
     await refresh()
+    await loadModels()
   }
 
   async function refresh() {
@@ -58,6 +56,22 @@
     } catch {
       status = null
     }
+  }
+
+  async function modelsFor(provider: ProviderName): Promise<string[]> {
+    if (provider === 'ollama') return (status?.ollama.models ?? []).map((m) => m.name)
+    if (!status || modelHint(provider, status)) return []
+    try {
+      return await api.listModels(provider)
+    } catch {
+      return []
+    }
+  }
+
+  async function loadModels() {
+    if (!settings) return
+    chatModels = await modelsFor(settings.chatProvider)
+    taskModels = settings.taskProvider === settings.chatProvider ? chatModels : await modelsFor(settings.taskProvider)
   }
 
   async function save() {
@@ -70,6 +84,32 @@
       toast(errorMessage(e), 'error')
     } finally {
       saving = false
+    }
+  }
+
+  async function saveAndReload() {
+    await save()
+    await loadModels()
+  }
+
+  async function saveKey(provider: string) {
+    try {
+      await api.setProviderKey(provider, keyInput[provider])
+      keyInput[provider] = ''
+      await refresh()
+      await loadModels()
+    } catch (e) {
+      toast(errorMessage(e), 'error')
+    }
+  }
+
+  async function removeKey(provider: string) {
+    try {
+      await api.deleteProviderKey(provider)
+      await refresh()
+      await loadModels()
+    } catch (e) {
+      toast(errorMessage(e), 'error')
     }
   }
 
@@ -166,25 +206,75 @@
       </section>
 
       <section>
-        <h4>Explain commit</h4>
-        <label class="radio">
-          <input type="radio" bind:group={settings.taskProvider} value="apple" on:change={save} />
-          <span>Apple Intelligence <span class="hint">· {appleText}</span></span>
-        </label>
-        <label class="radio">
-          <input type="radio" bind:group={settings.taskProvider} value="ollama" on:change={save} />
-          <span>Ollama</span>
-        </label>
-        {#if settings.taskProvider === 'ollama'}
-          <select bind:value={settings.taskModel} on:change={save}>
-            {#each models as m}
-              <option value={m.name}>{m.name}</option>
+        <h4>Chat &amp; agent</h4>
+        <label>
+          <span>Provider</span>
+          <select bind:value={settings.chatProvider} on:change={saveAndReload}>
+            {#each PROVIDERS as p}
+              <option value={p.value}>{p.label}</option>
             {/each}
-            {#if !models.some((m) => m.name === settings?.taskModel)}
-              <option value={settings.taskModel}>{settings.taskModel} (not installed)</option>
-            {/if}
           </select>
-        {/if}
+        </label>
+        <label>
+          <span>Model</span>
+          {#if chatHint}
+            <span class="hint">{chatHint}</span>
+          {:else}
+            <select bind:value={settings.chatModel} on:change={save}>
+              {#each chatModels as m}
+                <option value={m}>{m}</option>
+              {/each}
+              {#if !chatModels.includes(settings.chatModel)}
+                <option value={settings.chatModel}>{settings.chatModel}</option>
+              {/if}
+            </select>
+          {/if}
+        </label>
+      </section>
+
+      <section>
+        <h4>Explain commit</h4>
+        <label>
+          <span>Provider</span>
+          <select bind:value={settings.taskProvider} on:change={saveAndReload}>
+            {#each PROVIDERS as p}
+              <option value={p.value}>{p.label}</option>
+            {/each}
+          </select>
+        </label>
+        <label>
+          <span>Model</span>
+          {#if taskHint}
+            <span class="hint">{taskHint}</span>
+          {:else}
+            <select bind:value={settings.taskModel} on:change={save}>
+              {#each taskModels as m}
+                <option value={m}>{m}</option>
+              {/each}
+              {#if !taskModels.includes(settings.taskModel)}
+                <option value={settings.taskModel}>{settings.taskModel}</option>
+              {/if}
+            </select>
+          {/if}
+        </label>
+      </section>
+
+      <section>
+        <h4>API keys</h4>
+        {#each PROVIDERS.filter((p) => needsKey(p.value)) as p}
+          {@const st = status?.providers.find((s) => s.provider === p.value)}
+          <label class="row">
+            <span>{p.label} API key</span>
+            {#if st?.hasKey}
+              <span class="hint">{st.keyHint}</span>
+              <button class="btn" on:click={() => removeKey(p.value)}>Remove</button>
+            {:else}
+              <input type="password" placeholder="sk-…" bind:value={keyInput[p.value]} />
+              <button class="btn primary" disabled={!keyInput[p.value]} on:click={() => saveKey(p.value)}>Save</button>
+            {/if}
+          </label>
+        {/each}
+        {#if status?.keyStore}<p class="warn">{status.keyStore}</p>{/if}
       </section>
 
       <section>
@@ -214,7 +304,7 @@
   h4 { margin: 0 0 8px; font-size: 12px; font-weight: 500; color: var(--muted); }
   section { display: flex; flex-direction: column; gap: 8px; padding: 14px 0; border-bottom: 1px solid var(--border); }
   label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
-  label.radio { flex-direction: row; align-items: center; gap: 8px; font-size: 13px; color: var(--text); }
+  label.row { flex-direction: row; align-items: center; }
   .row { display: flex; gap: 6px; }
   .row input { flex: 1; }
   .status { display: flex; align-items: center; gap: 6px; }

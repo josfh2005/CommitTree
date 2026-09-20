@@ -116,10 +116,20 @@ export interface AIMessage {
   stopped?: boolean
 }
 
+export type ProviderName = 'ollama' | 'openai' | 'anthropic'
+
+export interface ProviderStatus {
+  provider: string
+  hasKey: boolean
+  keyHint: string
+  error?: string
+}
+
 export interface AISettings {
   ollamaURL: string
+  chatProvider: ProviderName
   chatModel: string
-  taskProvider: 'apple' | 'ollama'
+  taskProvider: ProviderName
   taskModel: string
 }
 
@@ -137,7 +147,9 @@ export interface AIStatus {
     chatModelInstalled: boolean
     error?: string
   }
-  apple: { available: boolean; reason?: string }
+  providers: ProviderStatus[]
+  // keyStore is why keys cannot be saved on this system, when they cannot.
+  keyStore?: string
 }
 
 export interface PromptInfo {
