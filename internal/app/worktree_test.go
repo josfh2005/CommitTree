@@ -2,6 +2,8 @@ package app
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -71,5 +73,31 @@ func TestGetWorktreeDiffRefusesAnUnlistedPath(t *testing.T) {
 	}
 	if !strings.Contains(out, "changed") {
 		t.Errorf("diff = %q, want the change in it", out)
+	}
+}
+
+// A path can go stale between the Status read inside GetWorktreeDiff and the
+// git diff call that follows it: the renderer sent a real, listed path, but
+// the file is gone from disk by the time the untracked --no-index diff runs.
+// git's exit 1 there means either "the files differ" (the ordinary case) or
+// "could not access the path" (this one) - they must not collapse into the
+// same empty-string success.
+func TestGetWorktreeDiffOfAVanishedUntrackedFileErrors(t *testing.T) {
+	a, r, id, _ := newAIMergeApp(t, "http://127.0.0.1:0")
+	r.WriteFile("a.txt", "changed\n")
+
+	out, err := a.GetWorktreeDiff(id, "a.txt", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "changed") {
+		t.Errorf("diff = %q, want the file's contents in it", out)
+	}
+
+	if err := os.Remove(filepath.Join(r.Dir, "a.txt")); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := a.GetWorktreeDiff(id, "a.txt", false); err == nil {
+		t.Errorf("want an error for a path that vanished before the diff, got out = %q", out)
 	}
 }

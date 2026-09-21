@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 
 	"git-ui/internal/gitcmd"
@@ -83,8 +85,16 @@ func (a *App) GetWorktreeDiff(id, path string, staged bool) (string, error) {
 	// An untracked file has no HEAD or index side to diff against; --no-index
 	// against /dev/null is what shows its whole content as an addition. That
 	// mode behaves like the plain diff(1) command it emulates: it exits 1
-	// merely because the two sides differ, not because anything went wrong.
+	// merely because the two sides differ, not because anything went wrong -
+	// but git overloads that same exit code for "could not access the path",
+	// which is exactly what a stale path from the renderer produces if the
+	// file vanished between the Status read above and this call. Exit 1 can't
+	// tell the two apart on its own, so the path is checked on disk first;
+	// only once it's confirmed to exist is exit 1 read as "they differ".
 	if !staged && slices.ContainsFunc(st.Untracked, func(f worktree.FileStatus) bool { return f.Path == path }) {
+		if _, statErr := os.Lstat(filepath.Join(dir, path)); statErr != nil {
+			return "", statErr
+		}
 		out, err := gitcmd.Run(a.ctx, dir, gitcmd.ReadTimeout, "--literal-pathspecs", "diff", "--no-index", "--", "/dev/null", path)
 		var gerr *gitcmd.Error
 		if errors.As(err, &gerr) && gerr.ExitCode == 1 {
