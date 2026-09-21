@@ -1,6 +1,7 @@
 <script lang="ts">
   import { EventsOn } from '../../wailsjs/runtime/runtime'
   import Icon from './Icon.svelte'
+  import FileList from './FileList.svelte'
   import { api } from '../lib/api'
   import { abortMerge, commitMerge, resolveConflicts, stageMergeFile, takeMergeSide, unstageMergeFile } from '../lib/actions'
   import { mergeSections, type MergeFile } from '../lib/merge'
@@ -66,7 +67,7 @@
 
   // A Manual file is settled by taking one side whole, after a confirmation:
   // it overwrites the worktree copy, which Unstage does not restore.
-  function manualMenu(event: MouseEvent, file: MergeFile) {
+  function manualMenu(event: MouseEvent, file: { path: string; status: string }) {
     if (file.status !== 'manual') return
     const into = $mergeState?.into ?? ''
     const from = $mergeState?.from ?? ''
@@ -74,6 +75,22 @@
       { label: `Take ours (${into})`, action: () => takeMergeSide(repoId, file.path, 'ours', into), disabled: !!$busy },
       { label: `Take theirs (${from})`, action: () => takeMergeSide(repoId, file.path, 'theirs', from), disabled: !!$busy },
     ])
+  }
+
+  function glyph(status: string): string {
+    if (status === 'manual') return '!'
+    if (status === 'unstaged') return 'M'
+    return '·'
+  }
+
+  function actionsFor(file: { path: string; status: string }) {
+    if (file.status === 'unstaged') {
+      return [{ label: 'Stage', run: () => stageMergeFile(repoId, file.path), disabled: !!$busy, title: 'Add to the merge commit' }]
+    }
+    if (file.status === 'staged') {
+      return [{ label: 'Unstage', run: () => unstageMergeFile(repoId, file.path), disabled: !!$busy, title: 'Take out of the merge commit, keeping the content' }]
+    }
+    return []
   }
 
   function lineClass(line: string): string {
@@ -102,28 +119,7 @@
   </header>
 
   <div class="body">
-    <div class="files">
-      {#each sections as section (section.title)}
-        <div class="section">{section.title}</div>
-        {#each section.files as f (f.path)}
-          <div class="row" class:active={selected === f.path}>
-            <button class="row-item file" class:active={selected === f.path} on:click={() => open(f)} on:contextmenu|preventDefault={(e) => manualMenu(e, f)}>
-              <span class="status s-{f.status}">
-                {#if f.status === 'staged'}<Icon name="check" size={12} />{:else if f.status === 'manual'}!{:else if f.status === 'unstaged'}M{:else}·{/if}
-              </span>
-              <span class="ellipsis">{f.path}</span>
-            </button>
-            {#if f.status === 'unstaged'}
-              <button class="act" disabled={!!$busy} title="Add to the merge commit" on:click={() => stageMergeFile(repoId, f.path)}>Stage</button>
-            {:else if f.status === 'staged'}
-              <button class="act" disabled={!!$busy} title="Take out of the merge commit, keeping the content" on:click={() => unstageMergeFile(repoId, f.path)}>Unstage</button>
-            {/if}
-          </div>
-        {/each}
-      {:else}
-        <div class="none">Nothing left to resolve.</div>
-      {/each}
-    </div>
+    <FileList {sections} {selected} onSelect={(path) => open(files.find((f) => f.path === path)!)} actions={actionsFor} onMenu={manualMenu} {glyph} />
     <div class="content mono">
       {#if error}
         <div class="error">{error}</div>
@@ -143,19 +139,6 @@
   .count { font-size: 12px; color: var(--muted); }
   .spacer { flex: 1; }
   .body { display: grid; grid-template-columns: minmax(260px, 36%) 1fr; flex: 1; min-height: 0; }
-  .files { overflow-y: auto; padding: 6px 8px; border-right: 1px solid var(--border); }
-  .section { padding: 8px 10px 2px; font-size: 11px; font-weight: 600; color: var(--faint); }
-  .section:first-child { padding-top: 2px; }
-  .row { position: relative; }
-  .file { height: 24px; font-size: 12px; }
-  .row .file { padding-right: 64px; }
-  .act { position: absolute; right: 4px; top: 2px; height: 20px; padding: 0 8px; font-size: 11px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); visibility: hidden; }
-  .row:hover .act, .row.active .act, .act:focus-visible { visibility: visible; }
-  .act:hover:not(:disabled) { background: var(--hover); }
-  .status { width: 14px; flex: none; font-family: var(--mono); font-weight: 600; color: var(--muted); }
-  .s-staged { color: var(--ok); }
-  .s-manual { color: var(--danger); }
-  .none { padding: 4px 10px; color: var(--faint); font-size: 12px; }
   .content { overflow: auto; padding: 8px 0; user-select: text; }
   .line { padding: 0 12px; white-space: pre; line-height: 18px; }
   .marker { background: var(--hover); color: var(--muted); font-weight: 600; }
