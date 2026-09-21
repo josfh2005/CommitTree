@@ -26,15 +26,27 @@ export function changedCount(state: WorktreeState | null): number {
   return paths.size
 }
 
+/** neverCommitted reports whether a discard of this file has no HEAD copy to
+ *  restore to, so Discard deletes it outright rather than reverting it. That
+ *  is true for an untracked file ('?') and equally true for a file that is
+ *  staged as newly added ('A'): git has no history for that path either way,
+ *  so `git restore --source=HEAD --staged --worktree` finds nothing at HEAD
+ *  and removes it for good. Gating on '?' alone missed the staged-'A' case —
+ *  a file created and staged, never committed — which looked like an
+ *  ordinary, reversible discard but was just as permanent. */
+export function neverCommitted(file: FileStatus): boolean {
+  return file.status === '?' || file.status === 'A'
+}
+
 /** discardMessage is the confirmation before throwing changes away — the only
- *  destructive action here, and for an untracked file git cannot undo it.
- *  `staged` must reflect whether the PATH has a staged entry anywhere in the
- *  worktree state (see hasStagedChanges), not which section the row the user
- *  clicked came from: `git restore --staged --worktree` discards both a
+ *  destructive action here, and for a file with no HEAD copy git cannot undo
+ *  it. `staged` must reflect whether the PATH has a staged entry anywhere in
+ *  the worktree state (see hasStagedChanges), not which section the row the
+ *  user clicked came from: `git restore --staged --worktree` discards both a
  *  file's staged and unstaged content together, regardless of which row of a
  *  partially staged file (git status "MM") triggered the discard. */
 export function discardMessage(file: FileStatus, staged: boolean): string {
-  if (file.status === '?') {
+  if (neverCommitted(file)) {
     return `This will delete ${file.path} for good — it was never committed, so this cannot be undone.`
   }
   const also = staged ? ' Its staged changes are thrown away too.' : ''

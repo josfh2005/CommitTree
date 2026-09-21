@@ -5,7 +5,7 @@ import type { Branch, FileStatus, Repo, ResetInfo, ResetMode } from './types'
 import { UP_TO_DATE } from './types'
 import { commitWarning, takeMessage } from './merge'
 import { resetMessage } from './reset'
-import { discardMessage } from './worktree'
+import { discardMessage, neverCommitted } from './worktree'
 import { choiceDialog, confirmDialog, errorMessage, promptDialog, toast } from './ui'
 
 export function branchRef(branch: Branch): string {
@@ -306,11 +306,18 @@ export async function resolveConflicts(id: string) {
 export const stageFile = (id: string, path: string) => run('Staging…', () => api.stageFile(id, path))
 export const unstageFile = (id: string, path: string) => run('Unstaging…', () => api.unstageFile(id, path))
 
+// commitChanges goes through the same run()/refreshRepo() path as every other
+// mutation, so a commit bumps logVersion and reloads refs like the spec
+// says, instead of only refreshing the worktree state as CommitBox used to.
+export const commitChanges = (id: string, message: string, amend: boolean) =>
+  run(amend ? 'Amending…' : 'Committing…', () => api.commitChanges(id, message, amend))
+
 export async function discardFile(id: string, file: FileStatus, staged: boolean) {
+  const hard = neverCommitted(file)
   const ok = await confirmDialog({
-    title: file.status === '?' ? 'Delete file' : 'Discard changes',
+    title: hard ? 'Delete file' : 'Discard changes',
     message: discardMessage(file, staged),
-    confirmLabel: file.status === '?' ? 'Delete' : 'Discard',
+    confirmLabel: hard ? 'Delete' : 'Discard',
     danger: true,
   })
   if (ok) await run('Discarding…', () => api.discardFile(id, file.path))

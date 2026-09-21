@@ -69,6 +69,20 @@ describe('discardMessage', () => {
     expect(m).toMatch(/cannot be undone|unrecoverable/i)
     expect(m).not.toContain('staged')
   })
+
+  it('warns that a staged, never-committed file (status A) is deleted for good, not merely "discarded"', () => {
+    const m = discardMessage({ path: 'new.ts', status: 'A' }, true)
+    expect(m).toContain('new.ts')
+    expect(m).toContain('never committed')
+    expect(m).toMatch(/cannot be undone|unrecoverable/i)
+    expect(m).not.toMatch(/^Discard your changes/)
+  })
+
+  it('a tracked modification (status M) keeps the ordinary, reversible wording', () => {
+    const m = discardMessage({ path: 'a.ts', status: 'M' }, false)
+    expect(m).toMatch(/^Discard your changes to a\.ts\?/)
+    expect(m).not.toContain('never committed')
+  })
 })
 
 describe('hasStagedChanges', () => {

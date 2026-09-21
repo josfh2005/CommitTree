@@ -3,9 +3,10 @@
   import { EventsOn } from '../../wailsjs/runtime/runtime'
   import Icon from './Icon.svelte'
   import { api } from '../lib/api'
+  import { commitChanges } from '../lib/actions'
   import { amendWarning, canCommit, shouldAutoGenerate } from '../lib/worktree'
   import type { CommitDeltaEvent, CommitDoneEvent, CommitInfo, WorktreeChangedEvent } from '../lib/types'
-  import { aiSettings, busy, loadWorktreeState } from '../lib/stores'
+  import { aiSettings, busy } from '../lib/stores'
   import { confirmDialog, errorMessage, toast } from '../lib/ui'
 
   export let repoId: string
@@ -113,6 +114,10 @@
   async function generate() {
     if (runID || !repoId) return
     const id = crypto.randomUUID()
+    // Captured before clearing the box: the backend call can reject
+    // immediately (no provider configured, nothing staged), and whatever the
+    // user had typed must come back rather than be lost to an empty box.
+    const previous = message
     runID = id
     message = ''
     clearStallTimer()
@@ -127,6 +132,7 @@
       if (runID === id) {
         runID = null
         clearStallTimer()
+        message = previous
       }
       toast(errorMessage(e), 'error')
     }
@@ -172,19 +178,13 @@
         if (!ok) return
       }
     }
-    busy.set('Committing…')
-    try {
-      await api.commitChanges(repoId, message, amend)
+    const ok = await commitChanges(repoId, message, amend)
+    if (ok) {
       message = ''
       touched = false
       amend = false
-      await loadWorktreeState()
-      await refresh()
-    } catch (e) {
-      toast(errorMessage(e), 'error')
-    } finally {
-      busy.set('')
     }
+    await refresh()
   }
 </script>
 
