@@ -17,6 +17,11 @@
   let preAmendMessage = ''
   let runID: string | null = null
   let request = 0
+  // Safety net for the no-backend-cancellation limitation: if commit:done
+  // never arrives (a crashed provider call, a dropped event) this clears the
+  // run after a while so the box doesn't stay disabled with Stop as the only
+  // escape. It is cleared on any normal completion, error, or manual Stop.
+  let stallTimer: ReturnType<typeof setTimeout> | null = null
 
   const offDelta = EventsOn('commit:delta', (payload: CommitDeltaEvent) => {
     if (payload.repoID !== repoId || payload.runID !== runID) return
@@ -24,7 +29,16 @@
   })
   const offDone = EventsOn('commit:done', (payload: CommitDoneEvent) => {
     if (payload.repoID !== repoId || payload.runID !== runID) return
-    if (payload.error) toast(payload.error, 'error')
+    clearStallTimer()
+    if (payload.error) {
+      toast(payload.error, 'error')
+    } else if (message.trim() !== '') {
+      // A completed, non-empty generation is content worth keeping: mark it
+      // touched so unticking Amend afterwards doesn't silently discard it
+      // (see toggleAmend's restore-on-untick, which only replaces an
+      // untouched box).
+      touched = true
+    }
     runID = null
   })
   const offChanged = EventsOn('worktree:changed', (payload: WorktreeChangedEvent) => {
@@ -35,13 +49,21 @@
     offDelta()
     offDone()
     offChanged()
+    clearStallTimer()
   })
 
   $: load(repoId)
-  // Whenever the staged set changes (info.stagedCount moves), decide whether
-  // to write the message for the user. Keyed off stagedCount rather than the
-  // whole object so this doesn't refire on every unrelated preview reload.
-  $: maybeAutoGenerate(info?.stagedCount ?? 0)
+  // A separate reactive value so the auto-generate check below depends only
+  // on the staged COUNT, not on the whole `info` object — Svelte tracks
+  // whatever variables a reactive statement's expression reads, and `info`
+  // appears in `info?.stagedCount` just as much as it would in `info` alone.
+  // Folding that lookup directly into maybeAutoGenerate(...)'s argument (the
+  // previous version) meant the statement depended on `info` itself and
+  // re-ran on every preview reload — including a worktree:changed that never
+  // touched the index. Naming the derived count here, and depending only on
+  // that name below, is what limits re-firing to when the count changes.
+  $: stagedCount = info?.stagedCount ?? 0
+  $: maybeAutoGenerate(stagedCount)
 
   async function load(id: string) {
     message = ''
@@ -66,13 +88,26 @@
     }
   }
 
-  function maybeAutoGenerate(_stagedCount: number) {
-    if (!info || !$aiSettings) return
-    if (shouldAutoGenerate($aiSettings.commitMessage, $aiSettings.taskProvider, message, touched)) generate()
+  function maybeAutoGenerate(count: number) {
+    // Nothing staged: Go's GenerateCommitMessage rejects this with
+    // ErrNothingStaged, and the shipped defaults (taskProvider "ollama",
+    // commitMessage "auto-local") would otherwise fire on every clean open
+    // and after every commit — see shouldAutoGenerate's own guard too.
+    if (!info || count <= 0 || !$aiSettings) return
+    if (shouldAutoGenerate($aiSettings.commitMessage, $aiSettings.taskProvider, message, touched, count)) generate()
   }
 
   function onInput() {
     touched = message.trim() !== ''
+  }
+
+  const STALL_MS = 60_000
+
+  function clearStallTimer() {
+    if (stallTimer) {
+      clearTimeout(stallTimer)
+      stallTimer = null
+    }
   }
 
   async function generate() {
@@ -80,10 +115,19 @@
     const id = crypto.randomUUID()
     runID = id
     message = ''
+    clearStallTimer()
+    stallTimer = setTimeout(() => {
+      if (runID !== id) return
+      runID = null
+      toast('The AI did not finish writing a message — try again.', 'error')
+    }, STALL_MS)
     try {
       await api.generateCommitMessage(repoId, id)
     } catch (e) {
-      if (runID === id) runID = null
+      if (runID === id) {
+        runID = null
+        clearStallTimer()
+      }
       toast(errorMessage(e), 'error')
     }
   }
@@ -96,9 +140,17 @@
   // stops listening to it.
   function stopGenerating() {
     runID = null
+    clearStallTimer()
   }
 
   function toggleAmend() {
+    // Amend is disabled in the template while a run is live; this guard is
+    // defensive only. Clearing runID here instead (to "allow" toggling
+    // mid-stream) would not stop the Go-side call — with no backend
+    // cancellation, the live delta handler would keep appending onto
+    // whatever this function put in the box, mixing the old message with an
+    // AI continuation. Disabling is the only correct option.
+    if (runID) return
     amend = !amend
     if (amend) {
       if (!touched) {
@@ -146,7 +198,7 @@
   ></textarea>
   <div class="row">
     <label class="amend">
-      <input type="checkbox" checked={amend} disabled={!info?.canAmend} on:change={toggleAmend} />
+      <input type="checkbox" checked={amend} disabled={!info?.canAmend || !!runID} on:change={toggleAmend} />
       Amend
     </label>
     <span class="spacer"></span>

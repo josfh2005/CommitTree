@@ -100,8 +100,13 @@ export function canCommit(info: CommitInfo | null, message: string, amend: boole
 
 /** shouldAutoGenerate decides whether to write the message without being
  *  asked. It never overwrites what the user typed: `touched` stays true once
- *  they edit the box, until they clear it. */
-export function shouldAutoGenerate(mode: string, taskProvider: string, message: string, touched: boolean): boolean {
+ *  they edit the box, until they clear it. It also never fires with nothing
+ *  staged — Go's GenerateCommitMessage rejects that call with
+ *  ErrNothingStaged, and the defaults (taskProvider "ollama", commitMessage
+ *  "auto-local") would otherwise auto-generate, and error, on every clean
+ *  tree and after every commit. */
+export function shouldAutoGenerate(mode: string, taskProvider: string, message: string, touched: boolean, stagedCount: number): boolean {
+  if (stagedCount <= 0) return false
   if (message.trim() !== '' || touched) return false
   if (mode === 'manual') return false
   if (mode === 'auto') return true

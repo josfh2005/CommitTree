@@ -147,22 +147,41 @@ describe('canCommit', () => {
   it('is false without a preview', () => {
     expect(canCommit(null, 'a message', false)).toBe(false)
   })
+
+  it('is false for an amend when the commit cannot be amended', () => {
+    expect(canCommit(info({ canAmend: false }), 'a message', true)).toBe(false)
+    expect(canCommit(info({ canAmend: false, stagedCount: 0 }), 'a message', true)).toBe(false)
+  })
 })
 
 describe('shouldAutoGenerate', () => {
-  it('generates for a local provider in auto-local', () => {
-    expect(shouldAutoGenerate('auto-local', 'ollama', '', false)).toBe(true)
-    expect(shouldAutoGenerate('auto-local', 'anthropic', '', false)).toBe(false)
+  it('generates for a local provider in auto-local, with something staged', () => {
+    expect(shouldAutoGenerate('auto-local', 'ollama', '', false, 1)).toBe(true)
+    expect(shouldAutoGenerate('auto-local', 'anthropic', '', false, 1)).toBe(false)
   })
 
   it('generates for any provider in auto, and never in manual', () => {
-    expect(shouldAutoGenerate('auto', 'anthropic', '', false)).toBe(true)
-    expect(shouldAutoGenerate('manual', 'ollama', '', false)).toBe(false)
+    expect(shouldAutoGenerate('auto', 'anthropic', '', false, 1)).toBe(true)
+    expect(shouldAutoGenerate('manual', 'ollama', '', false, 1)).toBe(false)
   })
 
   it('never overwrites what the user typed', () => {
-    expect(shouldAutoGenerate('auto', 'ollama', 'my own message', false)).toBe(false)
-    expect(shouldAutoGenerate('auto', 'ollama', '', true)).toBe(false)
+    expect(shouldAutoGenerate('auto', 'ollama', 'my own message', false, 1)).toBe(false)
+    expect(shouldAutoGenerate('auto', 'ollama', '', true, 1)).toBe(false)
+  })
+
+  it('never fires with nothing staged, in any mode — Go rejects an empty index with ErrNothingStaged', () => {
+    expect(shouldAutoGenerate('auto-local', 'ollama', '', false, 0)).toBe(false)
+    expect(shouldAutoGenerate('auto', 'anthropic', '', false, 0)).toBe(false)
+    expect(shouldAutoGenerate('manual', 'ollama', '', false, 0)).toBe(false)
+  })
+
+  it('falls back to the auto-local rule for an unrecognised mode string', () => {
+    // Neither 'manual' nor 'auto' is matched, so an unknown value is treated
+    // the same as 'auto-local' rather than silently generating for every
+    // provider — still gated on the local, free provider.
+    expect(shouldAutoGenerate('bogus', 'ollama', '', false, 1)).toBe(true)
+    expect(shouldAutoGenerate('bogus', 'anthropic', '', false, 1)).toBe(false)
   })
 })
 
@@ -175,5 +194,9 @@ describe('amendWarning', () => {
 
   it('is null for a commit that was never pushed', () => {
     expect(amendWarning(info())).toBeNull()
+  })
+
+  it('is null when pushed but there is no upstream to warn about', () => {
+    expect(amendWarning(info({ pushed: true, upstream: '' }))).toBeNull()
   })
 })
