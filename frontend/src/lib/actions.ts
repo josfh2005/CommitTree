@@ -1,7 +1,7 @@
 import { get } from 'svelte/store'
 import { api } from './api'
 import { busy, chatOpen, filters, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, selectRepo, selectedRepoId } from './stores'
-import type { Branch, FileStatus, Repo, ResetInfo, ResetMode } from './types'
+import type { Branch, FileStatus, Repo, ResetInfo, ResetMode, WorktreeState } from './types'
 import { UP_TO_DATE } from './types'
 import { commitWarning, takeMessage } from './merge'
 import { resetMessage } from './reset'
@@ -312,11 +312,13 @@ export const unstageFile = (id: string, path: string) => run('Unstaging…', () 
 export const commitChanges = (id: string, message: string, amend: boolean) =>
   run(amend ? 'Amending…' : 'Committing…', () => api.commitChanges(id, message, amend))
 
-export async function discardFile(id: string, file: FileStatus, staged: boolean) {
-  const hard = neverCommitted(file)
+export async function discardFile(id: string, state: WorktreeState, file: FileStatus, staged: boolean) {
+  // Both the wording and the labels follow the PATH's state, not the row the
+  // user clicked: an "AM" file is deleted for good from either of its rows.
+  const hard = neverCommitted(state, file.path)
   const ok = await confirmDialog({
     title: hard ? 'Delete file' : 'Discard changes',
-    message: discardMessage(file, staged),
+    message: discardMessage(state, file, staged),
     confirmLabel: hard ? 'Delete' : 'Discard',
     danger: true,
   })

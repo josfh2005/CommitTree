@@ -258,7 +258,8 @@ func TestUnstageOfARenameKeepsBothPathsTogether(t *testing.T) {
 	// One entry for the new path with status "R", carrying its OldPath too
 	// (see worktree.State.add): Discard needs that source to restore the
 	// rename rather than delete the file (see TestDiscardOfAnUnstagedRename
-	// in this file), and it also lets the rename be re-staged as one rename.
+	// in this file). Stage does not read OldPath, so re-staging this entry
+	// still yields an add plus a delete.
 	if len(st.Unstaged) != 1 || st.Unstaged[0].Path != "b.txt" || st.Unstaged[0].Status != "R" || st.Unstaged[0].OldPath != "a.txt" {
 		t.Errorf("unstaged = %+v, want one R entry for b.txt with OldPath a.txt", st.Unstaged)
 	}

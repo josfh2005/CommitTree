@@ -105,7 +105,7 @@
     // restore --staged --worktree` throws both away together regardless of
     // which row (Staged or Unstaged) of a partially staged file triggered it.
     const alsoStaged = $worktreeState ? hasStagedChanges($worktreeState, file.path) : staged
-    const discard = { label: 'Discard', run: () => discardFile(repoId, file, alsoStaged), danger: true, disabled: !!$busy, title: 'Throw this change away' }
+    const discard = { label: 'Discard', run: () => $worktreeState && discardFile(repoId, $worktreeState, file, alsoStaged), danger: true, disabled: !!$busy, title: 'Throw this change away' }
     if (staged) {
       return [{ label: 'Unstage', run: () => unstageFile(repoId, file.path), disabled: !!$busy, title: 'Take out of the next commit' }, discard]
     }

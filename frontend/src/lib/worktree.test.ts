@@ -53,25 +53,39 @@ describe('changedCount', () => {
 
 describe('discardMessage', () => {
   it('warns that an untracked file is deleted for good', () => {
-    const m = discardMessage({ path: 'notes.txt', status: '?' }, false)
+    const m = discardMessage(state({ untracked: [{ path: 'notes.txt', status: '?' }] }), { path: 'notes.txt', status: '?' }, false)
     expect(m).toContain('notes.txt')
     expect(m).toContain('delete')
     expect(m).toMatch(/cannot be undone|unrecoverable/i)
   })
 
   it('says a staged change is thrown away too', () => {
-    expect(discardMessage({ path: 'a.ts', status: 'M' }, true)).toContain('staged')
+    expect(discardMessage(state({ staged: [{ path: 'a.ts', status: 'M' }], unstaged: [{ path: 'a.ts', status: 'M' }] }), { path: 'a.ts', status: 'M' }, true)).toContain('staged')
   })
 
   it('an untracked file stays "deleted for good" even when the staged flag is true', () => {
-    const m = discardMessage({ path: 'notes.txt', status: '?' }, true)
+    const m = discardMessage(state({ untracked: [{ path: 'notes.txt', status: '?' }] }), { path: 'notes.txt', status: '?' }, true)
     expect(m).toContain('notes.txt')
     expect(m).toMatch(/cannot be undone|unrecoverable/i)
     expect(m).not.toContain('staged')
   })
 
+  // A file created, staged and then edited is porcelain AM: it lists under
+  // Staged as 'A' and under Unstaged as 'M'. Discard deletes it for good from
+  // EITHER row, so the row's own status must not decide the wording — the
+  // path's state must, exactly as hasStagedChanges already does.
+  it('warns that an AM file is deleted for good even from its Unstaged row', () => {
+    const s = state({
+      staged: [{ path: 'new.ts', status: 'A' }],
+      unstaged: [{ path: 'new.ts', status: 'M' }],
+    })
+    const m = discardMessage(s, { path: 'new.ts', status: 'M' }, true)
+    expect(m).toContain('never committed')
+    expect(m).not.toMatch(/^Discard your changes/)
+  })
+
   it('warns that a staged, never-committed file (status A) is deleted for good, not merely "discarded"', () => {
-    const m = discardMessage({ path: 'new.ts', status: 'A' }, true)
+    const m = discardMessage(state({ staged: [{ path: 'new.ts', status: 'A' }] }), { path: 'new.ts', status: 'A' }, true)
     expect(m).toContain('new.ts')
     expect(m).toContain('never committed')
     expect(m).toMatch(/cannot be undone|unrecoverable/i)
@@ -79,7 +93,7 @@ describe('discardMessage', () => {
   })
 
   it('a tracked modification (status M) keeps the ordinary, reversible wording', () => {
-    const m = discardMessage({ path: 'a.ts', status: 'M' }, false)
+    const m = discardMessage(state({ unstaged: [{ path: 'a.ts', status: 'M' }] }), { path: 'a.ts', status: 'M' }, false)
     expect(m).toMatch(/^Discard your changes to a\.ts\?/)
     expect(m).not.toContain('never committed')
   })
@@ -101,7 +115,7 @@ describe('hasStagedChanges', () => {
     // The Unstaged row's own FileStatus object is what's passed to discardMessage,
     // but the "staged" flag must come from hasStagedChanges(s, path), not the row.
     const unstagedRow = s.unstaged[0]
-    const m = discardMessage(unstagedRow, hasStagedChanges(s, unstagedRow.path))
+    const m = discardMessage(s, unstagedRow, hasStagedChanges(s, unstagedRow.path))
     expect(m).toContain('staged')
   })
 })
