@@ -195,3 +195,100 @@ func TestDiscardRefusesSomethingThatIsNotARegularFile(t *testing.T) {
 		t.Errorf("the FIFO was removed: %v", err)
 	}
 }
+
+// A staged new file whose worktree copy is gone has its only surviving copy
+// in the index. Unstaging it would drop the index entry and leave the path
+// in no list and nowhere on disk, so it must be refused instead.
+func TestUnstageRefusesANewFileWhoseWorktreeCopyIsGone(t *testing.T) {
+	r := base(t)
+	r.WriteFile("n.txt", "only copy\n")
+	r.Git("add", "n.txt")
+	if err := os.Remove(filepath.Join(r.Dir, "n.txt")); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := worktree.Unstage(ctx, r.Dir, "n.txt"); err == nil {
+		t.Error("want a refusal; unstaging would lose the only copy")
+	}
+	st := status(t, r.Dir)
+	if !slices.Contains(paths(st.Staged), "n.txt") {
+		t.Errorf("staged = %v, want n.txt still staged after the refusal", paths(st.Staged))
+	}
+}
+
+// Discarding a staged rename must restore the original, not delete the file:
+// restoring only the new path leaves it with no HEAD entry to fall back to.
+func TestDiscardOfAStagedRenameRestoresTheOriginal(t *testing.T) {
+	r := base(t)
+	r.Git("mv", "a.txt", "b.txt")
+
+	if err := worktree.Discard(ctx, r.Dir, "b.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, r.Dir, "a.txt"); got != "one\n" {
+		t.Errorf("a.txt = %q, want the committed content restored", got)
+	}
+	if _, err := os.Lstat(filepath.Join(r.Dir, "b.txt")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("b.txt still exists: %v", err)
+	}
+	st := status(t, r.Dir)
+	if len(st.Staged) != 0 || len(st.Unstaged) != 0 || len(st.Untracked) != 0 {
+		t.Errorf("state = %+v, want everything clean", st)
+	}
+}
+
+// Unstaging a rename must leave the whole rename together: restoring only the
+// new path from HEAD (which doesn't have it) used to drop it from the index
+// entirely, splitting the rename into a deletion plus an untracked file.
+func TestUnstageOfARenameKeepsBothPathsTogether(t *testing.T) {
+	r := base(t)
+	r.Git("mv", "a.txt", "b.txt")
+
+	if err := worktree.Unstage(ctx, r.Dir, "b.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, r.Dir, "b.txt"); got != "one\n" {
+		t.Errorf("b.txt = %q, want the renamed file kept in the working tree", got)
+	}
+	st := status(t, r.Dir)
+	if len(st.Staged) != 0 {
+		t.Errorf("staged = %v, want nothing staged after Unstage", paths(st.Staged))
+	}
+	// Assert on what git actually reports for the unstaged rename, not on an
+	// assumption: it is one entry for the new path with status "R", the old
+	// path only ever appearing on the staged side (see worktree.State.add).
+	if len(st.Unstaged) != 1 || st.Unstaged[0].Path != "b.txt" || st.Unstaged[0].Status != "R" {
+		t.Errorf("unstaged = %+v, want one R entry for b.txt", st.Unstaged)
+	}
+	if len(st.Untracked) != 0 {
+		t.Errorf("untracked = %v, want none; the rename must not fall apart into an untracked file", paths(st.Untracked))
+	}
+}
+
+// Discarding an untracked symlink removes the link itself and never follows
+// it, so whatever it points at is untouched.
+func TestDiscardOfAnUntrackedSymlinkRemovesOnlyTheLink(t *testing.T) {
+	r := base(t)
+	target := filepath.Join(t.TempDir(), "outside.txt")
+	if err := os.WriteFile(target, []byte("leave me alone\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(r.Dir, "link.txt")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := worktree.Discard(ctx, r.Dir, "link.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(link); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("link.txt still exists: %v", err)
+	}
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "leave me alone\n" {
+		t.Errorf("target = %q, the symlink's target was reached", data)
+	}
+}
