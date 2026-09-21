@@ -1,6 +1,10 @@
 # git-ui
 
-AI-first desktop Git client (Wails + Go + Svelte). Sub-project 1: core viewer.
+AI-first desktop Git client (Wails + Go + Svelte).
+
+Browse the log and the graph, merge a branch and resolve its conflicts with an
+AI agent, and work the working tree: see your changes, stage and unstage by
+file, discard, and commit with a message the model writes from what you staged.
 
 ## Requirements
 

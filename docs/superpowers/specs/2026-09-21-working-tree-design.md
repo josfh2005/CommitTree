@@ -1,7 +1,7 @@
 # git-ui — Sub-project 2a: Working tree — changes, staging and commit — Design
 
 Date: 2026-09-21
-Status: Draft for review
+Status: Implemented (manual pass pending)
 Builds on: `2026-09-16-git-ui-design.md` (core viewer),
 `2026-09-17-merge-agent-design.md` (merge view, whose file list this reuses) and
 `2026-09-20-ai-providers-design.md` (task provider), all merged to `main`.
