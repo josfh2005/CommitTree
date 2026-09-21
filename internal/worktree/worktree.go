@@ -32,6 +32,15 @@ type State struct {
 // with -z survives spaces, newlines and non-ASCII in paths.
 func Status(ctx context.Context, dir string) (State, error) {
 	st := State{Staged: []FileStatus{}, Unstaged: []FileStatus{}, Untracked: []FileStatus{}}
+	// rev-parse --quiet exits non-zero when MERGE_HEAD is absent, which is the
+	// ordinary "not merging" case rather than a failure. This is checked
+	// independently of the porcelain records below: staging the resolution of
+	// the last conflict turns its "u" record into an ordinary "1" one, but the
+	// merge stays open — only a commit closes it (see merge.Status, the same
+	// pattern) — so Merging must not depend on any "u" record still existing.
+	if _, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--verify", "--quiet", "MERGE_HEAD"); err == nil {
+		st.Merging = true
+	}
 	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout,
 		"status", "--porcelain=v2", "-z", "--untracked-files=all")
 	if err != nil {
@@ -55,7 +64,7 @@ func Status(ctx context.Context, dir string) (State, error) {
 				old = fields[i]
 			}
 			st.add(x, y, path, old)
-		case 'u': // unmerged: the merge view owns this repository
+		case 'u': // unmerged: belt-and-braces agreement with the MERGE_HEAD check above
 			st.Merging = true
 		case '?':
 			st.Untracked = append(st.Untracked, FileStatus{Path: strings.TrimPrefix(rec, "? "), Status: "?"})

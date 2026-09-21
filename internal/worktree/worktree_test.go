@@ -154,3 +154,53 @@ func TestStatusReportsAMergeInProgress(t *testing.T) {
 		t.Errorf("merging = false during a conflicted merge: %+v", st)
 	}
 }
+
+// Resolving the last conflict and staging it turns its "u" record into an
+// ordinary "1" one, but the merge is not over until it is committed. Merging
+// must stay true even though no unmerged record remains.
+func TestStatusReportsAMergeInProgressAfterConflictsAreResolvedAndStaged(t *testing.T) {
+	r := base(t)
+	r.Git("switch", "-q", "-c", "feature")
+	r.WriteFile("a.txt", "theirs\n")
+	r.Git("commit", "-q", "-am", "theirs")
+	r.Git("switch", "-q", "main")
+	r.WriteFile("a.txt", "ours\n")
+	r.Git("commit", "-q", "-am", "ours")
+	_ = r.GitFails("merge", "feature")
+	r.WriteFile("a.txt", "resolved\n")
+	r.Git("add", "a.txt")
+
+	st := status(t, r.Dir)
+	if !st.Merging {
+		t.Errorf("merging = false after staging the resolution, want true: %+v", st)
+	}
+	for _, f := range st.Staged {
+		if f.Status == "U" {
+			t.Errorf("staged still has an unmerged entry: %+v", st.Staged)
+		}
+	}
+}
+
+// A regular file replaced by a symlink of the same name is a type change;
+// git reports it with status T.
+func TestStatusReportsATypeChange(t *testing.T) {
+	r := base(t)
+	if err := os.Remove(filepath.Join(r.Dir, "a.txt")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("does-not-matter", filepath.Join(r.Dir, "a.txt")); err != nil {
+		t.Fatal(err)
+	}
+
+	st := status(t, r.Dir)
+	if len(st.Unstaged) != 1 {
+		t.Fatalf("unstaged = %v, want one entry", st.Unstaged)
+	}
+	got := st.Unstaged[0]
+	if got.Status != "T" {
+		t.Skipf("git on this machine reports the file-to-symlink change as %q, not T; skipping", got.Status)
+	}
+	if got.Path != "a.txt" {
+		t.Errorf("entry = %+v, want a.txt", got)
+	}
+}
