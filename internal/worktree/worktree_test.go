@@ -97,6 +97,26 @@ func TestStatusReportsARenameWithItsSource(t *testing.T) {
 	}
 }
 
+// An unstaged rename (staged, then unstaged) must report OldPath on its
+// unstaged entry too, not just the staged one: Discard's renameSource
+// depends on this to restore the rename instead of deleting the new path.
+func TestStatusReportsARenameWithItsSourceWhenUnstaged(t *testing.T) {
+	r := base(t)
+	r.Git("mv", "a.txt", "renamed.txt")
+	if err := worktree.Unstage(ctx, r.Dir, "renamed.txt"); err != nil {
+		t.Fatal(err)
+	}
+
+	st := status(t, r.Dir)
+	if len(st.Unstaged) != 1 {
+		t.Fatalf("unstaged = %v, want one entry", paths(st.Unstaged))
+	}
+	got := st.Unstaged[0]
+	if got.Path != "renamed.txt" || got.OldPath != "a.txt" || got.Status != "R" {
+		t.Errorf("entry = %+v, want renamed.txt from a.txt with status R", got)
+	}
+}
+
 func TestStatusReportsADeletion(t *testing.T) {
 	r := base(t)
 	r.Git("rm", "-q", "a.txt")

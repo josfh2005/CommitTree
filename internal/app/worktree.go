@@ -11,10 +11,17 @@ import (
 
 	"git-ui/internal/ai/prompts"
 	"git-ui/internal/ai/tasks"
+	"git-ui/internal/ai/tools"
 	"git-ui/internal/gitcmd"
 	"git-ui/internal/refs"
 	"git-ui/internal/worktree"
 )
+
+// worktreeDiffCap bounds what GetWorktreeDiff hands the diff pane. Without a
+// cap, one click on a large untracked or changed file buffers the whole diff
+// over IPC and renders one DOM node per line, which can freeze the app; this
+// is generous enough for an ordinary diff to never be touched.
+const worktreeDiffCap = 200 * 1024
 
 // EventWorktreeChanged tells the frontend the working tree moved, so the
 // Changes view refreshes without polling.
@@ -121,7 +128,7 @@ func (a *App) GetWorktreeDiff(id, path string, staged bool) (string, error) {
 		out, err := gitcmd.Run(a.ctx, dir, gitcmd.ReadTimeout, "--literal-pathspecs", "diff", "--no-index", "--", "/dev/null", path)
 		var gerr *gitcmd.Error
 		if errors.As(err, &gerr) && gerr.ExitCode == 1 {
-			return out, nil
+			return tools.Truncate(out, worktreeDiffCap), nil
 		}
 		return out, err
 	}
@@ -130,7 +137,11 @@ func (a *App) GetWorktreeDiff(id, path string, staged bool) (string, error) {
 		args = append(args, "--cached")
 	}
 	args = append(args, "--", path)
-	return gitcmd.Run(a.ctx, dir, gitcmd.ReadTimeout, args...)
+	out, err := gitcmd.Run(a.ctx, dir, gitcmd.ReadTimeout, args...)
+	if err != nil {
+		return out, err
+	}
+	return tools.Truncate(out, worktreeDiffCap), nil
 }
 
 // GenerateCommitMessage streams a commit message for the staged changes. It
@@ -142,11 +153,14 @@ func (a *App) GenerateCommitMessage(id, runID string) error {
 	if runID == "" {
 		return errors.New("run id is required")
 	}
-	repo, ok := a.store.Get(id)
-	if !ok {
-		return fmt.Errorf("unknown repository %q", id)
+	dir, err := a.dir(id)
+	if err != nil {
+		return err
 	}
-	st, err := worktree.Status(a.ctx, repo.Path)
+	// a.dir already confirmed id exists, so the repo's name is available
+	// with no further error to check.
+	repo, _ := a.store.Get(id)
+	st, err := worktree.Status(a.ctx, dir)
 	if err != nil {
 		return err
 	}
@@ -162,12 +176,12 @@ func (a *App) GenerateCommitMessage(id, runID string) error {
 		return err
 	}
 	instructions, err := a.ai.deps.Prompts.Get(prompts.CommitMessage, prompts.Vars{
-		Repo: repo.Name, Path: repo.Path, Branch: refs.CurrentLabel(a.ctx, repo.Path), Date: time.Now().Format("2006-01-02"),
+		Repo: repo.Name, Path: dir, Branch: refs.CurrentLabel(a.ctx, dir), Date: time.Now().Format("2006-01-02"),
 	})
 	if err != nil {
 		return err
 	}
-	prompt, err := tasks.CommitContext(a.ctx, repo.Path, tasks.OllamaDiffBudget)
+	prompt, err := tasks.CommitContext(a.ctx, dir, tasks.OllamaDiffBudget)
 	if err != nil {
 		return err
 	}

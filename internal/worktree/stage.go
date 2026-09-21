@@ -57,7 +57,12 @@ func Unstage(ctx context.Context, dir, path string) error {
 				return fmt.Errorf("worktree: %s has no copy in the working tree; unstaging it would lose it", path)
 			}
 		}
-		_, err = gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "--literal-pathspecs", "restore", "--staged", "--", path)
+		// `restore --staged` defaults its source to HEAD and fails outright
+		// in a repository with no commits yet ("fatal: could not resolve
+		// HEAD"), even though fileInHead now tolerates that case. `reset --
+		// path` resets the index entry the same way but is documented to
+		// special-case an unborn HEAD instead of erroring on it.
+		_, err = gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "--literal-pathspecs", "reset", "--", path)
 		return err
 	}
 	if _, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout,
@@ -97,8 +102,8 @@ func Discard(ctx context.Context, dir, path string) error {
 		return deleteUntracked(dir, path)
 	}
 	args := []string{"--literal-pathspecs", "restore", "--source=HEAD", "--staged", "--worktree", "--"}
-	if entry, ok := findStaged(st, path); ok && entry.OldPath != "" {
-		args = append(args, entry.OldPath, path)
+	if old, ok := renameSource(st, path); ok {
+		args = append(args, old, path)
 	} else {
 		args = append(args, path)
 	}
@@ -117,10 +122,32 @@ func findStaged(st State, path string) (FileStatus, bool) {
 	return FileStatus{}, false
 }
 
+// renameSource looks up path's rename source, staged or unstaged: an
+// unstaged rename (git mv, then Unstage) only has its OldPath on the
+// unstaged side, but Discard still needs it to restore the old path rather
+// than delete the new one outright.
+func renameSource(st State, path string) (string, bool) {
+	if entry, ok := findStaged(st, path); ok && entry.OldPath != "" {
+		return entry.OldPath, true
+	}
+	for _, f := range st.Unstaged {
+		if f.Path == path && f.OldPath != "" {
+			return f.OldPath, true
+		}
+	}
+	return "", false
+}
+
 // fileInHead reports whether HEAD has path itself as a file or link. ls-tree
-// also prints a directory of that name, which does not count. Mirrors
-// merge.fileInHead — do not reimplement this differently.
+// also prints a directory of that name, which does not count. A missing or
+// unborn HEAD (a fresh repository with no commits yet) is treated as "not in
+// HEAD" rather than an error, the same way Commit and Preview treat it —
+// `ls-tree HEAD` would otherwise fail with raw plumbing text ("fatal: Not a
+// valid object name HEAD") and leave the caller unable to unstage anything.
 func fileInHead(ctx context.Context, dir, path string) (bool, error) {
+	if _, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--verify", "--quiet", "HEAD"); err != nil {
+		return false, nil
+	}
 	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "--literal-pathspecs", "ls-tree", "-z", "HEAD", "--", path)
 	if err != nil {
 		return false, err

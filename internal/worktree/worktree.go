@@ -103,8 +103,12 @@ func (s *State) add(x, y byte, path, old string) {
 		s.Staged = append(s.Staged, FileStatus{Path: path, OldPath: old, Status: string(x)})
 	}
 	if y != '.' {
-		// The unstaged side of a rename is a change to the new path; the old
-		// path only exists staged.
-		s.Unstaged = append(s.Unstaged, FileStatus{Path: path, Status: string(y)})
+		// OldPath is carried onto the unstaged side too: an unstaged rename
+		// (git mv, then Unstage) still needs its source to Discard back to —
+		// without it, Discard can only restore the new path from HEAD, which
+		// HEAD never had, and the file is deleted instead of un-renamed. It
+		// also lets an unstaged rename be re-staged as one rename rather than
+		// a delete-plus-add.
+		s.Unstaged = append(s.Unstaged, FileStatus{Path: path, OldPath: old, Status: string(y)})
 	}
 }

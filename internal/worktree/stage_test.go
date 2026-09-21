@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"testing"
 
+	"git-ui/internal/testrepo"
 	"git-ui/internal/worktree"
 )
 
@@ -254,14 +255,65 @@ func TestUnstageOfARenameKeepsBothPathsTogether(t *testing.T) {
 	if len(st.Staged) != 0 {
 		t.Errorf("staged = %v, want nothing staged after Unstage", paths(st.Staged))
 	}
-	// Assert on what git actually reports for the unstaged rename, not on an
-	// assumption: it is one entry for the new path with status "R", the old
-	// path only ever appearing on the staged side (see worktree.State.add).
-	if len(st.Unstaged) != 1 || st.Unstaged[0].Path != "b.txt" || st.Unstaged[0].Status != "R" {
-		t.Errorf("unstaged = %+v, want one R entry for b.txt", st.Unstaged)
+	// One entry for the new path with status "R", carrying its OldPath too
+	// (see worktree.State.add): Discard needs that source to restore the
+	// rename rather than delete the file (see TestDiscardOfAnUnstagedRename
+	// in this file), and it also lets the rename be re-staged as one rename.
+	if len(st.Unstaged) != 1 || st.Unstaged[0].Path != "b.txt" || st.Unstaged[0].Status != "R" || st.Unstaged[0].OldPath != "a.txt" {
+		t.Errorf("unstaged = %+v, want one R entry for b.txt with OldPath a.txt", st.Unstaged)
 	}
 	if len(st.Untracked) != 0 {
 		t.Errorf("untracked = %v, want none; the rename must not fall apart into an untracked file", paths(st.Untracked))
+	}
+}
+
+// Discarding an UNSTAGED rename (git mv, then Unstage — a state Unstage
+// deliberately creates) must restore the original, exactly like discarding a
+// staged one: the old path is only ever passed to git when Discard consults
+// the unstaged entry's OldPath, since findStaged alone never sees it.
+// Reproduces the bug where this emptied the whole working tree: b.txt
+// deleted, a.txt never restored.
+func TestDiscardOfAnUnstagedRenameRestoresTheOriginal(t *testing.T) {
+	r := base(t)
+	r.Git("mv", "a.txt", "b.txt")
+	if err := worktree.Unstage(ctx, r.Dir, "b.txt"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := worktree.Discard(ctx, r.Dir, "b.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, r.Dir, "a.txt"); got != "one\n" {
+		t.Errorf("a.txt = %q, want the committed content restored", got)
+	}
+	if _, err := os.Lstat(filepath.Join(r.Dir, "b.txt")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("b.txt still exists: %v", err)
+	}
+	st := status(t, r.Dir)
+	if len(st.Staged) != 0 || len(st.Unstaged) != 0 || len(st.Untracked) != 0 {
+		t.Errorf("state = %+v, want everything clean", st)
+	}
+}
+
+// In a repository with no commits yet, Unstage must not fail with raw
+// plumbing text from `ls-tree HEAD` — an unborn HEAD is "not in HEAD", the
+// same way Commit and Preview treat it, and the file goes back to untracked.
+func TestUnstageInARepositoryWithNoCommitsYet(t *testing.T) {
+	r := testrepo.New(t)
+	r.WriteFile("new.txt", "hello\n")
+	if err := worktree.Stage(ctx, r.Dir, "new.txt"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := worktree.Unstage(ctx, r.Dir, "new.txt"); err != nil {
+		t.Fatal(err)
+	}
+	st := status(t, r.Dir)
+	if len(st.Staged) != 0 || !slices.Equal(paths(st.Untracked), []string{"new.txt"}) {
+		t.Errorf("after Unstage: staged = %v, untracked = %v, want new.txt untracked", paths(st.Staged), paths(st.Untracked))
+	}
+	if got := read(t, r.Dir, "new.txt"); got != "hello\n" {
+		t.Errorf("new.txt = %q, want its content kept", got)
 	}
 }
 

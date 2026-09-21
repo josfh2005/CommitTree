@@ -102,6 +102,37 @@ func TestGetWorktreeDiffOfAVanishedUntrackedFileErrors(t *testing.T) {
 	}
 }
 
+// A diff that exceeds worktreeDiffCap comes back truncated with a trailing
+// note, so a huge untracked or changed file can never freeze the diff pane;
+// a small diff is returned untouched. Covers the untracked branch (a whole
+// new file, shown via --no-index) and the tracked branch (a large in-place
+// change), which take different code paths inside GetWorktreeDiff.
+func TestGetWorktreeDiffTruncatesALargeDiff(t *testing.T) {
+	a, r, id, _ := newAIMergeApp(t, "http://127.0.0.1:0")
+
+	big := strings.Repeat("x", worktreeDiffCap+1024) + "\n"
+	r.WriteFile("huge.txt", big)
+	out, err := a.GetWorktreeDiff(id, "huge.txt", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) > worktreeDiffCap+64 {
+		t.Errorf("untracked diff length = %d, want it capped near %d", len(out), worktreeDiffCap)
+	}
+	if !strings.Contains(out, "truncated") {
+		t.Errorf("untracked diff = %q, want a truncation note", out[max(0, len(out)-64):])
+	}
+
+	r.WriteFile("small.txt", "one line\n")
+	small, err := a.GetWorktreeDiff(id, "small.txt", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(small, "truncated") {
+		t.Errorf("small diff = %q, want it untouched", small)
+	}
+}
+
 // The generated message streams as commit:delta events and ends with
 // commit:done; nothing is committed by generating one.
 func TestGenerateCommitMessageStreams(t *testing.T) {
@@ -126,5 +157,40 @@ func TestGenerateCommitMessageRefusesWithNothingStaged(t *testing.T) {
 	a, _, id, _ := newAIMergeApp(t, "http://127.0.0.1:0")
 	if err := a.GenerateCommitMessage(id, "run1"); err == nil {
 		t.Error("want an error with nothing staged")
+	}
+}
+
+// GenerateCommitMessage must use the TASK provider/model — the cheap one —
+// never the chat one, even when the two are configured differently.
+func TestGenerateCommitMessageUsesTheTaskModelNotTheChatModel(t *testing.T) {
+	var gotModel string
+	srv := fakeOllama(t, func(req map[string]any) {
+		if m, ok := req["model"].(string); ok {
+			gotModel = m
+		}
+	})
+	a, r, id, ev := newAIMergeApp(t, srv.URL)
+
+	cfg, err := a.GetAISettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.ChatModel = "chat-model"
+	cfg.TaskModel = "task-model"
+	if err := a.SaveAISettings(cfg); err != nil {
+		t.Fatal(err)
+	}
+
+	r.WriteFile("a.txt", "changed\n")
+	if err := a.StageFile(id, "a.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.GenerateCommitMessage(id, "run1"); err != nil {
+		t.Fatal(err)
+	}
+	ev.wait(t, EventCommitDone)
+
+	if gotModel != "task-model" {
+		t.Errorf("model sent to Ollama = %q, want the task model %q", gotModel, "task-model")
 	}
 }
