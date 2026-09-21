@@ -1162,8 +1162,9 @@ func TestCountsWithNoUpstream(t *testing.T) {
 }
 ```
 
-Add `"slices"` and `"errors"` to the test file's imports — `slices.Contains`
-and `errors.Is` are used above. Do **not** import `git-ui/internal/merge`
+Add `"slices"` to the test file's imports (`context`, `errors`, `strings`,
+`gitcmd`, `ops` and `testrepo` are already there; `slices.Contains` is the
+only new one). Do **not** import `git-ui/internal/merge`
 into `ops_test.go`: it is used by `ops.go`, not by these tests, and an unused
 import is a compile error.
 
