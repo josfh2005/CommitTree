@@ -4,24 +4,183 @@
 
 **Goal:** Push, pull (merge/rebase/auto strategy, upstream handling) and full stash support (push/apply/pop/drop/diff), with a rebase-pull or a stash conflict resolved in the same view that already handles a merge conflict.
 
-**Architecture:** `internal/ops` already has `Fetch` and a fast-forward-only `Pull` (unused by any UI); this plan replaces `Pull`'s ff-only refusal with real merge/rebase handling and adds `Push`/`Counts`. `internal/merge`'s `State` gains a `Kind` (`merge`/`rebase`/`stash`) so one view keeps working for all three; `Stage`/`Unstage`/`Take` are untouched. A new `internal/stash` package and a new `internal/gitsettings` package (the pull-strategy setting, kept apart from `ai/settings`) round out the backend. The frontend gets a small toolbar (Fetch/Pull/Push with ahead/behind badges), a Stash sidebar section mirroring Tags, and `MergeView.svelte` learns to show three different headers/action bars instead of one.
+**Architecture:** `internal/ops` already has `Fetch` and a fast-forward-only `Pull` (unused by any UI); this plan replaces `Pull`'s ff-only refusal with real merge/rebase handling and adds `Push`/`Counts`. `internal/merge`'s `State` gains a `Kind` (`merge`/`rebase`/`cherry-pick`/`revert`/`am`/`stash`) so one view keeps working for all of them; `Stage`/`Unstage`/`Take` are untouched. A new `internal/stash` package and a new `internal/gitsettings` package (the pull-strategy setting, kept apart from `ai/settings`) round out the backend. The frontend gets a small toolbar (Fetch/Pull/Push with ahead/behind badges), a Stash sidebar section mirroring Tags, and `MergeView.svelte` learns to show three different headers/action bars instead of one.
 
 **Tech Stack:** Go 1.26, Wails v2, Svelte 5, vitest.
 
 **Spec:** `docs/superpowers/specs/2026-09-21-push-pull-stash-design.md`
 
+## What the plan audit changed (2026-09-21, before any code)
+
+An audit of the first draft of this plan found 8 blocking defects, most
+reproduced against git 2.54 in scratch repositories. All 8 are fixed here;
+the fix is described where it belongs, and repeated in one line below so a
+reviewer can check them off.
+
+1. **`stash.List` always returned `[]`** — `git stash list` ignores
+   `--format`/`--pretty`/`-z`. Task 7 reads `git reflog show … refs/stash`
+   instead, guarded by a `rev-parse --verify refs/stash` so a
+   never-stashed repository is an empty list, not an error.
+2. **`newPlainApp` killed the `internal/app` test binary** — with no
+   `WithAI`, `a.emit` falls through to wails `runtime.EventsEmit`, whose
+   `getEvents` calls `log.Fatalf` on a context with no `"events"` value.
+   Task 6's helper now installs `WithAI(a, AIDeps{Emit: newEvents().emit})`
+   (and a temp `gitSettingsPath`, so no test reads the developer's real
+   `git.json`).
+3. **`-c core.editor=true` does not stop `--continue` opening an editor** —
+   `GIT_EDITOR` from the user's shell wins. New **Task 0** adds
+   `gitcmd.RunEnv`, and Task 2 passes `GIT_EDITOR=true` in the environment.
+4. **`KindStash` swallowed a cherry-pick, a revert and a `git am`** — Task 1
+   checks `CHERRY_PICK_HEAD`/`REVERT_HEAD` first and tells `git am` apart
+   from a rebase by `.git/rebase-apply/applying`; Task 2 gives each its own
+   `--continue`/`--abort`.
+5. **Task 4 left the tree non-building for two commits** — `internal/app`'s
+   old `Fetch`/`Pull` are now deleted in Task 4, with `ops.Pull`'s arity
+   change.
+6. **Task 4 Step 1 mandated a compile error** — the unused `merge` import in
+   `ops_test.go` is gone; `slices` and `errors` are imported instead.
+7. **Task 12 changed only MergeView's labels** — `abortMerge`'s dialog,
+   `commitWarning` and the sidebar's Fetch/Pull now follow the kind too, and
+   the wording lives in tested pure functions in `merge.ts` (Task 9) rather
+   than inline in a component nothing tests.
+8. **A stash conflict was a dead end** — Task 12 gives it "Done" (plus
+   "Drop stash" when a conflicted Pop still owes one, read from the new
+   `App.OwedStashDrop`), and a dismissed stash conflict gives the screen
+   back to the Changes view, with "Resolve conflicts" in the toolbar as the
+   way in again.
+
+The non-blocking findings are fixed too: one Fetch/Pull instead of two
+(Task 11), no dead `gitSettings` exports, `TestPullThroughTheAppLayer` on a
+temp settings file, a named branch instead of `onto 5e6df51`, and
+`ErrNothingToStash` instead of a silent no-op. `GetStashDiff` stays, ships
+unused, and Task 8 says so explicitly.
+
+### The four questions the audit asked the plan to answer
+
+- **A conflicted cherry-pick, revert or `am`** gets its own `Kind`, and
+  Continue/Abort run that command's own `--continue`/`--abort`. Detected
+  before the markerless stash case; `am` is detected but has no automated
+  test (see Task 1) and is verified by hand in Task 13.
+- **Pull does not try to tell its own conflict from a pre-existing one**: it
+  refuses up front with `ops.ErrResolutionInProgress` when anything is
+  already unresolved, so a `Merging` state afterwards is unambiguously its
+  own doing.
+- **Task 10's two deferrals are resolved in place**: `.icon-btn` is global
+  (`theme.css:88`), so the toolbar scopes its badge anchor with
+  `:global()`; `SettingsDialog` loads `git` inside its existing reactive
+  `load()` and saves on change, as a second settings object independent of
+  the AI one.
+- **The sidebar's per-row Fetch/Pull buttons go**, replaced by the toolbar
+  (which has the badges and the conflict guard they lacked); the repo
+  context menu keeps both entries, since it works on a repository that is
+  not selected, and both now call the same actions the toolbar does.
+
 ## Global Constraints
 
 - `internal/ops.Fetch` and its Wails binding already exist and are unchanged by this plan. `internal/ops.Pull`'s signature changes from `Pull(ctx, dir) error` to `Pull(ctx, dir, strategy) (Result, error)`; `ErrNotFastForward` and `TestPullRefusesDivergedHistory` are removed.
 - `internal/merge.State` gains `Kind`, `Step`, `Total`, `Subject`. `Merging` stays `true` for every `Kind` so existing callers (`App.svelte`'s `showChanges`, `worktree.State.Merging`) need no change. `Stage`, `Unstage` and `Take` keep their exact signatures and behaviour — every existing merge test must still pass unmodified.
-- `git rebase --continue` runs with `-c core.editor=true`, mirroring how `gitcmd.Run` already sets `GIT_TERMINAL_PROMPT=0` so nothing can block on a prompt.
+- `git rebase --continue` (and the `cherry-pick`/`revert`/`am` equivalents) must run with `GIT_EDITOR=true` **in the environment**, not `-c core.editor=true`: a `GIT_EDITOR` inherited from the user's shell beats `core.editor`, so the `-c` form can still open an editor and hang the app. `gitcmd.Run` has no env parameter today — Task 0 adds one.
+- `internal/merge.Kind` covers every conflict git can leave behind, not only the three the spec named: `merge`, `rebase`, `cherry-pick`, `revert`, `am`, `stash`. A conflicted cherry-pick looks exactly like a conflicted stash pop to a naive "no MERGE_HEAD, no rebase dir, unmerged entries" test, and `git am` uses `.git/rebase-apply`, which a naive rebase test would abort with `rebase --abort`. Detection order and the per-kind `Continue`/`Abort` subcommand are pinned in Task 1 and Task 2.
 - A new package is named `internal/gitsettings` (package `gitsettings`), not `internal/settings` — `internal/ai/settings` already uses the package name `settings`, and a same-named sibling would force an import alias everywhere both are used.
+- **This repository has no git remote.** Nothing in this plan may run `git push`/`git pull` against a real remote, and the manual pass in Task 13 builds its own scratch bare repository plus two clones under the scratchpad. Every remote test uses `testrepo.NewBareFrom`/`testrepo.Clone` (both already exist).
 - Every mutation still runs under the existing per-repo write lock (`a.write` / `a.writeMerge` / `a.writeWorktree`). Fetch, Push and Pull use `gitcmd.NetworkTimeout` (5 minutes); nothing else changes timeout.
 - A conflicted `Pull`, `StashApply` or `StashPop` is not a Go `error` at the app-layer boundary — the same convention `merge.Start` already uses for a conflicted merge. Only a real failure (network, auth, a dirty worktree) is an `error`.
 - Go: `go vet ./... && go test ./...` and `gofmt -l internal` clean.
 - Frontend: prefix every command with `export PATH=$HOME/.nvm/versions/node/v22.23.1/bin:$PATH` (the default shell node is v14 and fails). `npm run check` must end with 0 ERRORS; the 3 pre-existing a11y warnings in ContextMenu/Splitter/Sidebar are not this plan's to fix.
 - Never commit `frontend/wailsjs/runtime`; `make build` restores it.
 - Commit messages must NOT contain `Co-Authored-By` lines.
+
+---
+
+### Task 0: `gitcmd` — an environment override for one command
+
+**Files:**
+- Modify: `internal/gitcmd/gitcmd.go`
+- Modify: `internal/gitcmd/gitcmd_test.go`
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces:
+  ```go
+  func RunEnv(ctx context.Context, dir string, timeout time.Duration, env []string, args ...string) (string, error)
+  func Run(ctx context.Context, dir string, timeout time.Duration, args ...string) (string, error) // unchanged signature, now a RunEnv(nil, ...) wrapper
+  ```
+
+Every `--continue` in Task 2 runs git commands that may open an editor. `-c
+core.editor=true` does **not** stop that: git resolves the editor as
+`GIT_EDITOR` → `core.editor` → `EDITOR` → `vi`, so a developer with
+`GIT_EDITOR` exported (or the app launched from such a shell) still gets a
+blocking editor, and `gitcmd.Run` — which builds its own `cmd.Env` from
+`os.Environ()` — has no way to override it.
+
+- [ ] **Step 1: Write the failing test**
+
+Append to `internal/gitcmd/gitcmd_test.go` (match the file's existing package
+and helper conventions — read it first):
+
+```go
+// RunEnv's entries win over the inherited environment, which is what makes
+// GIT_EDITOR=true reliable for the --continue calls in internal/merge.
+func TestRunEnvOverridesTheInheritedEnvironment(t *testing.T) {
+	t.Setenv("GIT_EDITOR", "false")
+	r := testrepo.New(t)
+	r.Commit("base")
+
+	out, err := gitcmd.RunEnv(context.Background(), r.Dir, gitcmd.ReadTimeout,
+		[]string{"GIT_EDITOR=true"}, "var", "GIT_EDITOR")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(out) != "true" {
+		t.Errorf("GIT_EDITOR = %q, want true — the override did not win", strings.TrimSpace(out))
+	}
+}
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+Run: `go test ./internal/gitcmd/ -run RunEnv`
+Expected: FAIL — `gitcmd.RunEnv` undefined.
+
+- [ ] **Step 3: Write the implementation**
+
+In `internal/gitcmd/gitcmd.go`, rename the body of `Run` to `RunEnv` and add
+the env parameter; keep `Run` as the one-line wrapper so no existing caller
+changes:
+
+```go
+// Run executes git with args in dir and returns stdout. Prompts are disabled
+// so missing credentials fail instead of hanging, and output is in English so
+// callers can match messages.
+func Run(ctx context.Context, dir string, timeout time.Duration, args ...string) (string, error) {
+	return RunEnv(ctx, dir, timeout, nil, args...)
+}
+
+// RunEnv is Run with extra environment entries appended last, so they beat
+// anything inherited from the user's shell — GIT_EDITOR=true for a
+// --continue that must never open an editor, above all.
+func RunEnv(ctx context.Context, dir string, timeout time.Duration, env []string, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "LC_ALL=C")
+	cmd.Env = append(cmd.Env, env...)
+	// ... the rest of the existing body, unchanged ...
+}
+```
+
+- [ ] **Step 4: Run the tests to verify they pass**
+
+Run: `go test ./internal/gitcmd/ -v`
+Expected: PASS for every test in the package.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add internal/gitcmd
+git commit -m "feat(gitcmd): RunEnv, for a command that must override the inherited environment"
+```
 
 ---
 
@@ -37,9 +196,12 @@
   ```go
   type Kind string
   const (
-      KindMerge  Kind = "merge"
-      KindRebase Kind = "rebase"
-      KindStash  Kind = "stash"
+      KindMerge      Kind = "merge"
+      KindRebase     Kind = "rebase"
+      KindCherryPick Kind = "cherry-pick"
+      KindRevert     Kind = "revert"
+      KindAM         Kind = "am"
+      KindStash      Kind = "stash"
   )
   // State gains:
   //   Kind    Kind   `json:"kind"`
@@ -109,7 +271,60 @@ func TestStatusReportsAStashConflict(t *testing.T) {
 }
 ```
 
+```go
+// A conflicted cherry-pick has unmerged entries and no MERGE_HEAD, exactly
+// like a conflicted stash pop — CHERRY_PICK_HEAD is the only thing telling
+// them apart, and getting this wrong makes Continue/Abort silent no-ops on
+// a repository the user cannot then finish or abort from the app.
+func TestStatusTellsACherryPickApartFromAStashConflict(t *testing.T) {
+	r := testrepo.New(t)
+	r.Commit("base")
+	r.Git("switch", "-q", "-c", "feature")
+	r.WriteFile("a.txt", "feature change\n")
+	r.Git("commit", "-q", "-am", "feature change")
+	r.Git("switch", "-q", "main")
+	r.WriteFile("a.txt", "main change\n")
+	r.Git("commit", "-q", "-am", "main change")
+	r.GitFails("cherry-pick", "feature")
+
+	st := status(t, r.Dir)
+	if st.Kind != KindCherryPick || !st.Merging {
+		t.Fatalf("state = %+v, want Kind cherry-pick and Merging true", st)
+	}
+	if st.Subject != "feature change" {
+		t.Errorf("subject = %q, want the picked commit's subject", st.Subject)
+	}
+	if !slices.Contains(st.Conflicts, "a.txt") {
+		t.Errorf("conflicts = %v, want a.txt", st.Conflicts)
+	}
+}
+
+// A conflicted revert is the same shape, under REVERT_HEAD.
+func TestStatusReportsARevertInProgress(t *testing.T) {
+	r := testrepo.New(t)
+	r.WriteFile("a.txt", "one\n")
+	r.Git("add", "a.txt")
+	r.Git("commit", "-q", "-m", "base")
+	r.WriteFile("a.txt", "two\n")
+	r.Git("commit", "-q", "-am", "second")
+	r.WriteFile("a.txt", "three\n")
+	r.Git("commit", "-q", "-am", "third")
+	r.GitFails("revert", "--no-edit", "HEAD~1")
+
+	st := status(t, r.Dir)
+	if st.Kind != KindRevert || !st.Merging {
+		t.Fatalf("state = %+v, want Kind revert and Merging true", st)
+	}
+}
+```
+
 `TestStatusWhenNotMerging` already pins the zero-Kind, non-merging case — no new test needed for it.
+
+There is no automated test for `KindAM`: building a conflicted `git am` needs a
+mailbox patch file and is slow and brittle. It is detected by
+`.git/rebase-apply/applying` (Step 3) and verified by hand in Task 13 only —
+what matters is that it is *not* mistaken for a rebase, because `rebase
+--abort` on an `am` is destructive.
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
@@ -135,13 +350,19 @@ import (
 	"git-ui/internal/refs"
 )
 
-// Kind says what the repository is in the middle of resolving.
+// Kind says what the repository is in the middle of resolving. Every value
+// but KindStash has a git-level marker; KindStash is the leftover case —
+// unmerged entries with no marker at all, which only a stash apply/pop
+// leaves behind.
 type Kind string
 
 const (
-	KindMerge  Kind = "merge"
-	KindRebase Kind = "rebase"
-	KindStash  Kind = "stash"
+	KindMerge      Kind = "merge"
+	KindRebase     Kind = "rebase"
+	KindCherryPick Kind = "cherry-pick"
+	KindRevert     Kind = "revert"
+	KindAM         Kind = "am"
+	KindStash      Kind = "stash"
 )
 ```
 
@@ -179,16 +400,37 @@ func Status(ctx context.Context, dir string) (State, error) {
 		return State{}, err
 	}
 
+	// Detection order matters, and the cheap-looking "no MERGE_HEAD, no
+	// rebase directory, unmerged entries" shortcut is wrong: a conflicted
+	// cherry-pick or revert matches it exactly, and `git am` writes to
+	// .git/rebase-apply, so treating that directory as a rebase would make
+	// Abort run `rebase --abort` on an am. Sequencer heads first, then
+	// MERGE_HEAD, then the two rebase directories (am told apart by its own
+	// "applying" file), and only then the markerless stash case.
 	switch {
+	case pickedCommit(ctx, dir, "CHERRY_PICK_HEAD") != "":
+		st.Kind = KindCherryPick
+		st.Into = refs.CurrentLabel(ctx, dir)
+		st.From, st.Subject = sequencerFromInto(ctx, dir, "CHERRY_PICK_HEAD")
+	case pickedCommit(ctx, dir, "REVERT_HEAD") != "":
+		st.Kind = KindRevert
+		st.Into = refs.CurrentLabel(ctx, dir)
+		st.From, st.Subject = sequencerFromInto(ctx, dir, "REVERT_HEAD")
 	case hasMergeHead(ctx, dir):
 		st.Kind = KindMerge
 		st.Into = refs.CurrentLabel(ctx, dir)
 		st.From = mergeFrom(ctx, dir)
 	default:
 		if rebaseDir, ok := inRebase(ctx, dir); ok {
-			st.Kind = KindRebase
-			st.From, st.Into = rebaseFromInto(ctx, dir, rebaseDir)
-			st.Step, st.Total, st.Subject = rebaseStepInfo(ctx, dir, rebaseDir)
+			if isApplyingMailbox(rebaseDir) {
+				st.Kind = KindAM
+				st.Into = refs.CurrentLabel(ctx, dir)
+				st.Subject = amSubject(rebaseDir)
+			} else {
+				st.Kind = KindRebase
+				st.From, st.Into = rebaseFromInto(ctx, dir, rebaseDir)
+				st.Step, st.Total, st.Subject = rebaseStepInfo(ctx, dir, rebaseDir)
+			}
 		} else if len(entries) > 0 {
 			st.Kind = KindStash
 		}
@@ -217,9 +459,9 @@ func Status(ctx context.Context, dir string) (State, error) {
 	sort.Strings(st.Manual)
 
 	if st.Kind != KindMerge {
-		// A rebase or a stash conflict has no "incoming side" to filter an
-		// unrelated dirty file by — every settled path here is the
-		// conflict's own.
+		// Only a merge has an "incoming side" (mergeTouched) to filter an
+		// unrelated dirty file by; for every other kind every settled path
+		// here is the conflict's own.
 		if st.Staged, err = changedPaths(ctx, dir, entries, "--cached", "HEAD"); err != nil {
 			return State{}, err
 		}
@@ -246,6 +488,51 @@ func Status(ctx context.Context, dir string) (State, error) {
 		}
 	}
 	return st, nil
+}
+
+// pickedCommit returns the full hash CHERRY_PICK_HEAD or REVERT_HEAD points
+// at, or "" when that pseudo-ref does not exist.
+func pickedCommit(ctx context.Context, dir, ref string) string {
+	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--verify", "--quiet", ref)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
+}
+
+// sequencerFromInto labels a cherry-pick or a revert by the commit it is
+// replaying: From is its short hash (there is no branch to name), Subject
+// its message's first line.
+func sequencerFromInto(ctx context.Context, dir, ref string) (from, subject string) {
+	if out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "log", "-1", "--format=%h%x00%s", ref); err == nil {
+		fields := strings.SplitN(strings.TrimSpace(out), "\x00", 2)
+		if len(fields) == 2 {
+			return fields[0], fields[1]
+		}
+	}
+	return "", ""
+}
+
+// isApplyingMailbox reports whether a rebase-apply directory belongs to
+// `git am` rather than to an old-backend rebase: am writes an "applying"
+// file there, a rebase does not.
+func isApplyingMailbox(rebaseDir string) bool {
+	if filepath.Base(rebaseDir) != "rebase-apply" {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(rebaseDir, "applying"))
+	return err == nil
+}
+
+// amSubject is the first line of the patch being applied, when git left one
+// where it can be read.
+func amSubject(rebaseDir string) string {
+	data, err := os.ReadFile(filepath.Join(rebaseDir, "msg-clean"))
+	if err != nil {
+		return ""
+	}
+	line, _, _ := strings.Cut(strings.TrimSpace(string(data)), "\n")
+	return line
 }
 
 // hasMergeHead reports whether a merge is in progress.
@@ -281,7 +568,14 @@ func rebaseFromInto(ctx context.Context, dir, rebaseDir string) (from, into stri
 		from = strings.TrimPrefix(strings.TrimSpace(string(data)), "refs/heads/")
 	}
 	if data, err := os.ReadFile(filepath.Join(rebaseDir, "onto")); err == nil {
-		if out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--short", strings.TrimSpace(string(data))); err == nil {
+		onto := strings.TrimSpace(string(data))
+		// "Rebasing feature onto 5e6df51" tells the user nothing; name the
+		// branch that commit is on when there is one, and fall back to the
+		// short hash when there isn't (a detached onto, or a commit no
+		// branch contains any more).
+		if out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "name-rev", "--name-only", "--no-undefined", "--refs=refs/heads/*", onto); err == nil {
+			into = strings.TrimSpace(out)
+		} else if out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--short", onto); err == nil {
 			into = strings.TrimSpace(out)
 		}
 	}
@@ -419,6 +713,54 @@ func TestAbortStopsARebase(t *testing.T) {
 	}
 }
 
+// A cherry-pick is continued and aborted by its own subcommand. Without
+// this, the "no MERGE_HEAD, no rebase dir" shortcut would call it a stash
+// conflict and both buttons would be silent no-ops.
+func TestContinueAndAbortWorkOnACherryPick(t *testing.T) {
+	pick := func(t *testing.T) *testrepo.Repo {
+		t.Helper()
+		r := testrepo.New(t)
+		r.Commit("base")
+		r.Git("switch", "-q", "-c", "feature")
+		r.WriteFile("a.txt", "feature change\n")
+		r.Git("commit", "-q", "-am", "feature change")
+		r.Git("switch", "-q", "main")
+		r.WriteFile("a.txt", "main change\n")
+		r.Git("commit", "-q", "-am", "main change")
+		r.GitFails("cherry-pick", "feature")
+		return r
+	}
+
+	t.Run("continue", func(t *testing.T) {
+		r := pick(t)
+		r.WriteFile("a.txt", "resolved\n")
+		r.Git("add", "a.txt")
+		// This is the call that hangs forever if the editor is not
+		// overridden through the environment: a cherry-pick --continue
+		// opens one for the commit message.
+		if err := Continue(context.Background(), r.Dir); err != nil {
+			t.Fatal(err)
+		}
+		if st := status(t, r.Dir); st.Merging {
+			t.Fatalf("state = %+v, want the cherry-pick finished", st)
+		}
+	})
+
+	t.Run("abort", func(t *testing.T) {
+		r := pick(t)
+		before := r.Git("rev-parse", "HEAD")
+		if err := Abort(context.Background(), r.Dir); err != nil {
+			t.Fatal(err)
+		}
+		if st := status(t, r.Dir); st.Merging {
+			t.Fatalf("state = %+v, want the cherry-pick aborted", st)
+		}
+		if got := r.Git("rev-parse", "HEAD"); got != before {
+			t.Errorf("HEAD = %s, want %s — abort must not move the branch", got, before)
+		}
+	})
+}
+
 // Continue and Abort on a stash conflict do nothing at the git level — there
 // is nothing to continue or abort, only files to resolve or leave.
 func TestContinueAndAbortOnAStashConflictAreNoOps(t *testing.T) {
@@ -446,7 +788,7 @@ func TestContinueAndAbortOnAStashConflictAreNoOps(t *testing.T) {
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `go test ./internal/merge/ -run 'Continue|AbortStopsARebase'`
+Run: `go test ./internal/merge/ -run 'Continue|AbortStopsARebase|CherryPick'`
 Expected: FAIL — `merge.Continue` is undefined.
 
 - [ ] **Step 3: Write the implementation**
@@ -456,46 +798,64 @@ In `internal/merge/merge.go`, replace `Abort` and add `Continue` next to it:
 ```go
 // Continue moves the conflict resolution in progress one step forward: a
 // merge closes with git's own generated message, exactly as Commit did; a
-// rebase replays its next commit, which may itself conflict — the caller
-// re-reads Status to see. A stash conflict has no "continue" step; this is
-// a no-op so a stray call from the UI never errors.
+// rebase, a cherry-pick, a revert or an `am` run their own --continue and
+// may leave the next commit's conflicts behind — the caller re-reads Status
+// to see. A stash conflict has no "continue" step; this is a no-op so a
+// stray call from the UI never errors.
 func Continue(ctx context.Context, dir string) error {
 	st, err := Status(ctx, dir)
 	if err != nil {
 		return err
 	}
-	switch st.Kind {
-	case KindMerge:
+	if st.Kind == KindMerge {
 		return Commit(ctx, dir)
-	case KindRebase:
-		// core.editor=true: a plain "pick" continue never needs one, but a
-		// stray prompt must never be able to block the app.
-		_, err := gitcmd.Run(ctx, dir, gitcmd.HookTimeout, "-c", "core.editor=true", "rebase", "--continue")
-		return err
-	default:
-		return nil
 	}
+	cmd, ok := sequencer[st.Kind]
+	if !ok {
+		return nil // KindStash, or nothing in progress
+	}
+	// GIT_EDITOR through the environment, not -c core.editor: git resolves
+	// GIT_EDITOR first, so a value inherited from the user's shell would
+	// beat core.editor and open a real editor the app can never close.
+	// noEditor also covers hooks, which is why this uses HookTimeout.
+	_, err = gitcmd.RunEnv(ctx, dir, gitcmd.HookTimeout, noEditor, cmd, "--continue")
+	return err
 }
 
-// Abort undoes the conflict resolution in progress: a merge or a rebase both
-// have a real git-level abort. A stash conflict does not — there is nothing
-// to undo but the files themselves, which Discard already handles — so this
-// is a no-op rather than an error.
+// sequencer maps a Kind to the git subcommand that continues or aborts it.
+// KindMerge is not here: its continue is Commit, and its abort is
+// `merge --abort`, both handled by name below. KindStash is not here
+// either — it has no git-level step at all.
+var sequencer = map[Kind]string{
+	KindRebase:     "rebase",
+	KindCherryPick: "cherry-pick",
+	KindRevert:     "revert",
+	KindAM:         "am",
+}
+
+// noEditor stops any --continue from opening an editor the app cannot close.
+var noEditor = []string{"GIT_EDITOR=true"}
+
+// Abort undoes the conflict resolution in progress: every kind but a stash
+// has a real git-level abort, and each must get its own — `rebase --abort`
+// on a `git am` (which also lives in .git/rebase-apply) throws away the
+// mailbox. A stash conflict has nothing to undo but the files themselves,
+// which Discard already handles, so it is a no-op rather than an error.
 func Abort(ctx context.Context, dir string) error {
 	st, err := Status(ctx, dir)
 	if err != nil {
 		return err
 	}
-	switch st.Kind {
-	case KindMerge:
+	if st.Kind == KindMerge {
 		_, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "merge", "--abort")
 		return err
-	case KindRebase:
-		_, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rebase", "--abort")
-		return err
-	default:
-		return nil
 	}
+	cmd, ok := sequencer[st.Kind]
+	if !ok {
+		return nil // KindStash, or nothing in progress
+	}
+	_, err = gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, cmd, "--abort")
+	return err
 }
 ```
 
@@ -586,6 +946,15 @@ git commit -m "feat(app): CommitMerge advances a rebase too, not only a merge"
 **Files:**
 - Modify: `internal/ops/ops.go`
 - Modify: `internal/ops/ops_test.go`
+- Modify: `internal/app/app.go` (delete the old `Fetch`/`Pull` methods **in this task**)
+
+`ops.Pull`'s arity changes here, and `internal/app/app.go` is its only
+caller. Deleting that caller in a later task would leave the tree
+non-building for two commits, so the deletion belongs here — Task 6 adds the
+new `App.Fetch`/`App.Push`/`App.Pull` in `internal/app/remote.go`. Between
+the two commits the Wails bindings still carry the old `Pull`, which nothing
+regenerates until Task 6; no Go build or test touches them, so the tree stays
+green.
 
 **Interfaces:**
 - Consumes: `merge.Status`, `merge.Kind` from Task 1.
@@ -597,6 +966,7 @@ git commit -m "feat(app): CommitMerge advances a rebase too, not only a merge"
       StrategyRebase = "rebase"
   )
   var ErrInvalidStrategy = errors.New("ops: invalid pull strategy")
+  var ErrResolutionInProgress = errors.New("ops: finish the conflict in progress first")
   type Outcome int
   const (
       UpToDate Outcome = iota
@@ -709,6 +1079,24 @@ func TestPullConflictLeavesTheRepositoryForTheConflictViewToShow(t *testing.T) {
 	}
 }
 
+func TestPullRefusesWhileAConflictIsUnresolved(t *testing.T) {
+	a, b := clones(t)
+	a.WriteFile("file-1.txt", "a's change\n")
+	a.Git("commit", "-q", "-am", "a's change")
+	b.WriteFile("file-1.txt", "b's change\n")
+	b.Git("commit", "-q", "-am", "b's change")
+	b.Git("push", "-q", "origin", "main")
+	if _, err := ops.Pull(ctx, a.Dir, ops.StrategyMerge); err != nil {
+		t.Fatal(err)
+	}
+
+	// The first pull left a conflict; a second one must refuse rather than
+	// report the conflict it did not cause.
+	if _, err := ops.Pull(ctx, a.Dir, ops.StrategyMerge); !errors.Is(err, ops.ErrResolutionInProgress) {
+		t.Errorf("err = %v, want ErrResolutionInProgress", err)
+	}
+}
+
 func TestPullRefusesAnUnknownStrategy(t *testing.T) {
 	a, _ := clones(t)
 	if _, err := ops.Pull(ctx, a.Dir, "sometimes"); !errors.Is(err, ops.ErrInvalidStrategy) {
@@ -774,7 +1162,13 @@ func TestCountsWithNoUpstream(t *testing.T) {
 }
 ```
 
-Add `"git-ui/internal/merge"` and `"slices"` to the test file's imports (not needed directly in the tests above except `slices.Contains`; `merge` is used inside `ops.go` itself, not the test).
+Add `"slices"` and `"errors"` to the test file's imports — `slices.Contains`
+and `errors.Is` are used above. Do **not** import `git-ui/internal/merge`
+into `ops_test.go`: it is used by `ops.go`, not by these tests, and an unused
+import is a compile error.
+
+Also delete `internal/app/app.go`'s `Fetch` and `Pull` methods (lines 266-272)
+as part of this task's Step 3, so the tree builds at every commit.
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
@@ -801,8 +1195,9 @@ import (
 )
 
 var (
-	ErrInvalidRef      = errors.New("invalid ref")
-	ErrInvalidStrategy = errors.New("ops: invalid pull strategy")
+	ErrInvalidRef           = errors.New("invalid ref")
+	ErrInvalidStrategy      = errors.New("ops: invalid pull strategy")
+	ErrResolutionInProgress = errors.New("ops: finish the conflict in progress first")
 )
 
 const (
@@ -856,6 +1251,16 @@ func Pull(ctx context.Context, dir, strategy string) (Result, error) {
 		return Result{}, fmt.Errorf("%w: %q", ErrInvalidStrategy, strategy)
 	}
 
+	// A repository already mid-merge, mid-rebase or mid-anything cannot be
+	// pulled into, and more importantly the conflict-detection below could
+	// not tell a conflict this pull caused from one that was already there.
+	// Refuse up front instead of guessing afterwards. (The frontend's
+	// canSync already disables Pull in that state; this is the backend's own
+	// guarantee, for an agent tool call or a race with a finishing merge.)
+	if st, stErr := merge.Status(ctx, dir); stErr == nil && st.Merging {
+		return Result{}, fmt.Errorf("%w: %s", ErrResolutionInProgress, st.Kind)
+	}
+
 	before, err := head(ctx, dir)
 	if err != nil {
 		return Result{}, err
@@ -878,9 +1283,10 @@ func Pull(ctx context.Context, dir, strategy string) (Result, error) {
 			return Result{Outcome: Rebased}, nil
 		}
 	}
-	// A conflict leaves the repository mid-merge or mid-rebase; anything
-	// else (network, auth, a dirty worktree) is a real failure and is
-	// returned as-is.
+	// A conflict leaves the repository mid-merge or mid-rebase. Nothing was
+	// in progress before this call (the guard above), so a Merging state
+	// here is this pull's own doing. Anything else (network, auth, a dirty
+	// worktree) is a real failure and is returned as-is.
 	if st, statusErr := merge.Status(ctx, dir); statusErr == nil && st.Merging {
 		return Result{Outcome: Conflicted, Conflicts: append(append([]string{}, st.Conflicts...), st.Manual...)}, nil
 	}
@@ -1171,7 +1577,7 @@ git commit -m "feat(gitsettings): the pull-strategy setting"
 ### Task 6: App layer — Push, Pull, GetRemoteInfo, GetGitSettings/SaveGitSettings
 
 **Files:**
-- Modify: `internal/app/app.go` (remove the old `Fetch`/`Pull`; add the `gitSettingsPath` field)
+- Modify: `internal/app/app.go` (add the `gitSettingsPath` field; the old `Fetch`/`Pull` were already deleted in Task 4)
 - Create: `internal/app/remote.go`
 - Create: `internal/app/remote_test.go`
 
@@ -1205,15 +1611,30 @@ import (
 	"git-ui/internal/testrepo"
 )
 
-// newPlainApp builds an App over a fresh one-commit repository, with no AI
-// and no merge scaffolding — for tests that need neither.
+// newPlainApp builds an App over a fresh one-commit repository, with no
+// merge scaffolding — for tests that don't want newAIMergeApp's conflicting
+// history.
+//
+// WithAI is NOT optional here, even though these tests use no AI: App.emit
+// falls through to wails runtime.EventsEmit when a.ai is nil, and that
+// runtime's getEvents calls log.Fatalf on a context with no "events" value —
+// os.Exit(1) in the middle of the suite, taking every other test in
+// internal/app with it. Every stash mutation goes through writeMerge or
+// writeWorktree, both of which emit. Giving it an events sink (the same
+// `events` helper newAIMergeApp uses, defined in ai_test.go) is what keeps
+// `go test ./internal/app/` alive. gitSettingsPath is likewise always set to
+// a temp file so no test ever reads or writes the developer's real
+// ~/Library/Application Support/git-ui/git.json.
 func newPlainApp(t *testing.T) (a *App, r *testrepo.Repo, id string) {
 	t.Helper()
-	store, err := repos.Open(filepath.Join(t.TempDir(), "repos.json"))
+	dir := t.TempDir()
+	store, err := repos.Open(filepath.Join(dir, "repos.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	a = New(store)
+	WithAI(a, AIDeps{Emit: newEvents().emit})
+	a.gitSettingsPath = filepath.Join(dir, "git.json")
 	r = testrepo.New(t)
 	r.Commit("base")
 	repo, err := store.Add(context.Background(), r.Dir)
@@ -1269,8 +1690,7 @@ func TestGetRemoteInfoWithNoUpstream(t *testing.T) {
 }
 
 func TestGitSettingsDefaultAndSaveRoundTrip(t *testing.T) {
-	a, _, _ := newPlainApp(t)
-	a.gitSettingsPath = filepath.Join(t.TempDir(), "git.json")
+	a, _, _ := newPlainApp(t) // gitSettingsPath is already a temp file
 
 	got, err := a.GetGitSettings()
 	if err != nil {
@@ -1299,7 +1719,7 @@ Expected: FAIL — `a.Push`, `a.GetRemoteInfo`, `a.gitSettingsPath` etc. undefin
 
 - [ ] **Step 3: Write the implementation**
 
-In `internal/app/app.go`: delete the existing `Fetch`/`Pull` methods (lines 266-272), and add one field to `App`:
+In `internal/app/app.go`, add one field to `App` (the old `Fetch`/`Pull` methods are already gone — Task 4 deleted them):
 
 ```go
 type App struct {
@@ -1421,8 +1841,9 @@ git commit -m "feat(app): push, pull with a strategy, and the git settings"
       Branch  string `json:"branch"`
       Hash    string `json:"hash"`
   }
+  var ErrNothingToStash = errors.New("stash: nothing to stash")
   func List(ctx context.Context, dir string) ([]Entry, error)
-  func Push(ctx context.Context, dir, message string, includeUntracked bool) error
+  func Push(ctx context.Context, dir, message string, includeUntracked bool) error // ErrNothingToStash when the worktree is clean
   func Apply(ctx context.Context, dir string, index int) error
   func Pop(ctx context.Context, dir string, index int) error
   func Drop(ctx context.Context, dir string, index int) error
@@ -1438,6 +1859,7 @@ package stash_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -1562,6 +1984,9 @@ func TestDiffShowsTheStashedChange(t *testing.T) {
 	}
 }
 
+// A repository that has never stashed has no refs/stash at all; one that
+// stashed and dropped everything has an empty one. Both must read as an
+// empty list, not as an error.
 func TestListOfNoStashesIsEmptyNotNil(t *testing.T) {
 	r := base(t)
 	entries, err := stash.List(ctx, r.Dir)
@@ -1570,6 +1995,55 @@ func TestListOfNoStashesIsEmptyNotNil(t *testing.T) {
 	}
 	if entries == nil || len(entries) != 0 {
 		t.Errorf("entries = %#v, want an empty, non-nil slice", entries)
+	}
+
+	r.WriteFile("a.txt", "changed\n")
+	if err := stash.Push(ctx, r.Dir, "wip", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := stash.Drop(ctx, r.Dir, 0); err != nil {
+		t.Fatal(err)
+	}
+	entries, err = stash.List(ctx, r.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("entries = %#v, want an empty list once every stash is dropped", entries)
+	}
+}
+
+// List must carry a usable hash — the whole reason it reads the reflog
+// instead of `git stash list`.
+func TestListCarriesTheStashCommitHash(t *testing.T) {
+	r := base(t)
+	r.WriteFile("a.txt", "changed\n")
+	if err := stash.Push(ctx, r.Dir, "wip", false); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := stash.List(ctx, r.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("entries = %+v, want one", entries)
+	}
+	if entries[0].Hash != strings.TrimSpace(r.Git("rev-parse", "refs/stash")) {
+		t.Errorf("hash = %q, want refs/stash", entries[0].Hash)
+	}
+}
+
+func TestPushWithNothingToStash(t *testing.T) {
+	r := base(t)
+	if err := stash.Push(ctx, r.Dir, "wip", false); !errors.Is(err, stash.ErrNothingToStash) {
+		t.Errorf("err = %v, want ErrNothingToStash", err)
+	}
+	entries, err := stash.List(ctx, r.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("entries = %+v, want none", entries)
 	}
 }
 ```
@@ -1589,6 +2063,7 @@ package stash
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -1596,7 +2071,9 @@ import (
 	"git-ui/internal/gitcmd"
 )
 
-// Entry is one stash, newest first — the order `git stash list` already
+var ErrNothingToStash = errors.New("stash: nothing to stash")
+
+// Entry is one stash, newest first — the order the stash reflog already
 // gives.
 type Entry struct {
 	Index   int    `json:"index"`
@@ -1606,8 +2083,21 @@ type Entry struct {
 }
 
 // List reports every stash. An empty stash is an empty slice, not an error.
+//
+// It reads the stash reflog rather than `git stash list`: `stash list`
+// ignores --format, --pretty and -z entirely (verified against git 2.54 —
+// `git stash list --format=%gd%x00%s%x00%H` prints plain
+// "stash@{0}: On main: wip", with no NULs and no hash), so parsing its
+// output for a hash is impossible. `reflog show` on refs/stash takes the
+// same format placeholders `log` does and gives all three fields. A
+// repository that has never had a stash has no refs/stash at all and makes
+// `reflog show` fail with exit 128, so the ref is checked first rather than
+// guessing at an exit code that also covers real failures.
 func List(ctx context.Context, dir string) ([]Entry, error) {
-	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "stash", "list", "--format=%gd%x00%s%x00%H")
+	if _, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--verify", "--quiet", "refs/stash"); err != nil {
+		return []Entry{}, nil
+	}
+	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "reflog", "show", "--format=%gd%x00%s%x00%H", "refs/stash")
 	if err != nil {
 		return nil, err
 	}
@@ -1631,16 +2121,26 @@ func List(ctx context.Context, dir string) ([]Entry, error) {
 	return entries, nil
 }
 
-// Push stashes the worktree. Nothing to stash is not an error — git itself
-// prints "No local changes to save" and exits 0; the caller disables the
-// button instead, mirroring how Commit is disabled with nothing staged.
+// Push stashes the worktree. With nothing to stash git prints "No local
+// changes to save" and exits 0 — a silent no-op the UI would show as a
+// success with no stash to show for it, so that case becomes
+// ErrNothingToStash here. (The message is stable English because gitcmd.Run
+// pins LC_ALL=C.) The frontend also disables the button, mirroring Commit's
+// disabled-when-nothing-staged rule; this is the backstop for the race
+// between the two.
 func Push(ctx context.Context, dir, message string, includeUntracked bool) error {
 	args := []string{"stash", "push", "-m", message}
 	if includeUntracked {
 		args = append(args, "--include-untracked")
 	}
-	_, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, args...)
-	return err
+	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, args...)
+	if err != nil {
+		return err
+	}
+	if strings.Contains(out, "No local changes to save") {
+		return ErrNothingToStash
+	}
+	return nil
 }
 
 func Apply(ctx context.Context, dir string, index int) error {
@@ -1724,7 +2224,19 @@ git commit -m "feat(stash): list, push, apply, pop, drop and diff"
   func (a *App) StashPop(id string, index int) error
   func (a *App) StashDrop(id string, index int) error
   func (a *App) GetStashDiff(id string, index int) (string, error)
+  func (a *App) OwedStashDrop(id string) int // the index a conflicted Pop still owes, or -1
   ```
+
+`OwedStashDrop` is what the conflict view's conditional "Drop stash" button
+reads (Task 12): a conflicted `StashPop` leaves the entry in place on
+purpose, and until the conflict is resolved the user has no other way to get
+rid of it from inside the app.
+
+`GetStashDiff` ships **used by no component in this sub-project** — the
+sidebar's stash rows get a context menu, not a preview pane (Task 11). It is
+kept, and tested, because the spec lists it in the app surface and the
+preview is the obvious next step; the deferral is deliberate, not an
+oversight.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1795,9 +2307,16 @@ func TestStashPopConflictDropsAutomaticallyOnceResolved(t *testing.T) {
 		t.Fatalf("state = %+v, want a stash conflict on f.txt", st)
 	}
 
+	if owed := a.OwedStashDrop(id); owed != 0 {
+		t.Errorf("owed = %d, want 0 — the conflicted Pop still owes a drop", owed)
+	}
+
 	r.WriteFile("f.txt", "resolved\n")
 	if err := a.StageMergeFile(id, "f.txt"); err != nil {
 		t.Fatal(err)
+	}
+	if owed := a.OwedStashDrop(id); owed != -1 {
+		t.Errorf("owed = %d, want -1 once the conflict is resolved", owed)
 	}
 	entries, err := a.GetStashEntries(id)
 	if err != nil {
@@ -1924,8 +2443,27 @@ func (a *App) StashPop(id string, index int) error {
 
 func (a *App) StashDrop(id string, index int) error {
 	return a.writeWorktree(id, func(ctx context.Context, dir string) error {
-		return stash.Drop(ctx, dir, index)
+		if err := stash.Drop(ctx, dir, index); err != nil {
+			return err
+		}
+		// Dropping by hand settles the debt a conflicted Pop left, so
+		// finishOwedDrop doesn't later drop an unrelated entry that has
+		// since shifted into this index.
+		if v, ok := a.owedDrops.Load(id); ok && v.(int) == index {
+			a.owedDrops.Delete(id)
+		}
+		return nil
 	})
+}
+
+// OwedStashDrop is the stash index a conflicted Pop is still waiting to
+// drop, or -1 when nothing is owed. The conflict view shows its "Drop
+// stash" button only for the first case.
+func (a *App) OwedStashDrop(id string) int {
+	if v, ok := a.owedDrops.Load(id); ok {
+		return v.(int)
+	}
+	return -1
 }
 
 func (a *App) GetStashDiff(id string, index int) (string, error) {
@@ -1969,7 +2507,7 @@ Expected: everything passes.
 export PATH=$HOME/.nvm/versions/node/v22.23.1/bin:$HOME/go/bin:$PATH
 wails generate module
 git checkout -- frontend/wailsjs/runtime
-grep -n "StashPush\|StashPop\|GetStashEntries" frontend/wailsjs/go/app/App.d.ts
+grep -n "StashPush\|StashPop\|GetStashEntries\|OwedStashDrop" frontend/wailsjs/go/app/App.d.ts
 git add internal/app frontend/wailsjs/go
 git commit -m "feat(app): stash push/apply/pop/drop, with the owed drop tracked in memory"
 ```
@@ -1983,6 +2521,8 @@ git commit -m "feat(app): stash push/apply/pop/drop, with the owed drop tracked 
 - Modify: `frontend/src/lib/api.ts`
 - Modify: `frontend/src/lib/stores.ts`
 - Modify: `frontend/src/lib/actions.ts`
+- Modify: `frontend/src/lib/merge.ts` (kind-aware labels and warnings)
+- Modify: `frontend/src/lib/merge.test.ts` (its `state()` helper needs the new `kind` field)
 - Create: `frontend/src/lib/remote.ts`
 - Create: `frontend/src/lib/remote.test.ts`
 
@@ -1997,7 +2537,19 @@ git commit -m "feat(app): stash push/apply/pop/drop, with the owed drop tracked 
   export const PULL_UP_TO_DATE = 0
   // MergeState gains: kind, step?, total?, subject?
   export function canSync(state: MergeState | null, busy: string): boolean
+  // in merge.ts:
+  export interface ConflictHeader { lead: string; from: string; connector: string; into: string; detail: string }
+  export function conflictHeader(state: MergeState): ConflictHeader
+  export interface ConflictActions { abort: string | null; confirm: string | null; ai: boolean; done: boolean }
+  export function conflictActions(state: MergeState): ConflictActions
+  export function abortWarning(state: MergeState): { title: string; message: string; confirmLabel: string }
+  export function commitWarning(state: MergeState): string | null // now merge-only
   ```
+
+Every label the conflict view shows lives in `merge.ts` as a pure function
+with vitest coverage, not inline in the component: `MergeView.svelte` has no
+component test in this codebase's style, so anything left inline is untested,
+and Task 12's whole job is getting six kinds' worth of wording right.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2005,7 +2557,7 @@ Create `frontend/src/lib/remote.test.ts`:
 
 ```ts
 import { describe, expect, it } from 'vitest'
-import { canSync } from './remote'
+import { canSync, conflictOwnsScreen } from './remote'
 import type { MergeState } from './types'
 
 const merging = (kind: MergeState['kind']): MergeState => ({
@@ -2017,6 +2569,18 @@ const merging = (kind: MergeState['kind']): MergeState => ({
   manual: [],
   staged: [],
   unstaged: [],
+})
+
+describe('conflictOwnsScreen', () => {
+  it('is true for any unresolved conflict', () => {
+    expect(conflictOwnsScreen(merging('merge'), false)).toBe(true)
+    expect(conflictOwnsScreen(merging('rebase'), true)).toBe(true) // a dismissal is stash-only
+    expect(conflictOwnsScreen(merging('stash'), false)).toBe(true)
+  })
+  it('is false for a dismissed stash conflict, and with nothing in progress', () => {
+    expect(conflictOwnsScreen(merging('stash'), true)).toBe(false)
+    expect(conflictOwnsScreen(null, false)).toBe(false)
+  })
 })
 
 describe('canSync', () => {
@@ -2034,10 +2598,85 @@ describe('canSync', () => {
 })
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+Then extend `frontend/src/lib/merge.test.ts`. Its `state()` helper builds a
+whole `MergeState`, so it needs the new field — add `kind: 'merge'` to the
+defaults object (right above `merging: true`) or every existing test in the
+file stops type-checking. Then append:
 
-Run: `export PATH=$HOME/.nvm/versions/node/v22.23.1/bin:$PATH && cd frontend && npm run test -- --run remote`
-Expected: FAIL — `./remote` does not exist.
+```ts
+import { abortWarning, commitWarning, conflictActions, conflictHeader, mergeSections } from './merge'
+
+describe('conflictHeader', () => {
+  it('names both sides of a merge', () => {
+    expect(conflictHeader(state({ kind: 'merge' }))).toEqual({
+      lead: 'Merging', from: 'feature', connector: 'into', into: 'main', detail: '',
+    })
+  })
+  it('says onto for a rebase, with the commit counter', () => {
+    const h = conflictHeader(state({ kind: 'rebase', step: 2, total: 5, subject: 'tidy up' }))
+    expect(h.lead).toBe('Rebasing')
+    expect(h.connector).toBe('onto')
+    expect(h.detail).toBe('commit 2 of 5: tidy up')
+  })
+  it('names the picked commit for a cherry-pick', () => {
+    const h = conflictHeader(state({ kind: 'cherry-pick', from: '5e6df51', subject: 'tidy up' }))
+    expect(h.lead).toBe('Cherry-picking')
+    expect(h.detail).toBe('tidy up')
+  })
+  it('has nothing to name for a stash conflict', () => {
+    const h = conflictHeader(state({ kind: 'stash' }))
+    expect(h).toEqual({ lead: 'Resolving stashed changes', from: '', connector: '', into: '', detail: '' })
+  })
+})
+
+describe('conflictActions', () => {
+  it('offers AI, abort and commit for a merge', () => {
+    expect(conflictActions(state({ kind: 'merge' }))).toEqual({
+      abort: 'Abort merge', confirm: 'Commit merge', ai: true, done: false,
+    })
+  })
+  it('offers a rebase its own wording and no AI', () => {
+    expect(conflictActions(state({ kind: 'rebase' }))).toEqual({
+      abort: 'Abort rebase', confirm: 'Continue rebase', ai: false, done: false,
+    })
+  })
+  it.each(['cherry-pick', 'revert', 'am'] as const)('gives %s a real abort and continue', (kind) => {
+    const a = conflictActions(state({ kind }))
+    expect(a.abort).toBeTruthy()
+    expect(a.confirm).toBeTruthy()
+    expect(a.ai).toBe(false)
+  })
+  it('gives a stash conflict Done instead of abort/continue', () => {
+    expect(conflictActions(state({ kind: 'stash' }))).toEqual({
+      abort: null, confirm: null, ai: false, done: true,
+    })
+  })
+})
+
+describe('abortWarning', () => {
+  it('says rebase, not merge, for a rebase', () => {
+    const w = abortWarning(state({ kind: 'rebase' }))
+    expect(w.title).toBe('Abort rebase')
+    expect(w.message).not.toMatch(/merge/)
+    expect(w.confirmLabel).toBe('Abort rebase')
+  })
+})
+
+describe('commitWarning', () => {
+  it('is null for anything but a merge — nothing else writes a merge commit', () => {
+    expect(commitWarning(state({ kind: 'rebase', unstaged: ['a.ts'] }))).toBeNull()
+    expect(commitWarning(state({ kind: 'cherry-pick', unstaged: ['a.ts'] }))).toBeNull()
+  })
+})
+```
+
+The existing `commitWarning` tests in the file pass `state()` with no `kind`
+override, which now defaults to `'merge'` — they keep passing unchanged.
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `export PATH=$HOME/.nvm/versions/node/v22.23.1/bin:$PATH && cd frontend && npm run test -- --run remote merge`
+Expected: FAIL — `./remote` does not exist, and `conflictHeader`/`conflictActions`/`abortWarning` are not exported from `./merge`.
 
 - [ ] **Step 3: Write the implementation**
 
@@ -2053,13 +2692,122 @@ import type { MergeState } from './types'
 export function canSync(state: MergeState | null, busy: string): boolean {
   return !busy && !state?.merging
 }
+
+// conflictOwnsScreen decides whether the conflict view takes over the
+// details pane and blocks the Changes view. Every kind but a stash has a
+// git-level abort, so the user always has a way out of it and it keeps the
+// screen; a stash conflict can only be dismissed, and then the Changes view
+// (and the toolbar's "Resolve conflicts" button) take over again.
+export function conflictOwnsScreen(state: MergeState | null, stashDismissed: boolean): boolean {
+  if (!state?.merging) return false
+  return !(state.kind === 'stash' && stashDismissed)
+}
 ```
+
+In `frontend/src/lib/merge.ts`, add the label functions and scope
+`commitWarning` to a merge:
+
+```ts
+export interface ConflictHeader {
+  lead: string
+  from: string
+  connector: string
+  into: string
+  detail: string
+}
+
+// One table, so the six kinds' wording lives in one place instead of spread
+// through MergeView's template.
+const HEADINGS: Record<Exclude<ConflictKind, ''>, { lead: string; connector: string }> = {
+  merge: { lead: 'Merging', connector: 'into' },
+  rebase: { lead: 'Rebasing', connector: 'onto' },
+  'cherry-pick': { lead: 'Cherry-picking', connector: 'onto' },
+  revert: { lead: 'Reverting', connector: 'on' },
+  am: { lead: 'Applying patch', connector: '' },
+  stash: { lead: 'Resolving stashed changes', connector: '' },
+}
+
+export function conflictHeader(state: MergeState): ConflictHeader {
+  const kind = state.kind || 'merge'
+  const { lead, connector } = HEADINGS[kind]
+  if (kind === 'stash') return { lead, from: '', connector: '', into: '', detail: '' }
+  const detail =
+    kind === 'rebase' && state.total
+      ? `commit ${state.step} of ${state.total}${state.subject ? `: ${state.subject}` : ''}`
+      : kind === 'merge'
+        ? ''
+        : (state.subject ?? '')
+  return { lead, from: state.from, connector: state.into ? connector : '', into: state.into, detail }
+}
+
+export interface ConflictActions {
+  abort: string | null
+  confirm: string | null
+  ai: boolean
+  done: boolean
+}
+
+// "Resolve with AI" is merge-only: ResolveConflicts refuses anything without
+// MERGE_HEAD, so showing the button elsewhere only offers an error. A stash
+// conflict has no git-level abort or continue — it gets Done (and, when a
+// conflicted Pop still owes one, Drop stash, which MergeView adds itself
+// from OwedStashDrop rather than from this table).
+const ACTIONS: Record<Exclude<ConflictKind, ''>, ConflictActions> = {
+  merge: { abort: 'Abort merge', confirm: 'Commit merge', ai: true, done: false },
+  rebase: { abort: 'Abort rebase', confirm: 'Continue rebase', ai: false, done: false },
+  'cherry-pick': { abort: 'Abort cherry-pick', confirm: 'Continue cherry-pick', ai: false, done: false },
+  revert: { abort: 'Abort revert', confirm: 'Continue revert', ai: false, done: false },
+  am: { abort: 'Abort patch', confirm: 'Continue applying', ai: false, done: false },
+  stash: { abort: null, confirm: null, ai: false, done: true },
+}
+
+export function conflictActions(state: MergeState): ConflictActions {
+  return ACTIONS[state.kind || 'merge']
+}
+
+// abortWarning is the confirmation before throwing a resolution away. The
+// wording has to follow the kind: "Abort merge / go back to where the
+// branch was" is plainly wrong for a rebase or a cherry-pick.
+export function abortWarning(state: MergeState): { title: string; message: string; confirmLabel: string } {
+  const label = conflictActions(state).abort ?? 'Abort'
+  const what = {
+    merge: 'this merge',
+    rebase: 'this rebase',
+    'cherry-pick': 'this cherry-pick',
+    revert: 'this revert',
+    am: 'this patch',
+    stash: 'this',
+  }[state.kind || 'merge']
+  return {
+    title: label,
+    message: `Throw away every resolution from ${what} and go back to where the branch was?`,
+    confirmLabel: label,
+  }
+}
+```
+
+and change `commitWarning`'s first line so it only ever fires for a merge —
+its whole premise ("won't be in the merge commit, which keeps this branch's
+version instead") is false for a rebase, a cherry-pick or a revert, which
+never write a merge commit:
+
+```ts
+export function commitWarning(state: MergeState): string | null {
+  if (state.kind && state.kind !== 'merge') return null
+  const n = state.unstaged.length
+  // ... unchanged from here ...
+}
+```
+
+Import `ConflictKind` alongside `MergeState` at the top of `merge.ts`.
 
 In `frontend/src/lib/types.ts`, extend `MergeState` and add the new types (place near it and near the existing `WorktreeState`/`CommitInfo` block):
 
 ```ts
+export type ConflictKind = 'merge' | 'rebase' | 'cherry-pick' | 'revert' | 'am' | 'stash' | ''
+
 export interface MergeState {
-  kind: 'merge' | 'rebase' | 'stash' | ''
+  kind: ConflictKind
   merging: boolean
   from: string
   into: string
@@ -2119,6 +2867,7 @@ import type { AIMessage, AISettings, AIStatus, AheadBehind, CommitInfo, Conflict
   stashPop: (id: string, index: number) => call<void>(Go.StashPop(id, index)),
   stashDrop: (id: string, index: number) => call<void>(Go.StashDrop(id, index)),
   getStashDiff: (id: string, index: number) => call<string>(Go.GetStashDiff(id, index)),
+  owedStashDrop: (id: string) => call<number>(Go.OwedStashDrop(id)),
 ```
 
 In `frontend/src/lib/stores.ts`: add two stores and their loaders next to `worktreeState`/`loadWorktreeState`, and call both from `refreshRepo`:
@@ -2127,6 +2876,13 @@ In `frontend/src/lib/stores.ts`: add two stores and their loaders next to `workt
 export const remoteInfo = writable<AheadBehind | null>(null)
 export const stashEntries = writable<StashEntry[]>([])
 export const gitSettings = writable<GitSettings | null>(null)
+// The index a conflicted stash pop still owes a drop for, or -1.
+export const owedStashDrop = writable<number>(-1)
+// Set by the conflict view's "Done" for a stash conflict, which has no
+// git-level abort: the files stay as they are and the view stops owning the
+// screen. Cleared below whenever the conflict's kind changes or it goes
+// away, so it can never hide a *different* conflict later.
+export const stashConflictDismissed = writable<boolean>(false)
 
 export async function loadRemoteInfo() {
   const repo = get(selectedRepo)
@@ -2140,6 +2896,21 @@ export async function loadRemoteInfo() {
     remoteInfo.set(info)
   } catch {
     remoteInfo.set(null)
+  }
+}
+
+export async function loadOwedStashDrop() {
+  const repo = get(selectedRepo)
+  if (!repo || repo.missing) {
+    owedStashDrop.set(-1)
+    return
+  }
+  try {
+    const owed = await api.owedStashDrop(repo.id)
+    if (get(selectedRepoId) !== repo.id) return
+    owedStashDrop.set(owed)
+  } catch {
+    owedStashDrop.set(-1)
   }
 }
 
@@ -2176,13 +2947,48 @@ export async function refreshRepo() {
   await loadWorktreeState()
   await loadRemoteInfo()
   await loadStashEntries()
+  await loadOwedStashDrop()
   logVersion.update((v) => v + 1)
 }
 ```
 
-Also add `loadRemoteInfo()` and `loadStashEntries()` to `selectRepo`'s existing `loadMergeState(); loadWorktreeState()` pair, and import `AheadBehind`, `GitSettings`, `StashEntry` at the top of `stores.ts`.
+In the existing `loadMergeState`, clear the dismissal whenever the state it
+just read is not the same stash conflict that was dismissed — add this right
+after the store is set (and read the function first; keep its existing
+stale-repo guard):
+
+```ts
+  // A dismissal belongs to one stash conflict only. Anything else — a new
+  // kind, or nothing in progress — brings the view back.
+  if (state?.kind !== 'stash') stashConflictDismissed.set(false)
+```
+
+Also reset it in `selectRepo` alongside the other per-repo stores, so
+switching repositories never carries one repository's dismissal to another.
+
+Also add `loadRemoteInfo()`, `loadStashEntries()` and `loadOwedStashDrop()` to `selectRepo`'s existing `loadMergeState(); loadWorktreeState()` pair, and import `AheadBehind`, `GitSettings`, `StashEntry` at the top of `stores.ts`.
 
 In `frontend/src/lib/actions.ts`, add near `abortMerge`/`commitMerge` and import `promptDialog`, `PULL_UP_TO_DATE` alongside the existing imports:
+
+```ts
+Replace `abortMerge`'s hardcoded merge wording with the kind-aware one, and
+stop `commitMerge` from showing the merge-commit warning for a rebase (which
+`commitWarning` now returns null for anyway — this keeps the two in step):
+
+```ts
+export async function abortMerge(id: string) {
+  const state = get(mergeState)
+  const warning = abortWarning(state ?? ({ kind: 'merge' } as MergeState))
+  const ok = await confirmDialog({ ...warning, danger: true })
+  if (ok) await run(`${warning.title}…`, () => api.abortMerge(id))
+}
+```
+
+(`commitMerge` itself needs no change beyond `commitWarning`'s new
+merge-only guard; add `abortWarning` to the existing
+`import { commitWarning, takeMessage } from './merge'` line.)
+
+Then add the new actions:
 
 ```ts
 export const fetchRemote = (id: string) => run('Fetching…', () => api.fetch(id))
@@ -2214,6 +3020,12 @@ export async function stashChanges(id: string) {
 }
 
 export const stashApply = (id: string, index: number) => run('Applying stash…', () => api.stashApply(id, index))
+
+// The conflict view's "Done" for a stash conflict: the files stay exactly as
+// they are (conflicted or not), the view just stops owning the screen. The
+// flag is cleared by loadMergeState whenever the kind changes or the
+// conflict goes away, so a later stash conflict shows the view again.
+export const dismissStashConflict = () => stashConflictDismissed.set(true)
 
 export async function stashPop(id: string, index: number) {
   const ok = await confirmDialog({
@@ -2284,7 +3096,7 @@ Create `frontend/src/components/Toolbar.svelte`:
   import Icon from './Icon.svelte'
   import { fetchRemote, pull, push } from '../lib/actions'
   import { canSync } from '../lib/remote'
-  import { busy, mergeState, remoteInfo } from '../lib/stores'
+  import { busy, mergeState, remoteInfo, stashConflictDismissed } from '../lib/stores'
 
   export let repoId: string
 
@@ -2303,11 +3115,19 @@ Create `frontend/src/components/Toolbar.svelte`:
     <Icon name="upload" size={14} />
     {#if $remoteInfo?.ahead}<span class="badge">{$remoteInfo.ahead}</span>{/if}
   </button>
+  <!-- The only way back into a stash conflict the user dismissed with
+       "Done": without it the conflict view would be unreachable until the
+       files happen to resolve. -->
+  {#if $mergeState?.kind === 'stash' && $stashConflictDismissed}
+    <button class="btn" on:click={() => stashConflictDismissed.set(false)}>Resolve conflicts</button>
+  {/if}
 </div>
 
 <style>
   .toolbar { display: flex; align-items: center; gap: 2px; flex: none; }
-  .icon-btn { position: relative; }
+  /* .icon-btn itself is global (theme.css:88) — only the badge anchor is
+     local, so the shared hover/disabled styling keeps applying. */
+  .toolbar :global(.icon-btn) { position: relative; }
   .badge {
     position: absolute; top: -3px; right: -3px; font-size: 9px; line-height: 1;
     padding: 1px 3px; border-radius: 6px; background: var(--accent); color: white;
@@ -2315,7 +3135,11 @@ Create `frontend/src/components/Toolbar.svelte`:
 </style>
 ```
 
-Check `.icon-btn`'s base styling in whatever shared stylesheet already defines it (used elsewhere, e.g. `RepoRefs.svelte`'s "New tag" button) — if it is a global class, drop the local `.icon-btn` rule above and keep only `.badge`.
+`.icon-btn` is a global class defined in `frontend/src/theme.css:88` (hover
+and disabled states included), which is why the rule above is written as
+`.toolbar :global(.icon-btn)` — a plain `.icon-btn { … }` in a Svelte
+component would be scoped away and silently do nothing, and redefining the
+class locally would drop the shared hover styling.
 
 - [ ] **Step 3: Wire it into `LogView.svelte`**
 
@@ -2352,21 +3176,34 @@ Read the existing `commitMessage` `<section>` in `SettingsDialog.svelte` (around
 </section>
 ```
 
-with, in the `<script>` block, a `git` local mirroring however the existing `settings` local is loaded/saved (check the surrounding `onMount`/`save` functions for the exact pattern already used for AI settings and copy its shape):
+The dialog has no `onMount` load: it loads reactively, `$: if ($settingsOpen)
+load()` (line ~39), and `load()` (line ~46) fills `settings` and `prompts`
+inside a try/catch that toasts `errorMessage(e)`. Follow exactly that, with a
+second local that is *not* merged into the AI `settings` object:
 
 ```ts
   let git: GitSettings = { pullStrategy: 'auto' }
 
-  async function loadGit() {
-    git = await api.getGitSettings()
-  }
-
   async function saveGit() {
-    await api.saveGitSettings(git)
+    try {
+      await api.saveGitSettings(git)
+      await loadGitSettings() // keeps the store the rest of the app reads in step
+    } catch (e) {
+      toast(errorMessage(e), 'error')
+    }
   }
 ```
 
-Call `loadGit()` wherever the dialog already loads the AI settings on open (same `onMount`/reactive-open pattern), and import `GitSettings` from `'../lib/types'`.
+and one added line inside the existing `load()`, in the same `try` that
+already fetches the AI settings:
+
+```ts
+      git = await api.getGitSettings()
+```
+
+Import `GitSettings` from `'../lib/types'` and add `loadGitSettings` to the
+existing `import { loadAISettings, settingsOpen } from '../lib/stores'` line.
+`api`, `toast` and `errorMessage` are already imported.
 
 - [ ] **Step 5: Manual check and commit**
 
@@ -2384,11 +3221,12 @@ git commit -m "feat(frontend): a fetch/pull/push toolbar and the Git settings se
 
 ---
 
-### Task 11: Sidebar Stash section and the Stash… action
+### Task 11: Sidebar Stash section, the Stash… action, and de-duplicating Fetch/Pull
 
 **Files:**
 - Modify: `frontend/src/components/RepoRefs.svelte`
 - Modify: `frontend/src/components/CommitBox.svelte`
+- Modify: `frontend/src/components/Sidebar.svelte` (drop the per-row Fetch/Pull icon buttons)
 
 **Interfaces:**
 - Consumes: `stashEntries` store, `stashApply`/`stashPop`/`stashDrop`/`stashChanges` actions (Task 9).
@@ -2443,7 +3281,28 @@ Add the section itself, right after the existing Tags section (mirroring its str
 
 Diffing the stash preview (opening `api.getStashDiff` in the main pane on click) is out of scope for this task — it needs a place to render that isn't part of `RepoRefs.svelte` itself; leave the row's click doing nothing beyond the context menu for now, matching how a Tag row's *click* filters the log while its *context menu* holds the destructive actions, and note this gap rather than bolt a diff viewer onto the sidebar row.
 
-- [ ] **Step 2: Add "Stash…" to `CommitBox.svelte`**
+- [ ] **Step 2: Drop the duplicated Fetch/Pull buttons from `Sidebar.svelte`**
+
+`Sidebar.svelte` gives every repository row two hover icon buttons (lines
+49-50, `fetchRepo`/`pullRepo`) that the new toolbar now covers for the
+selected repository — with ahead/behind badges and the merge/rebase/stash
+guard the sidebar buttons lack. Delete those two `<button class="icon-btn">`
+elements. **Keep** the context-menu entries (lines 12-13): they still work on
+a repository that is not the selected one, which the toolbar cannot reach.
+
+Leave `fetchRepo`/`pullRepo` in `actions.ts` — the menu still calls them —
+but note that `pullRepo` and the toolbar's `pull` are now two different
+things: `pullRepo` is the plain `run(...)` wrapper and shows nothing for an
+up-to-date pull, `pull` reports the outcome. Change the menu to call the new
+`pull`/`fetchRemote` instead and delete `fetchRepo`/`pullRepo`, so one
+behaviour serves both entry points:
+
+```ts
+      { label: 'Fetch', action: () => fetchRemote(repo.id), disabled: repo.missing || !!$busy },
+      { label: 'Pull', action: () => pull(repo.id), disabled: repo.missing || !!$busy || !!$mergeState?.merging },
+```
+
+- [ ] **Step 3: Add "Stash…" to `CommitBox.svelte`**
 
 Import `stashChanges` and add a button next to the existing "Write with AI"/"Commit" buttons (around line 206-211):
 
@@ -2452,12 +3311,21 @@ Import `stashChanges` and add a button next to the existing "Write with AI"/"Com
 ```
 
 ```svelte
-<button class="btn" disabled={!repoId || !!$busy} on:click={() => stashChanges(repoId)}>Stash…</button>
+<button class="btn" disabled={!repoId || !!$busy || !hasChanges} on:click={() => stashChanges(repoId)}>Stash…</button>
 ```
 
-Place it before the primary "Commit"/"Amend" button, matching the existing left-to-right order (secondary actions, then the primary one last).
+Place it before the primary "Commit"/"Amend" button, matching the existing
+left-to-right order (secondary actions, then the primary one last).
 
-- [ ] **Step 3: Manual check**
+`hasChanges` mirrors Commit's own disabled-when-nothing-staged rule, which
+the spec asks for explicitly ("Stash push with nothing to stash → button
+disabled"): read the component's existing reactive statement over
+`$worktreeState` for the exact field names it already uses for the Commit
+button, and define `hasChanges` as "any staged or unstaged or untracked
+entry". `stash.Push` returning `ErrNothingToStash` (Task 7) is the backstop
+for the race, and surfaces as an error toast.
+
+- [ ] **Step 4: Manual check**
 
 Run:
 ```bash
@@ -2466,11 +3334,11 @@ cd frontend && npm run check && npm run test -- --run
 ```
 Expected: 0 ERRORS; all vitest still passes.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add frontend/src/components
-git commit -m "feat(frontend): a Stash sidebar section and the Stash… action"
+git commit -m "feat(frontend): a Stash sidebar section, the Stash… action, one Fetch/Pull"
 ```
 
 ---
@@ -2479,14 +3347,19 @@ git commit -m "feat(frontend): a Stash sidebar section and the Stash… action"
 
 **Files:**
 - Modify: `frontend/src/components/MergeView.svelte`
+- Modify: `frontend/src/components/LogView.svelte` (the details pane's `merging` condition)
+- Modify: `frontend/src/App.svelte` (the `showChanges` condition)
 
 **Interfaces:**
-- Consumes: `$mergeState.kind`/`step`/`total`/`subject` (Task 1, threaded through already).
-- Produces: no new exported API — the header and action bar read `Kind` instead of assuming a merge.
+- Consumes: `conflictHeader`, `conflictActions`, `abortWarning` (Task 9), `conflictOwnsScreen` (Task 9), `$owedStashDrop`/`$stashConflictDismissed` stores (Task 9).
+- Produces: no new exported API — the header and action bar read the tables instead of assuming a merge.
 
-- [ ] **Step 1: Write the failing test — none (Svelte component, no unit test in this codebase's style)**
+- [ ] **Step 1: No new test here — the wording is already under test**
 
-2a's `MergeView.svelte` work had no dedicated component test either — the pure logic it depends on (`mergeSections`, `nextSelection`) already has vitest coverage, and this task changes only display text and which buttons render, not any of that logic. Verify by hand in Task 13 instead.
+This codebase has no Svelte component tests, which is exactly why Task 9 put
+every label and every button decision in `merge.ts`/`remote.ts` as pure
+functions with vitest coverage. This task is the wiring only: if a label is
+wrong, fix it in `merge.ts` and its test, not inline here.
 
 - [ ] **Step 2: Update the header and action bar**
 
@@ -2494,48 +3367,78 @@ In `frontend/src/components/MergeView.svelte`, replace the `<header>` block. "Re
 
 ```svelte
   <header>
-    {#if $mergeState?.kind === 'rebase'}
-      <span class="title">Rebasing <strong>{$mergeState?.from}</strong> onto <strong>{$mergeState?.into}</strong></span>
-      {#if $mergeState?.total}
-        <span class="count">commit {$mergeState.step} of {$mergeState.total}{$mergeState.subject ? `: ${$mergeState.subject}` : ''}</span>
-      {/if}
-    {:else if $mergeState?.kind === 'stash'}
-      <span class="title">Resolving stashed changes</span>
-    {:else}
-      <span class="title">Merging <strong>{$mergeState?.from}</strong> into <strong>{$mergeState?.into}</strong></span>
+    {#if head}
+      <span class="title">
+        {head.lead}
+        {#if head.from}<strong>{head.from}</strong>{/if}
+        {#if head.connector}{head.connector} <strong>{head.into}</strong>{/if}
+      </span>
+      {#if head.detail}<span class="count">{head.detail}</span>{/if}
     {/if}
     <span class="count">{pending} left</span>
     <span class="spacer"></span>
-    {#if $mergeState?.kind === 'merge'}
+    {#if acts.ai}
       <button class="btn" disabled={!!$busy || pending === 0} on:click={() => resolveConflicts(repoId)}>
         <Icon name="sparkle" size={14} /> Resolve with AI
       </button>
     {/if}
-    {#if $mergeState?.kind !== 'stash'}
-      <button class="btn" disabled={!!$busy} on:click={() => abortMerge(repoId)}>
-        {$mergeState?.kind === 'rebase' ? 'Abort rebase' : 'Abort merge'}
-      </button>
-      <button class="btn primary" disabled={!!$busy || pending > 0} on:click={() => commitMerge(repoId)}>
-        {$mergeState?.kind === 'rebase' ? 'Continue rebase' : 'Commit merge'}
-      </button>
+    {#if acts.abort}
+      <button class="btn" disabled={!!$busy} on:click={() => abortMerge(repoId)}>{acts.abort}</button>
+    {/if}
+    {#if acts.confirm}
+      <button class="btn primary" disabled={!!$busy || pending > 0} on:click={() => commitMerge(repoId)}>{acts.confirm}</button>
+    {/if}
+    {#if acts.done}
+      <!-- A stash conflict has no git-level abort or continue. Drop stash is
+           the only way to get rid of the entry a conflicted Pop deliberately
+           kept; Done leaves the files exactly as they are and gives the
+           screen back (the toolbar's "Resolve conflicts" brings it back). -->
+      {#if $owedStashDrop >= 0}
+        <button class="btn" disabled={!!$busy} on:click={() => stashDrop(repoId, $owedStashDrop)}>Drop stash</button>
+      {/if}
+      <button class="btn primary" disabled={!!$busy} on:click={dismissStashConflict}>Done</button>
     {/if}
   </header>
 ```
+
+with, in the `<script>` block:
+
+```ts
+  import { conflictActions, conflictHeader } from '../lib/merge'
+  import { dismissStashConflict, stashDrop } from '../lib/actions'
+  import { owedStashDrop } from '../lib/stores'
+
+  $: head = $mergeState ? conflictHeader($mergeState) : null
+  $: acts = $mergeState ? conflictActions($mergeState) : { abort: null, confirm: null, ai: false, done: false }
+```
+
+- [ ] **Step 2b: Let a dismissed stash conflict give the screen back**
+
+In `frontend/src/components/LogView.svelte`, both `{#if $mergeState?.merging}`
+conditions (the splitter at line ~28 and the pane at line ~31) become
+`conflictOwnsScreen($mergeState, $stashConflictDismissed)`; keep the
+`|| $selectedHash` part of the first one as it is. In
+`frontend/src/App.svelte`, `showChanges`'s `!$mergeState?.merging` becomes
+`!conflictOwnsScreen($mergeState, $stashConflictDismissed)`, and its comment
+gains a sentence: a dismissed stash conflict is the one case where the
+Changes view is allowed to show a repository with unmerged entries, because
+nothing else can finish it. Import `conflictOwnsScreen` from `../lib/remote`
+and `stashConflictDismissed` from `../lib/stores` in both.
 
 - [ ] **Step 3: Manual check**
 
 Run:
 ```bash
 export PATH=$HOME/.nvm/versions/node/v22.23.1/bin:$PATH
-cd frontend && npm run check
+cd frontend && npm run check && npm run test -- --run
 ```
-Expected: 0 ERRORS.
+Expected: 0 ERRORS; all vitest passes.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add frontend/src/components/MergeView.svelte
-git commit -m "feat(frontend): MergeView shows a rebase or a stash conflict, not only a merge"
+git add frontend/src
+git commit -m "feat(frontend): the conflict view serves every kind, not only a merge"
 ```
 
 ---
@@ -2558,7 +3461,46 @@ Expected: everything green; `make build` produces `build/bin/git-ui.app`.
 
 - [ ] **Step 2: Manual pass (added to the pending list, as 2a's was)**
 
-Relaunch the app; in a repository with a remote, click Fetch, Pull and Push, and try a Pull that conflicts under each of the three strategy settings; push a change to create a stash, then Apply and Pop one that conflicts and confirm it resolves through the same view a merge conflict does, with the stash entry gone afterward for the Pop case. This needs a real remote or two local clones — the same kind of scratch setup the 2a manual pass used, extended with `git remote add origin <bare-clone-path>`.
+**This repository has no remote, and nothing here pushes to one.** Build a
+throwaway remote under the scratchpad instead:
+
+```bash
+S="$TMPDIR/git-ui-2b-manual" && rm -rf "$S" && mkdir -p "$S" && cd "$S"
+git init -q --bare origin.git
+git clone -q origin.git work && cd work
+printf 'one\n' > a.txt && git add a.txt && git commit -qm base && git push -q -u origin main
+cd "$S" && git clone -q origin.git other
+```
+
+Then add `$S/work` to the app and walk through:
+
+1. **Toolbar** — in `other`, commit and push a change; in `work`, Fetch and
+   check the behind badge, then Pull, then commit locally and Push and check
+   the ahead badge. Confirm the sidebar row no longer has its own Fetch/Pull
+   icons and that the repo context menu still does.
+2. **Pull strategy** — diverge `work` and `other` on the same file and Pull
+   once under each of Settings → Git → auto / merge / rebase. The merge run
+   ends in the conflict view headed "Merging", the rebase run in one headed
+   "Rebasing … onto main" with the commit counter. Resolve one and Abort the
+   other, and confirm the Abort dialog says *rebase*, not *merge*.
+3. **Stash** — with the Changes view dirty, use Stash…, with and without
+   "Include untracked"; check the sidebar Stash section's count, then Apply
+   (entry stays) and Drop. With a clean tree the Stash… button is disabled.
+4. **Stash conflict** — stash a change, commit a conflicting one on the same
+   file, then Pop. The conflict view opens headed "Resolving stashed
+   changes", with Drop stash and Done and no Abort/Continue. Press Done: the
+   Changes view comes back and the toolbar shows "Resolve conflicts", which
+   returns to it. Resolve every file and confirm the stash entry is gone by
+   itself.
+5. **Cherry-pick** — from a terminal in `work`, `git cherry-pick` a commit
+   that conflicts. The app must say "Cherry-picking", not "Resolving stashed
+   changes", and its Abort/Continue must actually work. Do the same for
+   `git revert`. This is the check the 8-defect audit cared about most: a
+   silent no-op here strands the user.
+6. **`git am`** — `git format-patch -1` a conflicting commit and `git am` it
+   from a terminal. The app must show "Applying patch" and its Abort must
+   run `am --abort`; verify `.git/rebase-apply` is gone and the mailbox was
+   not destroyed by a `rebase --abort`.
 
 - [ ] **Step 3: Commit if the manual pass finds nothing**
 
