@@ -52,6 +52,17 @@ func (r *Repo) Git(args ...string) string {
 	return run(r.t, r.Dir, nil, args...)
 }
 
+// GitFails runs git and returns its combined output without failing the test
+// when git exits non-zero — for commands whose failure is the point, such as
+// a merge that conflicts.
+func (r *Repo) GitFails(args ...string) string {
+	r.t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = r.Dir
+	out, _ := cmd.CombinedOutput()
+	return string(out)
+}
+
 // Commit writes a new file, commits it with msg and returns the HEAD hash.
 // Commit dates increase by one minute per commit so ordering is stable.
 func (r *Repo) Commit(msg string) string {
