@@ -44,9 +44,14 @@ half-finished — no longer needs a terminal at any point.
 
 ## Architecture
 
-### `internal/remote` (new)
+### `internal/ops` (extend — Fetch and Pull already exist here)
 
-A sibling of `worktree` and `merge`.
+`ops.Fetch` and `ops.Pull` were already built (`internal/ops/ops.go`), ahead
+of any UI calling them: `Fetch` runs `git fetch --all --prune` under
+`gitcmd.NetworkTimeout` unchanged. `Pull` today is `git pull --ff-only`,
+returning `ErrNotFastForward` on any divergence — this is the part 2b
+replaces, since a real pull must merge or rebase, not just refuse. There is
+no `Push` anywhere yet.
 
 ```go
 type AheadBehind struct {
@@ -71,12 +76,14 @@ type Result struct {
     Conflicts []string `json:"conflicts"` // set only when Conflicted
 }
 
-func Fetch(ctx context.Context, dir string) error
 func Push(ctx context.Context, dir string) error
-func Pull(ctx context.Context, dir, strategy string) (Result, error)
+func Pull(ctx context.Context, dir, strategy string) (Result, error) // strategy replaces the old ff-only-only signature
 func Counts(ctx context.Context, dir string) (AheadBehind, error)
 ```
 
+- `ErrNotFastForward` and its test (`TestPullRefusesDivergedHistory`) are
+  removed — a diverged upstream is now Pull's normal job, resolved by merge
+  or rebase, not a refusal.
 - `Push` checks `@{upstream}` the same way `worktree.Preview` already does
   (the symbolic form, never an abbreviated remote-tracking name a local
   branch could shadow). No upstream → `git push -u origin -- <branch>`.
@@ -89,9 +96,8 @@ func Counts(ctx context.Context, dir string) (AheadBehind, error)
 - `Counts` runs `git rev-list --left-right --count HEAD...@{upstream}` and
   parses the two numbers; no upstream yields a zero `AheadBehind` and no
   error, the same convention `worktree.Preview` uses for `Upstream`.
-- Fetch, push and pull run under `gitcmd.NetworkTimeout` (5 minutes,
-  already defined in `gitcmd.go` but unused until now); every other call in
-  this package uses `gitcmd.ReadTimeout`.
+- Push and pull already run (and Push will run) under `gitcmd.NetworkTimeout`
+  (5 minutes); `Counts` uses `gitcmd.ReadTimeout` like other reads.
 - `git rebase --continue` (below) can prompt an editor if a replayed commit
   becomes empty or needs its message changed; that call sets `GIT_EDITOR`
   to a no-op, the same spirit as `GIT_TERMINAL_PROMPT=0` already disabling
@@ -193,8 +199,10 @@ func Diff(ctx context.Context, dir string, index int) (string, error)
 
 ### App layer (`internal/app`)
 
-- `GetRemoteInfo(id)`, `Fetch(id)`, `Push(id)`, `Pull(id)` — the strategy
-  comes from the new settings package, read once per call.
+- `Fetch(id)` is unchanged. `Pull(id)` (already exists, calling the old
+  ff-only `ops.Pull`) is updated to call the new `ops.Pull(ctx, dir,
+  strategy)`, reading the strategy from the new settings package once per
+  call. `Push(id)` and `GetRemoteInfo(id)` (ahead/behind counts) are new.
 - `GetStashEntries(id)`, `StashPush(id, message, includeUntracked)`,
   `StashApply(id, index)`, `StashPop(id, index)`, `StashDrop(id, index)`,
   `GetStashDiff(id, index)`.
@@ -208,10 +216,12 @@ func Diff(ctx context.Context, dir string, index int) (string, error)
   untracked together) plus the existing log-refresh path, since a pull or
   a rebase continue can move `HEAD`.
 
-### `internal/settings` (new)
+### `internal/gitsettings` (new)
 
 A general git-behaviour settings package, sibling to `ai/settings` but its
-own file (`git.json`) — `ai/settings` stays AI-config only.
+own file (`git.json`) — `ai/settings` stays AI-config only. Named
+`gitsettings`, not `settings`, so a file that needs both never needs an
+import alias for either.
 
 ```go
 type Settings struct {
@@ -267,7 +277,12 @@ as a three-way choice, the same control shape 2a used for `commitMessage`.
   upstream first push; a rebase-pull that conflicts, resolved via
   `Continue`, and one aborted; a stash push/apply/pop that conflicts,
   resolved, and confirmed dropped for the `Pop` case; `Counts`' ahead/
-  behind arithmetic including the no-upstream zero case.
+  behind arithmetic including the no-upstream zero case. The existing
+  `TestFetchAndPullFastForward` and `TestPullRefusesDivergedHistory` in
+  `internal/ops/ops_test.go` are rewritten: the first still exercises the
+  fast-forward case (now via the default `auto` strategy), the second is
+  replaced by tests that a diverged pull actually merges or rebases
+  instead of refusing.
 - **Vitest, on the pure parts:** pull-strategy resolution, toolbar
   disabled-states, stash-list parsing/grouping.
 - **Manual, added to the pending list** (same as 2a): a real push/pull
