@@ -15,6 +15,11 @@ import (
 // reject anyway, with a message about the working tree instead of the index.
 var ErrNothingStaged = errors.New("worktree: nothing is staged")
 
+// ErrNothingToAmend refuses an amend in a repository with no commits yet,
+// before any temporary file is written — git's own error for this names the
+// temporary message file's path, which is not fit to show the user.
+var ErrNothingToAmend = errors.New("worktree: nothing to amend")
+
 // CommitInfo is what the commit box needs to decide what it can offer.
 type CommitInfo struct {
 	StagedCount int    `json:"stagedCount"`
@@ -31,7 +36,11 @@ func Commit(ctx context.Context, dir, message string, amend bool) error {
 	if strings.TrimSpace(message) == "" {
 		return errors.New("worktree: the commit message is empty")
 	}
-	if !amend {
+	if amend {
+		if _, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--verify", "--quiet", "HEAD"); err != nil {
+			return ErrNothingToAmend
+		}
+	} else {
 		st, err := Status(ctx, dir)
 		if err != nil {
 			return err
@@ -53,7 +62,9 @@ func Commit(ctx context.Context, dir, message string, amend bool) error {
 	if amend {
 		args = append(args, "--amend")
 	}
-	_, err = gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, args...)
+	// A pre-commit or commit-msg hook — a lint or test run, or a signing
+	// passphrase prompt — routinely takes longer than an ordinary read.
+	_, err = gitcmd.Run(ctx, dir, gitcmd.HookTimeout, args...)
 	return err
 }
 
@@ -96,21 +107,26 @@ func Preview(ctx context.Context, dir string) (CommitInfo, error) {
 		return info, nil // no commits yet: nothing to amend
 	}
 	info.CanAmend = true
-	if msg, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "log", "-1", "--pretty=%B"); err == nil {
-		info.LastMessage = strings.TrimRight(msg, "\n")
+	msg, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "log", "-1", "--pretty=%B")
+	if err != nil {
+		return info, err
 	}
+	info.LastMessage = strings.TrimRight(msg, "\n")
 
 	// The symbolic @{upstream}, not an abbreviated remote-tracking name a
 	// local branch could shadow — see ops.ResetPreview for the same fix.
 	up, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
 	if err != nil {
-		return info, nil // no upstream: nothing can have been pushed
+		return info, nil // no upstream: nothing can have been pushed, and that is not a failure
 	}
 	info.Upstream = strings.TrimSpace(up)
-	// HEAD is "pushed" when it has no commits the upstream lacks.
+	// HEAD is "pushed" when it has no commits the upstream lacks. Once the
+	// upstream has resolved, a failure here is a real error: silently
+	// leaving Pushed false would drop the force-push warning on exactly the
+	// path where being wrong is dangerous.
 	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-list", "--count", "HEAD", "^@{upstream}", "--")
 	if err != nil {
-		return info, nil
+		return info, err
 	}
 	ahead, err := strconv.Atoi(strings.TrimSpace(out))
 	if err != nil {

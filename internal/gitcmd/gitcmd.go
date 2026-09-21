@@ -15,6 +15,10 @@ import (
 const (
 	ReadTimeout    = 10 * time.Second
 	NetworkTimeout = 5 * time.Minute
+	// HookTimeout covers a git command that may run the user's hooks: a
+	// pre-commit lint or test run, or a signing passphrase prompt, takes far
+	// longer than an ordinary read.
+	HookTimeout = 2 * time.Minute
 )
 
 var ErrTimeout = errors.New("git command timed out")

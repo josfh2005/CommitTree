@@ -2,12 +2,49 @@ package worktree_test
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"git-ui/internal/testrepo"
 	"git-ui/internal/worktree"
 )
+
+// installHook points core.hooksPath at an isolated directory (so the
+// machine's own global hooks configuration cannot interfere) and writes an
+// executable pre-commit hook there with the given body.
+func installHook(t *testing.T, r *testrepo.Repo, body string) {
+	t.Helper()
+	hooks := filepath.Join(t.TempDir(), "hooks")
+	if err := os.MkdirAll(hooks, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	r.Git("config", "core.hooksPath", hooks)
+	path := filepath.Join(hooks, "pre-commit")
+	script := "#!/bin/sh\n" + body + "\n"
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// absoluteGitDir returns the repository's real git directory, the same way
+// commit.go locates it for the temporary message file.
+func absoluteGitDir(t *testing.T, r *testrepo.Repo) string {
+	t.Helper()
+	return r.Git("rev-parse", "--absolute-git-dir")
+}
+
+// leftoverMessageFiles reports any git-ui-commit-* temp file still sitting in
+// the repository's git directory.
+func leftoverMessageFiles(t *testing.T, r *testrepo.Repo) []string {
+	t.Helper()
+	matches, err := filepath.Glob(filepath.Join(absoluteGitDir(t, r), "git-ui-commit-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return matches
+}
 
 func TestCommitStagedChanges(t *testing.T) {
 	r := base(t)
@@ -137,5 +174,94 @@ func TestPreviewReportsAPushedCommit(t *testing.T) {
 	}
 	if !info.Pushed || info.Upstream != "origin/main" {
 		t.Errorf("info = %+v, want pushed on origin/main", info)
+	}
+}
+
+// Preview must not warn about a force-push when the branch is simply ahead
+// of its upstream: that is the case that decides NOT to warn.
+func TestPreviewReportsAnUnpushedCommitWhenAheadOfUpstream(t *testing.T) {
+	src := testrepo.New(t)
+	src.Commit("base")
+	bare := testrepo.NewBareFrom(t, src)
+	clone := testrepo.Clone(t, bare)
+	clone.WriteFile("a.txt", "changed\n")
+	clone.Git("add", "a.txt")
+	clone.Git("commit", "-q", "-m", "ahead of upstream")
+
+	info, err := worktree.Preview(ctx, clone.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Pushed || info.Upstream != "origin/main" {
+		t.Errorf("info = %+v, want unpushed on origin/main", info)
+	}
+}
+
+// A pre-commit hook running lint or tests routinely takes longer than an
+// ordinary git read; Commit must not time out on it.
+func TestCommitSucceedsWithASlowPreCommitHook(t *testing.T) {
+	r := base(t)
+	installHook(t, r, "sleep 2")
+	r.WriteFile("a.txt", "changed\n")
+	r.Git("add", "a.txt")
+
+	if err := worktree.Commit(ctx, r.Dir, "change a", false); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.Git("log", "-1", "--pretty=%s"); got != "change a" {
+		t.Errorf("subject = %q", got)
+	}
+}
+
+// Amending in a repository with no commits must be refused before any
+// temporary file is written, with a typed error rather than git's own
+// message, which names that temporary file's path.
+func TestAmendRefusesInAnEmptyRepository(t *testing.T) {
+	r := testrepo.New(t)
+	err := worktree.Commit(ctx, r.Dir, "nothing to amend yet", true)
+	if !errors.Is(err, worktree.ErrNothingToAmend) {
+		t.Errorf("err = %v, want ErrNothingToAmend", err)
+	}
+	if err != nil && strings.Contains(err.Error(), "git-ui-commit") {
+		t.Errorf("err = %q, must not name the temporary message file", err)
+	}
+	if matches := leftoverMessageFiles(t, r); len(matches) != 0 {
+		t.Errorf("leftover message files = %v", matches)
+	}
+}
+
+// The temporary message file must not survive a successful commit, and must
+// not appear as an untracked path in the meantime.
+func TestCommitCleansUpTheMessageFileOnSuccess(t *testing.T) {
+	r := base(t)
+	r.WriteFile("a.txt", "changed\n")
+	r.Git("add", "a.txt")
+
+	if err := worktree.Commit(ctx, r.Dir, "change a", false); err != nil {
+		t.Fatal(err)
+	}
+	if matches := leftoverMessageFiles(t, r); len(matches) != 0 {
+		t.Errorf("leftover message files = %v", matches)
+	}
+	if out := r.Git("status", "--porcelain"); strings.Contains(out, "git-ui-commit") {
+		t.Errorf("git status = %q, must not list the message file", out)
+	}
+}
+
+// The temporary message file must also not survive a commit a hook rejects.
+func TestCommitCleansUpTheMessageFileOnHookFailure(t *testing.T) {
+	r := base(t)
+	installHook(t, r, "exit 1")
+	r.WriteFile("a.txt", "changed\n")
+	r.Git("add", "a.txt")
+
+	if err := worktree.Commit(ctx, r.Dir, "change a", false); err == nil {
+		t.Fatal("want an error when the hook rejects the commit")
+	}
+	if matches := leftoverMessageFiles(t, r); len(matches) != 0 {
+		t.Errorf("leftover message files = %v", matches)
+	}
+	if out := r.Git("status", "--porcelain"); strings.Contains(out, "git-ui-commit") {
+		t.Errorf("git status = %q, must not list the message file", out)
 	}
 }
