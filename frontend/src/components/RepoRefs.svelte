@@ -3,7 +3,7 @@
   import Icon from './Icon.svelte'
   import { checkoutBranch, deleteBranch, deleteTag, mergeBranch, newBranch, newTag } from '../lib/actions'
   import { groupBranches, leafName, type BranchGroup } from '../lib/branches'
-  import { busy, filters, mainView, mergeState, refs, worktreeState } from '../lib/stores'
+  import { busy, filters, mainView, mergeState, refs, selectRepo, selectedRepoId, worktreeState } from '../lib/stores'
   import type { Branch, Tag } from '../lib/types'
   import { changedCount } from '../lib/worktree'
   import { openMenu } from '../lib/ui'
@@ -62,6 +62,26 @@
     ])
   }
 
+  // Clicking Changes under an expanded-but-not-selected repository must act
+  // on THAT repository, not silently read/route the currently selected
+  // one's state — selectRepo() first, same as clicking the repo row itself
+  // would. Once this repo is selected, the row is a toggle: clicking it
+  // again while the Changes view is already showing returns to the log
+  // (which is the only way back once the log pane is unmounted). A merge in
+  // progress always wins — the log pane is where the merge view lives.
+  function openChanges() {
+    if (repoId !== $selectedRepoId) {
+      selectRepo(repoId)
+      mainView.set('changes')
+      return
+    }
+    if ($mergeState?.merging) {
+      mainView.set('log')
+      return
+    }
+    mainView.set($mainView === 'changes' ? 'log' : 'changes')
+  }
+
   function tagMenu(event: MouseEvent, t: Tag) {
     openMenu(event, [
       { label: 'New branch from here…', action: () => newBranch(repoId, `refs/tags/${t.name}`, t.name) },
@@ -75,7 +95,7 @@
     <button
       class="row-item ref changes"
       class:active={$mainView === 'changes' && !$mergeState?.merging}
-      on:click={() => mainView.set($mergeState?.merging ? 'log' : 'changes')}
+      on:click={openChanges}
     >
       <span class="ellipsis">Changes</span>
       {#if changedCount($worktreeState)}<span class="count">{changedCount($worktreeState)}</span>{/if}

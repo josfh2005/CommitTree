@@ -1,10 +1,10 @@
 <script lang="ts">
   import { EventsOn } from '../../wailsjs/runtime/runtime'
-  import FileList from './FileList.svelte'
+  import FileList, { rowKey } from './FileList.svelte'
   import { api } from '../lib/api'
   import { discardFile, stageFile, unstageFile } from '../lib/actions'
   import { lineClass } from '../lib/diff'
-  import { worktreeSections } from '../lib/worktree'
+  import { hasStagedChanges, worktreeSections } from '../lib/worktree'
   import type { FileStatus, WorktreeChangedEvent } from '../lib/types'
   import { busy, loadWorktreeState, worktreeState } from '../lib/stores'
   import { errorMessage } from '../lib/ui'
@@ -26,8 +26,11 @@
 
   $: sections = $worktreeState ? worktreeSections($worktreeState) : []
   $: files = sections.flatMap((s) => s.files)
-  // Which section (by object identity) each file came from, so an action can
-  // tell a Staged row from an Unstaged row with the same status letter.
+  // Which section (by object identity) each file came from. A partially
+  // staged file (git status "MM") lists the SAME path under both Staged and
+  // Unstaged as two distinct FileStatus objects — this map, keyed by object
+  // identity rather than path, is what lets a row be told apart from its
+  // same-path counterpart in the other section.
   $: fileSection = new Map(sections.flatMap((s) => s.files.map((f) => [f, s.title] as const)))
   // Re-read the open file whenever the worktree state reloads — after a
   // stage/unstage/discard, or a focus that caught a change made in a
@@ -35,16 +38,24 @@
   $: if ($worktreeState) refresh()
   // Keep a selection valid as files are staged, unstaged or discarded
   // underneath it.
-  $: if (files.length && !files.some((f) => f.path === selected)) open(files[0])
+  $: if (files.length && !files.some((f) => keyOf(f) === selected)) open(files[0])
   $: if (!files.length) selected = ''
 
   function isStaged(file: FileStatus): boolean {
     return fileSection.get(file) === 'Staged'
   }
 
+  // rowKey(section, path) — the same identity scheme FileList uses — so a
+  // row can be resolved back from the value onSelect hands us without
+  // falling back to "the first file with this path", which for a partially
+  // staged file always finds the Staged instance.
+  function keyOf(file: FileStatus): string {
+    return rowKey(fileSection.get(file) ?? '', file.path)
+  }
+
   async function open(file: FileStatus) {
     const current = ++request
-    selected = file.path
+    selected = keyOf(file)
     text = ''
     error = ''
     try {
@@ -60,7 +71,7 @@
   // state changed.
   async function refresh() {
     if (!selected) return
-    const file = files.find((f) => f.path === selected)
+    const file = files.find((f) => keyOf(f) === selected)
     if (!file) return
     const current = ++request
     try {
@@ -79,7 +90,12 @@
 
   function actionsFor(file: FileStatus) {
     const staged = isStaged(file)
-    const discard = { label: 'Discard', run: () => discardFile(repoId, file, staged), danger: true, disabled: !!$busy, title: 'Throw this change away' }
+    // The discard warning must reflect whether the PATH has staged content
+    // anywhere, not which section this particular row came from: `git
+    // restore --staged --worktree` throws both away together regardless of
+    // which row (Staged or Unstaged) of a partially staged file triggered it.
+    const alsoStaged = $worktreeState ? hasStagedChanges($worktreeState, file.path) : staged
+    const discard = { label: 'Discard', run: () => discardFile(repoId, file, alsoStaged), danger: true, disabled: !!$busy, title: 'Throw this change away' }
     if (staged) {
       return [{ label: 'Unstage', run: () => unstageFile(repoId, file.path), disabled: !!$busy, title: 'Take out of the next commit' }, discard]
     }
@@ -92,7 +108,7 @@
     <FileList
       {sections}
       {selected}
-      onSelect={(path) => open(files.find((f) => f.path === path)!)}
+      onSelect={(key) => { const f = files.find((ff) => keyOf(ff) === key); if (f) open(f) }}
       actions={actionsFor}
       {glyph}
       emptyMessage="No changes."

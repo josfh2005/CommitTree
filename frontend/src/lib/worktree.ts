@@ -27,11 +27,25 @@ export function changedCount(state: WorktreeState | null): number {
 }
 
 /** discardMessage is the confirmation before throwing changes away — the only
- *  destructive action here, and for an untracked file git cannot undo it. */
+ *  destructive action here, and for an untracked file git cannot undo it.
+ *  `staged` must reflect whether the PATH has a staged entry anywhere in the
+ *  worktree state (see hasStagedChanges), not which section the row the user
+ *  clicked came from: `git restore --staged --worktree` discards both a
+ *  file's staged and unstaged content together, regardless of which row of a
+ *  partially staged file (git status "MM") triggered the discard. */
 export function discardMessage(file: FileStatus, staged: boolean): string {
   if (file.status === '?') {
     return `This will delete ${file.path} for good — it was never committed, so this cannot be undone.`
   }
   const also = staged ? ' Its staged changes are thrown away too.' : ''
   return `Discard your changes to ${file.path}?${also} This cannot be undone.`
+}
+
+/** hasStagedChanges reports whether path has a staged entry in state — the
+ *  question discardMessage needs answered. A partially staged file (git
+ *  status "MM") lists the same path under both Staged and Unstaged, so this
+ *  must be computed from the path's presence in state.staged, never from
+ *  which section the triggering row belongs to. */
+export function hasStagedChanges(state: WorktreeState, path: string): boolean {
+  return state.staged.some((f) => f.path === path)
 }

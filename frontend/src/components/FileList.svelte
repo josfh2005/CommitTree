@@ -1,3 +1,16 @@
+<script context="module" lang="ts">
+  /** rowKey disambiguates a row that shares its path with another section's
+   *  row — a partially staged file (git status "MM") lists the same path
+   *  under both Staged and Unstaged. Selecting or opening a row must resolve
+   *  to exactly the row that was clicked, not "whichever section's array
+   *  happens to contain that path". Exported so MergeView and ChangesView
+   *  can derive the same key from a section title + path when interpreting
+   *  the value onSelect hands back. */
+  export function rowKey(section: string, path: string): string {
+    return `${section}:${path}`
+  }
+</script>
+
 <script lang="ts">
   import Icon from './Icon.svelte'
 
@@ -16,8 +29,9 @@
   }
 
   export let sections: { title: string; files: ListFile[] }[]
+  /** A rowKey(section title, path) value — see the module-level rowKey. */
   export let selected: string
-  export let onSelect: (path: string) => void
+  export let onSelect: (key: string) => void
   export let actions: (file: ListFile) => FileAction[] = () => []
   export let onMenu: (event: MouseEvent, file: ListFile) => void = () => {}
   export let glyph: (status: string) => string = (s) => s
@@ -28,8 +42,9 @@
   {#each sections as section (section.title)}
     <div class="section">{section.title}</div>
     {#each section.files as f (f.path)}
-      <div class="row" class:active={selected === f.path}>
-        <button class="row-item file" class:active={selected === f.path} on:click={() => onSelect(f.path)} on:contextmenu|preventDefault={(e) => onMenu(e, f)}>
+      {@const key = rowKey(section.title, f.path)}
+      <div class="row" class:active={selected === key}>
+        <button class="row-item file" class:active={selected === key} on:click={() => onSelect(key)} on:contextmenu|preventDefault={(e) => onMenu(e, f)}>
           <span class="status s-{f.status}">
             {#if f.status === 'staged'}<Icon name="check" size={12} />{:else}{glyph(f.status)}{/if}
           </span>

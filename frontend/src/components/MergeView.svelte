@@ -1,7 +1,7 @@
 <script lang="ts">
   import { EventsOn } from '../../wailsjs/runtime/runtime'
   import Icon from './Icon.svelte'
-  import FileList from './FileList.svelte'
+  import FileList, { rowKey } from './FileList.svelte'
   import { api } from '../lib/api'
   import { abortMerge, commitMerge, resolveConflicts, stageMergeFile, takeMergeSide, unstageMergeFile } from '../lib/actions'
   import { mergeSections, type MergeFile } from '../lib/merge'
@@ -27,16 +27,27 @@
 
   $: sections = $mergeState ? mergeSections($mergeState) : []
   $: files = sections.flatMap((s) => s.files)
+  // Which section (by object identity) each file came from, so a row's key
+  // can be reconstructed from the file alone.
+  $: fileSection = new Map(sections.flatMap((s) => s.files.map((f) => [f, s.title] as const)))
   $: pending = ($mergeState?.conflicts.length ?? 0) + ($mergeState?.manual.length ?? 0)
   // Re-read the open file whenever the merge state reloads — after an agent
   // edit, an action, or a focus that caught a change made in a terminal.
   $: if ($mergeState) refresh()
   // Keep a selection valid as the agent resolves files underneath it.
-  $: if (files.length && !files.some((f) => f.path === selected)) open(files[0])
+  $: if (files.length && !files.some((f) => keyOf(f) === selected)) open(files[0])
+
+  // MergeView's sections are path-disjoint (a file is Conflicts, Unstaged or
+  // Staged, never two at once), so this key is equivalent to the bare path —
+  // kept in the same rowKey(section, path) shape FileList uses so both
+  // callers share one identity scheme.
+  function keyOf(file: MergeFile): string {
+    return rowKey(fileSection.get(file) ?? '', file.path)
+  }
 
   async function open(file: MergeFile) {
     const current = ++request
-    selected = file.path
+    selected = keyOf(file)
     text = ''
     error = ''
     try {
@@ -53,8 +64,10 @@
   // changed.
   async function refresh() {
     if (!selected) return
+    const file = files.find((f) => keyOf(f) === selected)
+    if (!file) return
     const current = ++request
-    const path = selected
+    const path = file.path
     try {
       const f = await api.getConflictFile(repoId, path)
       if (current !== request) return
@@ -108,7 +121,7 @@
   </header>
 
   <div class="body">
-    <FileList {sections} {selected} onSelect={(path) => open(files.find((f) => f.path === path)!)} actions={actionsFor} onMenu={manualMenu} {glyph} />
+    <FileList {sections} {selected} onSelect={(key) => { const f = files.find((ff) => keyOf(ff) === key); if (f) open(f) }} actions={actionsFor} onMenu={manualMenu} {glyph} />
     <div class="content mono">
       {#if error}
         <div class="error">{error}</div>
