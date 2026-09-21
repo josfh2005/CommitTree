@@ -6,17 +6,26 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
 var baseDate = time.Date(2020, 1, 1, 12, 0, 0, 0, time.UTC)
 
+// cloneSeq gives every Clone its own salt, so two sibling clones of the same
+// remote that each call Commit once don't independently pick the same
+// "file-1.txt" and turn an intended divergent-history test into a spurious
+// same-path conflict.
+var cloneSeq int64
+
 type Repo struct {
 	t    testing.TB
 	Dir  string
 	tick int
+	salt string
 }
 
 // New creates an empty repository on branch main.
@@ -41,7 +50,8 @@ func Clone(t testing.TB, remote string) *Repo {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "clone")
 	run(t, "", nil, "clone", "-q", remote, dir)
-	r := &Repo{t: t, Dir: dir}
+	salt := strconv.FormatInt(atomic.AddInt64(&cloneSeq, 1), 10)
+	r := &Repo{t: t, Dir: dir, salt: salt}
 	r.configure()
 	return r
 }
@@ -69,6 +79,9 @@ func (r *Repo) Commit(msg string) string {
 	r.t.Helper()
 	r.tick++
 	name := fmt.Sprintf("file-%d.txt", r.tick)
+	if r.salt != "" {
+		name = fmt.Sprintf("file-%s-%d.txt", r.salt, r.tick)
+	}
 	r.WriteFile(name, msg+"\n")
 	r.Git("add", name)
 	date := baseDate.Add(time.Duration(r.tick) * time.Minute).Format(time.RFC3339)

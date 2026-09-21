@@ -263,14 +263,6 @@ func (a *App) GetResetPreview(id, hash string) (ops.ResetInfo, error) {
 	return ops.ResetPreview(a.ctx, dir, hash)
 }
 
-func (a *App) Fetch(id string) error {
-	return a.write(id, func(ctx context.Context, dir string) error { return ops.Fetch(ctx, dir) })
-}
-
-func (a *App) Pull(id string) error {
-	return a.write(id, func(ctx context.Context, dir string) error { return ops.Pull(ctx, dir) })
-}
-
 func (a *App) CreateBranch(id, name, target string, checkout bool) error {
 	return a.write(id, func(ctx context.Context, dir string) error {
 		return refs.CreateBranch(ctx, dir, name, target, checkout)

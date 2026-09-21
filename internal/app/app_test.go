@@ -106,7 +106,7 @@ func TestWriteRejectsConcurrentOperation(t *testing.T) {
 	}()
 	<-started
 
-	if err := a.Fetch(id); !errors.Is(err, ErrBusy) {
+	if err := a.Checkout(id, "feature"); !errors.Is(err, ErrBusy) {
 		t.Fatalf("want ErrBusy, got %v", err)
 	}
 	close(release)
