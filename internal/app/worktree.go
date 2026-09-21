@@ -7,8 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"time"
 
+	"git-ui/internal/ai/prompts"
+	"git-ui/internal/ai/tasks"
 	"git-ui/internal/gitcmd"
+	"git-ui/internal/refs"
 	"git-ui/internal/worktree"
 )
 
@@ -16,8 +20,27 @@ import (
 // Changes view refreshes without polling.
 const EventWorktreeChanged = "worktree:changed"
 
+// EventCommitDelta streams the generated commit message into the box, and
+// EventCommitDone closes it. They mirror the chat's delta/done pair.
+const (
+	EventCommitDelta = "commit:delta"
+	EventCommitDone  = "commit:done"
+)
+
 type WorktreeChangedEvent struct {
 	RepoID string `json:"repoID"`
+}
+
+type CommitDeltaEvent struct {
+	RepoID string `json:"repoID"`
+	RunID  string `json:"runID"`
+	Text   string `json:"text"`
+}
+
+type CommitDoneEvent struct {
+	RepoID string `json:"repoID"`
+	RunID  string `json:"runID"`
+	Error  string `json:"error,omitempty"`
 }
 
 func (a *App) GetWorktreeState(id string) (worktree.State, error) {
@@ -108,6 +131,65 @@ func (a *App) GetWorktreeDiff(id, path string, staged bool) (string, error) {
 	}
 	args = append(args, "--", path)
 	return gitcmd.Run(a.ctx, dir, gitcmd.ReadTimeout, args...)
+}
+
+// GenerateCommitMessage streams a commit message for the staged changes. It
+// uses the task provider and model — the cheap one — and never commits.
+func (a *App) GenerateCommitMessage(id, runID string) error {
+	if a.ai == nil {
+		return ErrAIDisabled
+	}
+	if runID == "" {
+		return errors.New("run id is required")
+	}
+	repo, ok := a.store.Get(id)
+	if !ok {
+		return fmt.Errorf("unknown repository %q", id)
+	}
+	st, err := worktree.Status(a.ctx, repo.Path)
+	if err != nil {
+		return err
+	}
+	if len(st.Staged) == 0 {
+		return worktree.ErrNothingStaged
+	}
+	cfg, err := a.aiSettings()
+	if err != nil {
+		return err
+	}
+	responder, err := a.responderFor(cfg.TaskProvider, cfg.TaskModel, cfg)
+	if err != nil {
+		return err
+	}
+	instructions, err := a.ai.deps.Prompts.Get(prompts.CommitMessage, prompts.Vars{
+		Repo: repo.Name, Path: repo.Path, Branch: refs.CurrentLabel(a.ctx, repo.Path), Date: time.Now().Format("2006-01-02"),
+	})
+	if err != nil {
+		return err
+	}
+	prompt, err := tasks.CommitContext(a.ctx, repo.Path, tasks.OllamaDiffBudget)
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		stream, err := responder.Respond(a.ctx, instructions, prompt)
+		if err != nil {
+			a.emit(EventCommitDone, CommitDoneEvent{RepoID: id, RunID: runID, Error: err.Error()})
+			return
+		}
+		done := CommitDoneEvent{RepoID: id, RunID: runID}
+		for chunk := range stream {
+			switch {
+			case chunk.Err != nil:
+				done.Error = chunk.Err.Error()
+			case chunk.Delta != "":
+				a.emit(EventCommitDelta, CommitDeltaEvent{RepoID: id, RunID: runID, Text: chunk.Delta})
+			}
+		}
+		a.emit(EventCommitDone, done)
+	}()
+	return nil
 }
 
 // writeWorktree runs fn under the repository's write lock, so it cannot

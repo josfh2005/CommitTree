@@ -668,6 +668,7 @@ export namespace settings {
 	    chatModel: string;
 	    taskProvider: string;
 	    taskModel: string;
+	    commitMessage: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -680,6 +681,7 @@ export namespace settings {
 	        this.chatModel = source["chatModel"];
 	        this.taskProvider = source["taskProvider"];
 	        this.taskModel = source["taskModel"];
+	        this.commitMessage = source["commitMessage"];
 	    }
 	}
 

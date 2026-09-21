@@ -82,6 +82,10 @@ export function Fingerprint(arg1) {
   return window['go']['app']['App']['Fingerprint'](arg1);
 }
 
+export function GenerateCommitMessage(arg1, arg2) {
+  return window['go']['app']['App']['GenerateCommitMessage'](arg1, arg2);
+}
+
 export function GetAISettings() {
   return window['go']['app']['App']['GetAISettings']();
 }

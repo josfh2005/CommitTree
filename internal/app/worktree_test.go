@@ -101,3 +101,30 @@ func TestGetWorktreeDiffOfAVanishedUntrackedFileErrors(t *testing.T) {
 		t.Errorf("want an error for a path that vanished before the diff, got out = %q", out)
 	}
 }
+
+// The generated message streams as commit:delta events and ends with
+// commit:done; nothing is committed by generating one.
+func TestGenerateCommitMessageStreams(t *testing.T) {
+	srv := fakeOllama(t, nil) // its canned reply is enough; we assert on events
+	a, r, id, ev := newAIMergeApp(t, srv.URL)
+	before := r.Git("rev-list", "--count", "HEAD")
+	r.WriteFile("a.txt", "changed\n")
+	if err := a.StageFile(id, "a.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.GenerateCommitMessage(id, "run1"); err != nil {
+		t.Fatal(err)
+	}
+	ev.wait(t, EventCommitDelta)
+	ev.wait(t, EventCommitDone)
+	if got := r.Git("rev-list", "--count", "HEAD"); got != before {
+		t.Errorf("commit count = %s, want unchanged from %s; generating a message committed something", got, before)
+	}
+}
+
+func TestGenerateCommitMessageRefusesWithNothingStaged(t *testing.T) {
+	a, _, id, _ := newAIMergeApp(t, "http://127.0.0.1:0")
+	if err := a.GenerateCommitMessage(id, "run1"); err == nil {
+		t.Error("want an error with nothing staged")
+	}
+}

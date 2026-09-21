@@ -24,7 +24,7 @@ func TestLoadMissingFileUsesDefaults(t *testing.T) {
 
 func TestSaveAndLoadRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "sub", "ai.json")
-	s := settings.Settings{OllamaURL: "http://10.0.0.5:11434", ChatProvider: "ollama", ChatModel: "llama3.1:8b", TaskProvider: "ollama", TaskModel: "qwen2.5:3b"}
+	s := settings.Settings{OllamaURL: "http://10.0.0.5:11434", ChatProvider: "ollama", ChatModel: "llama3.1:8b", TaskProvider: "ollama", TaskModel: "qwen2.5:3b", CommitMessage: settings.CommitAutoLocal}
 
 	if err := settings.Save(path, s); err != nil {
 		t.Fatal(err)
@@ -109,6 +109,29 @@ func TestSaveRejectsUnknownProvider(t *testing.T) {
 	s.ChatProvider = "acme"
 	if err := settings.Save(path, s); !errors.Is(err, settings.ErrInvalid) {
 		t.Errorf("err = %v, want ErrInvalid", err)
+	}
+}
+
+func TestCommitMessageModeDefaultsAndValidates(t *testing.T) {
+	if got := settings.Defaults().CommitMessage; got != settings.CommitAutoLocal {
+		t.Errorf("default = %q, want auto-local", got)
+	}
+	path := filepath.Join(t.TempDir(), "ai.json")
+	s := settings.Defaults()
+	s.CommitMessage = "sometimes"
+	if err := settings.Save(path, s); !errors.Is(err, settings.ErrInvalid) {
+		t.Errorf("err = %v, want ErrInvalid for an unknown mode", err)
+	}
+	// A file written before this setting existed must still load.
+	if err := os.WriteFile(path, []byte(`{"ollamaURL":"http://localhost:11434","chatProvider":"ollama","chatModel":"m","taskProvider":"ollama","taskModel":"m"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := settings.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.CommitMessage != settings.CommitAutoLocal {
+		t.Errorf("loaded = %q, want the default filled in", loaded.CommitMessage)
 	}
 }
 

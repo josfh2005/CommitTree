@@ -51,6 +51,8 @@ export function Fetch(arg1:string):Promise<void>;
 
 export function Fingerprint(arg1:string):Promise<string>;
 
+export function GenerateCommitMessage(arg1:string,arg2:string):Promise<void>;
+
 export function GetAISettings():Promise<settings.Settings>;
 
 export function GetAuthors(arg1:string):Promise<Array<string>>;

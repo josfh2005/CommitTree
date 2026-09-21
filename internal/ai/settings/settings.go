@@ -22,16 +22,23 @@ const (
 	DefaultOllamaURL      = "http://localhost:11434"
 	DefaultModel          = "qwen2.5:7b"
 	DefaultAnthropicModel = "claude-opus-5"
+
+	// CommitAutoLocal generates the message automatically when the task
+	// provider is local and free, and offers a button otherwise.
+	CommitAutoLocal = "auto-local"
+	CommitAuto      = "auto"
+	CommitManual    = "manual"
 )
 
 var ErrInvalid = errors.New("invalid AI settings")
 
 type Settings struct {
-	OllamaURL    string `json:"ollamaURL"`
-	ChatProvider string `json:"chatProvider"`
-	ChatModel    string `json:"chatModel"`
-	TaskProvider string `json:"taskProvider"`
-	TaskModel    string `json:"taskModel"`
+	OllamaURL     string `json:"ollamaURL"`
+	ChatProvider  string `json:"chatProvider"`
+	ChatModel     string `json:"chatModel"`
+	TaskProvider  string `json:"taskProvider"`
+	TaskModel     string `json:"taskModel"`
+	CommitMessage string `json:"commitMessage"`
 }
 
 func DefaultPath() (string, error) {
@@ -44,11 +51,12 @@ func DefaultPath() (string, error) {
 
 func Defaults() Settings {
 	return Settings{
-		OllamaURL:    DefaultOllamaURL,
-		ChatProvider: ProviderOllama,
-		ChatModel:    DefaultModel,
-		TaskProvider: ProviderOllama,
-		TaskModel:    DefaultModel,
+		OllamaURL:     DefaultOllamaURL,
+		ChatProvider:  ProviderOllama,
+		ChatModel:     DefaultModel,
+		TaskProvider:  ProviderOllama,
+		TaskModel:     DefaultModel,
+		CommitMessage: CommitAutoLocal,
 	}
 }
 
@@ -73,6 +81,9 @@ func Load(path string) (Settings, error) {
 	}
 	if s.TaskProvider == ProviderApple || s.TaskProvider == "" {
 		s.TaskProvider = ProviderOllama
+	}
+	if s.CommitMessage == "" {
+		s.CommitMessage = CommitAutoLocal
 	}
 	return s, nil
 }
@@ -109,6 +120,11 @@ func validate(s Settings) error {
 		default:
 			return fmt.Errorf("%w: unknown provider %q", ErrInvalid, p)
 		}
+	}
+	switch s.CommitMessage {
+	case CommitAutoLocal, CommitAuto, CommitManual:
+	default:
+		return fmt.Errorf("%w: unknown commit message mode %q", ErrInvalid, s.CommitMessage)
 	}
 	return nil
 }

@@ -17,6 +17,7 @@ const (
 	Chat             = "chat"
 	ExplainCommit    = "explain-commit"
 	ResolveConflicts = "resolve-conflicts"
+	CommitMessage    = "commit-message"
 )
 
 var ErrUnknownPrompt = errors.New("unknown prompt")
