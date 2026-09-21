@@ -54,10 +54,13 @@ func (a *App) AbortMerge(id string) error {
 	return a.write(id, func(ctx context.Context, dir string) error { return merge.Abort(ctx, dir) })
 }
 
-// CommitMerge stops any agent run on the repository first, as AbortMerge does.
+// CommitMerge stops any agent run on the repository first, as AbortMerge
+// does, then advances whatever conflict resolution is in progress: a merge
+// commits, a rebase continues (and may leave the next commit's conflicts
+// for the view to show), a stash conflict does nothing.
 func (a *App) CommitMerge(id string) error {
 	a.stopRun(id)
-	return a.write(id, func(ctx context.Context, dir string) error { return merge.Commit(ctx, dir) })
+	return a.write(id, func(ctx context.Context, dir string) error { return merge.Continue(ctx, dir) })
 }
 
 // stopRun cancels the repository's running agent, if any. StopChat's only
