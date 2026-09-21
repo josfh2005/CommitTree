@@ -3,8 +3,9 @@
   import Icon from './Icon.svelte'
   import { checkoutBranch, deleteBranch, deleteTag, mergeBranch, newBranch, newTag } from '../lib/actions'
   import { groupBranches, leafName, type BranchGroup } from '../lib/branches'
-  import { busy, filters, mergeState, refs } from '../lib/stores'
+  import { busy, filters, mainView, mergeState, refs, worktreeState } from '../lib/stores'
   import type { Branch, Tag } from '../lib/types'
+  import { changedCount } from '../lib/worktree'
   import { openMenu } from '../lib/ui'
 
   export let repoId: string
@@ -71,6 +72,15 @@
 
 {#if $refs}
   <div class="refs">
+    <button
+      class="row-item ref changes"
+      class:active={$mainView === 'changes' && !$mergeState?.merging}
+      on:click={() => mainView.set($mergeState?.merging ? 'log' : 'changes')}
+    >
+      <span class="ellipsis">Changes</span>
+      {#if changedCount($worktreeState)}<span class="count">{changedCount($worktreeState)}</span>{/if}
+    </button>
+
     <div class="section">
       <span class="section-title">Branches</span>
       <button class="icon-btn" title="New branch from HEAD" on:click={() => newBranch(repoId, 'HEAD', 'HEAD')}>
@@ -195,6 +205,7 @@
   .refs { padding: 0 0 12px 12px; }
   .section { display: flex; align-items: center; justify-content: space-between; height: 30px; padding: 6px 4px 0 10px; }
   .ref { height: 26px; }
+  .changes .count { margin-left: auto; font-size: 11px; padding: 0 6px; border-radius: 4px; background: var(--hover); color: var(--muted); }
   .mark { width: 12px; flex: none; display: inline-grid; place-items: center; color: var(--muted); }
   .current { font-weight: 500; }
   .detached { color: var(--muted); }

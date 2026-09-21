@@ -21,6 +21,7 @@
   export let actions: (file: ListFile) => FileAction[] = () => []
   export let onMenu: (event: MouseEvent, file: ListFile) => void = () => {}
   export let glyph: (status: string) => string = (s) => s
+  export let emptyMessage = 'Nothing left to resolve.'
 </script>
 
 <div class="files">
@@ -40,7 +41,7 @@
       </div>
     {/each}
   {:else}
-    <div class="none">Nothing left to resolve.</div>
+    <div class="none">{emptyMessage}</div>
   {/each}
 </div>
 

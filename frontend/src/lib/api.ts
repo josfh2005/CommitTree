@@ -1,5 +1,5 @@
 import * as Go from '../../wailsjs/go/app/App'
-import type { AIMessage, AISettings, AIStatus, ConflictFile, Details, Filters, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, Refs, Repo, ResetInfo, ResetMode } from './types'
+import type { AIMessage, AISettings, AIStatus, CommitInfo, ConflictFile, Details, Filters, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, Refs, Repo, ResetInfo, ResetMode, WorktreeState } from './types'
 
 // The generated bindings use Wails model classes; the JSON is identical to our
 // interfaces, so cast at this single boundary.
@@ -44,6 +44,15 @@ export const api = {
   stageMergeFile: (id: string, path: string) => call<void>(Go.StageMergeFile(id, path)),
   unstageMergeFile: (id: string, path: string) => call<void>(Go.UnstageMergeFile(id, path)),
   takeMergeSide: (id: string, path: string, side: 'ours' | 'theirs') => call<void>(Go.TakeMergeSide(id, path, side)),
+
+  getWorktreeState: (id: string) => call<WorktreeState>(Go.GetWorktreeState(id)),
+  stageFile: (id: string, path: string) => call<void>(Go.StageFile(id, path)),
+  unstageFile: (id: string, path: string) => call<void>(Go.UnstageFile(id, path)),
+  discardFile: (id: string, path: string) => call<void>(Go.DiscardFile(id, path)),
+  getWorktreeDiff: (id: string, path: string, staged: boolean) => call<string>(Go.GetWorktreeDiff(id, path, staged)),
+  getCommitPreview: (id: string) => call<CommitInfo>(Go.GetCommitPreview(id)),
+  commitChanges: (id: string, message: string, amend: boolean) => call<void>(Go.CommitChanges(id, message, amend)),
+  generateCommitMessage: (id: string, runID: string) => call<void>(Go.GenerateCommitMessage(id, runID)),
 
   aiStatus: () => call<AIStatus>(Go.AIStatus()),
   getAISettings: () => call<AISettings>(Go.GetAISettings()),

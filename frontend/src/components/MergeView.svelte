@@ -5,6 +5,7 @@
   import { api } from '../lib/api'
   import { abortMerge, commitMerge, resolveConflicts, stageMergeFile, takeMergeSide, unstageMergeFile } from '../lib/actions'
   import { mergeSections, type MergeFile } from '../lib/merge'
+  import { lineClass } from '../lib/diff'
   import { busy, loadMergeState, mergeState } from '../lib/stores'
   import { errorMessage, openMenu } from '../lib/ui'
   import { onDestroy } from 'svelte'
@@ -92,18 +93,6 @@
     }
     return []
   }
-
-  function lineClass(line: string): string {
-    if (!resolved) {
-      if (line.startsWith('<<<<<<<') || line.startsWith('>>>>>>>') || line.startsWith('|||||||') || line.startsWith('=======')) return 'marker'
-      return ''
-    }
-    if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('diff ') || line.startsWith('index ')) return 'meta'
-    if (line.startsWith('@@')) return 'hunk'
-    if (line.startsWith('+')) return 'add'
-    if (line.startsWith('-')) return 'del'
-    return ''
-  }
 </script>
 
 <div class="merge">
@@ -125,7 +114,7 @@
         <div class="error">{error}</div>
       {:else}
         {#each text.split('\n') as line}
-          <div class="line {lineClass(line)}">{line || ' '}</div>
+          <div class="line {lineClass(line, resolved)}">{line || ' '}</div>
         {/each}
       {/if}
     </div>

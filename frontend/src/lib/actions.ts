@@ -1,10 +1,11 @@
 import { get } from 'svelte/store'
 import { api } from './api'
-import { busy, chatOpen, filters, loadMergeState, loadRefs, loadRepos, logVersion, mergeState, refreshRepo, selectRepo, selectedRepoId } from './stores'
-import type { Branch, Repo, ResetInfo, ResetMode } from './types'
+import { busy, chatOpen, filters, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, selectRepo, selectedRepoId } from './stores'
+import type { Branch, FileStatus, Repo, ResetInfo, ResetMode } from './types'
 import { UP_TO_DATE } from './types'
 import { commitWarning, takeMessage } from './merge'
 import { resetMessage } from './reset'
+import { discardMessage } from './worktree'
 import { choiceDialog, confirmDialog, errorMessage, promptDialog, toast } from './ui'
 
 export function branchRef(branch: Branch): string {
@@ -220,6 +221,7 @@ export function startFocusRefresh(): () => void {
     const id = get(selectedRepoId)
     if (!id) return
     loadMergeState()
+    loadWorktreeState()
     try {
       const current = await api.fingerprint(id)
       if (id === knownId && known && current !== known) await refreshRepo()
@@ -299,4 +301,17 @@ export async function resolveConflicts(id: string) {
   } catch (e) {
     toast(errorMessage(e), 'error')
   }
+}
+
+export const stageFile = (id: string, path: string) => run('Staging…', () => api.stageFile(id, path))
+export const unstageFile = (id: string, path: string) => run('Unstaging…', () => api.unstageFile(id, path))
+
+export async function discardFile(id: string, file: FileStatus, staged: boolean) {
+  const ok = await confirmDialog({
+    title: file.status === '?' ? 'Delete file' : 'Discard changes',
+    message: discardMessage(file, staged),
+    confirmLabel: file.status === '?' ? 'Delete' : 'Discard',
+    danger: true,
+  })
+  if (ok) await run('Discarding…', () => api.discardFile(id, file.path))
 }

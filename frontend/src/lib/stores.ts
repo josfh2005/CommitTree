@@ -1,6 +1,6 @@
 import { derived, get, writable, type Writable } from 'svelte/store'
 import { api } from './api'
-import { emptyFilters, type Filters, type MergeState, type Refs, type Repo } from './types'
+import { emptyFilters, type Filters, type MergeState, type Refs, type Repo, type WorktreeState } from './types'
 
 function persisted<T>(key: string, initial: T): Writable<T> {
   let start = initial
@@ -38,6 +38,11 @@ export const logVersion = writable(0)
 export const busy = writable('')
 export const settingsOpen = writable(false)
 export const mergeState = writable<MergeState | null>(null)
+export const worktreeState = writable<WorktreeState | null>(null)
+/** Which view the main pane shows: the log (with commit details / the merge
+ *  view below it) or the Changes view. A merge in progress always wins over
+ *  'changes' — see selectMainView below. */
+export const mainView = writable<'log' | 'changes'>('log')
 
 export const selectedRepo = derived([repos, selectedRepoId], ([$repos, $id]) => $repos.find((r) => r.id === $id) ?? null)
 
@@ -75,10 +80,28 @@ export async function loadMergeState() {
   }
 }
 
+export async function loadWorktreeState() {
+  const repo = get(selectedRepo)
+  if (!repo || repo.missing) {
+    worktreeState.set(null)
+    return
+  }
+  try {
+    const state = await api.getWorktreeState(repo.id)
+    // A slower answer for a repository the user has already left must not
+    // overwrite the one now on screen.
+    if (get(selectedRepoId) !== repo.id) return
+    worktreeState.set(state)
+  } catch {
+    if (get(selectedRepoId) === repo.id) worktreeState.set(null)
+  }
+}
+
 export async function refreshRepo() {
   await loadRepos()
   await loadRefs()
   await loadMergeState()
+  await loadWorktreeState()
   logVersion.update((v) => v + 1)
 }
 
@@ -86,12 +109,14 @@ export function selectRepo(id: string) {
   if (get(selectedRepoId) !== id) {
     filters.set(emptyFilters())
     selectedHash.set('')
+    mainView.set('log')
   }
   selectedRepoId.set(id)
   // Selecting a folded repo unfolds it; folding it later keeps it selected.
   expandedRepos.update((ids) => (ids.includes(id) ? ids : [...ids, id]))
   loadRefs()
   loadMergeState()
+  loadWorktreeState()
 }
 
 export function toggleRepoExpanded(id: string) {

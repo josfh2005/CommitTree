@@ -210,3 +210,8 @@ export interface MergeChangedEvent { repoID: string }
 
 export type ResetMode = 'soft' | 'mixed' | 'hard'
 export interface ResetInfo { undone: number; gained: number; pushed: number; upstream: string }
+
+export interface FileStatus { path: string; oldPath?: string; status: string }
+export interface WorktreeState { staged: FileStatus[]; unstaged: FileStatus[]; untracked: FileStatus[]; merging: boolean }
+export interface CommitInfo { stagedCount: number; canAmend: boolean; lastMessage: string; pushed: boolean; upstream: string }
+export interface WorktreeChangedEvent { repoID: string }
