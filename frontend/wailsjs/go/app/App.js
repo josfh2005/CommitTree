@@ -114,6 +114,10 @@ export function GetDiff(arg1, arg2, arg3, arg4) {
   return window['go']['app']['App']['GetDiff'](arg1, arg2, arg3, arg4);
 }
 
+export function GetGitSettings() {
+  return window['go']['app']['App']['GetGitSettings']();
+}
+
 export function GetLog(arg1, arg2, arg3, arg4) {
   return window['go']['app']['App']['GetLog'](arg1, arg2, arg3, arg4);
 }
@@ -124,6 +128,10 @@ export function GetMergeState(arg1) {
 
 export function GetRefs(arg1) {
   return window['go']['app']['App']['GetRefs'](arg1);
+}
+
+export function GetRemoteInfo(arg1) {
+  return window['go']['app']['App']['GetRemoteInfo'](arg1);
 }
 
 export function GetResetPreview(arg1, arg2) {
@@ -170,6 +178,10 @@ export function PullModel(arg1) {
   return window['go']['app']['App']['PullModel'](arg1);
 }
 
+export function Push(arg1) {
+  return window['go']['app']['App']['Push'](arg1);
+}
+
 export function RelocateRepo(arg1) {
   return window['go']['app']['App']['RelocateRepo'](arg1);
 }
@@ -196,6 +208,10 @@ export function ResolveConflicts(arg1, arg2) {
 
 export function SaveAISettings(arg1) {
   return window['go']['app']['App']['SaveAISettings'](arg1);
+}
+
+export function SaveGitSettings(arg1) {
+  return window['go']['app']['App']['SaveGitSettings'](arg1);
 }
 
 export function SendChat(arg1, arg2, arg3) {

@@ -54,6 +54,9 @@ type App struct {
 	logs   map[string]*logState
 	writes sync.Map // repo ID → *sync.Mutex
 	ai     *aiState
+	// gitSettingsPath overrides gitsettings.DefaultPath() when set — empty
+	// in production, a temp path in tests.
+	gitSettingsPath string
 }
 
 func New(store *repos.Store) *App {
