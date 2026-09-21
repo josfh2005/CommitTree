@@ -34,6 +34,10 @@ export function ClearChat(arg1) {
   return window['go']['app']['App']['ClearChat'](arg1);
 }
 
+export function CommitChanges(arg1, arg2, arg3) {
+  return window['go']['app']['App']['CommitChanges'](arg1, arg2, arg3);
+}
+
 export function CommitMerge(arg1) {
   return window['go']['app']['App']['CommitMerge'](arg1);
 }
@@ -62,6 +66,10 @@ export function DeleteTag(arg1, arg2) {
   return window['go']['app']['App']['DeleteTag'](arg1, arg2);
 }
 
+export function DiscardFile(arg1, arg2) {
+  return window['go']['app']['App']['DiscardFile'](arg1, arg2);
+}
+
 export function ExplainInChat(arg1, arg2, arg3, arg4) {
   return window['go']['app']['App']['ExplainInChat'](arg1, arg2, arg3, arg4);
 }
@@ -84,6 +92,10 @@ export function GetAuthors(arg1) {
 
 export function GetChat(arg1) {
   return window['go']['app']['App']['GetChat'](arg1);
+}
+
+export function GetCommitPreview(arg1) {
+  return window['go']['app']['App']['GetCommitPreview'](arg1);
 }
 
 export function GetConflictFile(arg1, arg2) {
@@ -112,6 +124,14 @@ export function GetRefs(arg1) {
 
 export function GetResetPreview(arg1, arg2) {
   return window['go']['app']['App']['GetResetPreview'](arg1, arg2);
+}
+
+export function GetWorktreeDiff(arg1, arg2, arg3) {
+  return window['go']['app']['App']['GetWorktreeDiff'](arg1, arg2, arg3);
+}
+
+export function GetWorktreeState(arg1) {
+  return window['go']['app']['App']['GetWorktreeState'](arg1);
 }
 
 export function IsShallow(arg1) {
@@ -182,6 +202,10 @@ export function SetProviderKey(arg1, arg2) {
   return window['go']['app']['App']['SetProviderKey'](arg1, arg2);
 }
 
+export function StageFile(arg1, arg2) {
+  return window['go']['app']['App']['StageFile'](arg1, arg2);
+}
+
 export function StageMergeFile(arg1, arg2) {
   return window['go']['app']['App']['StageMergeFile'](arg1, arg2);
 }
@@ -192,6 +216,10 @@ export function StopChat(arg1) {
 
 export function TakeMergeSide(arg1, arg2, arg3) {
   return window['go']['app']['App']['TakeMergeSide'](arg1, arg2, arg3);
+}
+
+export function UnstageFile(arg1, arg2) {
+  return window['go']['app']['App']['UnstageFile'](arg1, arg2);
 }
 
 export function UnstageMergeFile(arg1, arg2) {

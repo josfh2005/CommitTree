@@ -4,6 +4,7 @@ import {app} from '../models';
 import {repos} from '../models';
 import {settings} from '../models';
 import {ai} from '../models';
+import {worktree} from '../models';
 import {gitlog} from '../models';
 import {merge} from '../models';
 import {refs} from '../models';
@@ -26,6 +27,8 @@ export function CheckoutRemote(arg1:string,arg2:string,arg3:string):Promise<void
 
 export function ClearChat(arg1:string):Promise<void>;
 
+export function CommitChanges(arg1:string,arg2:string,arg3:boolean):Promise<void>;
+
 export function CommitMerge(arg1:string):Promise<void>;
 
 export function CreateBranch(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<void>;
@@ -40,6 +43,8 @@ export function DeleteRemoteBranch(arg1:string,arg2:string,arg3:string):Promise<
 
 export function DeleteTag(arg1:string,arg2:string):Promise<void>;
 
+export function DiscardFile(arg1:string,arg2:string):Promise<void>;
+
 export function ExplainInChat(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
 export function Fetch(arg1:string):Promise<void>;
@@ -51,6 +56,8 @@ export function GetAISettings():Promise<settings.Settings>;
 export function GetAuthors(arg1:string):Promise<Array<string>>;
 
 export function GetChat(arg1:string):Promise<Array<ai.Message>>;
+
+export function GetCommitPreview(arg1:string):Promise<worktree.CommitInfo>;
 
 export function GetConflictFile(arg1:string,arg2:string):Promise<app.ConflictFile>;
 
@@ -65,6 +72,10 @@ export function GetMergeState(arg1:string):Promise<merge.State>;
 export function GetRefs(arg1:string):Promise<refs.Refs>;
 
 export function GetResetPreview(arg1:string,arg2:string):Promise<ops.ResetInfo>;
+
+export function GetWorktreeDiff(arg1:string,arg2:string,arg3:boolean):Promise<string>;
+
+export function GetWorktreeState(arg1:string):Promise<worktree.State>;
 
 export function IsShallow(arg1:string):Promise<boolean>;
 
@@ -100,10 +111,14 @@ export function SendChat(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SetProviderKey(arg1:string,arg2:string):Promise<void>;
 
+export function StageFile(arg1:string,arg2:string):Promise<void>;
+
 export function StageMergeFile(arg1:string,arg2:string):Promise<void>;
 
 export function StopChat(arg1:string):Promise<void>;
 
 export function TakeMergeSide(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function UnstageFile(arg1:string,arg2:string):Promise<void>;
 
 export function UnstageMergeFile(arg1:string,arg2:string):Promise<void>;
