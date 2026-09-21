@@ -4,7 +4,7 @@
   import { api } from '../lib/api'
   import { discardFile, stageFile, unstageFile } from '../lib/actions'
   import { lineClass } from '../lib/diff'
-  import { hasStagedChanges, worktreeSections } from '../lib/worktree'
+  import { hasStagedChanges, nextSelection, worktreeSections, type SelectionKey } from '../lib/worktree'
   import type { FileStatus, WorktreeChangedEvent } from '../lib/types'
   import { busy, loadWorktreeState, worktreeState } from '../lib/stores'
   import { errorMessage } from '../lib/ui'
@@ -12,7 +12,11 @@
 
   export let repoId: string
 
-  let selected = ''
+  // `selection` is the continuity anchor: which path (and, to break a tie,
+  // which section) the user is looking at. It survives a stage/unstage that
+  // moves the file to a different section — see nextSelection. `selected` is
+  // just its rowKey(...) projection, for FileList's highlighting/onSelect.
+  let selection: SelectionKey | null = null
   let text = ''
   let error = ''
   let request = 0
@@ -32,14 +36,16 @@
   // identity rather than path, is what lets a row be told apart from its
   // same-path counterpart in the other section.
   $: fileSection = new Map(sections.flatMap((s) => s.files.map((f) => [f, s.title] as const)))
-  // Re-read the open file whenever the worktree state reloads — after a
-  // stage/unstage/discard, or a focus that caught a change made in a
-  // terminal.
-  $: if ($worktreeState) refresh()
-  // Keep a selection valid as files are staged, unstaged or discarded
-  // underneath it.
-  $: if (files.length && !files.some((f) => keyOf(f) === selected)) open(files[0])
-  $: if (!files.length) selected = ''
+  $: selected = selection ? rowKey(selection.section, selection.path) : ''
+  // Re-key the selection onto wherever its path now lives (staging or
+  // unstaging moves a file to a different section, but it's still the file
+  // the user had open) and re-read it — after a stage/unstage/discard, or a
+  // focus that caught a change made in a terminal. This must NOT fall back
+  // to the first file just because the path changed section.
+  $: if ($worktreeState) {
+    selection = nextSelection(selection, sections)
+    refresh()
+  }
 
   function isStaged(file: FileStatus): boolean {
     return fileSection.get(file) === 'Staged'
@@ -55,7 +61,7 @@
 
   async function open(file: FileStatus) {
     const current = ++request
-    selected = keyOf(file)
+    selection = { section: fileSection.get(file) ?? '', path: file.path }
     text = ''
     error = ''
     try {
@@ -68,14 +74,17 @@
   }
 
   // Re-reads the open file in place — no blank flash — after the worktree
-  // state changed.
+  // state changed. Uses `selection` directly (path AND its current section)
+  // rather than looking the file up in `files`, since a path that only
+  // changed section is still valid, and the diff must follow that new
+  // section (unstaged vs staged) rather than a stale one.
   async function refresh() {
-    if (!selected) return
-    const file = files.find((f) => keyOf(f) === selected)
-    if (!file) return
+    if (!selection) return
     const current = ++request
+    const path = selection.path
+    const staged = selection.section === 'Staged'
     try {
-      const diff = await api.getWorktreeDiff(repoId, file.path, isStaged(file))
+      const diff = await api.getWorktreeDiff(repoId, path, staged)
       if (current !== request) return
       text = diff
       error = ''

@@ -6,13 +6,18 @@
   import { abortMerge, commitMerge, resolveConflicts, stageMergeFile, takeMergeSide, unstageMergeFile } from '../lib/actions'
   import { mergeSections, type MergeFile } from '../lib/merge'
   import { lineClass } from '../lib/diff'
+  import { nextSelection, type SelectionKey } from '../lib/worktree'
   import { busy, loadMergeState, mergeState } from '../lib/stores'
   import { errorMessage, openMenu } from '../lib/ui'
   import { onDestroy } from 'svelte'
 
   export let repoId: string
 
-  let selected = ''
+  // `selection` is the continuity anchor: which path (and, to break a tie,
+  // which section) the user is looking at. It survives a resolve/stage that
+  // moves the file to a different section — see nextSelection. `selected` is
+  // just its rowKey(...) projection, for FileList's highlighting/onSelect.
+  let selection: SelectionKey | null = null
   let text = ''
   let resolved = false
   let error = ''
@@ -31,23 +36,24 @@
   // can be reconstructed from the file alone.
   $: fileSection = new Map(sections.flatMap((s) => s.files.map((f) => [f, s.title] as const)))
   $: pending = ($mergeState?.conflicts.length ?? 0) + ($mergeState?.manual.length ?? 0)
-  // Re-read the open file whenever the merge state reloads — after an agent
-  // edit, an action, or a focus that caught a change made in a terminal.
-  $: if ($mergeState) refresh()
-  // Keep a selection valid as the agent resolves files underneath it.
-  $: if (files.length && !files.some((f) => keyOf(f) === selected)) open(files[0])
+  $: selected = selection ? rowKey(selection.section, selection.path) : ''
+  // Re-key the selection onto wherever its path now lives (a resolve/stage
+  // moves a file Conflicts → Unstaged → Staged, but it's still the file the
+  // user had open) and re-read it — after an agent edit, an action, or a
+  // focus that caught a change made in a terminal. This must NOT fall back
+  // to the first file just because the path changed section.
+  $: if ($mergeState) {
+    selection = nextSelection(selection, sections)
+    refresh()
+  }
 
-  // MergeView's sections are path-disjoint (a file is Conflicts, Unstaged or
-  // Staged, never two at once), so this key is equivalent to the bare path —
-  // kept in the same rowKey(section, path) shape FileList uses so both
-  // callers share one identity scheme.
   function keyOf(file: MergeFile): string {
     return rowKey(fileSection.get(file) ?? '', file.path)
   }
 
   async function open(file: MergeFile) {
     const current = ++request
-    selected = keyOf(file)
+    selection = { section: fileSection.get(file) ?? '', path: file.path }
     text = ''
     error = ''
     try {
@@ -61,13 +67,12 @@
   }
 
   // Re-reads the open file in place — no blank flash — after the merge state
-  // changed.
+  // changed. Uses `selection.path` directly rather than looking the file up
+  // in `files`, since a path that only changed section is still valid.
   async function refresh() {
-    if (!selected) return
-    const file = files.find((f) => keyOf(f) === selected)
-    if (!file) return
+    if (!selection) return
     const current = ++request
-    const path = file.path
+    const path = selection.path
     try {
       const f = await api.getConflictFile(repoId, path)
       if (current !== request) return

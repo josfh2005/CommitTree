@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { changedCount, discardMessage, hasStagedChanges, worktreeSections } from './worktree'
+import { changedCount, discardMessage, hasStagedChanges, nextSelection, worktreeSections } from './worktree'
 import type { WorktreeState } from './types'
 
 const state = (over: Partial<WorktreeState> = {}): WorktreeState => ({
@@ -89,5 +89,37 @@ describe('hasStagedChanges', () => {
     const unstagedRow = s.unstaged[0]
     const m = discardMessage(unstagedRow, hasStagedChanges(s, unstagedRow.path))
     expect(m).toContain('staged')
+  })
+})
+
+describe('nextSelection', () => {
+  it('keeps the selection on the same path when it moves to a new section', () => {
+    const previous = { section: 'Unstaged', path: 'a.ts' }
+    const sections = [{ title: 'Staged', files: [{ path: 'a.ts' }] }]
+    expect(nextSelection(previous, sections)).toEqual({ section: 'Staged', path: 'a.ts' })
+  })
+
+  it('falls back to the first row when the previous path is gone', () => {
+    const previous = { section: 'Unstaged', path: 'gone.ts' }
+    const sections = [{ title: 'Staged', files: [{ path: 'x.ts' }] }]
+    expect(nextSelection(previous, sections)).toEqual({ section: 'Staged', path: 'x.ts' })
+  })
+
+  it('returns null when every section is empty', () => {
+    expect(nextSelection({ section: 'Staged', path: 'a.ts' }, [])).toBeNull()
+  })
+
+  it('keeps the row the user actually had selected when the path is in two sections at once', () => {
+    const previous = { section: 'Unstaged', path: 'a.ts' }
+    const sections = [
+      { title: 'Staged', files: [{ path: 'a.ts' }] },
+      { title: 'Unstaged', files: [{ path: 'a.ts' }] },
+    ]
+    expect(nextSelection(previous, sections)).toEqual({ section: 'Unstaged', path: 'a.ts' })
+  })
+
+  it('picks the first row when nothing was previously selected', () => {
+    const sections = [{ title: 'Staged', files: [{ path: 'a.ts' }] }]
+    expect(nextSelection(null, sections)).toEqual({ section: 'Staged', path: 'a.ts' })
   })
 })
