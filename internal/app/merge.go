@@ -173,6 +173,14 @@ func (a *App) writeMerge(id string, fn func(ctx context.Context, dir string) err
 // drop is still owed, so this in-memory reminder is the only place it
 // lives — losing it (an app restart mid-resolution) never risks the
 // changes themselves, only the tidiness of dropping the entry.
+//
+// The reminder is keyed by the stash's commit hash, not its index: indices
+// shift whenever another stash is pushed or dropped, and StashDrop needs no
+// clean tree, so that is reachable while a conflict is still open. Looking
+// the hash up again here, against the stash list as it stands right now,
+// means a shift never makes this drop the wrong entry — at worst the owed
+// one is already gone (dropped by hand, or the reminder outlived a restart)
+// and nothing here matches, so nothing is dropped.
 func (a *App) finishOwedDrop(id string) {
 	v, ok := a.owedDrops.Load(id)
 	if !ok {
@@ -187,7 +195,17 @@ func (a *App) finishOwedDrop(id string) {
 		return
 	}
 	a.owedDrops.Delete(id)
-	_ = stash.Drop(a.ctx, dir, v.(int))
+	sha := v.(string)
+	entries, err := stash.List(a.ctx, dir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if e.Hash == sha {
+			_ = stash.Drop(a.ctx, dir, e.Index)
+			return
+		}
+	}
 }
 
 // EventMergeChanged tells the frontend the working tree moved during a merge,
