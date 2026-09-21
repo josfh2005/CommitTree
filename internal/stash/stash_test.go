@@ -189,3 +189,27 @@ func TestPushWithNothingToStash(t *testing.T) {
 		t.Errorf("entries = %+v, want none", entries)
 	}
 }
+
+// A stash created outside the app (a bare terminal `git stash push`, no -m)
+// gets git's own "WIP on <branch>: <hash> <subject>" message instead of the
+// "On <branch>: <message>" shape Push always produces. List must still split
+// out the right branch and a usable message for it.
+func TestListParsesAStashWithoutACustomMessage(t *testing.T) {
+	r := base(t)
+	r.WriteFile("a.txt", "changed\n")
+	r.Git("stash", "push", "-q")
+
+	entries, err := stash.List(ctx, r.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("entries = %+v, want one", entries)
+	}
+	if entries[0].Branch != "main" {
+		t.Errorf("branch = %q, want main", entries[0].Branch)
+	}
+	if entries[0].Message == "" {
+		t.Errorf("message = %q, want a non-empty message", entries[0].Message)
+	}
+}
