@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { changedCount, discardMessage, hasStagedChanges, nextSelection, worktreeSections } from './worktree'
-import type { WorktreeState } from './types'
+import { amendWarning, canCommit, changedCount, discardMessage, hasStagedChanges, nextSelection, shouldAutoGenerate, worktreeSections } from './worktree'
+import type { CommitInfo, WorktreeState } from './types'
 
 const state = (over: Partial<WorktreeState> = {}): WorktreeState => ({
   staged: [],
@@ -121,5 +121,59 @@ describe('nextSelection', () => {
   it('picks the first row when nothing was previously selected', () => {
     const sections = [{ title: 'Staged', files: [{ path: 'a.ts' }] }]
     expect(nextSelection(null, sections)).toEqual({ section: 'Staged', path: 'a.ts' })
+  })
+})
+
+const info = (over: Partial<CommitInfo> = {}): CommitInfo => ({
+  stagedCount: 1,
+  canAmend: true,
+  lastMessage: 'previous',
+  pushed: false,
+  upstream: '',
+  ...over,
+})
+
+describe('canCommit', () => {
+  it('needs a message and something staged', () => {
+    expect(canCommit(info(), 'a message', false)).toBe(true)
+    expect(canCommit(info(), '   ', false)).toBe(false)
+    expect(canCommit(info({ stagedCount: 0 }), 'a message', false)).toBe(false)
+  })
+
+  it('allows an amend with nothing staged, which only rewrites the message', () => {
+    expect(canCommit(info({ stagedCount: 0 }), 'better subject', true)).toBe(true)
+  })
+
+  it('is false without a preview', () => {
+    expect(canCommit(null, 'a message', false)).toBe(false)
+  })
+})
+
+describe('shouldAutoGenerate', () => {
+  it('generates for a local provider in auto-local', () => {
+    expect(shouldAutoGenerate('auto-local', 'ollama', '', false)).toBe(true)
+    expect(shouldAutoGenerate('auto-local', 'anthropic', '', false)).toBe(false)
+  })
+
+  it('generates for any provider in auto, and never in manual', () => {
+    expect(shouldAutoGenerate('auto', 'anthropic', '', false)).toBe(true)
+    expect(shouldAutoGenerate('manual', 'ollama', '', false)).toBe(false)
+  })
+
+  it('never overwrites what the user typed', () => {
+    expect(shouldAutoGenerate('auto', 'ollama', 'my own message', false)).toBe(false)
+    expect(shouldAutoGenerate('auto', 'ollama', '', true)).toBe(false)
+  })
+})
+
+describe('amendWarning', () => {
+  it('warns when the commit is already on the upstream', () => {
+    const m = amendWarning(info({ pushed: true, upstream: 'origin/main' }))
+    expect(m).toContain('origin/main')
+    expect(m).toMatch(/force push/i)
+  })
+
+  it('is null for a commit that was never pushed', () => {
+    expect(amendWarning(info())).toBeNull()
   })
 })

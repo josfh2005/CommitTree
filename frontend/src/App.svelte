@@ -10,7 +10,7 @@
   import Splitter from './components/Splitter.svelte'
   import Toasts from './components/Toasts.svelte'
   import { startFocusRefresh } from './lib/actions'
-  import { chatOpen, chatWidth, loadRefs, loadRepos, mainView, mergeState, selectedHash, selectedRepo, sidebarWidth } from './lib/stores'
+  import { chatOpen, chatWidth, loadAISettings, loadRefs, loadRepos, mainView, mergeState, selectedHash, selectedRepo, sidebarWidth } from './lib/stores'
 
   // A merge in progress always wins: the Changes view has nothing to show
   // that the merge view (reached through the log pane) doesn't already cover,
@@ -24,6 +24,7 @@
 
   onMount(() => {
     loadRepos().then(loadRefs)
+    loadAISettings()
     return startFocusRefresh()
   })
 </script>

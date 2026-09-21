@@ -5,7 +5,7 @@
   import { api } from '../lib/api'
   import { formatBytes, percent } from '../lib/format'
   import { modelForProvider, modelHint, needsKey, processingNotice, PROVIDERS, settingsHaveModels, usesOllama } from '../lib/providers'
-  import { settingsOpen } from '../lib/stores'
+  import { loadAISettings, settingsOpen } from '../lib/stores'
   import type { AISettings, AIStatus, ModelDone, ModelProgress, ProviderName, PromptInfo } from '../lib/types'
   import { errorMessage, toast } from '../lib/ui'
 
@@ -110,6 +110,7 @@
     try {
       await api.saveAISettings(settings)
       await refresh()
+      await loadAISettings()
     } catch (e) {
       toast(errorMessage(e), 'error')
     } finally {
@@ -299,6 +300,14 @@
               {/if}
             </select>
           {/if}
+        </label>
+        <label>
+          <span>Commit message</span>
+          <select bind:value={settings.commitMessage} on:change={save}>
+            <option value="auto-local">Automatic for local models (default)</option>
+            <option value="auto">Always automatic</option>
+            <option value="manual">Only when I ask</option>
+          </select>
         </label>
       </section>
 

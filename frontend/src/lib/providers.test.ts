@@ -69,6 +69,7 @@ describe('settingsHaveModels', () => {
     chatModel: 'claude-opus-5',
     taskProvider: 'anthropic',
     taskModel: 'claude-opus-5',
+    commitMessage: 'auto-local',
     ...over,
   })
 

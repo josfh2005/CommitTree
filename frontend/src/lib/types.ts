@@ -125,12 +125,15 @@ export interface ProviderStatus {
   error?: string
 }
 
+export type CommitMessageMode = 'auto-local' | 'auto' | 'manual'
+
 export interface AISettings {
   ollamaURL: string
   chatProvider: ProviderName
   chatModel: string
   taskProvider: ProviderName
   taskModel: string
+  commitMessage: CommitMessageMode
 }
 
 export interface OllamaModel {
@@ -215,3 +218,5 @@ export interface FileStatus { path: string; oldPath?: string; status: string }
 export interface WorktreeState { staged: FileStatus[]; unstaged: FileStatus[]; untracked: FileStatus[]; merging: boolean }
 export interface CommitInfo { stagedCount: number; canAmend: boolean; lastMessage: string; pushed: boolean; upstream: string }
 export interface WorktreeChangedEvent { repoID: string }
+export interface CommitDeltaEvent { repoID: string; runID: string; text: string }
+export interface CommitDoneEvent { repoID: string; runID: string; error?: string }

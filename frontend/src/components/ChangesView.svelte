@@ -1,5 +1,6 @@
 <script lang="ts">
   import { EventsOn } from '../../wailsjs/runtime/runtime'
+  import CommitBox from './CommitBox.svelte'
   import FileList, { rowKey } from './FileList.svelte'
   import { api } from '../lib/api'
   import { discardFile, stageFile, unstageFile } from '../lib/actions'
@@ -134,6 +135,7 @@
       {/if}
     </div>
   </div>
+  <CommitBox {repoId} />
 </div>
 
 <style>

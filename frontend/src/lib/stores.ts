@@ -1,6 +1,6 @@
 import { derived, get, writable, type Writable } from 'svelte/store'
 import { api } from './api'
-import { emptyFilters, type Filters, type MergeState, type Refs, type Repo, type WorktreeState } from './types'
+import { emptyFilters, type AISettings, type Filters, type MergeState, type Refs, type Repo, type WorktreeState } from './types'
 
 function persisted<T>(key: string, initial: T): Writable<T> {
   let start = initial
@@ -39,6 +39,10 @@ export const busy = writable('')
 export const settingsOpen = writable(false)
 export const mergeState = writable<MergeState | null>(null)
 export const worktreeState = writable<WorktreeState | null>(null)
+/** The AI settings the commit box needs (auto-generation mode, task
+ *  provider) without hitting the API on every render. Loaded at startup and
+ *  refreshed after Settings saves — see SettingsDialog's save(). */
+export const aiSettings = writable<AISettings | null>(null)
 /** Which view the main pane shows: the log (with commit details / the merge
  *  view below it) or the Changes view. A merge in progress always wins over
  *  'changes' — see selectMainView below. */
@@ -94,6 +98,15 @@ export async function loadWorktreeState() {
     worktreeState.set(state)
   } catch {
     if (get(selectedRepoId) === repo.id) worktreeState.set(null)
+  }
+}
+
+export async function loadAISettings() {
+  try {
+    aiSettings.set(await api.getAISettings())
+  } catch {
+    // Left as whatever was last loaded (or null) — the commit box treats a
+    // null store as "don't auto-generate" rather than erroring.
   }
 }
 

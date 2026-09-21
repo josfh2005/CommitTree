@@ -1,4 +1,4 @@
-import type { FileStatus, WorktreeState } from './types'
+import type { CommitInfo, FileStatus, WorktreeState } from './types'
 
 export interface WorktreeSection {
   title: string
@@ -88,4 +88,29 @@ export function nextSelection(previous: SelectionKey | null, sections: SectionLi
   const matches = all.filter((f) => f.path === previous.path)
   if (matches.length === 0) return all[0]
   return matches.find((f) => f.section === previous.section) ?? matches[0]
+}
+
+/** canCommit gates the Commit button. An amend may have nothing staged: it
+ *  then only rewrites the message, which is the common use of it. */
+export function canCommit(info: CommitInfo | null, message: string, amend: boolean): boolean {
+  if (!info || message.trim() === '') return false
+  if (amend) return info.canAmend
+  return info.stagedCount > 0
+}
+
+/** shouldAutoGenerate decides whether to write the message without being
+ *  asked. It never overwrites what the user typed: `touched` stays true once
+ *  they edit the box, until they clear it. */
+export function shouldAutoGenerate(mode: string, taskProvider: string, message: string, touched: boolean): boolean {
+  if (message.trim() !== '' || touched) return false
+  if (mode === 'manual') return false
+  if (mode === 'auto') return true
+  return taskProvider === 'ollama' // auto-local: only the local, free provider
+}
+
+/** amendWarning is the confirmation before rewriting a commit the upstream
+ *  already has, or null when there is nothing to warn about. */
+export function amendWarning(info: CommitInfo): string | null {
+  if (!info.pushed || !info.upstream) return null
+  return `This commit is already on ${info.upstream}. Amending rewrites it, so pushing afterwards will need a force push. Amend anyway?`
 }
