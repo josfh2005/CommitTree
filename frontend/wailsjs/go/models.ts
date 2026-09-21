@@ -740,6 +740,29 @@ export namespace settings {
 
 }
 
+export namespace stash {
+	
+	export class Entry {
+	    index: number;
+	    message: string;
+	    branch: string;
+	    hash: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Entry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.index = source["index"];
+	        this.message = source["message"];
+	        this.branch = source["branch"];
+	        this.hash = source["hash"];
+	    }
+	}
+
+}
+
 export namespace worktree {
 	
 	export class CommitInfo {

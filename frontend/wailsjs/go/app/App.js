@@ -138,6 +138,14 @@ export function GetResetPreview(arg1, arg2) {
   return window['go']['app']['App']['GetResetPreview'](arg1, arg2);
 }
 
+export function GetStashDiff(arg1, arg2) {
+  return window['go']['app']['App']['GetStashDiff'](arg1, arg2);
+}
+
+export function GetStashEntries(arg1) {
+  return window['go']['app']['App']['GetStashEntries'](arg1);
+}
+
 export function GetWorktreeDiff(arg1, arg2, arg3) {
   return window['go']['app']['App']['GetWorktreeDiff'](arg1, arg2, arg3);
 }
@@ -168,6 +176,10 @@ export function MergeBranch(arg1, arg2) {
 
 export function OpenPromptsFolder() {
   return window['go']['app']['App']['OpenPromptsFolder']();
+}
+
+export function OwedStashDrop(arg1) {
+  return window['go']['app']['App']['OwedStashDrop'](arg1);
 }
 
 export function Pull(arg1) {
@@ -228,6 +240,22 @@ export function StageFile(arg1, arg2) {
 
 export function StageMergeFile(arg1, arg2) {
   return window['go']['app']['App']['StageMergeFile'](arg1, arg2);
+}
+
+export function StashApply(arg1, arg2) {
+  return window['go']['app']['App']['StashApply'](arg1, arg2);
+}
+
+export function StashDrop(arg1, arg2) {
+  return window['go']['app']['App']['StashDrop'](arg1, arg2);
+}
+
+export function StashPop(arg1, arg2) {
+  return window['go']['app']['App']['StashPop'](arg1, arg2);
+}
+
+export function StashPush(arg1, arg2, arg3) {
+  return window['go']['app']['App']['StashPush'](arg1, arg2, arg3);
 }
 
 export function StopChat(arg1) {

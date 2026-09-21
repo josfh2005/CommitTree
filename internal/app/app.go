@@ -57,6 +57,7 @@ type App struct {
 	// gitSettingsPath overrides gitsettings.DefaultPath() when set — empty
 	// in production, a temp path in tests.
 	gitSettingsPath string
+	owedDrops       sync.Map // repo ID → stash index still to drop once resolved
 }
 
 func New(store *repos.Store) *App {

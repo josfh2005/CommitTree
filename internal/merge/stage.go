@@ -18,14 +18,17 @@ import (
 // pathspec magic such as ":(glob)*" can never match one.
 var ErrNotInMerge = errors.New("merge: not a file of this merge")
 
-// Stage adds one of the merge's unstaged files to the index. It refuses a file
-// that still has conflict markers, as the agent's stage_file does.
+// Stage adds one of the merge's unstaged files to the index, or settles one
+// of its Conflicts once nothing in it needs resolving — the same thing the
+// agent's stage_file tool does for a path it opened. It refuses a file that
+// still has conflict markers.
 func Stage(ctx context.Context, dir, path string) error {
 	st, err := Status(ctx, dir)
 	if err != nil {
 		return err
 	}
-	if err := settled(st, st.Unstaged, path, "an unstaged file"); err != nil {
+	stageable := append(slices.Clone(st.Unstaged), st.Conflicts...)
+	if err := settled(st, stageable, path, "an unstaged or conflicted file"); err != nil {
 		return err
 	}
 	// A deleted file has nothing to check, and a symlink is staged as a link,

@@ -17,6 +17,7 @@ import (
 	"git-ui/internal/ai/tools"
 	"git-ui/internal/gitcmd"
 	"git-ui/internal/merge"
+	"git-ui/internal/stash"
 )
 
 // ConflictFile is one file of a merge as the UI shows it: the raw content
@@ -155,14 +156,38 @@ func (a *App) TakeMergeSide(id, path, side string) error {
 }
 
 // writeMerge runs fn under the repository's write lock, so it can't
-// interleave with an agent tool call, then tells the merge view and any
-// running agent's UI that the merge moved.
+// interleave with an agent tool call, drops a stash entry a conflicted Pop
+// left behind once resolving it leaves nothing unmerged, then tells the
+// merge view and any running agent's UI that something moved.
 func (a *App) writeMerge(id string, fn func(ctx context.Context, dir string) error) error {
 	if err := a.write(id, fn); err != nil {
 		return err
 	}
+	a.finishOwedDrop(id)
 	a.emit(EventMergeChanged, MergeChangedEvent{RepoID: id})
 	return nil
+}
+
+// finishOwedDrop drops a stash entry a conflicted StashPop left behind, once
+// resolving it leaves nothing unmerged. Git itself never records that a
+// drop is still owed, so this in-memory reminder is the only place it
+// lives — losing it (an app restart mid-resolution) never risks the
+// changes themselves, only the tidiness of dropping the entry.
+func (a *App) finishOwedDrop(id string) {
+	v, ok := a.owedDrops.Load(id)
+	if !ok {
+		return
+	}
+	dir, err := a.dir(id)
+	if err != nil {
+		return
+	}
+	st, err := merge.Status(a.ctx, dir)
+	if err != nil || st.Merging {
+		return
+	}
+	a.owedDrops.Delete(id)
+	_ = stash.Drop(a.ctx, dir, v.(int))
 }
 
 // EventMergeChanged tells the frontend the working tree moved during a merge,

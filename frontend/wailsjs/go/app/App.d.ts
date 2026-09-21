@@ -10,6 +10,7 @@ import {gitsettings} from '../models';
 import {merge} from '../models';
 import {refs} from '../models';
 import {ops} from '../models';
+import {stash} from '../models';
 import {prompts} from '../models';
 
 export function AIStatus():Promise<app.AIStatus>;
@@ -80,6 +81,10 @@ export function GetRemoteInfo(arg1:string):Promise<ops.AheadBehind>;
 
 export function GetResetPreview(arg1:string,arg2:string):Promise<ops.ResetInfo>;
 
+export function GetStashDiff(arg1:string,arg2:number):Promise<string>;
+
+export function GetStashEntries(arg1:string):Promise<Array<stash.Entry>>;
+
 export function GetWorktreeDiff(arg1:string,arg2:string,arg3:boolean):Promise<string>;
 
 export function GetWorktreeState(arg1:string):Promise<worktree.State>;
@@ -95,6 +100,8 @@ export function ListRepos():Promise<Array<app.RepoItem>>;
 export function MergeBranch(arg1:string,arg2:string):Promise<merge.Result>;
 
 export function OpenPromptsFolder():Promise<void>;
+
+export function OwedStashDrop(arg1:string):Promise<number>;
 
 export function Pull(arg1:string):Promise<ops.Result>;
 
@@ -125,6 +132,14 @@ export function SetProviderKey(arg1:string,arg2:string):Promise<void>;
 export function StageFile(arg1:string,arg2:string):Promise<void>;
 
 export function StageMergeFile(arg1:string,arg2:string):Promise<void>;
+
+export function StashApply(arg1:string,arg2:number):Promise<void>;
+
+export function StashDrop(arg1:string,arg2:number):Promise<void>;
+
+export function StashPop(arg1:string,arg2:number):Promise<void>;
+
+export function StashPush(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
 export function StopChat(arg1:string):Promise<void>;
 
