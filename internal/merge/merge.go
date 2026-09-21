@@ -72,8 +72,65 @@ func Start(ctx context.Context, dir, branch string) (Result, error) {
 	return Result{}, err
 }
 
+// Continue moves the conflict resolution in progress one step forward: a
+// merge closes with git's own generated message, exactly as Commit did; a
+// rebase, a cherry-pick, a revert or an `am` run their own --continue and
+// may leave the next commit's conflicts behind — the caller re-reads Status
+// to see. A stash conflict has no "continue" step; this is a no-op so a
+// stray call from the UI never errors.
+func Continue(ctx context.Context, dir string) error {
+	st, err := Status(ctx, dir)
+	if err != nil {
+		return err
+	}
+	if st.Kind == KindMerge {
+		return Commit(ctx, dir)
+	}
+	cmd, ok := sequencer[st.Kind]
+	if !ok {
+		return nil // KindStash, or nothing in progress
+	}
+	// GIT_EDITOR through the environment, not -c core.editor: git resolves
+	// GIT_EDITOR first, so a value inherited from the user's shell would
+	// beat core.editor and open a real editor the app can never close.
+	// noEditor also covers hooks, which is why this uses HookTimeout.
+	_, err = gitcmd.RunEnv(ctx, dir, gitcmd.HookTimeout, noEditor, cmd, "--continue")
+	return err
+}
+
+// sequencer maps a Kind to the git subcommand that continues or aborts it.
+// KindMerge is not here: its continue is Commit, and its abort is
+// `merge --abort`, both handled by name below. KindStash is not here
+// either — it has no git-level step at all.
+var sequencer = map[Kind]string{
+	KindRebase:     "rebase",
+	KindCherryPick: "cherry-pick",
+	KindRevert:     "revert",
+	KindAM:         "am",
+}
+
+// noEditor stops any --continue from opening an editor the app cannot close.
+var noEditor = []string{"GIT_EDITOR=true"}
+
+// Abort undoes the conflict resolution in progress: every kind but a stash
+// has a real git-level abort, and each must get its own — `rebase --abort`
+// on a `git am` (which also lives in .git/rebase-apply) throws away the
+// mailbox. A stash conflict has nothing to undo but the files themselves,
+// which Discard already handles, so it is a no-op rather than an error.
 func Abort(ctx context.Context, dir string) error {
-	_, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "merge", "--abort")
+	st, err := Status(ctx, dir)
+	if err != nil {
+		return err
+	}
+	if st.Kind == KindMerge {
+		_, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "merge", "--abort")
+		return err
+	}
+	cmd, ok := sequencer[st.Kind]
+	if !ok {
+		return nil // KindStash, or nothing in progress
+	}
+	_, err = gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, cmd, "--abort")
 	return err
 }
 
