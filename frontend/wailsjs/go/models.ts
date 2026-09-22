@@ -264,6 +264,7 @@ export namespace app {
 	    name: string;
 	    path: string;
 	    missing: boolean;
+	    group?: string;
 	    branch: string;
 	
 	    static createFrom(source: any = {}) {
@@ -276,6 +277,7 @@ export namespace app {
 	        this.name = source["name"];
 	        this.path = source["path"];
 	        this.missing = source["missing"];
+	        this.group = source["group"];
 	        this.branch = source["branch"];
 	    }
 	}
@@ -697,6 +699,7 @@ export namespace repos {
 	    name: string;
 	    path: string;
 	    missing: boolean;
+	    group?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Repo(source);
@@ -708,6 +711,7 @@ export namespace repos {
 	        this.name = source["name"];
 	        this.path = source["path"];
 	        this.missing = source["missing"];
+	        this.group = source["group"];
 	    }
 	}
 

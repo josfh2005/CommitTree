@@ -1,6 +1,6 @@
 import { get } from 'svelte/store'
 import { api } from './api'
-import { busy, chatOpen, filters, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, selectRepo, selectedRepoId, stashConflictDismissed } from './stores'
+import { busy, chatOpen, collapsedRepoGroups, filters, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, repos, selectRepo, selectedRepoId, stashConflictDismissed } from './stores'
 import type { Branch, FileStatus, MergeState, Repo, ResetInfo, ResetMode, WorktreeState } from './types'
 import { PULL_UP_TO_DATE, UP_TO_DATE } from './types'
 import { abortWarning, commitWarning, takeMessage } from './merge'
@@ -8,6 +8,8 @@ import { resetMessage } from './reset'
 import { discardMessage, neverCommitted } from './worktree'
 import { stashApplyAction } from './stash'
 import { choiceDialog, confirmDialog, confirmDialogWithCheckbox, errorMessage, promptDialog, toast } from './ui'
+import { resolveRepoDrop } from './repoDrop'
+import { classifyGroupRename, renameCollapsedGroup } from './repoGroupRename'
 
 export function branchRef(branch: Branch): string {
   return branch.remote ? `refs/remotes/${branch.remote}/${branch.name}` : `refs/heads/${branch.name}`
@@ -56,6 +58,97 @@ export async function removeRepo(repo: Repo) {
     if (get(selectedRepoId) === repo.id) selectedRepoId.set('')
     await loadRepos()
     await loadRefs()
+  } catch (e) {
+    toast(errorMessage(e), 'error')
+  }
+}
+
+// moveRepoToGroup offers every existing group (from the other repos in the
+// list — there is no separate groups table, see internal/repos) plus
+// "New group…" and "No group", so choosing one covers creating, renaming
+// into an existing group, and ungrouping in a single menu.
+const NEW_GROUP = '__new_group__'
+
+export async function moveRepoToGroup(repo: Repo) {
+  const groupNames = [...new Set(get(repos).map((r) => r.group).filter((g): g is string => !!g))].sort((a, b) =>
+    a.localeCompare(b),
+  )
+  const choice = await choiceDialog<string>({
+    title: 'Move to group',
+    label: 'Group',
+    options: [
+      { value: '', label: 'No group' },
+      ...groupNames.map((name) => ({ value: name, label: name })),
+      { value: NEW_GROUP, label: 'New group…' },
+    ],
+    value: repo.group || '',
+    message: (v) => (v === NEW_GROUP ? `Create a new group for ${repo.name}.` : `Move ${repo.name} to a group.`),
+    confirmLabel: () => 'Move',
+  })
+  if (choice === null) return
+
+  let group = choice
+  if (choice === NEW_GROUP) {
+    const result = await promptDialog({ title: 'New group', label: 'Group name', submitLabel: 'Create' })
+    group = result?.value.trim() ?? ''
+    if (!group) return
+  }
+
+  try {
+    await api.setRepoGroup(repo.id, group)
+    await loadRepos()
+  } catch (e) {
+    toast(errorMessage(e), 'error')
+  }
+}
+
+// dropRepoOnGroup is the drag-and-drop counterpart to moveRepoToGroup's
+// menu: same decision (resolveRepoDrop) and the same App method, just
+// triggered by a drop instead of a dialog choice. A no-op drop (dropped on
+// the group it is already in) never calls the backend.
+export async function dropRepoOnGroup(repoId: string, group: string) {
+  const repo = get(repos).find((r) => r.id === repoId)
+  if (!repo) return
+  const next = resolveRepoDrop(repo, { group })
+  if (next === null) return
+
+  try {
+    await api.setRepoGroup(repo.id, next)
+    await loadRepos()
+  } catch (e) {
+    toast(errorMessage(e), 'error')
+  }
+}
+
+// renameGroup opens the same prompt dialog moveRepoToGroup's "New group…"
+// uses, pre-filled with the group's current name. Renaming into a name
+// another group already has merges the two groups (a group is just a
+// string on each repository — see classifyGroupRename), so that case gets
+// an extra confirmation spelling out the merge before it happens. The
+// group's collapsed/expanded state is carried over to the new name so the
+// section doesn't jump open or shut.
+export async function renameGroup(name: string) {
+  const result = await promptDialog({ title: 'Rename group', label: 'Group name', value: name, submitLabel: 'Rename' })
+  if (result === null) return
+
+  const existingNames = [...new Set(get(repos).map((r) => r.group).filter((g): g is string => !!g))]
+  const action = classifyGroupRename(existingNames, name, result.value)
+  if (action.kind === 'noop') return
+
+  if (action.kind === 'merge') {
+    const ok = await confirmDialog({
+      title: 'Merge groups',
+      message: `A group named "${action.name}" already exists. Renaming "${name}" to "${action.name}" merges the two into one group named "${action.name}" — every repository from both ends up together, and this cannot be undone.`,
+      confirmLabel: 'Merge',
+      danger: true,
+    })
+    if (!ok) return
+  }
+
+  try {
+    await api.renameRepoGroup(name, action.name)
+    collapsedRepoGroups.update((names) => renameCollapsedGroup(names, name, action.name))
+    await loadRepos()
   } catch (e) {
     toast(errorMessage(e), 'error')
   }

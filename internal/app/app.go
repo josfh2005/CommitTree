@@ -111,6 +111,18 @@ func (a *App) RemoveRepo(id string) error {
 	return a.store.Remove(id)
 }
 
+// SetRepoGroup assigns id to the named sidebar group, or clears it when
+// group is "".
+func (a *App) SetRepoGroup(id, group string) error {
+	return a.store.SetGroup(id, group)
+}
+
+// RenameRepoGroup renames every repository in oldName to newName. See
+// repos.Store.RenameGroup for the merge and no-op semantics.
+func (a *App) RenameRepoGroup(oldName, newName string) error {
+	return a.store.RenameGroup(oldName, newName)
+}
+
 func (a *App) forgetLog(id string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()

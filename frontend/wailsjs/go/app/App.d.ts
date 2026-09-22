@@ -117,6 +117,8 @@ export function RelocateRepo(arg1:string):Promise<repos.Repo>;
 
 export function RemoveRepo(arg1:string):Promise<void>;
 
+export function RenameRepoGroup(arg1:string,arg2:string):Promise<void>;
+
 export function ResetBranch(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function ResetPrompt(arg1:string):Promise<void>;
@@ -132,6 +134,8 @@ export function SaveGitSettings(arg1:gitsettings.Settings):Promise<void>;
 export function SendChat(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SetProviderKey(arg1:string,arg2:string):Promise<void>;
+
+export function SetRepoGroup(arg1:string,arg2:string):Promise<void>;
 
 export function StageFile(arg1:string,arg2:string):Promise<void>;
 
