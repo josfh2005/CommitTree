@@ -1,5 +1,5 @@
 import * as Go from '../../wailsjs/go/app/App'
-import type { AIMessage, AISettings, AIStatus, CommitInfo, ConflictFile, Details, Filters, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, Refs, Repo, ResetInfo, ResetMode, WorktreeState } from './types'
+import type { AIMessage, AISettings, AIStatus, AheadBehind, CommitInfo, ConflictFile, Details, Filters, GitSettings, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, WorktreeState } from './types'
 
 // The generated bindings use Wails model classes; the JSON is identical to our
 // interfaces, so cast at this single boundary.
@@ -27,7 +27,20 @@ export const api = {
   resetBranch: (id: string, hash: string, mode: ResetMode) => call<void>(Go.ResetBranch(id, hash, mode)),
   getResetPreview: (id: string, hash: string) => call<ResetInfo>(Go.GetResetPreview(id, hash)),
   fetch: (id: string) => call<void>(Go.Fetch(id)),
-  pull: (id: string) => call<void>(Go.Pull(id)),
+  push: (id: string) => call<void>(Go.Push(id)),
+  pull: (id: string) => call<PullResult>(Go.Pull(id)),
+  getRemoteInfo: (id: string) => call<AheadBehind>(Go.GetRemoteInfo(id)),
+  getGitSettings: () => call<GitSettings>(Go.GetGitSettings()),
+  saveGitSettings: (s: GitSettings) => call<void>(Go.SaveGitSettings(s as any)),
+
+  getStashEntries: (id: string) => call<StashEntry[]>(Go.GetStashEntries(id)),
+  stashPush: (id: string, message: string, includeUntracked: boolean) => call<void>(Go.StashPush(id, message, includeUntracked)),
+  stashApply: (id: string, index: number) => call<void>(Go.StashApply(id, index)),
+  stashPop: (id: string, index: number) => call<void>(Go.StashPop(id, index)),
+  stashDrop: (id: string, index: number) => call<void>(Go.StashDrop(id, index)),
+  getStashDiff: (id: string, index: number) => call<string>(Go.GetStashDiff(id, index)),
+  owedStashDrop: (id: string) => call<number>(Go.OwedStashDrop(id)),
+
   createBranch: (id: string, name: string, target: string, checkout: boolean) =>
     call<void>(Go.CreateBranch(id, name, target, checkout)),
   deleteBranch: (id: string, name: string, force: boolean) => call<void>(Go.DeleteBranch(id, name, force)),
