@@ -22,14 +22,20 @@
   $: local = groupBranches($refs?.local ?? [])
 
   // A group opens on demand, and on its own when it holds the current branch
-  // or the branch the log is filtered by.
-  function isOpen(key: string, group: BranchGroup, filtered: string): boolean {
-    const remembered = openGroups[key]
+  // or the branch the log is filtered by. `open` is taken as a parameter
+  // (rather than read from the closed-over `openGroups`) so the template
+  // expression that calls this visibly depends on it — otherwise Svelte's
+  // compiled dirty-check, which only tracks identifiers referenced directly
+  // in the template, never re-evaluates the {@const} after toggleGroup
+  // assigns a new openGroups.
+  function isOpen(open: Record<string, boolean>, key: string, group: BranchGroup, filtered: string): boolean {
+    const remembered = open[key]
     if (remembered !== undefined) return remembered
     return group.hasCurrent || group.branches.some((b) => branchRef(b) === filtered)
   }
 
-  const toggleGroup = (key: string) => (openGroups = { ...openGroups, [key]: !isOpen(key, groupsByKey[key], $filters.branch) })
+  const toggleGroup = (key: string) =>
+    (openGroups = { ...openGroups, [key]: !isOpen(openGroups, key, groupsByKey[key], $filters.branch) })
 
   // Every rendered group, so toggleGroup can read the one it flips.
   $: groupsByKey = {
@@ -134,7 +140,7 @@
     {/each}
     {#each local.groups as group (group.name)}
       {@const key = `local:${group.name}`}
-      {@const open = isOpen(key, group, $filters.branch)}
+      {@const open = isOpen(openGroups, key, group, $filters.branch)}
       <button class="row-item ref group" on:click={() => toggleGroup(key)}>
         <span class="mark"><Icon name={open ? 'chevron-down' : 'chevron-right'} size={12} /></span>
         <span class="ellipsis" class:current={group.hasCurrent}>{group.name}</span>
@@ -181,7 +187,7 @@
             {/each}
             {#each grouped.groups as group (group.name)}
               {@const key = `${remote.name}:${group.name}`}
-              {@const open = isOpen(key, group, $filters.branch)}
+              {@const open = isOpen(openGroups, key, group, $filters.branch)}
               <button class="row-item ref group nested" on:click={() => toggleGroup(key)}>
                 <span class="mark"><Icon name={open ? 'chevron-down' : 'chevron-right'} size={12} /></span>
                 <span class="ellipsis">{group.name}</span>
