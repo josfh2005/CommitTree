@@ -17,6 +17,16 @@ export function stashSections(files: StashFile[]): { title: string; files: Stash
   ].filter((s) => s.files.length > 0)
 }
 
+/** stashApplyAction decides which backend call the apply-stash confirmation
+ *  should make: the checkbox on that dialog ("delete the stash after
+ *  applying it") turns a plain apply into a pop — pop already handles the
+ *  conflict case correctly (the entry is kept and dropped automatically once
+ *  the conflict is resolved), so this must never be reimplemented as
+ *  apply-then-drop. */
+export function stashApplyAction(deleteAfterApply: boolean): 'apply' | 'pop' {
+  return deleteAfterApply ? 'pop' : 'apply'
+}
+
 /** Which stash the sidebar has selected: its hash is the identity, index is
  *  only where the backend's index-based calls (GetStashFiles, StashApply, …)
  *  currently find it. */

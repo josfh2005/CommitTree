@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { stashFileTitle, stashSections, validSelectedStash } from './stash'
+import { stashApplyAction, stashFileTitle, stashSections, validSelectedStash } from './stash'
 import type { StashEntry, StashFile } from './types'
 
 const tracked = (path: string, status = 'M'): StashFile => ({ path, status, untracked: false })
@@ -25,6 +25,16 @@ describe('stashSections', () => {
   it('omits an empty section entirely', () => {
     expect(stashSections([untracked('new.txt')])).toEqual([{ title: 'Untracked', files: [untracked('new.txt')] }])
     expect(stashSections([])).toEqual([])
+  })
+})
+
+describe('stashApplyAction', () => {
+  it('applies when the checkbox is unchecked, leaving the entry in the list', () => {
+    expect(stashApplyAction(false)).toBe('apply')
+  })
+
+  it('pops when the checkbox is checked, so the entry is removed once applied', () => {
+    expect(stashApplyAction(true)).toBe('pop')
   })
 })
 

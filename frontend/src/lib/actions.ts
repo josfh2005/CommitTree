@@ -6,7 +6,8 @@ import { PULL_UP_TO_DATE, UP_TO_DATE } from './types'
 import { abortWarning, commitWarning, takeMessage } from './merge'
 import { resetMessage } from './reset'
 import { discardMessage, neverCommitted } from './worktree'
-import { choiceDialog, confirmDialog, errorMessage, promptDialog, toast } from './ui'
+import { stashApplyAction } from './stash'
+import { choiceDialog, confirmDialog, confirmDialogWithCheckbox, errorMessage, promptDialog, toast } from './ui'
 
 export function branchRef(branch: Branch): string {
   return branch.remote ? `refs/remotes/${branch.remote}/${branch.name}` : `refs/heads/${branch.name}`
@@ -334,7 +335,17 @@ export async function stashChanges(id: string) {
   await run('Stashing…', () => api.stashPush(id, result.value.trim(), result.checked))
 }
 
-export const stashApply = (id: string, index: number) => run('Applying stash…', () => api.stashApply(id, index))
+export async function stashApply(id: string, index: number) {
+  const result = await confirmDialogWithCheckbox({
+    title: 'Apply stash',
+    message: 'Apply this stash to the working tree? It stays in the list unless you choose to delete it below.',
+    confirmLabel: 'Apply',
+    checkboxLabel: 'Delete the stash after applying it',
+  })
+  if (!result.ok) return
+  if (stashApplyAction(result.checked) === 'pop') await run('Popping stash…', () => api.stashPop(id, index))
+  else await run('Applying stash…', () => api.stashApply(id, index))
+}
 
 // The conflict view's "Done" for a stash conflict: the files stay exactly as
 // they are (conflicted or not), the view just stops owning the screen. The
