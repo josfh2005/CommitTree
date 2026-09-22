@@ -23,6 +23,12 @@ export const api = {
   isShallow: (id: string) => call<boolean>(Go.IsShallow(id)),
   fingerprint: (id: string) => call<string>(Go.Fingerprint(id)),
 
+  terminalOpen: (repoId: string, cols: number, rows: number) => call<string>(Go.TerminalOpen(repoId, cols, rows)),
+  terminalWrite: (tab: string, data: string) => call<void>(Go.TerminalWrite(tab, data)),
+  terminalResize: (tab: string, cols: number, rows: number) => call<void>(Go.TerminalResize(tab, cols, rows)),
+  terminalClose: (tab: string) => call<void>(Go.TerminalClose(tab)),
+  terminalShell: () => call<string>(Go.TerminalShell()),
+
   checkout: (id: string, branch: string) => call<void>(Go.Checkout(id, branch)),
   checkoutRemote: (id: string, remote: string, name: string) => call<void>(Go.CheckoutRemote(id, remote, name)),
   checkoutDetached: (id: string, hash: string) => call<void>(Go.CheckoutDetached(id, hash)),

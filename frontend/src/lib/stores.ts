@@ -36,6 +36,9 @@ export const sidebarWidth = persisted('sidebarWidth', 280)
 export const chatWidth = persisted('chatWidth', 340)
 export const detailsHeight = persisted('detailsHeight', 280)
 export const chatOpen = persisted('chatOpen', true)
+export const terminalOpen = persisted('terminalOpen', false)
+/** Height of the terminal under the chat, in pixels. */
+export const terminalHeight = persisted('terminalHeight', 260)
 export const selectedRepoId = persisted('selectedRepoId', '')
 /** Ids of the repos whose refs are unfolded in the sidebar. */
 export const expandedRepos = persisted<string[]>('expandedRepos', [])
