@@ -139,12 +139,22 @@ func (a *App) GetRefs(id string) (refs.Refs, error) {
 	return refs.List(a.ctx, dir)
 }
 
-func (a *App) GetLog(id string, filters gitlog.Filters, offset, limit int) (LogPage, error) {
+// GetLog reads a page of commit history. order selects the walk order
+// (gitlog.OrderTopo or gitlog.OrderDate) — the caller passes it in, rather
+// than this reading a stored preference itself, the same way a pull
+// strategy is threaded through from a caller in remote.go. It is folded into
+// the paging key below, so switching order — like changing a filter —
+// invalidates whatever page was in flight and restarts the log from the
+// first page instead of mixing pages laid out for one order into another.
+func (a *App) GetLog(id string, filters gitlog.Filters, order string, offset, limit int) (LogPage, error) {
 	dir, err := a.dir(id)
 	if err != nil {
 		return LogPage{}, err
 	}
-	keyBytes, err := json.Marshal(filters)
+	keyBytes, err := json.Marshal(struct {
+		Filters gitlog.Filters
+		Order   string
+	}{filters, order})
 	if err != nil {
 		return LogPage{}, err
 	}
@@ -160,7 +170,7 @@ func (a *App) GetLog(id string, filters gitlog.Filters, offset, limit int) (LogP
 		return LogPage{}, ErrStalePage
 	}
 
-	commits, err := gitlog.Get(a.ctx, dir, filters, offset, limit)
+	commits, err := gitlog.Get(a.ctx, dir, filters, order, offset, limit)
 	if err != nil {
 		return LogPage{}, err
 	}

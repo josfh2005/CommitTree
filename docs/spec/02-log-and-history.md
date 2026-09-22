@@ -25,12 +25,20 @@ history and inspects any single change in it.
 
 ## The log
 
-The log lists commits for the selected repository, newest first, in the
-topological order git itself produces (children before their parents). With
-no filters applied it requests history from every ref (`--all`), not only
-the current branch, so commits reachable only from another branch or a
-remote-tracking ref still appear. Choosing a specific branch, tag or ref in
-the filter bar switches the request to that one ref only.
+The log lists commits for the selected repository, newest first, in one of
+two orders: topological (children before their parents, keeping a merged
+branch's own history together rather than interleaving it with the trunk by
+date) or commit date (a strict walk by commit date). Topological is the
+default. The order is a single global preference — not per repository — set
+from the filter bar and persisted like the interface's other UI
+preferences; changing it re-reads the log from the first page, the same as
+changing a filter, since a page fetched under one order cannot be continued
+under the other and the graph's lane layout has to be recomputed for the new
+commit sequence rather than reused. With no filters applied the log requests
+history from every ref (`--all`), not only the current branch, so commits
+reachable only from another branch or a remote-tracking ref still appear.
+Choosing a specific branch, tag or ref in the filter bar switches the
+request to that one ref only.
 
 Each row shows, left to right: a badge for every non-`HEAD` ref that
 decorates the commit (local branch, remote-tracking branch, or tag — each
@@ -55,13 +63,14 @@ history is not available locally.") instead of silently looking like
 history has ended.
 
 Paging is stateful on the backend: a page is only accepted immediately
-after the page before it, for the same filters. Any request that does not
-follow on from the page most recently served for that repository — filters
-that changed, or an offset that does not match what should come next — is
-refused, and the caller must start over from the beginning. Changing any
-filter, or an externally-triggered refresh of the repository (for example
-after a write elsewhere changed the history), starts the log over from the
-first page; scroll position resets to the top when that happens.
+after the page before it, for the same filters and the same order. Any
+request that does not follow on from the page most recently served for that
+repository — filters or order that changed, or an offset that does not
+match what should come next — is refused, and the caller must start over
+from the beginning. Changing any filter, changing the order, or an
+externally-triggered refresh of the repository (for example after a write
+elsewhere changed the history), starts the log over from the first page;
+scroll position resets to the top when that happens.
 
 ### The graph
 
@@ -104,9 +113,15 @@ not matched against diff content, author, or file paths), a ref picker
 (all branches, one local branch, or one remote-tracking branch), an author
 picker (populated from every author who has ever committed on any ref, not
 just those visible in the current filtered log), a since date, an until
-date, and a comma-separated list of paths. The until date is stored as the
-end of the chosen day, since git's own `--until` is otherwise exclusive of
-it, so picking "today" still includes commits made today.
+date, a comma-separated list of paths, and the order picker (topological or
+date; see "The log" above). The until date is stored as the end of the
+chosen day, since git's own `--until` is otherwise exclusive of it, so
+picking "today" still includes commits made today.
+
+Unlike every other control in the bar, the order picker is not part of the
+filters: it does not change which commits are selected, only the sequence
+they are returned in, and it is remembered globally rather than reset by
+`selectRepo` when the user switches repositories.
 
 Typing what looks like a hex commit hash (4 to 40 hex characters) into the
 free-text box does not filter the log by that text: it is instead resolved
@@ -165,10 +180,11 @@ needs, searching hides the graph column for the results it returns.
 1. With no ref filter set, the log is built from every ref, not the
    checked-out branch alone.
 2. A page is only ever accepted immediately following the page before it
-   for the same filters; anything else is rejected and the log must restart
-   from the first page.
-3. Changing any filter, or a refresh triggered by a write elsewhere,
-   restarts the log from its first page and scrolls back to the top.
+   for the same filters and the same order; anything else is rejected and
+   the log must restart from the first page.
+3. Changing any filter, changing the order, or a refresh triggered by a
+   write elsewhere, restarts the log from its first page and scrolls back
+   to the top.
 4. The graph is drawn only when the commit set's parent-child links are
    intact under the active filters — never under a text, author, or date
    filter, always under a plain, ref, or path filter.
@@ -186,3 +202,6 @@ needs, searching hides the graph column for the results it returns.
 
 None: no earlier design document describing the commit log or graph was
 found in this repository to compare the built behaviour against.
+
+Added since the previous revision of this document: the log can be ordered
+by commit date as an alternative to the topological default.

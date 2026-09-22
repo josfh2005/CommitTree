@@ -1,7 +1,7 @@
 import { derived, get, writable, type Writable } from 'svelte/store'
 import { api } from './api'
 import { validSelectedStash, type SelectedStash } from './stash'
-import { emptyFilters, type AISettings, type AheadBehind, type Filters, type GitSettings, type MergeState, type Refs, type Repo, type StashEntry, type WorktreeState } from './types'
+import { emptyFilters, type AISettings, type AheadBehind, type Filters, type GitSettings, type LogOrder, type MergeState, type Refs, type Repo, type StashEntry, type WorktreeState } from './types'
 
 function persisted<T>(key: string, initial: T): Writable<T> {
   let start = initial
@@ -37,6 +37,11 @@ export const expandedTagSections = persisted<string[]>('expandedTagSections', []
 /** Ids of the sidebar repo groups that are collapsed — groups start
  *  expanded, so only the non-default (collapsed) state needs remembering. */
 export const collapsedRepoGroups = persisted<string[]>('collapsedRepoGroups', [])
+/** How the log is ordered — a global preference, not per repository, so it
+ *  is stored here alongside the other persisted UI preferences rather than
+ *  in a per-repo backend setting (contrast gitSettings below, which is
+ *  per-repository and backend-owned). */
+export const logOrder = persisted<LogOrder>('logOrder', 'topo')
 
 export const repos = writable<Repo[]>([])
 export const refs = writable<Refs | null>(null)

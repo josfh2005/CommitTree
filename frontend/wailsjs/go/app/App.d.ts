@@ -71,7 +71,7 @@ export function GetDiff(arg1:string,arg2:string,arg3:string,arg4:Array<string>):
 
 export function GetGitSettings():Promise<gitsettings.Settings>;
 
-export function GetLog(arg1:string,arg2:gitlog.Filters,arg3:number,arg4:number):Promise<app.LogPage>;
+export function GetLog(arg1:string,arg2:gitlog.Filters,arg3:string,arg4:number,arg5:number):Promise<app.LogPage>;
 
 export function GetMergeState(arg1:string):Promise<merge.State>;
 

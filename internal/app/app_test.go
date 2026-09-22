@@ -35,15 +35,15 @@ func newTestApp(t *testing.T) (*App, string) {
 func TestGetLogPagesMatchSinglePage(t *testing.T) {
 	a, id := newTestApp(t)
 
-	whole, err := a.GetLog(id, gitlog.Filters{}, 0, 100)
+	whole, err := a.GetLog(id, gitlog.Filters{}, gitlog.OrderTopo, 0, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := a.GetLog(id, gitlog.Filters{}, 0, 2)
+	first, err := a.GetLog(id, gitlog.Filters{}, gitlog.OrderTopo, 0, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := a.GetLog(id, gitlog.Filters{}, 2, 100)
+	second, err := a.GetLog(id, gitlog.Filters{}, gitlog.OrderTopo, 2, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,20 +66,37 @@ func TestGetLogPagesMatchSinglePage(t *testing.T) {
 
 func TestGetLogRejectsStalePage(t *testing.T) {
 	a, id := newTestApp(t)
-	if _, err := a.GetLog(id, gitlog.Filters{}, 0, 2); err != nil {
+	if _, err := a.GetLog(id, gitlog.Filters{}, gitlog.OrderTopo, 0, 2); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.GetLog(id, gitlog.Filters{Author: "Test"}, 2, 2); !errors.Is(err, ErrStalePage) {
+	if _, err := a.GetLog(id, gitlog.Filters{Author: "Test"}, gitlog.OrderTopo, 2, 2); !errors.Is(err, ErrStalePage) {
 		t.Fatalf("different filters: want ErrStalePage, got %v", err)
 	}
-	if _, err := a.GetLog(id, gitlog.Filters{}, 3, 2); !errors.Is(err, ErrStalePage) {
+	if _, err := a.GetLog(id, gitlog.Filters{}, gitlog.OrderTopo, 3, 2); !errors.Is(err, ErrStalePage) {
 		t.Fatalf("wrong offset: want ErrStalePage, got %v", err)
+	}
+}
+
+func TestGetLogOrderChangeRejectsStalePage(t *testing.T) {
+	a, id := newTestApp(t)
+	if _, err := a.GetLog(id, gitlog.Filters{}, gitlog.OrderTopo, 0, 2); err != nil {
+		t.Fatal(err)
+	}
+	// A page fetched for the topo order cannot be followed by an offset page
+	// requested under date order: the ordering changed, so the log must
+	// restart from the first page just like a filter change would.
+	if _, err := a.GetLog(id, gitlog.Filters{}, gitlog.OrderDate, 2, 2); !errors.Is(err, ErrStalePage) {
+		t.Fatalf("order change: want ErrStalePage, got %v", err)
+	}
+	// Starting over at offset 0 under the new order is accepted.
+	if _, err := a.GetLog(id, gitlog.Filters{}, gitlog.OrderDate, 0, 2); err != nil {
+		t.Fatalf("restart under new order: %v", err)
 	}
 }
 
 func TestGetLogHidesGraphForAuthorFilter(t *testing.T) {
 	a, id := newTestApp(t)
-	page, err := a.GetLog(id, gitlog.Filters{Author: "Test User"}, 0, 100)
+	page, err := a.GetLog(id, gitlog.Filters{Author: "Test User"}, gitlog.OrderTopo, 0, 100)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -504,7 +504,7 @@ func (a *App) ExplainInChat(repoID, hash, provider, runID string) error {
 
 // explainQuestion is the user message stored for an explanation.
 func explainQuestion(ctx context.Context, dir, hash string) (string, error) {
-	commits, err := gitlog.Get(ctx, dir, gitlog.Filters{Branch: hash}, 0, 1)
+	commits, err := gitlog.Get(ctx, dir, gitlog.Filters{Branch: hash}, gitlog.OrderTopo, 0, 1)
 	if err != nil {
 		return "", err
 	}

@@ -13,7 +13,7 @@ import (
 var ctx = context.Background()
 
 func TestArgsDefaultsToAllRefs(t *testing.T) {
-	got := gitlog.Args(gitlog.Filters{}, 0, 500)
+	got := gitlog.Args(gitlog.Filters{}, gitlog.OrderTopo, 0, 500)
 	want := []string{"log", "--topo-order", "--parents", "--decorate=full", "--format=" + gitlog.Format,
 		"--skip=0", "-n500", "--all"}
 	if !reflect.DeepEqual(got, want) {
@@ -24,11 +24,28 @@ func TestArgsDefaultsToAllRefs(t *testing.T) {
 func TestArgsWithAllFilters(t *testing.T) {
 	f := gitlog.Filters{Text: "fix", Branch: "refs/heads/develop", Author: "ana",
 		Since: "2026-01-01", Until: "2026-02-01", Paths: []string{"a.go", "b/"}}
-	got := gitlog.Args(f, 500, 500)
+	got := gitlog.Args(f, gitlog.OrderTopo, 500, 500)
 	want := []string{"log", "--topo-order", "--parents", "--decorate=full", "--format=" + gitlog.Format,
 		"--skip=500", "-n500", "--author=ana", "--grep=fix", "-i", "--fixed-strings",
 		"--since=2026-01-01", "--until=2026-02-01",
 		"--end-of-options", "refs/heads/develop", "--", "a.go", "b/"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got  %q\nwant %q", got, want)
+	}
+}
+
+func TestArgsEmptyOrderDefaultsToTopo(t *testing.T) {
+	got := gitlog.Args(gitlog.Filters{}, "", 0, 500)
+	want := gitlog.Args(gitlog.Filters{}, gitlog.OrderTopo, 0, 500)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got  %q\nwant %q", got, want)
+	}
+}
+
+func TestArgsDateOrder(t *testing.T) {
+	got := gitlog.Args(gitlog.Filters{}, gitlog.OrderDate, 0, 500)
+	want := []string{"log", "--date-order", "--parents", "--decorate=full", "--format=" + gitlog.Format,
+		"--skip=0", "-n500", "--all"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got  %q\nwant %q", got, want)
 	}
@@ -115,7 +132,7 @@ func TestGetReadsRealRepo(t *testing.T) {
 	r.Git("merge", "-q", "--no-ff", "-m", "Merge feature", "feature")
 	r.Git("tag", "v1.0")
 
-	all, err := gitlog.Get(ctx, r.Dir, gitlog.Filters{}, 0, 100)
+	all, err := gitlog.Get(ctx, r.Dir, gitlog.Filters{}, gitlog.OrderTopo, 0, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,14 +155,71 @@ func TestGetReadsRealRepo(t *testing.T) {
 		t.Fatalf("last = %s, want base %s", all[3].Hash, base)
 	}
 
-	page, err := gitlog.Get(ctx, r.Dir, gitlog.Filters{}, 2, 2)
+	page, err := gitlog.Get(ctx, r.Dir, gitlog.Filters{}, gitlog.OrderTopo, 2, 2)
 	if err != nil || len(page) != 2 || page[0].Hash != all[2].Hash {
 		t.Fatalf("page = %+v, err %v", page, err)
 	}
 
-	onlyFeature, err := gitlog.Get(ctx, r.Dir, gitlog.Filters{Branch: "refs/heads/feature"}, 0, 100)
+	onlyFeature, err := gitlog.Get(ctx, r.Dir, gitlog.Filters{Branch: "refs/heads/feature"}, gitlog.OrderTopo, 0, 100)
 	if err != nil || len(onlyFeature) != 2 || onlyFeature[0].Hash != feat {
 		t.Fatalf("feature log = %+v, err %v", onlyFeature, err)
+	}
+}
+
+func TestGetOrderTopoVsDate(t *testing.T) {
+	// Build a merge where the merged-in branch's own commit is older than
+	// commits made on the trunk after the branch point, so topo order (which
+	// keeps a merged branch's own history together right after the merge)
+	// and date order (a strict walk by commit date) genuinely disagree about
+	// where that commit sits relative to the trunk commits — a test that
+	// passed under either ordering would prove nothing.
+	r := testrepo.New(t)
+	r.Commit("base")
+	r.Git("switch", "-q", "-c", "feature")
+	feat := r.Commit("feature work") // older than the trunk commits below
+	r.Git("switch", "-q", "main")
+	r.Commit("trunk 1")
+	trunk2 := r.Commit("trunk 2")
+	r.Git("merge", "-q", "--no-ff", "-m", "Merge feature", "feature")
+	merge := r.Git("rev-parse", "HEAD")
+
+	hashesFor := func(order string) []string {
+		commits, err := gitlog.Get(ctx, r.Dir, gitlog.Filters{}, order, 0, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		hashes := make([]string, len(commits))
+		for i, c := range commits {
+			hashes[i] = c.Hash
+		}
+		return hashes
+	}
+	indexOf := func(hashes []string, target string) int {
+		for i, h := range hashes {
+			if h == target {
+				return i
+			}
+		}
+		t.Fatalf("%s not found in %v", target, hashes)
+		return -1
+	}
+
+	topo := hashesFor(gitlog.OrderTopo)
+	date := hashesFor(gitlog.OrderDate)
+	if topo[0] != merge || date[0] != merge {
+		t.Fatalf("merge commit should lead both orders: topo=%v date=%v", topo, date)
+	}
+
+	// Topo order keeps the merged-in branch's own history together right
+	// after the merge, ahead of the trunk commits, even though those trunk
+	// commits are chronologically newer.
+	if indexOf(topo, feat) > indexOf(topo, trunk2) {
+		t.Fatalf("topo order: expected feature commit before trunk2, got %v", topo)
+	}
+	// Date order is a strict walk by commit date, so the chronologically
+	// older feature commit sorts after the (newer) trunk commits.
+	if indexOf(date, feat) < indexOf(date, trunk2) {
+		t.Fatalf("date order: expected feature commit after trunk2 by date, got %v", date)
 	}
 }
 
@@ -165,7 +239,7 @@ func TestGetWithPathFilterRewritesParents(t *testing.T) {
 	r.Git("commit", "-q", "-m", "commit3")
 	c3 := r.Git("rev-parse", "HEAD")
 
-	got, err := gitlog.Get(ctx, r.Dir, gitlog.Filters{Paths: []string{"a"}}, 0, 100)
+	got, err := gitlog.Get(ctx, r.Dir, gitlog.Filters{Paths: []string{"a"}}, gitlog.OrderTopo, 0, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +256,7 @@ func TestGetWithPathFilterRewritesParents(t *testing.T) {
 
 func TestGetEmptyRepo(t *testing.T) {
 	r := testrepo.New(t)
-	got, err := gitlog.Get(ctx, r.Dir, gitlog.Filters{}, 0, 100)
+	got, err := gitlog.Get(ctx, r.Dir, gitlog.Filters{}, gitlog.OrderTopo, 0, 100)
 	if err != nil || len(got) != 0 {
 		t.Fatalf("got %+v, err %v", got, err)
 	}

@@ -6,7 +6,7 @@
   import {
     arrowAt, DOT_RADIUS, edgeSegment, graphWidth, laneColor, laneX, ROW_HEIGHT, rowCenterY, visibleRange,
   } from '../lib/geometry'
-  import { busy, chatOpen, filters, jumpTo, logVersion, mergeState, refs, selectedHash } from '../lib/stores'
+  import { busy, chatOpen, filters, jumpTo, logOrder, logVersion, mergeState, refs, selectedHash } from '../lib/stores'
   import type { LogRow } from '../lib/types'
   import { copyText, errorMessage, openMenu, toast } from '../lib/ui'
 
@@ -30,7 +30,7 @@
   let viewport = 0
   let hover: { x: number; y: number; text: string } | null = null
 
-  $: reload(repoId, $filters, $logVersion)
+  $: reload(repoId, $filters, $logOrder, $logVersion)
 
   async function reload(..._deps: unknown[]) {
     const gen = ++generation
@@ -48,7 +48,7 @@
     if (loadingGen === gen) return
     loadingGen = gen
     try {
-      const page = await api.getLog(repoId, $filters, rows.length, PAGE)
+      const page = await api.getLog(repoId, $filters, $logOrder, rows.length, PAGE)
       if (gen !== generation) return
       page.rows.forEach((r, i) => byHash.set(r.hash, rows.length + i))
       rows = rows.concat(page.rows)
