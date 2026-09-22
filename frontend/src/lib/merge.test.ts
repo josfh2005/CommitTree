@@ -68,6 +68,16 @@ describe('conflictHeader', () => {
     const h = conflictHeader(state({ kind: 'stash' }))
     expect(h).toEqual({ lead: 'Resolving stashed changes', from: '', connector: '', into: '', detail: '' })
   })
+  it('says on for a revert, with the reverted commit as detail', () => {
+    expect(conflictHeader(state({ kind: 'revert', from: '5e6df51', subject: 'tidy up' }))).toEqual({
+      lead: 'Reverting', from: '5e6df51', connector: 'on', into: 'main', detail: 'tidy up',
+    })
+  })
+  it('names the applied patch for git am, with no connector', () => {
+    expect(conflictHeader(state({ kind: 'am', subject: 'tidy up' }))).toEqual({
+      lead: 'Applying patch', from: 'feature', connector: '', into: 'main', detail: 'tidy up',
+    })
+  })
 })
 
 describe('conflictActions', () => {
