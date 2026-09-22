@@ -95,12 +95,21 @@ func (m *Manager) Open(repoID, dir string, cols, rows int) (string, error) {
 	}
 	m.mu.Lock()
 	m.next++
-	s := &session{id: fmt.Sprintf("t%d", m.next), repoID: repoID, cmd: cmd, pty: f, done: make(chan struct{})}
+	id := fmt.Sprintf("t%d", m.next)
+	m.mu.Unlock()
+
+	// Build the whole session, including its settle timer, before it is
+	// visible to other goroutines: a concurrent CloseAll/CloseRepo must
+	// never observe a session with a nil settle timer or race its
+	// assignment.
+	s := &session{id: id, repoID: repoID, cmd: cmd, pty: f, done: make(chan struct{})}
+	s.settle = time.AfterFunc(time.Hour, func() { m.fireSettle(s) })
+	s.settle.Stop()
+
+	m.mu.Lock()
 	m.tabs[s.id] = s
 	m.mu.Unlock()
 
-	s.settle = time.AfterFunc(time.Hour, func() { m.fireSettle(s) })
-	s.settle.Stop()
 	go m.read(s)
 	return s.id, nil
 }
@@ -155,6 +164,14 @@ func (m *Manager) Close(tab string) error {
 	if !ok {
 		return ErrUnknownTab
 	}
+	// If the shell has already been reaped, its pid/pgid may since have
+	// been recycled onto an unrelated process. Never signal in that case.
+	select {
+	case <-s.done:
+		s.pty.Close()
+		return nil
+	default:
+	}
 	s.settle.Stop()
 	groups := []int{s.cmd.Process.Pid}
 	if fg := foregroundGroup(s.pty); fg > 0 && fg != groups[0] {
@@ -170,7 +187,12 @@ func (m *Manager) Close(tab string) error {
 		for _, g := range groups {
 			syscall.Kill(-g, syscall.SIGKILL)
 		}
-		<-s.done
+		select {
+		case <-s.done:
+		case <-time.After(killAfter):
+			// The reader goroutine is leaked in this pathological case;
+			// Close must not hang the caller waiting for it.
+		}
 	}
 	return nil
 }
@@ -199,9 +221,8 @@ func (m *Manager) ids(keep func(*session) bool) []string {
 	return out
 }
 
-// foregroundGroup reads the pty's foreground process group without calling
-// Fd(), which would switch the file to blocking mode and stop Close from
-// unblocking the reader.
+// foregroundGroup reads the pty's foreground process group, reaching the
+// fd via SyscallConn.
 func foregroundGroup(f *os.File) int {
 	rc, err := f.SyscallConn()
 	if err != nil {

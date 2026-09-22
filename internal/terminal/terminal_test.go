@@ -149,6 +149,27 @@ func TestExitReportsCodeAndRejectsWrites(t *testing.T) {
 	}
 }
 
+// TestCloseAfterExitReturnsPromptly ensures Close on an already-exited tab
+// never signals a reaped (and possibly recycled) pid/pgid: it must return
+// well under killAfter, before any SIGKILL fallback could fire.
+func TestCloseAfterExitReturnsPromptly(t *testing.T) {
+	m, r := newTestManager(t)
+	tab, _ := m.Open("repo1", t.TempDir(), 80, 24)
+	m.Write(tab, "exit 0\r")
+	select {
+	case <-r.exited:
+	case <-time.After(5 * time.Second):
+		t.Fatal("no exit")
+	}
+	start := time.Now()
+	if err := m.Close(tab); err != nil {
+		t.Fatalf("close after exit: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed >= killAfter {
+		t.Fatalf("close took %v, wanted well under killAfter (%v)", elapsed, killAfter)
+	}
+}
+
 func TestCloseKillsForegroundJob(t *testing.T) {
 	m, r := newTestManager(t)
 	tab, _ := m.Open("repo1", t.TempDir(), 80, 24)
