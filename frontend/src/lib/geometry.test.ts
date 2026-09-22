@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { arrowAt, edgeSegment, graphWidth, laneColor, laneX, LANE_COLORS, refBadgeBorderColor, rowCenterY, visibleRange } from './geometry'
+import { arrowAt, edgeSegment, graphWidth, laneColor, laneX, LANE_COLORS, rowCenterY, visibleRange } from './geometry'
 import { EDGE_ARROW_DOWN, EDGE_ARROW_UP, EDGE_LINE, type Edge, type LogRow } from './types'
 
 const row = (lane: number, edges: Edge[] = []): LogRow =>
@@ -66,21 +66,5 @@ describe('laneColor', () => {
   it('cycles through the palette', () => {
     expect(laneColor(0)).toBe(LANE_COLORS[0])
     expect(laneColor(LANE_COLORS.length + 1)).toBe(LANE_COLORS[1])
-  })
-})
-
-describe('refBadgeBorderColor', () => {
-  it('takes the lane color for local and remote branches', () => {
-    expect(refBadgeBorderColor('local', 0)).toBe(LANE_COLORS[0])
-    expect(refBadgeBorderColor('remote', 2)).toBe(LANE_COLORS[2])
-  })
-
-  it('gives the same color to two refs sharing a commit', () => {
-    expect(refBadgeBorderColor('local', 3)).toBe(refBadgeBorderColor('remote', 3))
-  })
-
-  it('leaves tags and head with no lane color', () => {
-    expect(refBadgeBorderColor('tag', 1)).toBeNull()
-    expect(refBadgeBorderColor('head', 1)).toBeNull()
   })
 })

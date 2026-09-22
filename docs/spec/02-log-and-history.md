@@ -50,19 +50,18 @@ distinctly from an ordinary commit's. The commit currently checked out as
 `HEAD` is marked by drawing its graph dot hollow (outlined, not filled)
 rather than by an extra badge.
 
-A local or remote-tracking branch's badge is bordered in the colour of the
-graph lane its commit sits in, drawn from the same palette and the same
-per-row colour index the graph itself uses — the badge's text and
-background are unchanged, only the border carries the lane's colour, since
-that palette is tuned for a 2px graph line rather than for small text sitting
-on a coloured fill, and a border keeps the badge legible in both themes
-without a second, separate colour scheme. Two branches pointing at the same
-commit share its lane colour; that is expected, not a bug, since the colour
-identifies the lane, not any one branch (see the graph's own colour rule
-below). A tag's badge is not coloured this way and keeps its existing accent
-styling: a tag marks a single point in history rather than a moving line of
-development, so borrowing a lane colour it happens to share with an
-unrelated branch would suggest a relationship that is not there.
+A ref's badge is coloured by its kind, not by where its commit sits in the
+graph: every local or remote-tracking branch badge takes one hue (a soft
+tinted background with its label text in a saturated shade of the same
+hue), and every tag badge takes a second, distinct hue in the same style.
+The graph's lane colour (see below) is deliberately not reused here — the
+lane is already shown two columns to the left, so repeating it on the badge
+would add nothing, while "is this a branch or a tag" is information the
+badge can usefully carry instead. The branch currently checked out is drawn
+with the same branch hue as any other branch badge, not a different colour,
+but its own badge's text is bolder than an ordinary branch badge's — the
+one piece of the current-branch emphasis this view still carries, alongside
+the hollow `HEAD` dot in the graph.
 
 ### Paging
 
@@ -151,6 +150,10 @@ selection rather than silently reverting to "All branches".
 
 ## Selecting a commit and the details pane
 
+A log row has no hover highlight — passing the pointer over it leaves it
+unchanged, so the log doesn't read as banded. The selected row is still
+highlighted, and stays highlighted regardless of the pointer's position.
+
 Selecting a row (a click, or landing on it via a graph-arrow jump) opens the
 details pane beneath the log. The pane shows the commit's full subject and
 body, its author and email, its full commit date, its full hash (copyable)
@@ -203,9 +206,9 @@ needs, searching hides the graph column for the results it returns.
    intact under the active filters — never under a text, author, or date
    filter, always under a plain, ref, or path filter.
 5. A lane's colour identifies the lane while it exists, not the branch or
-   ref associated with it; colours are reused once a lane closes. A branch
-   badge borrows this same colour (as a border) for the lane its commit
-   currently sits in; a tag badge does not.
+   ref associated with it; colours are reused once a lane closes. A ref
+   badge's colour identifies its kind (branch or tag) instead, and is
+   unrelated to any lane colour.
 6. A merge commit's file list and diff are always computed against its
    first parent only.
 7. The free-text filter matches the commit message alone, case-insensitively,
@@ -219,6 +222,7 @@ needs, searching hides the graph column for the results it returns.
 None: no earlier design document describing the commit log or graph was
 found in this repository to compare the built behaviour against.
 
-Added since the previous revision of this document: branch badges are now
-coloured by graph lane, and the log can be ordered by commit date as an
-alternative to the topological default.
+Added since the previous revision of this document: ref badges are now
+coloured by kind (branch vs tag) rather than left uncoloured, the log can be
+ordered by commit date as an alternative to the topological default, and
+hovering a log row no longer highlights it (selecting one still does).
