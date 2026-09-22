@@ -2969,9 +2969,9 @@ switching repositories never carries one repository's dismissal to another.
 
 Also add `loadRemoteInfo()`, `loadStashEntries()` and `loadOwedStashDrop()` to `selectRepo`'s existing `loadMergeState(); loadWorktreeState()` pair, and import `AheadBehind`, `GitSettings`, `StashEntry` at the top of `stores.ts`.
 
-In `frontend/src/lib/actions.ts`, add near `abortMerge`/`commitMerge` and import `promptDialog`, `PULL_UP_TO_DATE` alongside the existing imports:
+In `frontend/src/lib/actions.ts`, work near `abortMerge`/`commitMerge`, and
+import `promptDialog` and `PULL_UP_TO_DATE` alongside the existing imports.
 
-```ts
 Replace `abortMerge`'s hardcoded merge wording with the kind-aware one, and
 stop `commitMerge` from showing the merge-commit warning for a rebase (which
 `commitWarning` now returns null for anyway — this keeps the two in step):
