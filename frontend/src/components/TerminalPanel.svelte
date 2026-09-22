@@ -5,7 +5,7 @@
   import TerminalView from './TerminalView.svelte'
   import { api } from '../lib/api'
   import { checkExternalChanges } from '../lib/actions'
-  import { busy, loadRepos, selectedRepo, selectedRepoId, terminalOpen } from '../lib/stores'
+  import { busy, loadRepos, repos, selectedRepo, selectedRepoId, terminalOpen } from '../lib/stores'
   import { addTab, markExited, removeTab, setActive, settledAction, tabTitle, tabsFor, terminalState } from '../lib/terminal'
   import { errorMessage, toast } from '../lib/ui'
   import { get } from 'svelte/store'
@@ -30,7 +30,12 @@
     EventsOn('terminal:data', (p: { tab: string; data: string }) => {
       const w = writers.get(p.tab)
       if (w) w(p.data)
-      else early.set(p.tab, (early.get(p.tab) ?? '') + p.data)
+      // A tab that no longer exists (closed, or its repo's tabs removed)
+      // can still have data in flight from the backend; buffering it in
+      // `early` forever would leak, since nothing will ever register a
+      // writer for it. Only buffer for a tab that still exists but whose
+      // view has not mounted yet.
+      else if (get(terminalState).tabs.some((t) => t.id === p.tab)) early.set(p.tab, (early.get(p.tab) ?? '') + p.data)
     }),
     EventsOn('terminal:exit', (p: { tab: string; code: number }) => terminalState.update((s) => markExited(s, p.tab, p.code))),
     EventsOn('terminal:settled', (p: { tab: string; repo: string }) => {
@@ -44,6 +49,13 @@
     try {
       // The view refits to the real size as soon as it mounts.
       const id = await api.terminalOpen(repoId, 80, 24)
+      // The repo can have been removed from the sidebar while the open
+      // call was in flight; adding the tab then would leak the shell,
+      // since nothing would ever close it.
+      if (!get(repos).some((r) => r.id === repoId)) {
+        await api.terminalClose(id).catch(() => {})
+        return
+      }
       terminalState.update((s) => addTab(s, repoId, id, shell))
     } catch (e) {
       toast(errorMessage(e), 'error')
@@ -66,6 +78,10 @@
   // also require $terminalOpen — otherwise switching repositories while
   // the terminal is closed would silently spawn a shell for each one.
   const autoOpened = new Set<string>()
+  // A repo that is removed and later re-added (same id) must auto-open
+  // again, so its entry is forgotten as soon as the repo disappears from
+  // the store — otherwise autoOpened would wrongly remember it forever.
+  $: for (const id of autoOpened) if (!$repos.some((r) => r.id === id)) autoOpened.delete(id)
   $: if ($terminalOpen && repoId && tabs.length === 0 && !autoOpened.has(repoId)) {
     autoOpened.add(repoId)
     open(repoId)

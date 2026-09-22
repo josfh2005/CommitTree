@@ -236,6 +236,53 @@ func TestFlushKeepsSplitRune(t *testing.T) {
 	}
 }
 
+func TestShellEnvAddsLangWhenLocaleAbsent(t *testing.T) {
+	base := []string{"PATH=/usr/bin", "HOME=/home/x"}
+	env := shellEnv(base)
+	if !containsEnv(env, "LANG=en_US.UTF-8") {
+		t.Fatalf("LANG not added: %v", env)
+	}
+	if !containsEnv(env, "TERM=xterm-256color") || !containsEnv(env, "COLORTERM=truecolor") {
+		t.Fatalf("TERM/COLORTERM missing: %v", env)
+	}
+}
+
+func TestShellEnvLeavesLangUnchanged(t *testing.T) {
+	base := []string{"PATH=/usr/bin", "LANG=fr_FR.UTF-8"}
+	env := shellEnv(base)
+	if containsEnv(env, "LANG=en_US.UTF-8") {
+		t.Fatalf("LANG overridden: %v", env)
+	}
+	if !containsEnv(env, "LANG=fr_FR.UTF-8") {
+		t.Fatalf("original LANG dropped: %v", env)
+	}
+}
+
+func TestShellEnvLeavesLcAllUnchanged(t *testing.T) {
+	base := []string{"PATH=/usr/bin", "LC_ALL=C"}
+	env := shellEnv(base)
+	if containsEnv(env, "LANG=en_US.UTF-8") {
+		t.Fatalf("LANG added despite LC_ALL: %v", env)
+	}
+}
+
+func TestShellEnvLeavesLcCtypeUnchanged(t *testing.T) {
+	base := []string{"PATH=/usr/bin", "LC_CTYPE=C"}
+	env := shellEnv(base)
+	if containsEnv(env, "LANG=en_US.UTF-8") {
+		t.Fatalf("LANG added despite LC_CTYPE: %v", env)
+	}
+}
+
+func containsEnv(env []string, kv string) bool {
+	for _, e := range env {
+		if e == kv {
+			return true
+		}
+	}
+	return false
+}
+
 func TestDefaultShellFallback(t *testing.T) {
 	t.Setenv("SHELL", "")
 	if s := DefaultShell(); s != "/bin/zsh" && s != "/bin/sh" {

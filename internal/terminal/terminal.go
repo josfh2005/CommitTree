@@ -47,6 +47,13 @@ type session struct {
 	pty        *os.File
 	done       chan struct{} // closed once the shell has been reaped
 
+	// emitMu serializes calls to OnData: it is held across taking the
+	// buffer and calling the callback, so the timer-driven flush and the
+	// final EOF flush (both of which can fire around the same time) never
+	// call OnData concurrently and reorder chunks, which would corrupt
+	// escape sequences split across them.
+	emitMu sync.Mutex
+
 	mu       sync.Mutex
 	buf      []byte
 	flushing bool
@@ -86,7 +93,7 @@ func (m *Manager) Shell() string { return filepath.Base(m.shell) }
 func (m *Manager) Open(repoID, dir string, cols, rows int) (string, error) {
 	cmd := exec.Command(m.shell, "-l")
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "TERM=xterm-256color", "COLORTERM=truecolor")
+	cmd.Env = shellEnv(os.Environ())
 	// StartWithSize makes the shell a session leader with the pty as its
 	// controlling terminal, so it is also its own process group.
 	f, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
@@ -112,6 +119,28 @@ func (m *Manager) Open(repoID, dir string, cols, rows int) (string, error) {
 
 	go m.read(s)
 	return s.id, nil
+}
+
+// shellEnv builds the shell's environment from base (the app's own inherited
+// environment): TERM and COLORTERM are always added, and LANG is added as a
+// UTF-8 default only when none of LC_ALL, LC_CTYPE or LANG is already set —
+// launching the app from Finder rather than a shell profile often leaves all
+// three unset, which makes line-drawing and other non-ASCII shell output
+// render as replacement characters.
+func shellEnv(base []string) []string {
+	hasLocale := false
+	for _, e := range base {
+		for _, prefix := range []string{"LC_ALL=", "LC_CTYPE=", "LANG="} {
+			if strings.HasPrefix(e, prefix) && e != prefix {
+				hasLocale = true
+			}
+		}
+	}
+	env := append([]string(nil), base...)
+	if !hasLocale {
+		env = append(env, "LANG=en_US.UTF-8")
+	}
+	return append(env, "TERM=xterm-256color", "COLORTERM=truecolor")
 }
 
 func (m *Manager) get(tab string) (*session, error) {
@@ -269,6 +298,8 @@ func (m *Manager) read(s *session) {
 }
 
 func (m *Manager) flush(s *session) {
+	s.emitMu.Lock()
+	defer s.emitMu.Unlock()
 	s.mu.Lock()
 	head, rest := splitUTF8(s.buf)
 	s.buf = append([]byte(nil), rest...)

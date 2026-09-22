@@ -35,8 +35,8 @@ Closing a tab, whether it is still running or already exited, never asks
 for confirmation. Closing sends SIGHUP to the shell's own process group and
 to the terminal's current foreground process group (so a job-control shell's
 running job is hung up too, the same as closing a real terminal window
-closes its jobs), then waits up to two seconds before sending SIGKILL to
-either group that is still alive. A background job the shell has disowned
+closes its jobs), then waits up to two seconds; if the shell itself has not
+exited by then, SIGKILL is sent to both groups. A background job the shell has disowned
 (`nohup`, `disown`) survives the shell's own SIGHUP the same way it would
 survive closing an external terminal.
 
@@ -96,17 +96,26 @@ selected repository:
 ## Busy notice
 
 While an application operation (a commit, a pull, a merge, and so on) is
-running against the selected repository, the terminal's tab bar shows
-"Operation running: `<label>`" using the same label the rest of the
-interface already shows for that operation. This is informational only —
-see Safety below for why it does not stop the user from typing.
+running, the terminal's tab bar shows "Operation running: `<label>`" using
+the same label the rest of the interface already shows for that operation —
+`busy` is a single, application-wide label (see Conventions and
+constraints), not one scoped to the selected repository, so the notice shows
+regardless of which repository the operation targets. This is informational
+only — see Safety below for why it does not stop the user from typing.
 
 ## Safety
 
 - **Not sandboxed.** The shell runs as the user, with their own login-shell
-  profile and the application's environment (the same `PATH` repairs and
-  variables every git invocation gets). It can do anything a terminal
-  application on the same machine can do.
+  profile and the application's own environment, including its `PATH`
+  repair, plus `TERM=xterm-256color` and `COLORTERM=truecolor`. If none of
+  `LC_ALL`, `LC_CTYPE` or `LANG` is already set in that inherited
+  environment — as happens when the application is launched from Finder
+  rather than a shell — `LANG=en_US.UTF-8` is added too, so shell output
+  that relies on a UTF-8 locale still renders correctly. This is not the
+  same environment a git invocation gets: `GIT_TERMINAL_PROMPT=0` and
+  `LC_ALL=C` are added only to the application's own git commands, not to
+  the shell. The shell can do anything a terminal application on the same
+  machine can do.
 - **Bypasses the write lock, by design.** Every mutating action the rest of
   the application performs takes that repository's write lock first (see
   Conventions and constraints); the embedded terminal does not, and nothing

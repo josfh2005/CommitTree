@@ -45,7 +45,10 @@
   function toggleTerminal(e: KeyboardEvent) {
     if (e.ctrlKey && !e.metaKey && !e.altKey && e.code === 'Backquote') {
       e.preventDefault()
-      terminalOpen.update((v) => !v)
+      // Opening needs a selected, present repository — same condition the
+      // header button is disabled under — so the shortcut can't open an
+      // empty panel. Closing is always allowed.
+      terminalOpen.update((v) => (v ? false : !!$selectedRepo && !$selectedRepo.missing))
     }
   }
 

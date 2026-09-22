@@ -267,10 +267,10 @@ described above.
 
 ### macOS and Linux only
 
-The embedded terminal (see Terminal) is built on a real pty (`github.com/
-creack/pty` on the backend, `@xterm/xterm` with `@xterm/addon-fit` in the
-frontend) and is only available on macOS and Linux; there is no Windows
-console (ConPTY) implementation. Every other feature is unaffected by this.
+The embedded terminal (see Terminal) is built on a real pseudo-terminal on
+the backend and a terminal emulator component in the frontend, and is only
+available on macOS and Linux; there is no Windows console (ConPTY)
+implementation. Every other feature is unaffected by this.
 
 ### How the backend tells the frontend that something changed
 
