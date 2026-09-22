@@ -5,13 +5,14 @@
   import { api } from '../lib/api'
   import { formatBytes, percent } from '../lib/format'
   import { modelForProvider, modelHint, needsKey, processingNotice, PROVIDERS, settingsHaveModels, usesOllama } from '../lib/providers'
-  import { loadAISettings, settingsOpen } from '../lib/stores'
-  import type { AISettings, AIStatus, ModelDone, ModelProgress, ProviderName, PromptInfo } from '../lib/types'
+  import { loadAISettings, loadGitSettings, settingsOpen } from '../lib/stores'
+  import type { AISettings, AIStatus, GitSettings, ModelDone, ModelProgress, ProviderName, PromptInfo } from '../lib/types'
   import { errorMessage, toast } from '../lib/ui'
 
   const RECOMMENDED = 'qwen2.5:7b'
 
   let settings: AISettings | null = null
+  let git: GitSettings = { pullStrategy: 'auto' }
   let status: AIStatus | null = null
   let prompts: PromptInfo[] = []
   let pull: ModelProgress | null = null
@@ -48,11 +49,21 @@
     try {
       settings = await api.getAISettings()
       prompts = await api.listPrompts()
+      git = await api.getGitSettings()
     } catch (e) {
       toast(errorMessage(e), 'error')
     }
     await refresh()
     await syncModels()
+  }
+
+  async function saveGit() {
+    try {
+      await api.saveGitSettings(git)
+      await loadGitSettings() // keeps the store the rest of the app reads in step
+    } catch (e) {
+      toast(errorMessage(e), 'error')
+    }
   }
 
   async function refresh() {
@@ -341,6 +352,18 @@
           </div>
         {/each}
         <button class="btn" on:click={openFolder}>Open prompts folder</button>
+      </section>
+
+      <section>
+        <h3>Git</h3>
+        <label>
+          Pull strategy
+          <select bind:value={git.pullStrategy} on:change={saveGit}>
+            <option value="auto">Auto — follow this repository's git config</option>
+            <option value="merge">Always merge</option>
+            <option value="rebase">Always rebase</option>
+          </select>
+        </label>
       </section>
 
       <footer>{processingNotice(settings.chatProvider, settings.taskProvider, remote)}</footer>

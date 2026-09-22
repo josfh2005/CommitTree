@@ -5,6 +5,7 @@
   import LogList from './LogList.svelte'
   import MergeView from './MergeView.svelte'
   import Splitter from './Splitter.svelte'
+  import Toolbar from './Toolbar.svelte'
   import { chatOpen, detailsHeight, mergeState, selectedHash, selectedRepo } from '../lib/stores'
 </script>
 
@@ -16,6 +17,9 @@
         <span class="path ellipsis">{$selectedRepo.path}</span>
       {/if}
     </div>
+    {#if $selectedRepo && !$selectedRepo.missing}
+      <Toolbar repoId={$selectedRepo.id} />
+    {/if}
     {#if !$chatOpen}
       <button class="icon-btn" title="Show chat" on:click={() => chatOpen.set(true)}><Icon name="panel-right" /></button>
     {/if}
