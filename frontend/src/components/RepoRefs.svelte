@@ -234,10 +234,15 @@
     </div>
     {#if showStash}
       {#each $stashEntries as entry (entry.index)}
-        <button class="row-item ref" on:contextmenu={(e) => stashMenu(e, entry)}>
+        <!-- Not a button: the diff preview a click would open is deliberately
+             deferred, so there is nothing here to activate from the keyboard
+             or a left-click — only the context menu below. role="none" keeps
+             it out of the tab order while still satisfying the a11y rule
+             that a static element with a contextmenu handler needs a role. -->
+        <div class="row-item ref" role="none" on:contextmenu={(e) => stashMenu(e, entry)}>
           <span class="mark"><Icon name="download" size={12} /></span>
           <span class="ellipsis">{entry.message}</span>
-        </button>
+        </div>
       {:else}
         <div class="none">No stashed changes</div>
       {/each}
@@ -250,6 +255,7 @@
   .section { display: flex; align-items: center; justify-content: space-between; height: 30px; padding: 6px 4px 0 10px; }
   .ref { height: 26px; }
   .changes .count { margin-left: auto; font-size: 11px; padding: 0 6px; border-radius: 4px; background: var(--hover); color: var(--muted); }
+  .section .count { font-size: 11px; color: var(--faint); }
   .mark { width: 12px; flex: none; display: inline-grid; place-items: center; color: var(--muted); }
   .current { font-weight: 500; }
   .detached { color: var(--muted); }

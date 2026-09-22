@@ -105,7 +105,10 @@
   }
 
   function actionsFor(file: { path: string; status: string }) {
-    if (file.status === 'unstaged') {
+    // A plain text conflict is staged the same way an unstaged file is —
+    // merge.Stage refuses one that still has conflict markers left in it,
+    // and that error surfaces as a toast, so no extra guard is needed here.
+    if (file.status === 'conflict' || file.status === 'unstaged') {
       return [{ label: 'Stage', run: () => stageMergeFile(repoId, file.path), disabled: !!$busy, title: 'Add to the merge commit' }]
     }
     if (file.status === 'staged') {

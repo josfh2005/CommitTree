@@ -83,6 +83,59 @@ func TestStashPopConflictDropsAutomaticallyOnceResolved(t *testing.T) {
 	}
 }
 
+// The plan's sanctioned "Done → Changes view" path can settle the git-level
+// conflict outside StageMergeFile entirely — an editor's own "mark resolved"
+// runs `git add` directly, same as a terminal `git add` does, which is the
+// only workaround the Critical finding leaves for a kind with no AI button.
+// Once that happens, the file is an ordinary tracked one again as far as
+// git is concerned; resetting it back out of the index (say, to double
+// check the diff before recommitting) and re-staging it through the
+// Changes view's own Stage button calls StageFile (worktree.Stage →
+// writeWorktree), never StageMergeFile (merge.Stage → writeMerge).
+// writeWorktree must settle the same owed drop writeMerge does, or the
+// popped stash survives forever with nothing telling the user it's owed.
+func TestStashPopConflictDropsAutomaticallyWhenResolvedFromChangesView(t *testing.T) {
+	a, r, id := newPlainApp(t)
+	r.WriteFile("f.txt", "one\n")
+	r.Git("add", "f.txt")
+	r.Git("commit", "-q", "-m", "base f")
+	r.WriteFile("f.txt", "stashed\n")
+	r.Git("stash", "push", "-q", "-m", "wip")
+	r.WriteFile("f.txt", "conflicting\n")
+	r.Git("commit", "-q", "-am", "conflicting")
+
+	if err := a.StashPop(id, 0); err != nil {
+		t.Fatal(err)
+	}
+	if owed := a.OwedStashDrop(id); owed != 0 {
+		t.Fatalf("owed = %d, want 0 — the conflicted Pop still owes a drop", owed)
+	}
+
+	// Resolve the conflict the way an editor's merge tool would — a plain
+	// `git add`, with no App call at all — then back it out of the index so
+	// the file is an ordinary Unstaged entry the Changes view can see.
+	r.WriteFile("f.txt", "resolved\n")
+	r.Git("add", "f.txt")
+	r.Git("reset", "-q", "f.txt")
+	if owed := a.OwedStashDrop(id); owed != 0 {
+		t.Fatalf("owed = %d, want 0 still — nothing in the App has run since the terminal resolved it", owed)
+	}
+
+	if err := a.StageFile(id, "f.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if owed := a.OwedStashDrop(id); owed != -1 {
+		t.Errorf("owed = %d, want -1 once the Changes view's own Stage settles it", owed)
+	}
+	entries, err := a.GetStashEntries(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("entries = %+v, want the owed stash dropped once resolved from the Changes view", entries)
+	}
+}
+
 // A stash index is not stable across the async gap a conflicted Pop opens:
 // dropping some other stash before the conflict is resolved shifts every
 // index below it down by one. The owed drop must still land on the entry

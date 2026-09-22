@@ -160,10 +160,15 @@ func (a *App) TakeMergeSide(id, path, side string) error {
 // left behind once resolving it leaves nothing unmerged, then tells the
 // merge view and any running agent's UI that something moved.
 func (a *App) writeMerge(id string, fn func(ctx context.Context, dir string) error) error {
-	if err := a.write(id, fn); err != nil {
+	if err := a.write(id, func(ctx context.Context, dir string) error {
+		if err := fn(ctx, dir); err != nil {
+			return err
+		}
+		a.finishOwedDrop(id, ctx, dir)
+		return nil
+	}); err != nil {
 		return err
 	}
-	a.finishOwedDrop(id)
 	a.emit(EventMergeChanged, MergeChangedEvent{RepoID: id})
 	return nil
 }
@@ -181,28 +186,30 @@ func (a *App) writeMerge(id string, fn func(ctx context.Context, dir string) err
 // means a shift never makes this drop the wrong entry — at worst the owed
 // one is already gone (dropped by hand, or the reminder outlived a restart)
 // and nothing here matches, so nothing is dropped.
-func (a *App) finishOwedDrop(id string) {
+//
+// Callers must already hold the repository's write lock (they run this from
+// inside their a.write closure, passing that closure's ctx and dir) so the
+// List → Drop pair below can't interleave with a concurrent StashDrop, which
+// would otherwise be free to shift indices between the two and make this
+// drop the wrong entry.
+func (a *App) finishOwedDrop(id string, ctx context.Context, dir string) {
 	v, ok := a.owedDrops.Load(id)
 	if !ok {
 		return
 	}
-	dir, err := a.dir(id)
-	if err != nil {
-		return
-	}
-	st, err := merge.Status(a.ctx, dir)
+	st, err := merge.Status(ctx, dir)
 	if err != nil || st.Merging {
 		return
 	}
 	a.owedDrops.Delete(id)
 	sha := v.(string)
-	entries, err := stash.List(a.ctx, dir)
+	entries, err := stash.List(ctx, dir)
 	if err != nil {
 		return
 	}
 	for _, e := range entries {
 		if e.Hash == sha {
-			_ = stash.Drop(a.ctx, dir, e.Index)
+			_ = stash.Drop(ctx, dir, e.Index)
 			return
 		}
 	}
