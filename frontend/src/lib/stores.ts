@@ -1,5 +1,6 @@
 import { derived, get, writable, type Writable } from 'svelte/store'
 import { api } from './api'
+import { validSelectedStash } from './stash'
 import { emptyFilters, type AISettings, type AheadBehind, type Filters, type GitSettings, type MergeState, type Refs, type Repo, type StashEntry, type WorktreeState } from './types'
 
 function persisted<T>(key: string, initial: T): Writable<T> {
@@ -44,9 +45,15 @@ export const worktreeState = writable<WorktreeState | null>(null)
  *  refreshed after Settings saves — see SettingsDialog's save(). */
 export const aiSettings = writable<AISettings | null>(null)
 /** Which view the main pane shows: the log (with commit details / the merge
- *  view below it) or the Changes view. A merge in progress always wins over
- *  'changes' — see selectMainView below. */
-export const mainView = writable<'log' | 'changes'>('log')
+ *  view below it), the Changes view, or a stash preview. A merge in
+ *  progress always wins over either — see conflictOwnsScreen in remote.ts,
+ *  which App.svelte applies on top of this. */
+export const mainView = writable<'log' | 'changes' | 'stash'>('log')
+/** Which stash the sidebar has selected for the preview pane, or null when
+ *  none is. Revalidated against the current list in loadStashEntries, and
+ *  cleared outright on a repository switch — see selectRepo and
+ *  validSelectedStash. */
+export const selectedStashIndex = writable<number | null>(null)
 
 export const remoteInfo = writable<AheadBehind | null>(null)
 export const stashEntries = writable<StashEntry[]>([])
@@ -155,9 +162,19 @@ export async function loadStashEntries() {
     const entries = await api.getStashEntries(repo.id)
     if (get(selectedRepoId) !== repo.id) return
     stashEntries.set(entries)
+    selectedStashIndex.update((i) => validSelectedStash(i, entries))
   } catch {
     stashEntries.set([])
+    selectedStashIndex.set(null)
   }
+}
+
+/** selectStash opens the stash preview for entry index — a sidebar click.
+ *  Mirrors openChanges' cross-repo handling: the caller selects the target
+ *  repository first when it differs from the one already selected. */
+export function selectStash(index: number) {
+  selectedStashIndex.set(index)
+  mainView.set('stash')
 }
 
 export async function loadGitSettings() {
@@ -195,6 +212,7 @@ export function selectRepo(id: string) {
     selectedHash.set('')
     mainView.set('log')
     stashConflictDismissed.set(false)
+    selectedStashIndex.set(null)
   }
   selectedRepoId.set(id)
   // Selecting a folded repo unfolds it; folding it later keeps it selected.

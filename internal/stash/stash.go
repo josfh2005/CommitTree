@@ -102,6 +102,77 @@ func Diff(ctx context.Context, dir string, index int) (string, error) {
 	return gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "stash", "show", "-p", ref(index))
 }
 
+// File is one path touched by a stash, tracked and untracked together.
+type File struct {
+	Path      string `json:"path"`
+	Status    string `json:"status"`
+	Untracked bool   `json:"untracked"`
+}
+
+// Files lists every path a stash touches: tracked changes against the
+// stash's first parent, plus any untracked files it captured in its third
+// parent (only present when the stash was pushed with -u). `git stash show`
+// cannot be used for this — it ignores both --name-status and a pathspec
+// (verified against git 2.54: it prints the whole patch or "Empty stash"
+// regardless), so this reads the stash commit's parents with plain diff
+// plumbing instead, the same trick List already uses for `stash list`.
+func Files(ctx context.Context, dir string, index int) ([]File, error) {
+	files := []File{}
+	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "diff", "--name-status", ref(index)+"^1", ref(index))
+	if err != nil {
+		return nil, err
+	}
+	for _, line := range splitNonEmpty(out) {
+		fields := strings.SplitN(line, "\t", 2)
+		if len(fields) != 2 {
+			continue
+		}
+		files = append(files, File{Status: fields[0], Path: fields[1]})
+	}
+	if hasUntrackedParent(ctx, dir, index) {
+		out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "show", "--name-status", "--format=", ref(index)+"^3")
+		if err != nil {
+			return nil, err
+		}
+		for _, line := range splitNonEmpty(out) {
+			fields := strings.SplitN(line, "\t", 2)
+			if len(fields) != 2 {
+				continue
+			}
+			files = append(files, File{Status: fields[0], Path: fields[1], Untracked: true})
+		}
+	}
+	return files, nil
+}
+
+// FileDiff returns one file's patch out of a stash: the ordinary diff
+// against its stashed base for a tracked file, or its whole content shown
+// as an addition (via `git show` on the untracked third parent) for one
+// that was only ever untracked.
+func FileDiff(ctx context.Context, dir string, index int, path string) (string, error) {
+	if hasUntrackedParent(ctx, dir, index) {
+		if out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "show", ref(index)+"^3", "--", path); err == nil && out != "" {
+			return out, nil
+		}
+	}
+	return gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "diff", ref(index)+"^1", ref(index), "--", path)
+}
+
+// hasUntrackedParent reports whether the stash commit has a third parent,
+// which only exists when it was pushed with --include-untracked (or -a).
+func hasUntrackedParent(ctx context.Context, dir string, index int) bool {
+	_, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--verify", "--quiet", ref(index)+"^3")
+	return err == nil
+}
+
+func splitNonEmpty(s string) []string {
+	s = strings.TrimRight(s, "\n")
+	if s == "" {
+		return nil
+	}
+	return strings.Split(s, "\n")
+}
+
 func ref(index int) string { return fmt.Sprintf("stash@{%d}", index) }
 
 // parseIndex pulls N out of "stash@{N}".

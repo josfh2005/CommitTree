@@ -190,6 +190,109 @@ func TestPushWithNothingToStash(t *testing.T) {
 	}
 }
 
+func TestFilesListsATrackedChange(t *testing.T) {
+	r := base(t)
+	r.WriteFile("a.txt", "changed\n")
+	if err := stash.Push(ctx, r.Dir, "wip", false); err != nil {
+		t.Fatal(err)
+	}
+	files, err := stash.Files(ctx, r.Dir, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 {
+		t.Fatalf("files = %+v, want one", files)
+	}
+	if files[0].Path != "a.txt" {
+		t.Errorf("path = %q, want a.txt", files[0].Path)
+	}
+	if files[0].Status != "M" {
+		t.Errorf("status = %q, want M", files[0].Status)
+	}
+	if files[0].Untracked {
+		t.Error("Untracked = true, want false for a tracked change")
+	}
+}
+
+func TestFilesIncludesAnUntrackedFile(t *testing.T) {
+	r := base(t)
+	r.WriteFile("a.txt", "changed\n")
+	r.WriteFile("new.txt", "brand new\n")
+	if err := stash.Push(ctx, r.Dir, "with untracked", true); err != nil {
+		t.Fatal(err)
+	}
+	files, err := stash.Files(ctx, r.Dir, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 2 {
+		t.Fatalf("files = %+v, want two", files)
+	}
+	var tracked, untracked *stash.File
+	for i := range files {
+		switch files[i].Path {
+		case "a.txt":
+			tracked = &files[i]
+		case "new.txt":
+			untracked = &files[i]
+		}
+	}
+	if tracked == nil || tracked.Untracked {
+		t.Errorf("tracked = %+v, want a.txt marked tracked", tracked)
+	}
+	if untracked == nil || !untracked.Untracked {
+		t.Errorf("untracked = %+v, want new.txt marked untracked", untracked)
+	}
+}
+
+func TestFilesOnAStashOfOnlyUntrackedFiles(t *testing.T) {
+	r := base(t)
+	r.WriteFile("new.txt", "brand new\n")
+	if err := stash.Push(ctx, r.Dir, "only untracked", true); err != nil {
+		t.Fatal(err)
+	}
+	files, err := stash.Files(ctx, r.Dir, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 {
+		t.Fatalf("files = %+v, want one", files)
+	}
+	if files[0].Path != "new.txt" || !files[0].Untracked {
+		t.Errorf("files[0] = %+v, want new.txt marked untracked", files[0])
+	}
+}
+
+func TestFileDiffOfATrackedFile(t *testing.T) {
+	r := base(t)
+	r.WriteFile("a.txt", "changed\n")
+	if err := stash.Push(ctx, r.Dir, "wip", false); err != nil {
+		t.Fatal(err)
+	}
+	out, err := stash.FileDiff(ctx, r.Dir, 0, "a.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "changed") {
+		t.Errorf("diff = %q, missing the change", out)
+	}
+}
+
+func TestFileDiffOfAnUntrackedFile(t *testing.T) {
+	r := base(t)
+	r.WriteFile("new.txt", "brand new content\n")
+	if err := stash.Push(ctx, r.Dir, "with untracked", true); err != nil {
+		t.Fatal(err)
+	}
+	out, err := stash.FileDiff(ctx, r.Dir, 0, "new.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "brand new content") {
+		t.Errorf("diff = %q, missing the untracked file's content", out)
+	}
+}
+
 // A stash created outside the app (a bare terminal `git stash push`, no -m)
 // gets git's own "WIP on <branch>: <hash> <subject>" message instead of the
 // "On <branch>: <message>" shape Push always produces. List must still split

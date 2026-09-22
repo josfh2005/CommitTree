@@ -3,7 +3,7 @@
   import Icon from './Icon.svelte'
   import { checkoutBranch, deleteBranch, deleteTag, mergeBranch, newBranch, newTag, stashApply, stashDrop, stashPop } from '../lib/actions'
   import { groupBranches, leafName, type BranchGroup } from '../lib/branches'
-  import { busy, filters, mainView, mergeState, refs, selectRepo, selectedRepoId, stashEntries, worktreeState } from '../lib/stores'
+  import { busy, filters, mainView, mergeState, refs, selectRepo, selectStash, selectedRepoId, selectedStashIndex, stashEntries, worktreeState } from '../lib/stores'
   import type { Branch, Tag } from '../lib/types'
   import { changedCount } from '../lib/worktree'
   import { openMenu } from '../lib/ui'
@@ -102,6 +102,15 @@
       { label: 'Pop', action: () => stashPop(repoId, entry.index), disabled: !!$busy },
       { label: 'Drop', action: () => stashDrop(repoId, entry.index), danger: true, disabled: !!$busy },
     ])
+  }
+
+  // A single click previews the stash; a row for a repository other than the
+  // one on screen selects it first, the same cross-repo handling openChanges
+  // above uses. Double click applies it — Apply keeps the entry, so this
+  // needs no confirmation, matching the context menu's own Apply.
+  function openStash(entry: { index: number }) {
+    if (repoId !== $selectedRepoId) selectRepo(repoId)
+    selectStash(entry.index)
   }
 </script>
 
@@ -240,15 +249,16 @@
     </div>
     {#if showStash}
       {#each $stashEntries as entry (entry.index)}
-        <!-- Not a button: the diff preview a click would open is deliberately
-             deferred, so there is nothing here to activate from the keyboard
-             or a left-click — only the context menu below. role="none" keeps
-             it out of the tab order while still satisfying the a11y rule
-             that a static element with a contextmenu handler needs a role. -->
-        <div class="row-item ref" role="none" on:contextmenu={(e) => stashMenu(e, entry)}>
+        <button
+          class="row-item ref"
+          class:active={repoId === $selectedRepoId && $mainView === 'stash' && $selectedStashIndex === entry.index}
+          on:click={() => openStash(entry)}
+          on:dblclick={() => !$busy && stashApply(repoId, entry.index)}
+          on:contextmenu={(e) => stashMenu(e, entry)}
+        >
           <span class="mark"><Icon name="download" size={12} /></span>
           <span class="ellipsis">{entry.message}</span>
-        </div>
+        </button>
       {:else}
         <div class="none">No stashed changes</div>
       {/each}

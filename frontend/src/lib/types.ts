@@ -226,6 +226,12 @@ export interface StashEntry {
   hash: string
 }
 
+export interface StashFile {
+  path: string
+  status: string
+  untracked: boolean
+}
+
 export const MERGED = 0
 export const CONFLICTED = 1
 export const UP_TO_DATE = 2

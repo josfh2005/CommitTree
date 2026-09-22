@@ -125,6 +125,26 @@ func (a *App) GetStashDiff(id string, index int) (string, error) {
 	return tools.Truncate(out, worktreeDiffCap), nil
 }
 
+func (a *App) GetStashFiles(id string, index int) ([]stash.File, error) {
+	dir, err := a.dir(id)
+	if err != nil {
+		return nil, err
+	}
+	return stash.Files(a.ctx, dir, index)
+}
+
+func (a *App) GetStashFileDiff(id string, index int, path string) (string, error) {
+	dir, err := a.dir(id)
+	if err != nil {
+		return "", err
+	}
+	out, err := stash.FileDiff(a.ctx, dir, index, path)
+	if err != nil {
+		return "", err
+	}
+	return tools.Truncate(out, worktreeDiffCap), nil
+}
+
 // isStashConflict reports whether err is Apply/Pop leaving a conflict behind
 // rather than a real failure.
 func isStashConflict(ctx context.Context, dir string, err error) bool {

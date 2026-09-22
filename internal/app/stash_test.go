@@ -39,6 +39,51 @@ func TestStashPushListApplyPopDrop(t *testing.T) {
 	}
 }
 
+func TestGetStashFilesAndFileDiff(t *testing.T) {
+	a, r, id := newPlainApp(t)
+	r.WriteFile("f.txt", "changed\n")
+	r.WriteFile("new.txt", "brand new\n")
+	if err := a.StashPush(id, "wip", true); err != nil {
+		t.Fatal(err)
+	}
+	files, err := a.GetStashFiles(id, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 2 {
+		t.Fatalf("files = %+v, want two", files)
+	}
+	diff, err := a.GetStashFileDiff(id, 0, "f.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff == "" {
+		t.Error("diff of f.txt is empty")
+	}
+	udiff, err := a.GetStashFileDiff(id, 0, "new.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if udiff == "" {
+		t.Error("diff of new.txt is empty")
+	}
+}
+
+func TestGetStashFilesOnAnUntrackedOnlyStash(t *testing.T) {
+	a, r, id := newPlainApp(t)
+	r.WriteFile("new.txt", "brand new\n")
+	if err := a.StashPush(id, "only untracked", true); err != nil {
+		t.Fatal(err)
+	}
+	files, err := a.GetStashFiles(id, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 || !files[0].Untracked {
+		t.Errorf("files = %+v, want one untracked file", files)
+	}
+}
+
 // A Pop that conflicts leaves the stash entry in place and routes the
 // repository into the shared conflict view as Kind stash; resolving it by
 // staging the conflicted file drops the owed stash automatically.

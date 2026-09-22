@@ -760,6 +760,22 @@ export namespace stash {
 	        this.hash = source["hash"];
 	    }
 	}
+	export class File {
+	    path: string;
+	    status: string;
+	    untracked: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new File(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.status = source["status"];
+	        this.untracked = source["untracked"];
+	    }
+	}
 
 }
 

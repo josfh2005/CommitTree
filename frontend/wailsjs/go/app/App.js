@@ -146,6 +146,14 @@ export function GetStashEntries(arg1) {
   return window['go']['app']['App']['GetStashEntries'](arg1);
 }
 
+export function GetStashFileDiff(arg1, arg2, arg3) {
+  return window['go']['app']['App']['GetStashFileDiff'](arg1, arg2, arg3);
+}
+
+export function GetStashFiles(arg1, arg2) {
+  return window['go']['app']['App']['GetStashFiles'](arg1, arg2);
+}
+
 export function GetWorktreeDiff(arg1, arg2, arg3) {
   return window['go']['app']['App']['GetWorktreeDiff'](arg1, arg2, arg3);
 }

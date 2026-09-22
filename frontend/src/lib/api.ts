@@ -1,5 +1,5 @@
 import * as Go from '../../wailsjs/go/app/App'
-import type { AIMessage, AISettings, AIStatus, AheadBehind, CommitInfo, ConflictFile, Details, Filters, GitSettings, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, WorktreeState } from './types'
+import type { AIMessage, AISettings, AIStatus, AheadBehind, CommitInfo, ConflictFile, Details, Filters, GitSettings, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, WorktreeState } from './types'
 
 // The generated bindings use Wails model classes; the JSON is identical to our
 // interfaces, so cast at this single boundary.
@@ -39,6 +39,8 @@ export const api = {
   stashPop: (id: string, index: number) => call<void>(Go.StashPop(id, index)),
   stashDrop: (id: string, index: number) => call<void>(Go.StashDrop(id, index)),
   getStashDiff: (id: string, index: number) => call<string>(Go.GetStashDiff(id, index)),
+  getStashFiles: (id: string, index: number) => call<StashFile[]>(Go.GetStashFiles(id, index)),
+  getStashFileDiff: (id: string, index: number, path: string) => call<string>(Go.GetStashFileDiff(id, index, path)),
   owedStashDrop: (id: string) => call<number>(Go.OwedStashDrop(id)),
 
   createBranch: (id: string, name: string, target: string, checkout: boolean) =>
