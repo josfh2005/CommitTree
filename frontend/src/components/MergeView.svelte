@@ -3,11 +3,11 @@
   import Icon from './Icon.svelte'
   import FileList, { rowKey } from './FileList.svelte'
   import { api } from '../lib/api'
-  import { abortMerge, commitMerge, resolveConflicts, stageMergeFile, takeMergeSide, unstageMergeFile } from '../lib/actions'
-  import { mergeSections, type MergeFile } from '../lib/merge'
+  import { abortMerge, commitMerge, dismissStashConflict, resolveConflicts, stageMergeFile, stashDrop, takeMergeSide, unstageMergeFile } from '../lib/actions'
+  import { conflictActions, conflictHeader, mergeSections, type MergeFile } from '../lib/merge'
   import { lineClass } from '../lib/diff'
   import { nextSelection, type SelectionKey } from '../lib/worktree'
-  import { busy, loadMergeState, mergeState } from '../lib/stores'
+  import { busy, loadMergeState, mergeState, owedStashDrop } from '../lib/stores'
   import { errorMessage, openMenu } from '../lib/ui'
   import { onDestroy } from 'svelte'
 
@@ -36,6 +36,8 @@
   // can be reconstructed from the file alone.
   $: fileSection = new Map(sections.flatMap((s) => s.files.map((f) => [f, s.title] as const)))
   $: pending = ($mergeState?.conflicts.length ?? 0) + ($mergeState?.manual.length ?? 0)
+  $: head = $mergeState ? conflictHeader($mergeState) : null
+  $: acts = $mergeState ? conflictActions($mergeState) : { abort: null, confirm: null, ai: false, done: false }
   $: selected = selection ? rowKey(selection.section, selection.path) : ''
   // Re-key the selection onto wherever its path now lives (a resolve/stage
   // moves a file Conflicts → Unstaged → Staged, but it's still the file the
@@ -115,14 +117,37 @@
 
 <div class="merge">
   <header>
-    <span class="title">Merging <strong>{$mergeState?.from}</strong> into <strong>{$mergeState?.into}</strong></span>
+    {#if head}
+      <span class="title">
+        {head.lead}
+        {#if head.from}<strong>{head.from}</strong>{/if}
+        {#if head.connector}{head.connector} <strong>{head.into}</strong>{/if}
+      </span>
+      {#if head.detail}<span class="count">{head.detail}</span>{/if}
+    {/if}
     <span class="count">{pending} left</span>
     <span class="spacer"></span>
-    <button class="btn" disabled={!!$busy || pending === 0} on:click={() => resolveConflicts(repoId)}>
-      <Icon name="sparkle" size={14} /> Resolve with AI
-    </button>
-    <button class="btn" disabled={!!$busy} on:click={() => abortMerge(repoId)}>Abort merge</button>
-    <button class="btn primary" disabled={!!$busy || pending > 0} on:click={() => commitMerge(repoId)}>Commit merge</button>
+    {#if acts.ai}
+      <button class="btn" disabled={!!$busy || pending === 0} on:click={() => resolveConflicts(repoId)}>
+        <Icon name="sparkle" size={14} /> Resolve with AI
+      </button>
+    {/if}
+    {#if acts.abort}
+      <button class="btn" disabled={!!$busy} on:click={() => abortMerge(repoId)}>{acts.abort}</button>
+    {/if}
+    {#if acts.confirm}
+      <button class="btn primary" disabled={!!$busy || pending > 0} on:click={() => commitMerge(repoId)}>{acts.confirm}</button>
+    {/if}
+    {#if acts.done}
+      <!-- A stash conflict has no git-level abort or continue. Drop stash is
+           the only way to get rid of the entry a conflicted Pop deliberately
+           kept; Done leaves the files exactly as they are and gives the
+           screen back (the toolbar's "Resolve conflicts" brings it back). -->
+      {#if $owedStashDrop >= 0}
+        <button class="btn" disabled={!!$busy} on:click={() => stashDrop(repoId, $owedStashDrop)}>Drop stash</button>
+      {/if}
+      <button class="btn primary" disabled={!!$busy} on:click={dismissStashConflict}>Done</button>
+    {/if}
   </header>
 
   <div class="body">

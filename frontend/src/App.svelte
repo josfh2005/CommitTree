@@ -10,12 +10,16 @@
   import Splitter from './components/Splitter.svelte'
   import Toasts from './components/Toasts.svelte'
   import { startFocusRefresh } from './lib/actions'
-  import { chatOpen, chatWidth, loadAISettings, loadRefs, loadRepos, mainView, mergeState, selectedHash, selectedRepo, sidebarWidth } from './lib/stores'
+  import { conflictOwnsScreen } from './lib/remote'
+  import { chatOpen, chatWidth, loadAISettings, loadRefs, loadRepos, mainView, mergeState, selectedHash, selectedRepo, sidebarWidth, stashConflictDismissed } from './lib/stores'
 
   // A merge in progress always wins: the Changes view has nothing to show
   // that the merge view (reached through the log pane) doesn't already cover,
-  // and only the merge view can commit or abort a merge.
-  $: showChanges = $mainView === 'changes' && !$mergeState?.merging && !!$selectedRepo && !$selectedRepo.missing
+  // and only the merge view can commit or abort a merge. A dismissed stash
+  // conflict is the one case where the Changes view may show a repository
+  // with unmerged entries, since nothing else — no abort, no continue — can
+  // finish it; Done just hands the screen back with the entries still there.
+  $: showChanges = $mainView === 'changes' && !conflictOwnsScreen($mergeState, $stashConflictDismissed) && !!$selectedRepo && !$selectedRepo.missing
   // Selecting a commit in the log means the user wants to look at history,
   // not the working tree — switch the main pane back.
   $: if ($selectedHash) mainView.set('log')

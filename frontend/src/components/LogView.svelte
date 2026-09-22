@@ -6,7 +6,8 @@
   import MergeView from './MergeView.svelte'
   import Splitter from './Splitter.svelte'
   import Toolbar from './Toolbar.svelte'
-  import { chatOpen, detailsHeight, mergeState, selectedHash, selectedRepo } from '../lib/stores'
+  import { conflictOwnsScreen } from '../lib/remote'
+  import { chatOpen, detailsHeight, mergeState, selectedHash, selectedRepo, stashConflictDismissed } from '../lib/stores'
 </script>
 
 <div class="log-view">
@@ -29,10 +30,10 @@
     {#key $selectedRepo.id}
       <FilterBar repoId={$selectedRepo.id} />
       <div class="list"><LogList repoId={$selectedRepo.id} /></div>
-      {#if $mergeState?.merging || $selectedHash}
+      {#if conflictOwnsScreen($mergeState, $stashConflictDismissed) || $selectedHash}
         <Splitter direction="horizontal" on:drag={(e) => detailsHeight.set(Math.min(720, Math.max(120, $detailsHeight - e.detail)))} />
         <div class="details" style="height: {$detailsHeight}px">
-          {#if $mergeState?.merging}
+          {#if conflictOwnsScreen($mergeState, $stashConflictDismissed)}
             <MergeView repoId={$selectedRepo.id} />
           {:else if $selectedHash}
             <CommitDetails repoId={$selectedRepo.id} hash={$selectedHash} />
