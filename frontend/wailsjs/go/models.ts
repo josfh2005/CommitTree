@@ -762,6 +762,7 @@ export namespace stash {
 	}
 	export class File {
 	    path: string;
+	    oldPath?: string;
 	    status: string;
 	    untracked: boolean;
 	
@@ -772,6 +773,7 @@ export namespace stash {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.path = source["path"];
+	        this.oldPath = source["oldPath"];
 	        this.status = source["status"];
 	        this.untracked = source["untracked"];
 	    }

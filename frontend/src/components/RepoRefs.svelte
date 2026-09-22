@@ -3,8 +3,8 @@
   import Icon from './Icon.svelte'
   import { checkoutBranch, deleteBranch, deleteTag, mergeBranch, newBranch, newTag, stashApply, stashDrop, stashPop } from '../lib/actions'
   import { groupBranches, leafName, type BranchGroup } from '../lib/branches'
-  import { busy, filters, mainView, mergeState, refs, selectRepo, selectStash, selectedRepoId, selectedStashIndex, stashEntries, worktreeState } from '../lib/stores'
-  import type { Branch, Tag } from '../lib/types'
+  import { busy, filters, mainView, mergeState, refs, selectRepo, selectStash, selectedRepoId, selectedStash, stashEntries, worktreeState } from '../lib/stores'
+  import type { Branch, StashEntry, Tag } from '../lib/types'
   import { changedCount } from '../lib/worktree'
   import { openMenu } from '../lib/ui'
 
@@ -108,9 +108,9 @@
   // one on screen selects it first, the same cross-repo handling openChanges
   // above uses. Double click applies it — Apply keeps the entry, so this
   // needs no confirmation, matching the context menu's own Apply.
-  function openStash(entry: { index: number }) {
+  function openStash(entry: StashEntry) {
     if (repoId !== $selectedRepoId) selectRepo(repoId)
-    selectStash(entry.index)
+    selectStash(entry)
   }
 </script>
 
@@ -251,7 +251,7 @@
       {#each $stashEntries as entry (entry.index)}
         <button
           class="row-item ref"
-          class:active={repoId === $selectedRepoId && $mainView === 'stash' && $selectedStashIndex === entry.index}
+          class:active={repoId === $selectedRepoId && $mainView === 'stash' && $selectedStash?.hash === entry.hash}
           on:click={() => openStash(entry)}
           on:dblclick={() => !$busy && stashApply(repoId, entry.index)}
           on:contextmenu={(e) => stashMenu(e, entry)}

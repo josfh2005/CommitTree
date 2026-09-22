@@ -34,13 +34,33 @@ describe('validSelectedStash', () => {
     { index: 1, message: 'older', branch: 'main', hash: 'b' },
   ]
 
-  it('keeps a selection whose index is still in the list', () => {
-    expect(validSelectedStash(1, entries)).toBe(1)
+  it('keeps a selection whose hash is still in the list', () => {
+    expect(validSelectedStash({ index: 1, hash: 'b' }, entries)).toEqual({ index: 1, hash: 'b' })
   })
-  it('clears a selection whose index no longer exists', () => {
-    expect(validSelectedStash(2, entries)).toBeNull()
-    expect(validSelectedStash(0, [])).toBeNull()
+
+  // Applying, popping or dropping an entry below the selected one shifts
+  // every index above it down by one — the stash it was selected against is
+  // still there, just no longer at the index it was selected at. Identity
+  // is the hash; the index must follow it, not the other way around.
+  it('follows its hash to a new index when entries below it are removed', () => {
+    const shifted: StashEntry[] = [{ index: 0, message: 'older', branch: 'main', hash: 'b' }]
+    expect(validSelectedStash({ index: 1, hash: 'b' }, shifted)).toEqual({ index: 0, hash: 'b' })
   })
+
+  // The dangerous case this guards against: the selected stash is gone, but
+  // some other, unrelated stash now sits at the very index it used to
+  // occupy. Checking the index alone would pass and silently preview that
+  // other stash's files; checking the hash must clear the selection
+  // instead.
+  it('clears a selection when a different stash now sits at the same index', () => {
+    const different: StashEntry[] = [{ index: 0, message: 'new', branch: 'main', hash: 'c' }]
+    expect(validSelectedStash({ index: 0, hash: 'a' }, different)).toBeNull()
+  })
+
+  it('clears a selection whose hash no longer exists at all', () => {
+    expect(validSelectedStash({ index: 0, hash: 'a' }, [])).toBeNull()
+  })
+
   it('leaves null as null', () => {
     expect(validSelectedStash(null, entries)).toBeNull()
   })

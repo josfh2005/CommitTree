@@ -102,9 +102,13 @@ func Diff(ctx context.Context, dir string, index int) (string, error) {
 	return gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "stash", "show", "-p", ref(index))
 }
 
-// File is one path touched by a stash, tracked and untracked together.
+// File is one path touched by a stash, tracked and untracked together. A
+// rename or copy carries its source in OldPath (empty otherwise), and
+// Status is always git's bare one-letter kind — "R" or "C" for those, never
+// the similarity score --name-status appends to them ("R070").
 type File struct {
 	Path      string `json:"path"`
+	OldPath   string `json:"oldPath,omitempty"`
 	Status    string `json:"status"`
 	Untracked bool   `json:"untracked"`
 }
@@ -123,11 +127,9 @@ func Files(ctx context.Context, dir string, index int) ([]File, error) {
 		return nil, err
 	}
 	for _, line := range splitNonEmpty(out) {
-		fields := strings.SplitN(line, "\t", 2)
-		if len(fields) != 2 {
-			continue
+		if f, ok := parseNameStatusLine(line, false); ok {
+			files = append(files, f)
 		}
-		files = append(files, File{Status: fields[0], Path: fields[1]})
 	}
 	if hasUntrackedParent(ctx, dir, index) {
 		out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "show", "--name-status", "--format=", ref(index)+"^3")
@@ -135,27 +137,67 @@ func Files(ctx context.Context, dir string, index int) ([]File, error) {
 			return nil, err
 		}
 		for _, line := range splitNonEmpty(out) {
-			fields := strings.SplitN(line, "\t", 2)
-			if len(fields) != 2 {
-				continue
+			if f, ok := parseNameStatusLine(line, true); ok {
+				files = append(files, f)
 			}
-			files = append(files, File{Status: fields[0], Path: fields[1], Untracked: true})
 		}
 	}
 	return files, nil
 }
 
+// parseNameStatusLine parses one tab-separated `--name-status` line. An
+// ordinary change is two fields ("M\tpath"); a rename or copy is three
+// ("R070\told\tnew" — the status also carries a similarity score, which is
+// trimmed down to git's bare one-letter kind here, the same convention
+// gitlog.ParseNameStatus and worktree.Status already follow for a rename).
+func parseNameStatusLine(line string, untracked bool) (File, bool) {
+	fields := strings.Split(line, "\t")
+	if len(fields) < 2 || fields[0] == "" {
+		return File{}, false
+	}
+	kind := fields[0][:1]
+	if (kind == "R" || kind == "C") && len(fields) >= 3 {
+		return File{Status: kind, OldPath: fields[1], Path: fields[2], Untracked: untracked}, true
+	}
+	return File{Status: kind, Path: fields[1], Untracked: untracked}, true
+}
+
 // FileDiff returns one file's patch out of a stash: the ordinary diff
 // against its stashed base for a tracked file, or its whole content shown
 // as an addition (via `git show` on the untracked third parent) for one
-// that was only ever untracked.
+// that was only ever untracked. A renamed file needs both its old and new
+// path in the same pathspec — `git diff ... -- newpath` alone shows the new
+// path's entire content as a bare addition once git has already decided
+// it's a rename (its delta lives against the old path, which the lone
+// pathspec then excludes), so renameSourceOf pairs the two back up.
 func FileDiff(ctx context.Context, dir string, index int, path string) (string, error) {
 	if hasUntrackedParent(ctx, dir, index) {
 		if out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "show", ref(index)+"^3", "--", path); err == nil && out != "" {
 			return out, nil
 		}
 	}
-	return gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "diff", ref(index)+"^1", ref(index), "--", path)
+	args := []string{"diff", ref(index) + "^1", ref(index), "--"}
+	if old := renameSourceOf(ctx, dir, index, path); old != "" {
+		args = append(args, old, path)
+	} else {
+		args = append(args, path)
+	}
+	return gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, args...)
+}
+
+// renameSourceOf returns the old path path was renamed from in this stash,
+// or "" when it isn't a rename (or Files fails to say either way).
+func renameSourceOf(ctx context.Context, dir string, index int, path string) string {
+	files, err := Files(ctx, dir, index)
+	if err != nil {
+		return ""
+	}
+	for _, f := range files {
+		if f.Path == path {
+			return f.OldPath
+		}
+	}
+	return ""
 }
 
 // hasUntrackedParent reports whether the stash commit has a third parent,

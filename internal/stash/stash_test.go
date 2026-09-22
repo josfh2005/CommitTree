@@ -293,6 +293,65 @@ func TestFileDiffOfAnUntrackedFile(t *testing.T) {
 	}
 }
 
+// git diff --name-status reports a rename as three tab-separated fields
+// ("R070\told.txt\tnew.txt"), not two — Files must not fold the old and new
+// paths together into one garbled Path, and the similarity score must not
+// leak into Status.
+func TestFilesParsesARename(t *testing.T) {
+	// Git only detects a rename above its default 50% similarity threshold —
+	// base(t)'s one-line a.txt is too small a base for that once a line is
+	// added, so this writes a longer file of its own to stay well past it.
+	r := base(t)
+	r.WriteFile("a.txt", "one\ntwo\nthree\n")
+	r.Git("commit", "-q", "-am", "grow a.txt")
+	r.Git("mv", "a.txt", "renamed.txt")
+	r.WriteFile("renamed.txt", "one\ntwo\nthree\nmore\n")
+	if err := stash.Push(ctx, r.Dir, "wip", false); err != nil {
+		t.Fatal(err)
+	}
+	files, err := stash.Files(ctx, r.Dir, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 {
+		t.Fatalf("files = %+v, want one", files)
+	}
+	f := files[0]
+	if f.Path != "renamed.txt" {
+		t.Errorf("path = %q, want renamed.txt (not the tab-joined old+new)", f.Path)
+	}
+	if f.OldPath != "a.txt" {
+		t.Errorf("oldPath = %q, want a.txt", f.OldPath)
+	}
+	if f.Status != "R" {
+		t.Errorf("status = %q, want a bare R, not the similarity score", f.Status)
+	}
+}
+
+// FileDiff of a renamed file must show the actual content delta, not the
+// whole new file rendered as a fresh addition — which is what a pathspec of
+// only the new path gives once git has already decided it's a rename.
+func TestFileDiffOfARename(t *testing.T) {
+	r := base(t)
+	r.WriteFile("a.txt", "one\ntwo\nthree\n")
+	r.Git("commit", "-q", "-am", "grow a.txt")
+	r.Git("mv", "a.txt", "renamed.txt")
+	r.WriteFile("renamed.txt", "one\ntwo\nthree\nmore\n")
+	if err := stash.Push(ctx, r.Dir, "wip", false); err != nil {
+		t.Fatal(err)
+	}
+	out, err := stash.FileDiff(ctx, r.Dir, 0, "renamed.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "+more") {
+		t.Errorf("diff = %q, missing the actual added line", out)
+	}
+	if strings.Contains(out, "+one") {
+		t.Errorf("diff = %q, rendered the whole file as an addition instead of a rename delta", out)
+	}
+}
+
 // A stash created outside the app (a bare terminal `git stash push`, no -m)
 // gets git's own "WIP on <branch>: <hash> <subject>" message instead of the
 // "On <branch>: <message>" shape Push always produces. List must still split

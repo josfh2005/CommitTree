@@ -17,13 +17,27 @@ export function stashSections(files: StashFile[]): { title: string; files: Stash
   ].filter((s) => s.files.length > 0)
 }
 
-/** validSelectedStash keeps the sidebar's stash preview from outliving its
- *  entry: applying or dropping a different stash first shifts every index
- *  below it, dropping the selected one removes it outright, and switching
- *  repositories makes any previously selected index meaningless. Given the
- *  previously selected index and the current list, this returns the index
- *  to keep selected, or null when the preview should close. */
-export function validSelectedStash(selected: number | null, entries: StashEntry[]): number | null {
+/** Which stash the sidebar has selected: its hash is the identity, index is
+ *  only where the backend's index-based calls (GetStashFiles, StashApply, …)
+ *  currently find it. */
+export interface SelectedStash {
+  index: number
+  hash: string
+}
+
+/** validSelectedStash keeps the sidebar's stash preview from outliving, or
+ *  silently swapping, its entry. The index alone can't be trusted: applying,
+ *  popping or dropping any entry below the selected one shifts every index
+ *  above it — including from another session, since the stash stack is
+ *  shared across worktrees — so a stale index can end up naming a different
+ *  stash entirely, and checking it alone would pass and quietly preview
+ *  that other stash's files. The hash is the one thing that survives a
+ *  shift, so this looks the selection up by hash and re-syncs its index to
+ *  wherever that hash currently sits; when the hash isn't in the list at
+ *  all — dropped, or popped into a completed merge — the selection clears
+ *  instead of falling back to whatever now occupies its old index. */
+export function validSelectedStash(selected: SelectedStash | null, entries: StashEntry[]): SelectedStash | null {
   if (selected === null) return null
-  return entries.some((e) => e.index === selected) ? selected : null
+  const entry = entries.find((e) => e.hash === selected.hash)
+  return entry ? { index: entry.index, hash: entry.hash } : null
 }

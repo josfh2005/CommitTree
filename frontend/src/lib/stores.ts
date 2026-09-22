@@ -1,6 +1,6 @@
 import { derived, get, writable, type Writable } from 'svelte/store'
 import { api } from './api'
-import { validSelectedStash } from './stash'
+import { validSelectedStash, type SelectedStash } from './stash'
 import { emptyFilters, type AISettings, type AheadBehind, type Filters, type GitSettings, type MergeState, type Refs, type Repo, type StashEntry, type WorktreeState } from './types'
 
 function persisted<T>(key: string, initial: T): Writable<T> {
@@ -50,10 +50,12 @@ export const aiSettings = writable<AISettings | null>(null)
  *  which App.svelte applies on top of this. */
 export const mainView = writable<'log' | 'changes' | 'stash'>('log')
 /** Which stash the sidebar has selected for the preview pane, or null when
- *  none is. Revalidated against the current list in loadStashEntries, and
- *  cleared outright on a repository switch — see selectRepo and
- *  validSelectedStash. */
-export const selectedStashIndex = writable<number | null>(null)
+ *  none is. Identified by hash, not index — an index shifts whenever any
+ *  entry below it is applied, popped or dropped, including from another
+ *  session, since the stash stack is shared across worktrees. Revalidated
+ *  against the current list in loadStashEntries, and cleared outright on a
+ *  repository switch — see selectRepo and validSelectedStash. */
+export const selectedStash = writable<SelectedStash | null>(null)
 
 export const remoteInfo = writable<AheadBehind | null>(null)
 export const stashEntries = writable<StashEntry[]>([])
@@ -162,18 +164,19 @@ export async function loadStashEntries() {
     const entries = await api.getStashEntries(repo.id)
     if (get(selectedRepoId) !== repo.id) return
     stashEntries.set(entries)
-    selectedStashIndex.update((i) => validSelectedStash(i, entries))
+    selectedStash.update((s) => validSelectedStash(s, entries))
   } catch {
     stashEntries.set([])
-    selectedStashIndex.set(null)
+    selectedStash.set(null)
   }
 }
 
-/** selectStash opens the stash preview for entry index — a sidebar click.
- *  Mirrors openChanges' cross-repo handling: the caller selects the target
- *  repository first when it differs from the one already selected. */
-export function selectStash(index: number) {
-  selectedStashIndex.set(index)
+/** selectStash opens the stash preview for entry — a sidebar click. Mirrors
+ *  openChanges' cross-repo handling: the caller selects the target
+ *  repository first when it differs from the one already selected. Stored
+ *  by hash (see SelectedStash/validSelectedStash), not by index alone. */
+export function selectStash(entry: StashEntry) {
+  selectedStash.set({ index: entry.index, hash: entry.hash })
   mainView.set('stash')
 }
 
@@ -212,7 +215,7 @@ export function selectRepo(id: string) {
     selectedHash.set('')
     mainView.set('log')
     stashConflictDismissed.set(false)
-    selectedStashIndex.set(null)
+    selectedStash.set(null)
   }
   selectedRepoId.set(id)
   // Selecting a folded repo unfolds it; folding it later keeps it selected.

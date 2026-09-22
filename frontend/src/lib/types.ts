@@ -228,6 +228,7 @@ export interface StashEntry {
 
 export interface StashFile {
   path: string
+  oldPath?: string
   status: string
   untracked: boolean
 }
