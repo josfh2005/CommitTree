@@ -1,4 +1,4 @@
-import { EDGE_ARROW_DOWN, EDGE_ARROW_UP, EDGE_LINE, type Edge, type LogRow } from './types'
+import { EDGE_ARROW_DOWN, EDGE_ARROW_UP, EDGE_LINE, type Edge, type LogRow, type RefKind } from './types'
 
 export const ROW_HEIGHT = 28
 export const LANE_WIDTH = 16
@@ -11,6 +11,28 @@ export const LANE_COLORS = ['#4f9d4f', '#a4478f', '#b58a3a', '#3f7fbf', '#c0504d
 export const laneX = (lane: number) => GRAPH_PADDING + lane * LANE_WIDTH + LANE_WIDTH / 2
 export const rowCenterY = (index: number) => index * ROW_HEIGHT + ROW_HEIGHT / 2
 export const laneColor = (color: number) => LANE_COLORS[((color % LANE_COLORS.length) + LANE_COLORS.length) % LANE_COLORS.length]
+
+/** The border colour a ref badge should take, or null to leave it with its
+ *  own existing (non-lane) styling. A branch (local or remote-tracking)
+ *  takes the colour of the graph lane its commit sits in, reusing the same
+ *  palette and index the graph itself uses — two refs on the same commit
+ *  share a colour, and that is correct, not a bug. A colour is applied as a
+ *  border rather than a background: LANE_COLORS is tuned for a 2px line on
+ *  the canvas, not for small text sitting on top of it, and a border keeps
+ *  the badge's normal text colour (and its light/dark contrast) intact
+ *  while still carrying the lane's identity. A tag is not a branch — it
+ *  marks a single point in history rather than a moving line of
+ *  development — so it keeps its existing accent-coloured treatment
+ *  instead of borrowing a lane colour two unrelated commits could share. */
+export function refBadgeBorderColor(kind: RefKind, color: number): string | null {
+  switch (kind) {
+    case 'local':
+    case 'remote':
+      return laneColor(color)
+    default:
+      return null
+  }
+}
 
 export interface Segment {
   x1: number

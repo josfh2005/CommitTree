@@ -4,7 +4,7 @@
   import { checkoutCommit, newBranch, newTag, resetBranch } from '../lib/actions'
   import { relativeDate } from '../lib/format'
   import {
-    arrowAt, DOT_RADIUS, edgeSegment, graphWidth, laneColor, laneX, ROW_HEIGHT, rowCenterY, visibleRange,
+    arrowAt, DOT_RADIUS, edgeSegment, graphWidth, laneColor, laneX, refBadgeBorderColor, ROW_HEIGHT, rowCenterY, visibleRange,
   } from '../lib/geometry'
   import { busy, chatOpen, filters, jumpTo, logOrder, logVersion, mergeState, refs, selectedHash } from '../lib/stores'
   import type { LogRow } from '../lib/types'
@@ -247,7 +247,7 @@
         >
           <span class="subject ellipsis">
             {#each row.refs.filter((r) => r.kind !== 'head') as ref}
-              <span class="badge {ref.kind}">{ref.name}</span>
+              <span class="badge {ref.kind}" style={refBadgeBorderColor(ref.kind, row.color) ? `border-color: ${refBadgeBorderColor(ref.kind, row.color)}` : ''}>{ref.name}</span>
             {/each}
             {row.subject}
           </span>
@@ -294,7 +294,7 @@
   .row.selected { background: var(--selection); }
   .merge .subject { color: var(--merge-text); }
   .author, .date, .hash { color: var(--muted); font-size: 12px; }
-  .badge { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 4px; font-size: 11px; line-height: 17px; background: var(--hover); color: var(--muted); }
+  .badge { display: inline-block; margin-right: 6px; padding: 0 6px; border: 1px solid transparent; border-radius: 4px; font-size: 11px; line-height: 17px; background: var(--hover); color: var(--muted); }
   .badge.local { color: var(--text); background: var(--active); }
   .badge.tag { color: var(--accent); }
   .note { position: absolute; left: 0; right: 0; height: 28px; line-height: 28px; text-align: center; font-size: 12px; color: var(--faint); }

@@ -50,6 +50,20 @@ distinctly from an ordinary commit's. The commit currently checked out as
 `HEAD` is marked by drawing its graph dot hollow (outlined, not filled)
 rather than by an extra badge.
 
+A local or remote-tracking branch's badge is bordered in the colour of the
+graph lane its commit sits in, drawn from the same palette and the same
+per-row colour index the graph itself uses — the badge's text and
+background are unchanged, only the border carries the lane's colour, since
+that palette is tuned for a 2px graph line rather than for small text sitting
+on a coloured fill, and a border keeps the badge legible in both themes
+without a second, separate colour scheme. Two branches pointing at the same
+commit share its lane colour; that is expected, not a bug, since the colour
+identifies the lane, not any one branch (see the graph's own colour rule
+below). A tag's badge is not coloured this way and keeps its existing accent
+styling: a tag marks a single point in history rather than a moving line of
+development, so borrowing a lane colour it happens to share with an
+unrelated branch would suggest a relationship that is not there.
+
 ### Paging
 
 Commits are fetched in pages of a fixed size; the next page is requested
@@ -189,7 +203,9 @@ needs, searching hides the graph column for the results it returns.
    intact under the active filters — never under a text, author, or date
    filter, always under a plain, ref, or path filter.
 5. A lane's colour identifies the lane while it exists, not the branch or
-   ref associated with it; colours are reused once a lane closes.
+   ref associated with it; colours are reused once a lane closes. A branch
+   badge borrows this same colour (as a border) for the lane its commit
+   currently sits in; a tag badge does not.
 6. A merge commit's file list and diff are always computed against its
    first parent only.
 7. The free-text filter matches the commit message alone, case-insensitively,
@@ -203,5 +219,6 @@ needs, searching hides the graph column for the results it returns.
 None: no earlier design document describing the commit log or graph was
 found in this repository to compare the built behaviour against.
 
-Added since the previous revision of this document: the log can be ordered
-by commit date as an alternative to the topological default.
+Added since the previous revision of this document: branch badges are now
+coloured by graph lane, and the log can be ordered by commit date as an
+alternative to the topological default.
