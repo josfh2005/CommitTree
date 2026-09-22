@@ -9,7 +9,7 @@ export interface BranchGroup {
 export interface GroupedBranches {
   /** Branches shown on their own, with their full name. */
   loose: Branch[]
-  /** Prefixes shared by two or more branches, sorted by name. */
+  /** Every first path segment among branches with a slash, sorted by name. */
   groups: BranchGroup[]
 }
 
@@ -25,22 +25,17 @@ export function leafName(name: string, group: string): string {
 }
 
 /**
- * groupBranches puts branches that share a first path segment ("fix/abc",
- * "fix/cdf") into a group, and leaves the rest — including prefixes used by a
- * single branch — on their own. Input order is preserved inside each part.
+ * groupBranches puts every branch whose name contains a slash ("fix/abc",
+ * "release/only-one") into a group keyed by its first path segment, even
+ * when that group holds a single branch. A branch with no slash stays
+ * loose. Input order is preserved inside each part.
  */
 export function groupBranches(branches: Branch[]): GroupedBranches {
-  const counts = new Map<string, number>()
-  for (const branch of branches) {
-    const group = groupOf(branch.name)
-    if (group !== '') counts.set(group, (counts.get(group) ?? 0) + 1)
-  }
-
   const loose: Branch[] = []
   const byName = new Map<string, BranchGroup>()
   for (const branch of branches) {
     const group = groupOf(branch.name)
-    if (group === '' || (counts.get(group) ?? 0) < 2) {
+    if (group === '') {
       loose.push(branch)
       continue
     }

@@ -22,7 +22,7 @@ describe('groupOf / leafName', () => {
 })
 
 describe('groupBranches', () => {
-  it('groups prefixes shared by two or more branches', () => {
+  it('groups branches sharing a first path segment', () => {
     const branches = [
       b('main', { current: true }),
       b('develop'),
@@ -35,10 +35,19 @@ describe('groupBranches', () => {
 
     const { loose, groups } = groupBranches(branches)
 
-    expect(loose.map((x) => x.name)).toEqual(['main', 'develop', 'hotfix/only-one'])
-    expect(groups.map((g) => g.name)).toEqual(['feature', 'fix'])
+    expect(loose.map((x) => x.name)).toEqual(['main', 'develop'])
+    expect(groups.map((g) => g.name)).toEqual(['feature', 'fix', 'hotfix'])
     expect(groups[0].branches.map((x) => x.name)).toEqual(['feature/NEXO-2', 'feature/NEXO-1/x'])
     expect(groups[1].branches.map((x) => x.name)).toEqual(['fix/abc', 'fix/cdf'])
+    expect(groups[2].branches.map((x) => x.name)).toEqual(['hotfix/only-one'])
+  })
+
+  it('puts a lone branch with a slash into its own single-branch group', () => {
+    const { loose, groups } = groupBranches([b('main'), b('release/escala-release-21')])
+
+    expect(loose.map((x) => x.name)).toEqual(['main'])
+    expect(groups.map((g) => g.name)).toEqual(['release'])
+    expect(groups[0].branches.map((x) => x.name)).toEqual(['release/escala-release-21'])
   })
 
   it('marks the group holding the current branch', () => {
