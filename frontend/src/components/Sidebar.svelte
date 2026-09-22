@@ -1,7 +1,7 @@
 <script lang="ts">
   import Icon from './Icon.svelte'
   import RepoRefs from './RepoRefs.svelte'
-  import { addRepo, fetchRemote, pull, relocateRepo, removeRepo } from '../lib/actions'
+  import { addRepo, fetchRemote, pull, push, relocateRepo, removeRepo } from '../lib/actions'
   import { busy, expandedRepos, mergeState, repos, selectRepo, selectedRepoId, settingsOpen, toggleRepoExpanded } from '../lib/stores'
   import type { Repo } from '../lib/types'
   import { openMenu } from '../lib/ui'
@@ -11,6 +11,7 @@
       ...(repo.missing ? [{ label: 'Locate…', action: () => relocateRepo(repo.id) }] : []),
       { label: 'Fetch', action: () => fetchRemote(repo.id), disabled: repo.missing || !!$busy },
       { label: 'Pull', action: () => pull(repo.id), disabled: repo.missing || !!$busy || !!$mergeState?.merging },
+      { label: 'Push', action: () => push(repo.id), disabled: repo.missing || !!$busy || !!$mergeState?.merging },
       { label: 'Remove from list…', action: () => removeRepo(repo), danger: true },
     ])
   }
