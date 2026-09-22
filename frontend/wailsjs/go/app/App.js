@@ -114,6 +114,10 @@ export function GetDiff(arg1, arg2, arg3, arg4) {
   return window['go']['app']['App']['GetDiff'](arg1, arg2, arg3, arg4);
 }
 
+export function GetGitSettings() {
+  return window['go']['app']['App']['GetGitSettings']();
+}
+
 export function GetLog(arg1, arg2, arg3, arg4) {
   return window['go']['app']['App']['GetLog'](arg1, arg2, arg3, arg4);
 }
@@ -126,8 +130,28 @@ export function GetRefs(arg1) {
   return window['go']['app']['App']['GetRefs'](arg1);
 }
 
+export function GetRemoteInfo(arg1) {
+  return window['go']['app']['App']['GetRemoteInfo'](arg1);
+}
+
 export function GetResetPreview(arg1, arg2) {
   return window['go']['app']['App']['GetResetPreview'](arg1, arg2);
+}
+
+export function GetStashDiff(arg1, arg2) {
+  return window['go']['app']['App']['GetStashDiff'](arg1, arg2);
+}
+
+export function GetStashEntries(arg1) {
+  return window['go']['app']['App']['GetStashEntries'](arg1);
+}
+
+export function GetStashFileDiff(arg1, arg2, arg3) {
+  return window['go']['app']['App']['GetStashFileDiff'](arg1, arg2, arg3);
+}
+
+export function GetStashFiles(arg1, arg2) {
+  return window['go']['app']['App']['GetStashFiles'](arg1, arg2);
 }
 
 export function GetWorktreeDiff(arg1, arg2, arg3) {
@@ -162,12 +186,20 @@ export function OpenPromptsFolder() {
   return window['go']['app']['App']['OpenPromptsFolder']();
 }
 
+export function OwedStashDrop(arg1) {
+  return window['go']['app']['App']['OwedStashDrop'](arg1);
+}
+
 export function Pull(arg1) {
   return window['go']['app']['App']['Pull'](arg1);
 }
 
 export function PullModel(arg1) {
   return window['go']['app']['App']['PullModel'](arg1);
+}
+
+export function Push(arg1) {
+  return window['go']['app']['App']['Push'](arg1);
 }
 
 export function RelocateRepo(arg1) {
@@ -198,6 +230,10 @@ export function SaveAISettings(arg1) {
   return window['go']['app']['App']['SaveAISettings'](arg1);
 }
 
+export function SaveGitSettings(arg1) {
+  return window['go']['app']['App']['SaveGitSettings'](arg1);
+}
+
 export function SendChat(arg1, arg2, arg3) {
   return window['go']['app']['App']['SendChat'](arg1, arg2, arg3);
 }
@@ -212,6 +248,22 @@ export function StageFile(arg1, arg2) {
 
 export function StageMergeFile(arg1, arg2) {
   return window['go']['app']['App']['StageMergeFile'](arg1, arg2);
+}
+
+export function StashApply(arg1, arg2) {
+  return window['go']['app']['App']['StashApply'](arg1, arg2);
+}
+
+export function StashDrop(arg1, arg2) {
+  return window['go']['app']['App']['StashDrop'](arg1, arg2);
+}
+
+export function StashPop(arg1, arg2) {
+  return window['go']['app']['App']['StashPop'](arg1, arg2);
+}
+
+export function StashPush(arg1, arg2, arg3) {
+  return window['go']['app']['App']['StashPush'](arg1, arg2, arg3);
 }
 
 export function StopChat(arg1) {

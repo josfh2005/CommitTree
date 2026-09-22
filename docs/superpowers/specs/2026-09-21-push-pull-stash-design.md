@@ -113,9 +113,12 @@ and `Status`'s detection widens to recognise three sources of conflict:
 type Kind string
 
 const (
-    KindMerge Kind = "merge"
-    KindRebase Kind = "rebase"
-    KindStash Kind = "stash"
+    KindMerge      Kind = "merge"
+    KindRebase     Kind = "rebase"
+    KindCherryPick Kind = "cherry-pick"
+    KindRevert     Kind = "revert"
+    KindAM         Kind = "am"
+    KindStash      Kind = "stash"
 )
 
 type State struct {
@@ -134,22 +137,40 @@ type State struct {
 }
 ```
 
+Detection runs in this order, and the order is load-bearing (the plan audit
+of 2026-09-21 found the original three-value version misreporting a
+conflicted cherry-pick as a stash conflict, which made Continue and Abort
+silent no-ops):
+
+- `CHERRY_PICK_HEAD` present → `KindCherryPick`; `REVERT_HEAD` →
+  `KindRevert`. Both come first: they leave unmerged entries and no
+  `MERGE_HEAD`, exactly like a conflicted stash.
 - `MERGE_HEAD` present → `KindMerge`, exactly today's detection.
-- `.git/rebase-merge` or `.git/rebase-apply` present → `KindRebase`. Step
-  and total come from `rebase-merge/msgnum` and `rebase-merge/end`; the
-  subject comes from `git log -1 --format=%s REBASE_HEAD`.
-- Neither, but unmerged index entries exist → `KindStash`.
+- `.git/rebase-merge`, or `.git/rebase-apply` without an `applying` file →
+  `KindRebase`. Step and total come from `rebase-merge/msgnum` and
+  `rebase-merge/end`; the subject comes from `git log -1 --format=%s
+  REBASE_HEAD`.
+- `.git/rebase-apply` **with** an `applying` file → `KindAM`. `git am` shares
+  that directory with the old rebase backend, and running `rebase --abort`
+  on it destroys the mailbox.
+- None of the above, but unmerged index entries exist → `KindStash`. This is
+  the only markerless case, which is why it must be last.
 - `Stage`, `Unstage` and `Take` are unchanged — they already work purely
   off `Status`'s `Staged`/`Unstaged`/`Conflicts` lists, never off `Kind`.
 - A new `Continue(ctx, dir)` replaces the direct call to `merge.Commit` at
-  the call site: `KindMerge` → `merge.Commit`; `KindRebase` → `git rebase
-  --continue`, and the caller re-runs `Status` afterward — if still
+  the call site: `KindMerge` → `merge.Commit`; every other kind but
+  `KindStash` → `git <kind> --continue` (`rebase`, `cherry-pick`, `revert`,
+  `am`) run with `GIT_EDITOR=true` **in the environment** — `-c
+  core.editor=true` is not enough, because git resolves `GIT_EDITOR` first
+  and a value inherited from the user's shell would open a real editor the
+  app cannot close. The caller re-runs `Status` afterward — if still
   `KindRebase`, the next commit's conflicts are ready; if clean, the
   rebase finished. `KindStash` has no "continue"; finishing just means no
   unmerged entries remain, after which the app drops the stash if it was a
   `Pop` (see below).
 - `Abort(ctx, dir)` becomes kind-aware too: `KindMerge` → `git merge
-  --abort` (as today); `KindRebase` → `git rebase --abort`; `KindStash` has
+  --abort` (as today); every other kind but `KindStash` → `git <kind>
+  --abort`; `KindStash` has
   nothing to abort at the git level — the frontend's "Abort" for a stash
   conflict is really "leave it, resolve later" and does nothing.
 - The package keeps its name, `merge` — renaming to something like
@@ -174,11 +195,19 @@ func Drop(ctx context.Context, dir string, index int) error
 func Diff(ctx context.Context, dir string, index int) (string, error)
 ```
 
-- `List` parses `git stash list --format=%gd%x00%s%x00%H` (`%gd` gives the
+- `List` parses `git reflog show --format=%gd%x00%s%x00%H refs/stash`, after
+  checking `refs/stash` exists at all (a repository that never stashed has no
+  such ref and `reflog show` fails). **Not** `git stash list --format=…`:
+  `stash list` ignores `--format`, `--pretty` and `-z` entirely — verified
+  against git 2.54, it always prints `stash@{0}: On main: wip` — so the
+  hash can never be parsed out of it. The placeholders below are what
+  `reflog show` gives (`%gd` gives the
   `stash@{N}` ref, decomposed to `Index`; `%s` is stash's own subject line,
   which already encodes the branch it was taken from — parsed the way
   `mergeFrom` already parses git-generated text elsewhere).
-- `Push` runs `git stash push -m <message>` (`--include-untracked` when
+- `Push` returns `ErrNothingToStash` when git prints "No local changes to
+  save" (it exits 0 in that case, so an unchecked call is a silent no-op the
+  UI would report as success). Otherwise it runs `git stash push -m <message>` (`--include-untracked` when
   requested), refusing (button disabled, mirroring Commit's
   nothing-staged rule) when the worktree is clean.
 - `Apply`/`Pop` run `git stash apply stash@{N}` / `git stash pop

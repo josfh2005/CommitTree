@@ -88,3 +88,20 @@ func TestRunBoundedByWaitDelayWhenChildOrphansHoldPipesOpen(t *testing.T) {
 		t.Fatalf("Run took %s, want it bounded by WaitDelay well under the orphan's 10s hold", elapsed)
 	}
 }
+
+// RunEnv's entries win over the inherited environment, which is what makes
+// GIT_EDITOR=true reliable for the --continue calls in internal/merge.
+func TestRunEnvOverridesTheInheritedEnvironment(t *testing.T) {
+	t.Setenv("GIT_EDITOR", "false")
+	r := testrepo.New(t)
+	r.Commit("base")
+
+	out, err := gitcmd.RunEnv(context.Background(), r.Dir, gitcmd.ReadTimeout,
+		[]string{"GIT_EDITOR=true"}, "var", "GIT_EDITOR")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(out) != "true" {
+		t.Errorf("GIT_EDITOR = %q, want true — the override did not win", strings.TrimSpace(out))
+	}
+}

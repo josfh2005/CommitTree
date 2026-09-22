@@ -45,11 +45,19 @@ func (e *Error) Unwrap() error { return e.Err }
 // so missing credentials fail instead of hanging, and output is in English so
 // callers can match messages.
 func Run(ctx context.Context, dir string, timeout time.Duration, args ...string) (string, error) {
+	return RunEnv(ctx, dir, timeout, nil, args...)
+}
+
+// RunEnv is Run with extra environment entries appended last, so they beat
+// anything inherited from the user's shell — GIT_EDITOR=true for a
+// --continue that must never open an editor, above all.
+func RunEnv(ctx context.Context, dir string, timeout time.Duration, env []string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "LC_ALL=C")
+	cmd.Env = append(cmd.Env, env...)
 	// A killed git whose child (e.g. a credential helper) holds the pipe open
 	// must not block Wait past this, on top of the context timeout above.
 	cmd.WaitDelay = 5 * time.Second

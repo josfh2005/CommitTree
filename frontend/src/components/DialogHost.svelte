@@ -11,6 +11,7 @@
     second = ''
     checked = $dialog.checked ?? false
   }
+  $: if ($dialog?.kind === 'confirm') checked = $dialog.checked ?? false
   $: if ($dialog?.kind === 'choice') choice = $dialog.value
   $: danger = $dialog?.kind === 'confirm' ? !!$dialog.danger : $dialog?.kind === 'choice' ? !!$dialog.danger?.(choice) : false
   $: submitLabel =
@@ -20,7 +21,7 @@
     const current = $dialog
     if (!current) return
     dialog.set(null)
-    if (current.kind === 'confirm') current.resolve(ok)
+    if (current.kind === 'confirm') current.resolve({ ok, checked })
     else if (current.kind === 'choice') current.resolve(ok ? choice : null)
     else current.resolve(ok ? { value, second, checked } : null)
   }
@@ -38,6 +39,9 @@
       <h3>{$dialog.title}</h3>
       {#if $dialog.kind === 'confirm'}
         <p>{$dialog.message}</p>
+        {#if $dialog.checkboxLabel}
+          <label class="check"><input type="checkbox" bind:checked /> {$dialog.checkboxLabel}</label>
+        {/if}
       {:else if $dialog.kind === 'choice'}
         <label>
           <span>{$dialog.label}</span>

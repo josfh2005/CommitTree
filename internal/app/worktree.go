@@ -207,10 +207,21 @@ func (a *App) GenerateCommitMessage(id, runID string) error {
 }
 
 // writeWorktree runs fn under the repository's write lock, so it cannot
-// interleave with a merge action or an agent tool call, then tells the
-// frontend the working tree moved.
+// interleave with a merge action or an agent tool call, settles a stash
+// drop a conflicted Pop still owes if fn happened to be what resolved it —
+// staging a stash conflict's files through the Changes view rather than
+// the merge view's StageMergeFile reaches this path instead of writeMerge,
+// and would otherwise leave the popped stash entry orphaned forever — then
+// tells the frontend the working tree moved. finishOwedDrop is a no-op when
+// nothing is owed.
 func (a *App) writeWorktree(id string, fn func(ctx context.Context, dir string) error) error {
-	if err := a.write(id, fn); err != nil {
+	if err := a.write(id, func(ctx context.Context, dir string) error {
+		if err := fn(ctx, dir); err != nil {
+			return err
+		}
+		a.finishOwedDrop(id, ctx, dir)
+		return nil
+	}); err != nil {
 		return err
 	}
 	a.emit(EventWorktreeChanged, WorktreeChangedEvent{RepoID: id})

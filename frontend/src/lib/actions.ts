@@ -1,12 +1,13 @@
 import { get } from 'svelte/store'
 import { api } from './api'
-import { busy, chatOpen, filters, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, selectRepo, selectedRepoId } from './stores'
-import type { Branch, FileStatus, Repo, ResetInfo, ResetMode, WorktreeState } from './types'
-import { UP_TO_DATE } from './types'
-import { commitWarning, takeMessage } from './merge'
+import { busy, chatOpen, filters, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, selectRepo, selectedRepoId, stashConflictDismissed } from './stores'
+import type { Branch, FileStatus, MergeState, Repo, ResetInfo, ResetMode, WorktreeState } from './types'
+import { PULL_UP_TO_DATE, UP_TO_DATE } from './types'
+import { abortWarning, commitWarning, takeMessage } from './merge'
 import { resetMessage } from './reset'
 import { discardMessage, neverCommitted } from './worktree'
-import { choiceDialog, confirmDialog, errorMessage, promptDialog, toast } from './ui'
+import { stashApplyAction } from './stash'
+import { choiceDialog, confirmDialog, confirmDialogWithCheckbox, errorMessage, promptDialog, toast } from './ui'
 
 export function branchRef(branch: Branch): string {
   return branch.remote ? `refs/remotes/${branch.remote}/${branch.name}` : `refs/heads/${branch.name}`
@@ -69,9 +70,6 @@ export async function relocateRepo(id: string) {
     toast(errorMessage(e), 'error')
   }
 }
-
-export const fetchRepo = (id: string) => run('Fetching…', () => api.fetch(id))
-export const pullRepo = (id: string) => run('Pulling…', () => api.pull(id))
 
 export const checkoutBranch = (id: string, branch: Branch) =>
   run('Checking out…', () =>
@@ -263,13 +261,10 @@ export async function mergeBranch(id: string, branch: Branch, into: string) {
 }
 
 export async function abortMerge(id: string) {
-  const ok = await confirmDialog({
-    title: 'Abort merge',
-    message: 'Throw away every resolution from this merge and go back to where the branch was?',
-    confirmLabel: 'Abort merge',
-    danger: true,
-  })
-  if (ok) await run('Aborting merge…', () => api.abortMerge(id))
+  const state = get(mergeState)
+  const warning = abortWarning(state ?? ({ kind: 'merge' } as MergeState))
+  const ok = await confirmDialog({ ...warning, danger: true })
+  if (ok) await run(`${warning.title}…`, () => api.abortMerge(id))
 }
 
 export async function commitMerge(id: string) {
@@ -311,6 +306,71 @@ export const unstageFile = (id: string, path: string) => run('Unstaging…', () 
 // says, instead of only refreshing the worktree state as CommitBox used to.
 export const commitChanges = (id: string, message: string, amend: boolean) =>
   run(amend ? 'Amending…' : 'Committing…', () => api.commitChanges(id, message, amend))
+
+export const fetchRemote = (id: string) => run('Fetching…', () => api.fetch(id))
+
+export const push = (id: string) => run('Pushing…', () => api.push(id))
+
+export async function pull(id: string) {
+  busy.set('Pulling…')
+  try {
+    const result = await api.pull(id)
+    if (result.outcome === PULL_UP_TO_DATE) toast('Already up to date.', 'info')
+  } catch (e) {
+    toast(errorMessage(e), 'error')
+  } finally {
+    busy.set('')
+    await refreshRepo()
+  }
+}
+
+export async function stashChanges(id: string) {
+  const result = await promptDialog({
+    title: 'Stash changes',
+    label: 'Message (optional)',
+    checkboxLabel: 'Include untracked files',
+    submitLabel: 'Stash',
+  })
+  if (!result) return
+  await run('Stashing…', () => api.stashPush(id, result.value.trim(), result.checked))
+}
+
+export async function stashApply(id: string, index: number) {
+  const result = await confirmDialogWithCheckbox({
+    title: 'Apply stash',
+    message: 'Apply this stash to the working tree? It stays in the list unless you choose to delete it below.',
+    confirmLabel: 'Apply',
+    checkboxLabel: 'Delete the stash after applying it',
+  })
+  if (!result.ok) return
+  if (stashApplyAction(result.checked) === 'pop') await run('Popping stash…', () => api.stashPop(id, index))
+  else await run('Applying stash…', () => api.stashApply(id, index))
+}
+
+// The conflict view's "Done" for a stash conflict: the files stay exactly as
+// they are (conflicted or not), the view just stops owning the screen. The
+// flag is cleared by loadMergeState whenever the kind changes or the
+// conflict goes away, so a later stash conflict shows the view again.
+export const dismissStashConflict = () => stashConflictDismissed.set(true)
+
+export async function stashPop(id: string, index: number) {
+  const ok = await confirmDialog({
+    title: 'Pop stash',
+    message: 'Apply this stash and remove it from the list? If it conflicts, it stays until the conflict is resolved.',
+    confirmLabel: 'Pop',
+  })
+  if (ok) await run('Popping stash…', () => api.stashPop(id, index))
+}
+
+export async function stashDrop(id: string, index: number) {
+  const ok = await confirmDialog({
+    title: 'Drop stash',
+    message: 'Delete this stash entry for good? This cannot be undone.',
+    confirmLabel: 'Drop',
+    danger: true,
+  })
+  if (ok) await run('Dropping stash…', () => api.stashDrop(id, index))
+}
 
 export async function discardFile(id: string, state: WorktreeState, file: FileStatus, staged: boolean) {
   // Both the wording and the labels follow the PATH's state, not the row the

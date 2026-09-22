@@ -1,10 +1,10 @@
 <script lang="ts">
   import BranchRow from './BranchRow.svelte'
   import Icon from './Icon.svelte'
-  import { checkoutBranch, deleteBranch, deleteTag, mergeBranch, newBranch, newTag } from '../lib/actions'
+  import { checkoutBranch, deleteBranch, deleteTag, mergeBranch, newBranch, newTag, stashApply, stashDrop, stashPop } from '../lib/actions'
   import { groupBranches, leafName, type BranchGroup } from '../lib/branches'
-  import { busy, filters, mainView, mergeState, refs, selectRepo, selectedRepoId, worktreeState } from '../lib/stores'
-  import type { Branch, Tag } from '../lib/types'
+  import { busy, filters, mainView, mergeState, refs, selectRepo, selectStash, selectedRepoId, selectedStash, stashEntries, worktreeState } from '../lib/stores'
+  import type { Branch, StashEntry, Tag } from '../lib/types'
   import { changedCount } from '../lib/worktree'
   import { openMenu } from '../lib/ui'
 
@@ -12,6 +12,7 @@
 
   let showRemotes = true
   let showTags = true
+  let showStash = true
   let openRemotes: Record<string, boolean> = {}
   let openGroups: Record<string, boolean> = {}
 
@@ -21,14 +22,20 @@
   $: local = groupBranches($refs?.local ?? [])
 
   // A group opens on demand, and on its own when it holds the current branch
-  // or the branch the log is filtered by.
-  function isOpen(key: string, group: BranchGroup, filtered: string): boolean {
-    const remembered = openGroups[key]
+  // or the branch the log is filtered by. `open` is taken as a parameter
+  // (rather than read from the closed-over `openGroups`) so the template
+  // expression that calls this visibly depends on it — otherwise Svelte's
+  // compiled dirty-check, which only tracks identifiers referenced directly
+  // in the template, never re-evaluates the {@const} after toggleGroup
+  // assigns a new openGroups.
+  function isOpen(open: Record<string, boolean>, key: string, group: BranchGroup, filtered: string): boolean {
+    const remembered = open[key]
     if (remembered !== undefined) return remembered
     return group.hasCurrent || group.branches.some((b) => branchRef(b) === filtered)
   }
 
-  const toggleGroup = (key: string) => (openGroups = { ...openGroups, [key]: !isOpen(key, groupsByKey[key], $filters.branch) })
+  const toggleGroup = (key: string) =>
+    (openGroups = { ...openGroups, [key]: !isOpen(openGroups, key, groupsByKey[key], $filters.branch) })
 
   // Every rendered group, so toggleGroup can read the one it flips.
   $: groupsByKey = {
@@ -88,6 +95,23 @@
       { label: 'Delete…', action: () => deleteTag(repoId, t.name), danger: true },
     ])
   }
+
+  function stashMenu(event: MouseEvent, entry: { index: number }) {
+    openMenu(event, [
+      { label: 'Apply', action: () => stashApply(repoId, entry.index), disabled: !!$busy },
+      { label: 'Pop', action: () => stashPop(repoId, entry.index), disabled: !!$busy },
+      { label: 'Drop', action: () => stashDrop(repoId, entry.index), danger: true, disabled: !!$busy },
+    ])
+  }
+
+  // A single click previews the stash; a row for a repository other than the
+  // one on screen selects it first, the same cross-repo handling openChanges
+  // above uses. Double click applies it — Apply keeps the entry, so this
+  // needs no confirmation, matching the context menu's own Apply.
+  function openStash(entry: StashEntry) {
+    if (repoId !== $selectedRepoId) selectRepo(repoId)
+    selectStash(entry)
+  }
 </script>
 
 {#if $refs}
@@ -125,7 +149,7 @@
     {/each}
     {#each local.groups as group (group.name)}
       {@const key = `local:${group.name}`}
-      {@const open = isOpen(key, group, $filters.branch)}
+      {@const open = isOpen(openGroups, key, group, $filters.branch)}
       <button class="row-item ref group" on:click={() => toggleGroup(key)}>
         <span class="mark"><Icon name={open ? 'chevron-down' : 'chevron-right'} size={12} /></span>
         <span class="ellipsis" class:current={group.hasCurrent}>{group.name}</span>
@@ -172,7 +196,7 @@
             {/each}
             {#each grouped.groups as group (group.name)}
               {@const key = `${remote.name}:${group.name}`}
-              {@const open = isOpen(key, group, $filters.branch)}
+              {@const open = isOpen(openGroups, key, group, $filters.branch)}
               <button class="row-item ref group nested" on:click={() => toggleGroup(key)}>
                 <span class="mark"><Icon name={open ? 'chevron-down' : 'chevron-right'} size={12} /></span>
                 <span class="ellipsis">{group.name}</span>
@@ -218,6 +242,27 @@
         <div class="none">No tags</div>
       {/each}
     {/if}
+
+    <div class="section">
+      <button class="section-title" on:click={() => (showStash = !showStash)}>Stash</button>
+      <span class="count">{$stashEntries.length}</span>
+    </div>
+    {#if showStash}
+      {#each $stashEntries as entry (entry.index)}
+        <button
+          class="row-item ref"
+          class:active={repoId === $selectedRepoId && $mainView === 'stash' && $selectedStash?.hash === entry.hash}
+          on:click={() => openStash(entry)}
+          on:dblclick={() => !$busy && stashApply(repoId, entry.index)}
+          on:contextmenu={(e) => stashMenu(e, entry)}
+        >
+          <span class="mark"><Icon name="download" size={12} /></span>
+          <span class="ellipsis">{entry.message}</span>
+        </button>
+      {:else}
+        <div class="none">No stashed changes</div>
+      {/each}
+    {/if}
   </div>
 {/if}
 
@@ -226,6 +271,7 @@
   .section { display: flex; align-items: center; justify-content: space-between; height: 30px; padding: 6px 4px 0 10px; }
   .ref { height: 26px; }
   .changes .count { margin-left: auto; font-size: 11px; padding: 0 6px; border-radius: 4px; background: var(--hover); color: var(--muted); }
+  .section .count { font-size: 11px; color: var(--faint); }
   .mark { width: 12px; flex: none; display: inline-grid; place-items: center; color: var(--muted); }
   .current { font-weight: 500; }
   .detached { color: var(--muted); }

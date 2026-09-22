@@ -170,3 +170,153 @@ func TestStartDoesNotClaimSomeoneElsesConflicts(t *testing.T) {
 		t.Errorf("outcome = Conflicted with %v, want no result", got.Conflicts)
 	}
 }
+
+// Continue on a plain merge behaves exactly as Commit did.
+func TestContinueClosesAMergeLikeCommit(t *testing.T) {
+	r := conflicting(t)
+	if _, err := Start(context.Background(), r.Dir, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	r.WriteFile("greeting.txt", "hi there\n")
+	r.Git("add", "greeting.txt")
+	if err := Continue(context.Background(), r.Dir); err != nil {
+		t.Fatal(err)
+	}
+	if st := status(t, r.Dir); st.Merging {
+		t.Fatalf("state = %+v, want the merge closed", st)
+	}
+	parents := r.Git("rev-list", "--parents", "-n", "1", "HEAD")
+	if len(strings.Fields(parents)) != 3 {
+		t.Errorf("want two parents, got %q", parents)
+	}
+}
+
+// Continue on a rebase runs rebase --continue; resolving the only conflict
+// finishes it and the branch ends up on top of main, not merged into it.
+func TestContinueFinishesARebase(t *testing.T) {
+	r := testrepo.New(t)
+	r.Commit("base")
+	r.Git("switch", "-q", "-c", "feature")
+	r.WriteFile("a.txt", "feature change\n")
+	r.Git("add", "a.txt")
+	r.Git("commit", "-q", "-am", "feature change")
+	r.Git("switch", "-q", "main")
+	r.WriteFile("a.txt", "main change\n")
+	r.Git("add", "a.txt")
+	r.Git("commit", "-q", "-am", "main change")
+	r.Git("switch", "-q", "feature")
+	r.GitFails("rebase", "main")
+
+	r.WriteFile("a.txt", "resolved\n")
+	r.Git("add", "a.txt")
+	if err := Continue(context.Background(), r.Dir); err != nil {
+		t.Fatal(err)
+	}
+	if st := status(t, r.Dir); st.Merging {
+		t.Fatalf("state = %+v, want the rebase finished", st)
+	}
+	if got := r.Git("log", "-1", "--format=%P"); strings.Contains(got, " ") {
+		t.Errorf("HEAD has more than one parent: %q, want a rebase, not a merge commit", got)
+	}
+}
+
+// Abort on a rebase restores the branch to where it was.
+func TestAbortStopsARebase(t *testing.T) {
+	r := testrepo.New(t)
+	r.Commit("base")
+	r.Git("switch", "-q", "-c", "feature")
+	before := r.Git("rev-parse", "HEAD")
+	r.WriteFile("a.txt", "feature change\n")
+	r.Git("add", "a.txt")
+	r.Git("commit", "-q", "-am", "feature change")
+	r.Git("switch", "-q", "main")
+	r.WriteFile("a.txt", "main change\n")
+	r.Git("add", "a.txt")
+	r.Git("commit", "-q", "-am", "main change")
+	r.Git("switch", "-q", "feature")
+	r.GitFails("rebase", "main")
+
+	if err := Abort(context.Background(), r.Dir); err != nil {
+		t.Fatal(err)
+	}
+	if st := status(t, r.Dir); st.Merging {
+		t.Fatalf("state = %+v, want the rebase aborted", st)
+	}
+	if got := r.Git("rev-parse", "HEAD"); got == before {
+		t.Errorf("HEAD = %s, want the feature commit still on top, not the pre-rebase base", got)
+	}
+}
+
+// A cherry-pick is continued and aborted by its own subcommand. Without
+// this, the "no MERGE_HEAD, no rebase dir" shortcut would call it a stash
+// conflict and both buttons would be silent no-ops.
+func TestContinueAndAbortWorkOnACherryPick(t *testing.T) {
+	pick := func(t *testing.T) *testrepo.Repo {
+		t.Helper()
+		r := testrepo.New(t)
+		r.Commit("base")
+		r.Git("switch", "-q", "-c", "feature")
+		r.WriteFile("a.txt", "feature change\n")
+		r.Git("add", "a.txt")
+		r.Git("commit", "-q", "-am", "feature change")
+		r.Git("switch", "-q", "main")
+		r.WriteFile("a.txt", "main change\n")
+		r.Git("add", "a.txt")
+		r.Git("commit", "-q", "-am", "main change")
+		r.GitFails("cherry-pick", "feature")
+		return r
+	}
+
+	t.Run("continue", func(t *testing.T) {
+		r := pick(t)
+		r.WriteFile("a.txt", "resolved\n")
+		r.Git("add", "a.txt")
+		// This is the call that hangs forever if the editor is not
+		// overridden through the environment: a cherry-pick --continue
+		// opens one for the commit message.
+		if err := Continue(context.Background(), r.Dir); err != nil {
+			t.Fatal(err)
+		}
+		if st := status(t, r.Dir); st.Merging {
+			t.Fatalf("state = %+v, want the cherry-pick finished", st)
+		}
+	})
+
+	t.Run("abort", func(t *testing.T) {
+		r := pick(t)
+		before := r.Git("rev-parse", "HEAD")
+		if err := Abort(context.Background(), r.Dir); err != nil {
+			t.Fatal(err)
+		}
+		if st := status(t, r.Dir); st.Merging {
+			t.Fatalf("state = %+v, want the cherry-pick aborted", st)
+		}
+		if got := r.Git("rev-parse", "HEAD"); got != before {
+			t.Errorf("HEAD = %s, want %s — abort must not move the branch", got, before)
+		}
+	})
+}
+
+// Continue and Abort on a stash conflict do nothing at the git level — there
+// is nothing to continue or abort, only files to resolve or leave.
+func TestContinueAndAbortOnAStashConflictAreNoOps(t *testing.T) {
+	r := testrepo.New(t)
+	r.WriteFile("a.txt", "one\n")
+	r.Git("add", "a.txt")
+	r.Git("commit", "-q", "-m", "base")
+	r.WriteFile("a.txt", "stashed\n")
+	r.Git("stash", "push", "-q", "-m", "wip")
+	r.WriteFile("a.txt", "conflicting\n")
+	r.Git("commit", "-q", "-am", "conflicting")
+	r.GitFails("stash", "pop")
+
+	if err := Continue(context.Background(), r.Dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := Abort(context.Background(), r.Dir); err != nil {
+		t.Fatal(err)
+	}
+	if st := status(t, r.Dir); st.Kind != KindStash {
+		t.Fatalf("state = %+v, want the stash conflict untouched", st)
+	}
+}

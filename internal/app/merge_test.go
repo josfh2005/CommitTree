@@ -493,3 +493,19 @@ func TestMergeFileActionsRejectOrAnnounce(t *testing.T) {
 		t.Errorf("staged = %v, want greeting.txt back", st.Staged)
 	}
 }
+
+// ResolveConflicts is scoped to a real merge by its own existing MERGE_HEAD
+// check (mergeHead returns "" outside a merge); this pins that it stays
+// refused once nothing is merging, now that Status also reports a rebase or
+// a stash conflict as Merging true — AbortMerge (kind-aware since Task 2)
+// is used here specifically to leave the repository in a clean state
+// regardless of whatever newAIMergeApp's own conflicted history started it
+// in, without this test needing to know that shape itself.
+func TestResolveConflictsRefusesOutsideARealMerge(t *testing.T) {
+	a, _, id, _ := newAIMergeApp(t, "http://127.0.0.1:0")
+	_ = a.AbortMerge(id)
+
+	if err := a.ResolveConflicts(id, "run1"); err == nil {
+		t.Error("want a refusal outside a merge")
+	}
+}

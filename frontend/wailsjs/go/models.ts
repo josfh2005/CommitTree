@@ -396,6 +396,23 @@ export namespace gitlog {
 
 }
 
+export namespace gitsettings {
+	
+	export class Settings {
+	    pullStrategy: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Settings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.pullStrategy = source["pullStrategy"];
+	    }
+	}
+
+}
+
 export namespace graph {
 	
 	export class Edge {
@@ -438,6 +455,7 @@ export namespace merge {
 	    }
 	}
 	export class State {
+	    kind: string;
 	    merging: boolean;
 	    from: string;
 	    into: string;
@@ -445,6 +463,9 @@ export namespace merge {
 	    manual: string[];
 	    staged: string[];
 	    unstaged: string[];
+	    step?: number;
+	    total?: number;
+	    subject?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new State(source);
@@ -452,6 +473,7 @@ export namespace merge {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
 	        this.merging = source["merging"];
 	        this.from = source["from"];
 	        this.into = source["into"];
@@ -459,6 +481,9 @@ export namespace merge {
 	        this.manual = source["manual"];
 	        this.staged = source["staged"];
 	        this.unstaged = source["unstaged"];
+	        this.step = source["step"];
+	        this.total = source["total"];
+	        this.subject = source["subject"];
 	    }
 	}
 
@@ -485,6 +510,20 @@ export namespace ollama {
 
 export namespace ops {
 	
+	export class AheadBehind {
+	    ahead: number;
+	    behind: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new AheadBehind(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ahead = source["ahead"];
+	        this.behind = source["behind"];
+	    }
+	}
 	export class ResetInfo {
 	    undone: number;
 	    gained: number;
@@ -501,6 +540,20 @@ export namespace ops {
 	        this.gained = source["gained"];
 	        this.pushed = source["pushed"];
 	        this.upstream = source["upstream"];
+	    }
+	}
+	export class Result {
+	    outcome: number;
+	    conflicts: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Result(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.outcome = source["outcome"];
+	        this.conflicts = source["conflicts"];
 	    }
 	}
 
@@ -682,6 +735,47 @@ export namespace settings {
 	        this.taskProvider = source["taskProvider"];
 	        this.taskModel = source["taskModel"];
 	        this.commitMessage = source["commitMessage"];
+	    }
+	}
+
+}
+
+export namespace stash {
+	
+	export class Entry {
+	    index: number;
+	    message: string;
+	    branch: string;
+	    hash: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Entry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.index = source["index"];
+	        this.message = source["message"];
+	        this.branch = source["branch"];
+	        this.hash = source["hash"];
+	    }
+	}
+	export class File {
+	    path: string;
+	    oldPath?: string;
+	    status: string;
+	    untracked: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new File(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.oldPath = source["oldPath"];
+	        this.status = source["status"];
+	        this.untracked = source["untracked"];
 	    }
 	}
 

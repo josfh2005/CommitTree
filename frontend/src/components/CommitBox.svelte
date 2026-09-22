@@ -3,10 +3,10 @@
   import { EventsOn } from '../../wailsjs/runtime/runtime'
   import Icon from './Icon.svelte'
   import { api } from '../lib/api'
-  import { commitChanges } from '../lib/actions'
+  import { commitChanges, stashChanges } from '../lib/actions'
   import { amendWarning, canCommit, shouldAutoGenerate } from '../lib/worktree'
   import type { CommitDeltaEvent, CommitDoneEvent, CommitInfo, WorktreeChangedEvent } from '../lib/types'
-  import { aiSettings, busy } from '../lib/stores'
+  import { aiSettings, busy, worktreeState } from '../lib/stores'
   import { confirmDialog, errorMessage, toast } from '../lib/ui'
 
   export let repoId: string
@@ -65,6 +65,7 @@
   // that name below, is what limits re-firing to when the count changes.
   $: stagedCount = info?.stagedCount ?? 0
   $: maybeAutoGenerate(stagedCount)
+  $: hasChanges = !!$worktreeState && ($worktreeState.staged.length > 0 || $worktreeState.unstaged.length > 0 || $worktreeState.untracked.length > 0)
 
   async function load(id: string) {
     message = ''
@@ -207,6 +208,7 @@
     {:else}
       <button class="btn" disabled={!repoId} on:click={generate}><Icon name="sparkle" /> Write with AI</button>
     {/if}
+    <button class="btn" disabled={!repoId || !!$busy || !hasChanges} on:click={() => stashChanges(repoId)}>Stash…</button>
     <button class="btn primary" disabled={!canCommit(info, message, amend) || !!$busy} on:click={commit}>
       {amend ? 'Amend' : 'Commit'}
     </button>

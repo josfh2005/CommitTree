@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -366,3 +367,105 @@ func TestStatusPutsACustomMarkerSizeConflictInManualWhenTheirsDropsTheAttribute(
 	}
 }
 
+// A rebase that conflicts is Kind rebase, with step info from git's own
+// rebase-merge bookkeeping, not Kind merge — MERGE_HEAD never exists here.
+func TestStatusReportsARebaseInProgress(t *testing.T) {
+	r := testrepo.New(t)
+	r.Commit("base")
+	r.Git("switch", "-q", "-c", "feature")
+	r.WriteFile("a.txt", "feature change\n")
+	r.Git("add", "a.txt")
+	r.Git("commit", "-q", "-am", "feature change")
+	r.Git("switch", "-q", "main")
+	r.WriteFile("a.txt", "main change\n")
+	r.Git("add", "a.txt")
+	r.Git("commit", "-q", "-am", "main change")
+	r.Git("switch", "-q", "feature")
+	r.GitFails("rebase", "main")
+
+	st := status(t, r.Dir)
+	if st.Kind != KindRebase || !st.Merging {
+		t.Fatalf("state = %+v, want Kind rebase and Merging true", st)
+	}
+	if st.Step != 1 || st.Total != 1 {
+		t.Errorf("step/total = %d/%d, want 1/1", st.Step, st.Total)
+	}
+	if st.Subject != "feature change" {
+		t.Errorf("subject = %q", st.Subject)
+	}
+	if st.From != "feature" {
+		t.Errorf("from = %q, want feature", st.From)
+	}
+	if !slices.Contains(st.Conflicts, "a.txt") {
+		t.Errorf("conflicts = %v, want a.txt", st.Conflicts)
+	}
+}
+
+// A stash pop that conflicts has no MERGE_HEAD and no rebase directory —
+// unmerged entries alone are the signal.
+func TestStatusReportsAStashConflict(t *testing.T) {
+	r := testrepo.New(t)
+	r.WriteFile("a.txt", "one\n")
+	r.Git("add", "a.txt")
+	r.Git("commit", "-q", "-m", "base")
+	r.WriteFile("a.txt", "stashed change\n")
+	r.Git("stash", "push", "-q", "-m", "wip")
+	r.WriteFile("a.txt", "conflicting change\n")
+	r.Git("commit", "-q", "-am", "conflicting change")
+	r.GitFails("stash", "pop")
+
+	st := status(t, r.Dir)
+	if st.Kind != KindStash || !st.Merging {
+		t.Fatalf("state = %+v, want Kind stash and Merging true", st)
+	}
+	if !slices.Contains(st.Conflicts, "a.txt") {
+		t.Errorf("conflicts = %v, want a.txt", st.Conflicts)
+	}
+}
+
+// A conflicted cherry-pick has unmerged entries and no MERGE_HEAD, exactly
+// like a conflicted stash pop — CHERRY_PICK_HEAD is the only thing telling
+// them apart, and getting this wrong makes Continue/Abort silent no-ops on
+// a repository the user cannot then finish or abort from the app.
+func TestStatusTellsACherryPickApartFromAStashConflict(t *testing.T) {
+	r := testrepo.New(t)
+	r.Commit("base")
+	r.Git("switch", "-q", "-c", "feature")
+	r.WriteFile("a.txt", "feature change\n")
+	r.Git("add", "a.txt")
+	r.Git("commit", "-q", "-am", "feature change")
+	r.Git("switch", "-q", "main")
+	r.WriteFile("a.txt", "main change\n")
+	r.Git("add", "a.txt")
+	r.Git("commit", "-q", "-am", "main change")
+	r.GitFails("cherry-pick", "feature")
+
+	st := status(t, r.Dir)
+	if st.Kind != KindCherryPick || !st.Merging {
+		t.Fatalf("state = %+v, want Kind cherry-pick and Merging true", st)
+	}
+	if st.Subject != "feature change" {
+		t.Errorf("subject = %q, want the picked commit's subject", st.Subject)
+	}
+	if !slices.Contains(st.Conflicts, "a.txt") {
+		t.Errorf("conflicts = %v, want a.txt", st.Conflicts)
+	}
+}
+
+// A conflicted revert is the same shape, under REVERT_HEAD.
+func TestStatusReportsARevertInProgress(t *testing.T) {
+	r := testrepo.New(t)
+	r.WriteFile("a.txt", "one\n")
+	r.Git("add", "a.txt")
+	r.Git("commit", "-q", "-m", "base")
+	r.WriteFile("a.txt", "two\n")
+	r.Git("commit", "-q", "-am", "second")
+	r.WriteFile("a.txt", "three\n")
+	r.Git("commit", "-q", "-am", "third")
+	r.GitFails("revert", "--no-edit", "HEAD~1")
+
+	st := status(t, r.Dir)
+	if st.Kind != KindRevert || !st.Merging {
+		t.Fatalf("state = %+v, want Kind revert and Merging true", st)
+	}
+}

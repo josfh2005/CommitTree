@@ -1,7 +1,7 @@
 <script lang="ts">
   import Icon from './Icon.svelte'
   import RepoRefs from './RepoRefs.svelte'
-  import { addRepo, fetchRepo, pullRepo, relocateRepo, removeRepo } from '../lib/actions'
+  import { addRepo, fetchRemote, pull, push, relocateRepo, removeRepo } from '../lib/actions'
   import { busy, expandedRepos, mergeState, repos, selectRepo, selectedRepoId, settingsOpen, toggleRepoExpanded } from '../lib/stores'
   import type { Repo } from '../lib/types'
   import { openMenu } from '../lib/ui'
@@ -9,8 +9,9 @@
   function repoMenu(event: MouseEvent, repo: Repo) {
     openMenu(event, [
       ...(repo.missing ? [{ label: 'Locate…', action: () => relocateRepo(repo.id) }] : []),
-      { label: 'Fetch', action: () => fetchRepo(repo.id), disabled: repo.missing || !!$busy },
-      { label: 'Pull', action: () => pullRepo(repo.id), disabled: repo.missing || !!$busy },
+      { label: 'Fetch', action: () => fetchRemote(repo.id), disabled: repo.missing || !!$busy },
+      { label: 'Pull', action: () => pull(repo.id), disabled: repo.missing || !!$busy || !!$mergeState?.merging },
+      { label: 'Push', action: () => push(repo.id), disabled: repo.missing || !!$busy || !!$mergeState?.merging },
       { label: 'Remove from list…', action: () => removeRepo(repo), danger: true },
     ])
   }
@@ -44,12 +45,6 @@
             <span class="branch ellipsis">{repo.branch}</span>
           {/if}
         </button>
-        {#if !repo.missing}
-          <span class="hover-actions">
-            <button class="icon-btn" title="Fetch" disabled={!!$busy} on:click={() => fetchRepo(repo.id)}><Icon name="refresh" size={14} /></button>
-            <button class="icon-btn" title="Pull" disabled={!!$busy} on:click={() => pullRepo(repo.id)}><Icon name="download" size={14} /></button>
-          </span>
-        {/if}
       </div>
       {#if expanded}
         <RepoRefs repoId={repo.id} />
@@ -80,9 +75,6 @@
   .branch { margin-left: auto; font-size: 12px; color: var(--muted); }
   .missing .name { color: var(--faint); }
   .badge { margin-left: auto; font-size: 11px; padding: 0 6px; border-radius: 4px; background: var(--hover); color: var(--muted); }
-  .hover-actions { display: none; }
-  .repo:hover .hover-actions { display: flex; }
-  .repo:hover .branch { display: none; }
   .empty { margin: 0; padding: 6px 10px; color: var(--muted); }
   .footer { flex: none; border-top: 1px solid var(--border); padding-top: 6px; }
   .note { padding: 4px 10px; font-size: 12px; color: var(--muted); }

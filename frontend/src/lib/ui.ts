@@ -31,6 +31,15 @@ export interface ConfirmOptions {
   message: string
   confirmLabel: string
   danger?: boolean
+  checkboxLabel?: string
+  checked?: boolean
+}
+
+/** What confirmDialogWithCheckbox resolves to: whether the user confirmed,
+ *  and — only meaningful when ok is true — the checkbox's final state. */
+export interface ConfirmResult {
+  ok: boolean
+  checked: boolean
 }
 
 export interface PromptOptions {
@@ -61,14 +70,20 @@ export interface ChoiceOptions<T extends string = string> {
 }
 
 export type Dialog =
-  | (ConfirmOptions & { kind: 'confirm'; resolve: (ok: boolean) => void })
+  | (ConfirmOptions & { kind: 'confirm'; resolve: (result: ConfirmResult) => void })
   | (PromptOptions & { kind: 'prompt'; resolve: (result: PromptResult | null) => void })
   | (ChoiceOptions & { kind: 'choice'; resolve: (value: string | null) => void })
 
 export const dialog = writable<Dialog | null>(null)
 
 export const confirmDialog = (options: ConfirmOptions) =>
-  new Promise<boolean>((resolve) => dialog.set({ ...options, kind: 'confirm', resolve }))
+  new Promise<boolean>((resolve) => dialog.set({ ...options, kind: 'confirm', resolve: (result) => resolve(result.ok) }))
+
+/** Like confirmDialog, but for a confirmation whose checkbox changes which
+ *  action confirming performs (e.g. apply vs pop a stash) — the caller needs
+ *  the checkbox's state, not just whether the dialog was confirmed. */
+export const confirmDialogWithCheckbox = (options: ConfirmOptions & { checkboxLabel: string }) =>
+  new Promise<ConfirmResult>((resolve) => dialog.set({ ...options, kind: 'confirm', resolve }))
 
 export const promptDialog = (options: PromptOptions) =>
   new Promise<PromptResult | null>((resolve) => dialog.set({ ...options, kind: 'prompt', resolve }))

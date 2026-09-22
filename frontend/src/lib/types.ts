@@ -184,7 +184,10 @@ export interface ExplainDeltaEvent { runID: string; text: string }
 export interface ExplainDoneEvent { runID: string }
 export interface ExplainErrorEvent { runID: string; message: string }
 
+export type ConflictKind = 'merge' | 'rebase' | 'cherry-pick' | 'revert' | 'am' | 'stash' | ''
+
 export interface MergeState {
+  kind: ConflictKind
   merging: boolean
   from: string
   into: string
@@ -192,6 +195,42 @@ export interface MergeState {
   manual: string[]
   staged: string[]
   unstaged: string[]
+  step?: number
+  total?: number
+  subject?: string
+}
+
+export interface AheadBehind {
+  ahead: number
+  behind: number
+}
+
+export const PULL_UP_TO_DATE = 0
+export const PULL_MERGED = 1
+export const PULL_REBASED = 2
+export const PULL_CONFLICTED = 3
+
+export interface PullResult {
+  outcome: number
+  conflicts: string[]
+}
+
+export interface GitSettings {
+  pullStrategy: 'auto' | 'merge' | 'rebase'
+}
+
+export interface StashEntry {
+  index: number
+  message: string
+  branch: string
+  hash: string
+}
+
+export interface StashFile {
+  path: string
+  oldPath?: string
+  status: string
+  untracked: boolean
 }
 
 export const MERGED = 0

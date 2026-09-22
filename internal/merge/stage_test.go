@@ -124,6 +124,27 @@ func TestStageRefusesAFileWithMarkers(t *testing.T) {
 	}
 }
 
+// Stage also settles a genuine Conflicts entry — the UU index state a real
+// unmerged file leaves — once its markers are gone, the same thing the
+// agent's stage_file tool does; a human resolving one by hand in the merge
+// view needs the same path.
+func TestStageSettlesAConflictOnceMarkersAreGone(t *testing.T) {
+	r := conflicting(t)
+	if _, err := Start(context.Background(), r.Dir, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	if st := status(t, r.Dir); !slices.Contains(st.Conflicts, "greeting.txt") {
+		t.Fatalf("conflicts = %v, want greeting.txt", st.Conflicts)
+	}
+	r.WriteFile("greeting.txt", "hi hola\n")
+	if err := Stage(context.Background(), r.Dir, "greeting.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if st := status(t, r.Dir); !slices.Equal(st.Staged, []string{"greeting.txt"}) || len(st.Conflicts) != 0 {
+		t.Errorf("staged = %v, conflicts = %v, want greeting.txt staged and no conflicts left", st.Staged, st.Conflicts)
+	}
+}
+
 // Paths must be ones git itself listed. Pathspec magic, a path from the wrong
 // list and a path outside the merge are all refused, and nothing changes.
 func TestStageAndUnstageAcceptOnlyListedPaths(t *testing.T) {

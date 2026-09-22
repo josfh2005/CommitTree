@@ -1,6 +1,7 @@
 import { derived, get, writable, type Writable } from 'svelte/store'
 import { api } from './api'
-import { emptyFilters, type AISettings, type Filters, type MergeState, type Refs, type Repo, type WorktreeState } from './types'
+import { validSelectedStash, type SelectedStash } from './stash'
+import { emptyFilters, type AISettings, type AheadBehind, type Filters, type GitSettings, type MergeState, type Refs, type Repo, type StashEntry, type WorktreeState } from './types'
 
 function persisted<T>(key: string, initial: T): Writable<T> {
   let start = initial
@@ -44,9 +45,28 @@ export const worktreeState = writable<WorktreeState | null>(null)
  *  refreshed after Settings saves — see SettingsDialog's save(). */
 export const aiSettings = writable<AISettings | null>(null)
 /** Which view the main pane shows: the log (with commit details / the merge
- *  view below it) or the Changes view. A merge in progress always wins over
- *  'changes' — see selectMainView below. */
-export const mainView = writable<'log' | 'changes'>('log')
+ *  view below it), the Changes view, or a stash preview. A merge in
+ *  progress always wins over either — see conflictOwnsScreen in remote.ts,
+ *  which App.svelte applies on top of this. */
+export const mainView = writable<'log' | 'changes' | 'stash'>('log')
+/** Which stash the sidebar has selected for the preview pane, or null when
+ *  none is. Identified by hash, not index — an index shifts whenever any
+ *  entry below it is applied, popped or dropped, including from another
+ *  session, since the stash stack is shared across worktrees. Revalidated
+ *  against the current list in loadStashEntries, and cleared outright on a
+ *  repository switch — see selectRepo and validSelectedStash. */
+export const selectedStash = writable<SelectedStash | null>(null)
+
+export const remoteInfo = writable<AheadBehind | null>(null)
+export const stashEntries = writable<StashEntry[]>([])
+export const gitSettings = writable<GitSettings | null>(null)
+// The index a conflicted stash pop still owes a drop for, or -1.
+export const owedStashDrop = writable<number>(-1)
+// Set by the conflict view's "Done" for a stash conflict, which has no
+// git-level abort: the files stay as they are and the view stops owning the
+// screen. Cleared below whenever the conflict's kind changes or it goes
+// away, so it can never hide a *different* conflict later.
+export const stashConflictDismissed = writable<boolean>(false)
 
 export const selectedRepo = derived([repos, selectedRepoId], ([$repos, $id]) => $repos.find((r) => r.id === $id) ?? null)
 
@@ -79,6 +99,9 @@ export async function loadMergeState() {
     // overwrite the one now on screen.
     if (get(selectedRepoId) !== repo.id) return
     mergeState.set(state)
+    // A dismissal belongs to one stash conflict only. Anything else — a new
+    // kind, or nothing in progress — brings the view back.
+    if (state?.kind !== 'stash') stashConflictDismissed.set(false)
   } catch {
     if (get(selectedRepoId) === repo.id) mergeState.set(null)
   }
@@ -101,6 +124,71 @@ export async function loadWorktreeState() {
   }
 }
 
+export async function loadRemoteInfo() {
+  const repo = get(selectedRepo)
+  if (!repo || repo.missing) {
+    remoteInfo.set(null)
+    return
+  }
+  try {
+    const info = await api.getRemoteInfo(repo.id)
+    if (get(selectedRepoId) !== repo.id) return
+    remoteInfo.set(info)
+  } catch {
+    remoteInfo.set(null)
+  }
+}
+
+export async function loadOwedStashDrop() {
+  const repo = get(selectedRepo)
+  if (!repo || repo.missing) {
+    owedStashDrop.set(-1)
+    return
+  }
+  try {
+    const owed = await api.owedStashDrop(repo.id)
+    if (get(selectedRepoId) !== repo.id) return
+    owedStashDrop.set(owed)
+  } catch {
+    owedStashDrop.set(-1)
+  }
+}
+
+export async function loadStashEntries() {
+  const repo = get(selectedRepo)
+  if (!repo || repo.missing) {
+    stashEntries.set([])
+    return
+  }
+  try {
+    const entries = await api.getStashEntries(repo.id)
+    if (get(selectedRepoId) !== repo.id) return
+    stashEntries.set(entries)
+    selectedStash.update((s) => validSelectedStash(s, entries))
+  } catch {
+    stashEntries.set([])
+    selectedStash.set(null)
+  }
+}
+
+/** selectStash opens the stash preview for entry — a sidebar click. Mirrors
+ *  openChanges' cross-repo handling: the caller selects the target
+ *  repository first when it differs from the one already selected. Stored
+ *  by hash (see SelectedStash/validSelectedStash), not by index alone. */
+export function selectStash(entry: StashEntry) {
+  selectedStash.set({ index: entry.index, hash: entry.hash })
+  mainView.set('stash')
+}
+
+export async function loadGitSettings() {
+  try {
+    gitSettings.set(await api.getGitSettings())
+  } catch {
+    // Left as whatever was last loaded — the toolbar has no strategy
+    // picker of its own, so nothing else depends on this succeeding.
+  }
+}
+
 export async function loadAISettings() {
   try {
     aiSettings.set(await api.getAISettings())
@@ -115,6 +203,9 @@ export async function refreshRepo() {
   await loadRefs()
   await loadMergeState()
   await loadWorktreeState()
+  await loadRemoteInfo()
+  await loadStashEntries()
+  await loadOwedStashDrop()
   logVersion.update((v) => v + 1)
 }
 
@@ -123,6 +214,8 @@ export function selectRepo(id: string) {
     filters.set(emptyFilters())
     selectedHash.set('')
     mainView.set('log')
+    stashConflictDismissed.set(false)
+    selectedStash.set(null)
   }
   selectedRepoId.set(id)
   // Selecting a folded repo unfolds it; folding it later keeps it selected.
@@ -130,6 +223,9 @@ export function selectRepo(id: string) {
   loadRefs()
   loadMergeState()
   loadWorktreeState()
+  loadRemoteInfo()
+  loadStashEntries()
+  loadOwedStashDrop()
 }
 
 export function toggleRepoExpanded(id: string) {

@@ -54,6 +54,10 @@ type App struct {
 	logs   map[string]*logState
 	writes sync.Map // repo ID → *sync.Mutex
 	ai     *aiState
+	// gitSettingsPath overrides gitsettings.DefaultPath() when set — empty
+	// in production, a temp path in tests.
+	gitSettingsPath string
+	owedDrops       sync.Map // repo ID → stash index still to drop once resolved
 }
 
 func New(store *repos.Store) *App {
@@ -261,14 +265,6 @@ func (a *App) GetResetPreview(id, hash string) (ops.ResetInfo, error) {
 		return ops.ResetInfo{}, err
 	}
 	return ops.ResetPreview(a.ctx, dir, hash)
-}
-
-func (a *App) Fetch(id string) error {
-	return a.write(id, func(ctx context.Context, dir string) error { return ops.Fetch(ctx, dir) })
-}
-
-func (a *App) Pull(id string) error {
-	return a.write(id, func(ctx context.Context, dir string) error { return ops.Pull(ctx, dir) })
 }
 
 func (a *App) CreateBranch(id, name, target string, checkout bool) error {

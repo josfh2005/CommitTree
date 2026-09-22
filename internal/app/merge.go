@@ -17,6 +17,7 @@ import (
 	"git-ui/internal/ai/tools"
 	"git-ui/internal/gitcmd"
 	"git-ui/internal/merge"
+	"git-ui/internal/stash"
 )
 
 // ConflictFile is one file of a merge as the UI shows it: the raw content
@@ -54,10 +55,13 @@ func (a *App) AbortMerge(id string) error {
 	return a.write(id, func(ctx context.Context, dir string) error { return merge.Abort(ctx, dir) })
 }
 
-// CommitMerge stops any agent run on the repository first, as AbortMerge does.
+// CommitMerge stops any agent run on the repository first, as AbortMerge
+// does, then advances whatever conflict resolution is in progress: a merge
+// commits, a rebase continues (and may leave the next commit's conflicts
+// for the view to show), a stash conflict does nothing.
 func (a *App) CommitMerge(id string) error {
 	a.stopRun(id)
-	return a.write(id, func(ctx context.Context, dir string) error { return merge.Commit(ctx, dir) })
+	return a.write(id, func(ctx context.Context, dir string) error { return merge.Continue(ctx, dir) })
 }
 
 // stopRun cancels the repository's running agent, if any. StopChat's only
@@ -152,14 +156,63 @@ func (a *App) TakeMergeSide(id, path, side string) error {
 }
 
 // writeMerge runs fn under the repository's write lock, so it can't
-// interleave with an agent tool call, then tells the merge view and any
-// running agent's UI that the merge moved.
+// interleave with an agent tool call, drops a stash entry a conflicted Pop
+// left behind once resolving it leaves nothing unmerged, then tells the
+// merge view and any running agent's UI that something moved.
 func (a *App) writeMerge(id string, fn func(ctx context.Context, dir string) error) error {
-	if err := a.write(id, fn); err != nil {
+	if err := a.write(id, func(ctx context.Context, dir string) error {
+		if err := fn(ctx, dir); err != nil {
+			return err
+		}
+		a.finishOwedDrop(id, ctx, dir)
+		return nil
+	}); err != nil {
 		return err
 	}
 	a.emit(EventMergeChanged, MergeChangedEvent{RepoID: id})
 	return nil
+}
+
+// finishOwedDrop drops a stash entry a conflicted StashPop left behind, once
+// resolving it leaves nothing unmerged. Git itself never records that a
+// drop is still owed, so this in-memory reminder is the only place it
+// lives — losing it (an app restart mid-resolution) never risks the
+// changes themselves, only the tidiness of dropping the entry.
+//
+// The reminder is keyed by the stash's commit hash, not its index: indices
+// shift whenever another stash is pushed or dropped, and StashDrop needs no
+// clean tree, so that is reachable while a conflict is still open. Looking
+// the hash up again here, against the stash list as it stands right now,
+// means a shift never makes this drop the wrong entry — at worst the owed
+// one is already gone (dropped by hand, or the reminder outlived a restart)
+// and nothing here matches, so nothing is dropped.
+//
+// Callers must already hold the repository's write lock (they run this from
+// inside their a.write closure, passing that closure's ctx and dir) so the
+// List → Drop pair below can't interleave with a concurrent StashDrop, which
+// would otherwise be free to shift indices between the two and make this
+// drop the wrong entry.
+func (a *App) finishOwedDrop(id string, ctx context.Context, dir string) {
+	v, ok := a.owedDrops.Load(id)
+	if !ok {
+		return
+	}
+	st, err := merge.Status(ctx, dir)
+	if err != nil || st.Merging {
+		return
+	}
+	a.owedDrops.Delete(id)
+	sha := v.(string)
+	entries, err := stash.List(ctx, dir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if e.Hash == sha {
+			_ = stash.Drop(ctx, dir, e.Index)
+			return
+		}
+	}
 }
 
 // EventMergeChanged tells the frontend the working tree moved during a merge,

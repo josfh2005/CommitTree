@@ -6,9 +6,11 @@ import {settings} from '../models';
 import {ai} from '../models';
 import {worktree} from '../models';
 import {gitlog} from '../models';
+import {gitsettings} from '../models';
 import {merge} from '../models';
 import {refs} from '../models';
 import {ops} from '../models';
+import {stash} from '../models';
 import {prompts} from '../models';
 
 export function AIStatus():Promise<app.AIStatus>;
@@ -67,13 +69,25 @@ export function GetDetails(arg1:string,arg2:string):Promise<gitlog.Details>;
 
 export function GetDiff(arg1:string,arg2:string,arg3:string,arg4:Array<string>):Promise<string>;
 
+export function GetGitSettings():Promise<gitsettings.Settings>;
+
 export function GetLog(arg1:string,arg2:gitlog.Filters,arg3:number,arg4:number):Promise<app.LogPage>;
 
 export function GetMergeState(arg1:string):Promise<merge.State>;
 
 export function GetRefs(arg1:string):Promise<refs.Refs>;
 
+export function GetRemoteInfo(arg1:string):Promise<ops.AheadBehind>;
+
 export function GetResetPreview(arg1:string,arg2:string):Promise<ops.ResetInfo>;
+
+export function GetStashDiff(arg1:string,arg2:number):Promise<string>;
+
+export function GetStashEntries(arg1:string):Promise<Array<stash.Entry>>;
+
+export function GetStashFileDiff(arg1:string,arg2:number,arg3:string):Promise<string>;
+
+export function GetStashFiles(arg1:string,arg2:number):Promise<Array<stash.File>>;
 
 export function GetWorktreeDiff(arg1:string,arg2:string,arg3:boolean):Promise<string>;
 
@@ -91,9 +105,13 @@ export function MergeBranch(arg1:string,arg2:string):Promise<merge.Result>;
 
 export function OpenPromptsFolder():Promise<void>;
 
-export function Pull(arg1:string):Promise<void>;
+export function OwedStashDrop(arg1:string):Promise<number>;
+
+export function Pull(arg1:string):Promise<ops.Result>;
 
 export function PullModel(arg1:string):Promise<void>;
+
+export function Push(arg1:string):Promise<void>;
 
 export function RelocateRepo(arg1:string):Promise<repos.Repo>;
 
@@ -109,6 +127,8 @@ export function ResolveConflicts(arg1:string,arg2:string):Promise<void>;
 
 export function SaveAISettings(arg1:settings.Settings):Promise<void>;
 
+export function SaveGitSettings(arg1:gitsettings.Settings):Promise<void>;
+
 export function SendChat(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SetProviderKey(arg1:string,arg2:string):Promise<void>;
@@ -116,6 +136,14 @@ export function SetProviderKey(arg1:string,arg2:string):Promise<void>;
 export function StageFile(arg1:string,arg2:string):Promise<void>;
 
 export function StageMergeFile(arg1:string,arg2:string):Promise<void>;
+
+export function StashApply(arg1:string,arg2:number):Promise<void>;
+
+export function StashDrop(arg1:string,arg2:number):Promise<void>;
+
+export function StashPop(arg1:string,arg2:number):Promise<void>;
+
+export function StashPush(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
 export function StopChat(arg1:string):Promise<void>;
 
