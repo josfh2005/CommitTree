@@ -1,20 +1,9 @@
 <script lang="ts">
   import Icon from './Icon.svelte'
-  import RepoRefs from './RepoRefs.svelte'
-  import { addRepo, fetchRemote, pull, push, relocateRepo, removeRepo } from '../lib/actions'
-  import { busy, expandedRepos, mergeState, repos, selectRepo, selectedRepoId, settingsOpen, toggleRepoExpanded } from '../lib/stores'
-  import type { Repo } from '../lib/types'
-  import { openMenu } from '../lib/ui'
-
-  function repoMenu(event: MouseEvent, repo: Repo) {
-    openMenu(event, [
-      ...(repo.missing ? [{ label: 'Locate…', action: () => relocateRepo(repo.id) }] : []),
-      { label: 'Fetch', action: () => fetchRemote(repo.id), disabled: repo.missing || !!$busy },
-      { label: 'Pull', action: () => pull(repo.id), disabled: repo.missing || !!$busy || !!$mergeState?.merging },
-      { label: 'Push', action: () => push(repo.id), disabled: repo.missing || !!$busy || !!$mergeState?.merging },
-      { label: 'Remove from list…', action: () => removeRepo(repo), danger: true },
-    ])
-  }
+  import RepoRow from './RepoRow.svelte'
+  import { addRepo } from '../lib/actions'
+  import { groupRepos } from '../lib/repoGroups'
+  import { busy, collapsedRepoGroups, repos, settingsOpen, toggleRepoGroupCollapsed } from '../lib/stores'
 </script>
 
 <div class="sidebar">
@@ -24,34 +13,27 @@
 
   <div class="section-title heading">Repos</div>
   <div class="list">
-    {#each $repos as repo (repo.id)}
-      {@const active = repo.id === $selectedRepoId}
-      {@const expanded = $expandedRepos.includes(repo.id) && !repo.missing}
-      <div class="repo row-item" class:active class:missing={repo.missing} on:contextmenu={(e) => repoMenu(e, repo)}>
-        <button
-          class="fold icon-btn"
-          title={expanded ? 'Collapse' : 'Expand'}
-          disabled={repo.missing}
-          on:click={() => toggleRepoExpanded(repo.id)}
-        >
-          <Icon name={expanded ? 'chevron-down' : 'chevron-right'} size={12} />
+    {#if $repos.length}
+      {@const grouped = groupRepos($repos)}
+      {#each grouped.loose as repo (repo.id)}
+        <RepoRow {repo} />
+      {/each}
+      {#each grouped.groups as group (group.name)}
+        {@const collapsed = $collapsedRepoGroups.includes(group.name)}
+        <button class="row-item group-header" on:click={() => toggleRepoGroupCollapsed(group.name)}>
+          <span class="mark"><Icon name={collapsed ? 'chevron-right' : 'chevron-down'} size={12} /></span>
+          <span class="ellipsis">{group.name}</span>
+          <span class="count">{group.repos.length}</span>
         </button>
-        <button class="select" on:click={() => selectRepo(repo.id)}>
-          <span class="name ellipsis" class:selected={active}>{repo.name}</span>
-          {#if repo.missing}
-            <span class="badge">missing</span>
-          {:else}
-            {#if active && $mergeState?.merging}<span class="badge">merging</span>{/if}
-            <span class="branch ellipsis">{repo.branch}</span>
-          {/if}
-        </button>
-      </div>
-      {#if expanded}
-        <RepoRefs repoId={repo.id} />
-      {/if}
+        {#if !collapsed}
+          {#each group.repos as repo (repo.id)}
+            <RepoRow {repo} depth={1} />
+          {/each}
+        {/if}
+      {/each}
     {:else}
       <p class="empty">Add a git repository to get started.</p>
-    {/each}
+    {/if}
   </div>
 
   <div class="footer">
@@ -66,15 +48,9 @@
   .add { font-weight: 500; margin-bottom: 16px; }
   .heading { padding: 0 10px 6px; }
   .list { flex: 1; overflow-y: auto; min-height: 0; }
-  .repo { padding: 0 4px 0 4px; gap: 4px; }
-  .fold { width: 20px; height: 20px; flex: none; }
-  .fold:disabled { opacity: 0; }
-  .select { flex: 1; min-width: 0; height: 100%; display: flex; align-items: center; gap: 8px; color: var(--muted); }
-  .name { color: var(--text); flex: none; max-width: 60%; }
-  .name.selected { font-weight: 600; }
-  .branch { margin-left: auto; font-size: 12px; color: var(--muted); }
-  .missing .name { color: var(--faint); }
-  .badge { margin-left: auto; font-size: 11px; padding: 0 6px; border-radius: 4px; background: var(--hover); color: var(--muted); }
+  .group-header { gap: 6px; }
+  .mark { width: 12px; flex: none; display: inline-grid; place-items: center; color: var(--muted); }
+  .group-header .count { margin-left: auto; font-size: 11px; color: var(--faint); }
   .empty { margin: 0; padding: 6px 10px; color: var(--muted); }
   .footer { flex: none; border-top: 1px solid var(--border); padding-top: 6px; }
   .note { padding: 4px 10px; font-size: 12px; color: var(--muted); }

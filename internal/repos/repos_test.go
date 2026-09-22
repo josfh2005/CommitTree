@@ -152,3 +152,57 @@ func TestRelocateKeepsID(t *testing.T) {
 		t.Fatalf("Get = %+v %v", got, ok)
 	}
 }
+
+func TestSetGroupPersists(t *testing.T) {
+	r := testrepo.New(t)
+	file := filepath.Join(t.TempDir(), "repos.json")
+	s, _ := repos.Open(file)
+	added, err := s.Add(ctx, r.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if added.Group != "" {
+		t.Fatalf("new repo group = %q, want empty", added.Group)
+	}
+
+	if err := s.SetGroup(added.ID, "work"); err != nil {
+		t.Fatal(err)
+	}
+	got, ok := s.Get(added.ID)
+	if !ok || got.Group != "work" {
+		t.Fatalf("Get after SetGroup = %+v %v", got, ok)
+	}
+
+	reopened, err := repos.Open(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	list := reopened.List()
+	if len(list) != 1 || list[0].Group != "work" {
+		t.Fatalf("reopened list = %+v", list)
+	}
+
+	// Empty string clears the group again.
+	if err := reopened.SetGroup(added.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	got, ok = reopened.Get(added.ID)
+	if !ok || got.Group != "" {
+		t.Fatalf("Get after clearing group = %+v %v", got, ok)
+	}
+
+	if err := reopened.SetGroup("nope", "x"); !errors.Is(err, repos.ErrUnknownRepo) {
+		t.Fatalf("SetGroup unknown: %v", err)
+	}
+}
+
+func TestOpenWithoutGroupFieldLoadsUngrouped(t *testing.T) {
+	s, err := repos.Open("testdata/repos_no_group.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	list := s.List()
+	if len(list) != 1 || list[0].ID != "abc123def456" || list[0].Group != "" {
+		t.Fatalf("list = %+v, want one ungrouped entry", list)
+	}
+}

@@ -1,6 +1,6 @@
 import { get } from 'svelte/store'
 import { api } from './api'
-import { busy, chatOpen, filters, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, selectRepo, selectedRepoId, stashConflictDismissed } from './stores'
+import { busy, chatOpen, filters, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, repos, selectRepo, selectedRepoId, stashConflictDismissed } from './stores'
 import type { Branch, FileStatus, MergeState, Repo, ResetInfo, ResetMode, WorktreeState } from './types'
 import { PULL_UP_TO_DATE, UP_TO_DATE } from './types'
 import { abortWarning, commitWarning, takeMessage } from './merge'
@@ -56,6 +56,45 @@ export async function removeRepo(repo: Repo) {
     if (get(selectedRepoId) === repo.id) selectedRepoId.set('')
     await loadRepos()
     await loadRefs()
+  } catch (e) {
+    toast(errorMessage(e), 'error')
+  }
+}
+
+// moveRepoToGroup offers every existing group (from the other repos in the
+// list — there is no separate groups table, see internal/repos) plus
+// "New group…" and "No group", so choosing one covers creating, renaming
+// into an existing group, and ungrouping in a single menu.
+const NEW_GROUP = '__new_group__'
+
+export async function moveRepoToGroup(repo: Repo) {
+  const groupNames = [...new Set(get(repos).map((r) => r.group).filter((g): g is string => !!g))].sort((a, b) =>
+    a.localeCompare(b),
+  )
+  const choice = await choiceDialog<string>({
+    title: 'Move to group',
+    label: 'Group',
+    options: [
+      { value: '', label: 'No group' },
+      ...groupNames.map((name) => ({ value: name, label: name })),
+      { value: NEW_GROUP, label: 'New group…' },
+    ],
+    value: repo.group || '',
+    message: (v) => (v === NEW_GROUP ? `Create a new group for ${repo.name}.` : `Move ${repo.name} to a group.`),
+    confirmLabel: () => 'Move',
+  })
+  if (choice === null) return
+
+  let group = choice
+  if (choice === NEW_GROUP) {
+    const result = await promptDialog({ title: 'New group', label: 'Group name', submitLabel: 'Create' })
+    group = result?.value.trim() ?? ''
+    if (!group) return
+  }
+
+  try {
+    await api.setRepoGroup(repo.id, group)
+    await loadRepos()
   } catch (e) {
     toast(errorMessage(e), 'error')
   }

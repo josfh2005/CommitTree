@@ -34,6 +34,9 @@ export const expandedRepos = persisted<string[]>('expandedRepos', [])
  *  expandedRepos above. Keyed by repo id so expanding it in one repository
  *  doesn't expand it in another. */
 export const expandedTagSections = persisted<string[]>('expandedTagSections', [])
+/** Ids of the sidebar repo groups that are collapsed — groups start
+ *  expanded, so only the non-default (collapsed) state needs remembering. */
+export const collapsedRepoGroups = persisted<string[]>('collapsedRepoGroups', [])
 
 export const repos = writable<Repo[]>([])
 export const refs = writable<Refs | null>(null)
@@ -239,4 +242,8 @@ export function toggleRepoExpanded(id: string) {
 
 export function toggleTagsExpanded(repoId: string) {
   expandedTagSections.update((ids) => (ids.includes(repoId) ? ids.filter((x) => x !== repoId) : [...ids, repoId]))
+}
+
+export function toggleRepoGroupCollapsed(name: string) {
+  collapsedRepoGroups.update((names) => (names.includes(name) ? names.filter((x) => x !== name) : [...names, name]))
 }

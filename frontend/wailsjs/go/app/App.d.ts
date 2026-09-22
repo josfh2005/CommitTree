@@ -133,6 +133,8 @@ export function SendChat(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SetProviderKey(arg1:string,arg2:string):Promise<void>;
 
+export function SetRepoGroup(arg1:string,arg2:string):Promise<void>;
+
 export function StageFile(arg1:string,arg2:string):Promise<void>;
 
 export function StageMergeFile(arg1:string,arg2:string):Promise<void>;

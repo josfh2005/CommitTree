@@ -242,6 +242,10 @@ export function SetProviderKey(arg1, arg2) {
   return window['go']['app']['App']['SetProviderKey'](arg1, arg2);
 }
 
+export function SetRepoGroup(arg1, arg2) {
+  return window['go']['app']['App']['SetRepoGroup'](arg1, arg2);
+}
+
 export function StageFile(arg1, arg2) {
   return window['go']['app']['App']['StageFile'](arg1, arg2);
 }

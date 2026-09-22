@@ -27,6 +27,10 @@ type Repo struct {
 	Name    string `json:"name"`
 	Path    string `json:"path"`
 	Missing bool   `json:"missing"`
+	// Group names the sidebar group this repository belongs to, or "" when
+	// it is ungrouped. omitempty keeps a repos.json written before this
+	// field existed loading unchanged, with every repository ungrouped.
+	Group string `json:"group,omitempty"`
 }
 
 type Store struct {
@@ -126,6 +130,25 @@ func (s *Store) Relocate(ctx context.Context, id, path string) (Repo, error) {
 		return r, nil
 	}
 	return Repo{}, ErrUnknownRepo
+}
+
+// SetGroup assigns id to group, or clears its group when group is "".
+func (s *Store) SetGroup(id, group string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, r := range s.repos {
+		if r.ID != id {
+			continue
+		}
+		old := r.Group
+		s.repos[i].Group = group
+		if err := s.save(); err != nil {
+			s.repos[i].Group = old
+			return err
+		}
+		return nil
+	}
+	return ErrUnknownRepo
 }
 
 func (s *Store) Remove(id string) error {

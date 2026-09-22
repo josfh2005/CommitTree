@@ -10,6 +10,7 @@ export const api = {
   addRepo: () => call<Repo>(Go.AddRepo()),
   relocateRepo: (id: string) => call<Repo>(Go.RelocateRepo(id)),
   removeRepo: (id: string) => call<void>(Go.RemoveRepo(id)),
+  setRepoGroup: (id: string, group: string) => call<void>(Go.SetRepoGroup(id, group)),
 
   getRefs: (id: string) => call<Refs>(Go.GetRefs(id)),
   getLog: (id: string, filters: Filters, offset: number, limit: number) =>

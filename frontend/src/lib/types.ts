@@ -59,6 +59,7 @@ export interface Repo {
   path: string
   missing: boolean
   branch: string
+  group?: string
 }
 
 export interface Branch {
