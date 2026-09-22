@@ -1,0 +1,255 @@
+# Remote and stash
+
+This area covers everything that leaves the local repository to talk to a
+remote — fetching, pulling and pushing — and the stash, which is local but
+shares the same toolbar and the same conflict machinery as a pull. Both are
+about setting work aside from, or bringing it in from, somewhere other than
+the current working tree.
+
+## Concepts
+
+- **Upstream**: the remote branch the current branch tracks. A branch can
+  have no upstream, typically because it was created locally and never
+  pushed.
+- **Ahead/behind**: how many commits the current branch has that its upstream
+  lacks (ahead), and vice versa (behind), computed by comparing the two
+  histories.
+- **Pull strategy**: how a pull integrates the upstream once fetched — follow
+  the repository's own configuration, always merge, or always rebase. It is
+  an application-level preference, stored once, not a per-repository or
+  per-pull choice.
+- **Conflict**: a merge, rebase or stash application that has left one or
+  more files with unresolved regions. See Conflicts for how a conflict is
+  represented and resolved; this document covers only what triggers one and
+  what stays available while it lasts.
+- **Stash**: a snapshot of the working tree (and, optionally, untracked
+  files) saved under a message, without being committed. A repository can
+  hold any number of stashes, ordered newest first.
+- **Owed stash drop**: a bookkeeping note the application keeps when applying
+  a stash by popping it goes wrong — see "Pop and the owed drop" below.
+
+## Fetch, pull and push
+
+The toolbar offers three remote actions, each disabled under different
+conditions:
+
+| Action | Disabled when | Touches the working tree or index? |
+|---|---|---|
+| Fetch | another write operation is already running | No |
+| Pull | another write operation is running, or the repository has an unresolved conflict of any kind | Yes |
+| Push | same as Pull | No (moves refs only) |
+
+Fetch has no conflict-related restriction because it only updates the
+repository's knowledge of the remote's refs; it never changes a branch, the
+working tree or the index, so it stays available even while a conflict is
+being resolved. Pull and Push are refused whenever a merge, rebase or stash
+conflict currently owns the repository, for the same reason a commit is
+refused then: the working tree and index are not in a state either operation
+can safely act on. Both also refuse while any other write operation for the
+repository is in progress — the application allows only one write at a time
+per repository.
+
+The toolbar shows the ahead count as a badge on Push and the behind count as
+a badge on Pull, each hidden when the count is zero.
+
+### Fetch
+
+Fetch downloads every remote's refs and removes any remote-tracking branch
+whose remote counterpart no longer exists. It reports only success or
+failure; it never reports how much changed.
+
+### Push
+
+Pushing publishes the current branch:
+
+- If the branch already has an upstream, Push pushes to it as-is.
+- If the branch has no upstream yet, Push sets one on the remote named
+  `origin`, publishing under the branch's own name. This is a deliberate
+  default rather than a prompt: a first push almost always means "publish
+  this to the usual remote," and asking every time would slow down the
+  common case.
+- A detached HEAD has nothing to publish; Push refuses.
+
+### Pull
+
+Pull first checks that the repository has no merge, rebase or other
+resolution already in progress; if it does, Pull refuses outright rather than
+attempting the fetch and integration. The reason is stricter than
+convenience: if a pull ran anyway, the application could not tell a conflict
+this pull caused apart from one that already existed, and would misreport
+the outcome.
+
+With that guard passed, Pull fetches and then integrates the upstream
+according to the configured strategy:
+
+| Strategy | Behaviour |
+|---|---|
+| Follow repository configuration | Integrates using whatever the repository's own settings resolve to, exactly as an unmodified pull typed at a terminal would. |
+| Always merge | Integrates with a merge commit regardless of the repository's own configuration. |
+| Always rebase | Replays the local commits on top of the upstream regardless of the repository's own configuration. |
+
+The strategy is a single stored preference for the whole application, not
+set per repository or per pull.
+
+Once the integration finishes (or fails), Pull reports one of four outcomes:
+
+| Outcome | Meaning |
+|---|---|
+| Already up to date | The branch tip did not move; there was nothing to integrate. |
+| Merged | The branch tip moved to a new merge commit, or this was the first pull into a repository with no prior commits. |
+| Rebased | The branch tip moved to a commit that is not reached by a plain merge from where it started — i.e. the local commits were replayed on top of the upstream. |
+| Conflicted | The integration left the repository mid-merge or mid-rebase with one or more files needing attention. |
+
+A conflicted outcome is not treated as a failure: Pull returns it as a result
+with the list of conflicting paths, the same way a conflicted merge is
+reported elsewhere (see Conflicts). Any other failure — network,
+authentication, a rejected push, and so on — is returned as an error instead
+of a result.
+
+### Ahead/behind
+
+The count is read fresh whenever asked, by comparing the current branch with
+its upstream. A branch with no upstream, or any other failure reading the
+comparison, reports zero ahead and zero behind rather than an error — the
+toolbar simply shows no badges rather than surfacing a failure for a
+perfectly normal state (a new local branch, a detached HEAD).
+
+## Stash
+
+The stash list appears in the sidebar, newest entry first — the same order
+the repository's own stash history already gives. An empty stash is an empty
+list, never an error or a missing section.
+
+Each entry shows:
+
+- Its message, exactly as it was given (or as originating tooling produced
+  it, if the stash was created outside the application).
+- The branch it was taken from.
+
+### Creating a stash
+
+Stashing prompts for an optional message and a checkbox for including
+untracked files. Only the working tree's tracked changes are captured unless
+the box is checked, in which case untracked files are captured too (ignored
+files never are).
+
+If there is nothing to stash — no staged, unstaged or untracked change to
+capture — the operation is refused rather than silently creating an empty
+entry. This mirrors the rule that disables committing with nothing staged;
+the refusal exists as a backstop in the application layer even though the
+button is normally already disabled for the same reason, covering the case
+where the working tree changes between the button being enabled and the
+click being handled.
+
+### Applying, popping and dropping
+
+Three actions act on a stash entry:
+
+- **Apply**: reapplies the entry to the working tree and keeps it in the
+  list.
+- **Pop**: reapplies the entry and then removes it from the list, in one
+  step.
+- **Drop**: removes the entry from the list without reapplying it. This
+  cannot be undone.
+
+Applying a stash is offered through a confirmation dialog with a checkbox
+labelled to delete the stash after applying it. Leaving the checkbox
+unchecked performs a plain Apply; checking it performs a Pop instead — the
+checkbox does not apply and then separately drop the entry, because Pop
+already handles a conflicted outcome correctly (see below) and a separate
+apply-then-drop would not. Popping directly (from the list's own action, not
+through the Apply dialog) asks for a plain confirmation with no checkbox,
+since Pop's own behaviour already implies deletion once resolved. Dropping
+asks for a plain, explicit confirmation, since it discards the entry
+outright and cannot be undone.
+
+Both Apply and Pop can leave the repository conflicted, the same way a merge
+can: reapplying a stash is itself a kind of merge between the working tree
+and the snapshot. A conflicted Apply or Pop is not reported as a failure to
+the caller — it is reported through the same conflict state a merge or
+rebase reports, distinguished by its own kind so the conflict view can tailor
+itself (see Conflicts). Unlike a merge or rebase conflict, a stash conflict
+has no underlying abort command; the only way out of it is to resolve every
+conflicting file (or otherwise let it settle) and finish, or dismiss the
+conflict view without resolving it. Dismissing does not change any file — it
+only lets the Changes view and the rest of the toolbar take over the screen
+again; a "Resolve conflicts" button reappears in the toolbar as the way back
+into the dismissed conflict.
+
+### Pop and the owed drop
+
+When Pop leaves a conflict behind, the stash entry is deliberately kept
+rather than dropped — the user may still need it if the conflict cannot be
+resolved. The application remembers, for that repository, that this entry's
+drop is still owed once the conflict is resolved, and the conflict view
+offers a "Drop stash" action for exactly that entry once it is available;
+the action is present only when an owed drop exists for the repository, and
+what it targets is decided at the moment it is offered, not fixed when the
+conflict began.
+
+The reminder is keyed by the stash's own identity (the commit it points to),
+not by its position in the list. Positions shift: any stash pushed, applied-
+and-dropped, or otherwise removed above the entry the reminder is waiting on
+changes every position below it, in this repository and in any other
+application session or terminal working against the same repository, since
+the stash list is shared, not private to this application. Resolving the
+reminder against identity rather than position means it always finds the
+entry it meant, or reports there is nothing left to drop if that entry no
+longer exists by any means (a hand-run drop, or another pop that consumed
+it).
+
+The reminder does not survive the application restarting: it exists only for
+the running session, held in memory and nowhere else. If the application is
+closed and reopened while a conflicted pop's drop is still owed, the
+reminder is gone — the stash entry itself is untouched and still sits in the
+list, but the application no longer offers the dedicated "Drop stash" action
+for it. It can still be dropped by hand like any other entry once the
+conflict is otherwise settled. This is a real gap rather than a documented
+design choice: nothing in the codebase persists the reminder across a
+restart, and nothing explains why not.
+
+### Previewing a stash
+
+Selecting an entry shows every file the stash touches, tracked and untracked
+together, tracked changes listed first. Selecting a file shows its diff:
+for a tracked file, the change against what the stash captured; for a file
+that was only ever untracked, its whole content shown as newly added. A
+renamed file's diff carries both its old and new path so the change reads as
+a rename rather than as a deletion and an unrelated addition.
+
+An empty stash (nothing captured) shows an explicit empty state rather than
+an empty pane. Switching to a different stash entry always reloads its file
+list from nothing; there is no continuity to preserve between two unrelated
+stashes.
+
+## Rules
+
+1. Fetch never refuses because of a conflict; Pull and Push always do.
+2. Only one write operation runs per repository at a time; any of Fetch,
+   Pull, Push, or a stash action refuses rather than interleaving with
+   another already running for the same repository.
+3. Pull refuses outright, without attempting anything, when the repository
+   already has an unresolved merge, rebase or stash conflict.
+4. A push with no upstream sets one on the remote named `origin`, using the
+   branch's own name, without asking.
+5. Pull reports exactly one of: already up to date, merged, rebased,
+   conflicted. A conflicted pull is a result, not an error.
+6. Stashing with nothing to stash is refused, not silently accepted as an
+   empty entry.
+7. Applying a stash never deletes it; popping always removes it once there
+   is no conflict left requiring it; dropping always removes it regardless
+   of its contents.
+8. A stash conflict has no underlying abort; it is left in place until
+   resolved or dismissed, and dismissing changes no files.
+9. The owed-drop reminder for a conflicted pop is identified by the stash's
+   commit, never by its list position, so a shift in the stash list from any
+   source cannot make it target the wrong entry.
+10. The owed-drop reminder is in-memory only and does not survive an
+    application restart.
+11. The ahead/behind count, and any other read of a branch's upstream
+    relationship, reports zero rather than an error when there is no
+    upstream to compare against.
+
+## Known divergences
+
+None.
