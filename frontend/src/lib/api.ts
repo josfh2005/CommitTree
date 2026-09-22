@@ -11,6 +11,7 @@ export const api = {
   relocateRepo: (id: string) => call<Repo>(Go.RelocateRepo(id)),
   removeRepo: (id: string) => call<void>(Go.RemoveRepo(id)),
   setRepoGroup: (id: string, group: string) => call<void>(Go.SetRepoGroup(id, group)),
+  renameRepoGroup: (oldName: string, newName: string) => call<void>(Go.RenameRepoGroup(oldName, newName)),
 
   getRefs: (id: string) => call<Refs>(Go.GetRefs(id)),
   getLog: (id: string, filters: Filters, offset: number, limit: number) =>

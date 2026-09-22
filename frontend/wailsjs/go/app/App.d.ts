@@ -117,6 +117,8 @@ export function RelocateRepo(arg1:string):Promise<repos.Repo>;
 
 export function RemoveRepo(arg1:string):Promise<void>;
 
+export function RenameRepoGroup(arg1:string,arg2:string):Promise<void>;
+
 export function ResetBranch(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function ResetPrompt(arg1:string):Promise<void>;

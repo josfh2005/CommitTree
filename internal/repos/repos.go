@@ -151,6 +151,39 @@ func (s *Store) SetGroup(id, group string) error {
 	return ErrUnknownRepo
 }
 
+// RenameGroup moves every repository in oldName to newName, in a single
+// persisted write. Renaming to the current name is a no-op. Renaming to a
+// name that already has repositories under it merges the two groups — a
+// group is just a string on each repository, so ending up with the same
+// string is what "merge" means here. A missing oldName (no repository
+// carries it) is also a no-op.
+func (s *Store) RenameGroup(oldName, newName string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if oldName == newName {
+		return nil
+	}
+	var touched []int
+	for i, r := range s.repos {
+		if r.Group == oldName {
+			touched = append(touched, i)
+		}
+	}
+	if len(touched) == 0 {
+		return nil
+	}
+	for _, i := range touched {
+		s.repos[i].Group = newName
+	}
+	if err := s.save(); err != nil {
+		for _, i := range touched {
+			s.repos[i].Group = oldName
+		}
+		return err
+	}
+	return nil
+}
+
 func (s *Store) Remove(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

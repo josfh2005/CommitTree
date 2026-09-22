@@ -1,10 +1,11 @@
 <script lang="ts">
   import Icon from './Icon.svelte'
   import RepoRow from './RepoRow.svelte'
-  import { addRepo, dropRepoOnGroup } from '../lib/actions'
+  import { addRepo, dropRepoOnGroup, renameGroup } from '../lib/actions'
   import { groupRepos } from '../lib/repoGroups'
   import { REPO_DRAG_MIME } from '../lib/repoDrop'
   import { busy, collapsedRepoGroups, repos, settingsOpen, toggleRepoGroupCollapsed } from '../lib/stores'
+  import { openMenu } from '../lib/ui'
 
   // Which drop target (a group name, or '' for the loose area) the drag is
   // currently over, for the highlight. A drop target spans a whole section
@@ -41,6 +42,10 @@
     event.preventDefault()
     dropRepoOnGroup(id, target)
   }
+
+  function groupMenu(event: MouseEvent, name: string) {
+    openMenu(event, [{ label: 'Rename group…', action: () => renameGroup(name) }])
+  }
 </script>
 
 <div class="sidebar">
@@ -74,7 +79,11 @@
           on:dragleave={(e) => handleDragLeave(e, group.name)}
           on:drop={(e) => handleDrop(e, group.name)}
         >
-          <button class="row-item group-header" on:click={() => toggleRepoGroupCollapsed(group.name)}>
+          <button
+            class="row-item group-header"
+            on:click={() => toggleRepoGroupCollapsed(group.name)}
+            on:contextmenu={(e) => groupMenu(e, group.name)}
+          >
             <span class="mark"><Icon name={collapsed ? 'chevron-right' : 'chevron-down'} size={12} /></span>
             <span class="ellipsis">{group.name}</span>
             <span class="count">{group.repos.length}</span>

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"git-ui/internal/repos"
 	"git-ui/internal/testrepo"
@@ -193,6 +194,147 @@ func TestSetGroupPersists(t *testing.T) {
 
 	if err := reopened.SetGroup("nope", "x"); !errors.Is(err, repos.ErrUnknownRepo) {
 		t.Fatalf("SetGroup unknown: %v", err)
+	}
+}
+
+func TestRenameGroupMovesEveryRepoWithOldName(t *testing.T) {
+	a := testrepo.New(t)
+	b := testrepo.New(t)
+	c := testrepo.New(t)
+	file := filepath.Join(t.TempDir(), "repos.json")
+	s, _ := repos.Open(file)
+	ra, err := s.Add(ctx, a.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rb, err := s.Add(ctx, b.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rc, err := s.Add(ctx, c.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetGroup(ra.ID, "work"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetGroup(rb.ID, "work"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetGroup(rc.ID, "personal"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.RenameGroup("work", "job"); err != nil {
+		t.Fatal(err)
+	}
+
+	gotA, _ := s.Get(ra.ID)
+	gotB, _ := s.Get(rb.ID)
+	gotC, _ := s.Get(rc.ID)
+	if gotA.Group != "job" || gotB.Group != "job" {
+		t.Fatalf("renamed repos = %+v, %+v", gotA, gotB)
+	}
+	if gotC.Group != "personal" {
+		t.Fatalf("unrelated repo group changed: %+v", gotC)
+	}
+
+	reopened, err := repos.Open(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range reopened.List() {
+		if (r.ID == ra.ID || r.ID == rb.ID) && r.Group != "job" {
+			t.Fatalf("persisted group not renamed: %+v", r)
+		}
+		if r.ID == rc.ID && r.Group != "personal" {
+			t.Fatalf("persisted unrelated group changed: %+v", r)
+		}
+	}
+}
+
+func TestRenameGroupIntoExistingNameMerges(t *testing.T) {
+	a := testrepo.New(t)
+	b := testrepo.New(t)
+	s, _ := repos.Open(filepath.Join(t.TempDir(), "repos.json"))
+	ra, err := s.Add(ctx, a.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rb, err := s.Add(ctx, b.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetGroup(ra.ID, "work"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetGroup(rb.ID, "personal"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.RenameGroup("work", "personal"); err != nil {
+		t.Fatal(err)
+	}
+
+	gotA, _ := s.Get(ra.ID)
+	gotB, _ := s.Get(rb.ID)
+	if gotA.Group != "personal" || gotB.Group != "personal" {
+		t.Fatalf("merge result = %+v, %+v", gotA, gotB)
+	}
+}
+
+func TestRenameGroupSameNameDoesNotWrite(t *testing.T) {
+	a := testrepo.New(t)
+	file := filepath.Join(t.TempDir(), "repos.json")
+	s, _ := repos.Open(file)
+	ra, err := s.Add(ctx, a.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetGroup(ra.ID, "work"); err != nil {
+		t.Fatal(err)
+	}
+	info1, err := os.Stat(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(10 * time.Millisecond)
+
+	if err := s.RenameGroup("work", "work"); err != nil {
+		t.Fatal(err)
+	}
+
+	info2, err := os.Stat(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info1.ModTime().Equal(info2.ModTime()) {
+		t.Fatalf("no-op rename touched the file: %v -> %v", info1.ModTime(), info2.ModTime())
+	}
+	got, ok := s.Get(ra.ID)
+	if !ok || got.Group != "work" {
+		t.Fatalf("Get after no-op rename = %+v %v", got, ok)
+	}
+}
+
+func TestRenameGroupWithNoMatchesIsNoop(t *testing.T) {
+	a := testrepo.New(t)
+	s, _ := repos.Open(filepath.Join(t.TempDir(), "repos.json"))
+	ra, err := s.Add(ctx, a.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetGroup(ra.ID, "work"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.RenameGroup("nonexistent", "job"); err != nil {
+		t.Fatal(err)
+	}
+
+	got, ok := s.Get(ra.ID)
+	if !ok || got.Group != "work" {
+		t.Fatalf("unrelated repo group changed: %+v", got)
 	}
 }
 
