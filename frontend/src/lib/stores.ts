@@ -29,6 +29,11 @@ export const chatOpen = persisted('chatOpen', true)
 export const selectedRepoId = persisted('selectedRepoId', '')
 /** Ids of the repos whose refs are unfolded in the sidebar. */
 export const expandedRepos = persisted<string[]>('expandedRepos', [])
+/** Ids of the repos whose Tags section is expanded — it starts collapsed,
+ *  so only the non-default (expanded) state needs remembering, same as
+ *  expandedRepos above. Keyed by repo id so expanding it in one repository
+ *  doesn't expand it in another. */
+export const expandedTagSections = persisted<string[]>('expandedTagSections', [])
 
 export const repos = writable<Repo[]>([])
 export const refs = writable<Refs | null>(null)
@@ -230,4 +235,8 @@ export function selectRepo(id: string) {
 
 export function toggleRepoExpanded(id: string) {
   expandedRepos.update((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]))
+}
+
+export function toggleTagsExpanded(repoId: string) {
+  expandedTagSections.update((ids) => (ids.includes(repoId) ? ids.filter((x) => x !== repoId) : [...ids, repoId]))
 }

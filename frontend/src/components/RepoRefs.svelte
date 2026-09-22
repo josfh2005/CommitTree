@@ -3,7 +3,7 @@
   import Icon from './Icon.svelte'
   import { checkoutBranch, deleteBranch, deleteTag, mergeBranch, newBranch, newTag, stashApply, stashDrop, stashPop } from '../lib/actions'
   import { groupBranches, leafName, type BranchGroup } from '../lib/branches'
-  import { busy, filters, mainView, mergeState, refs, selectRepo, selectStash, selectedRepoId, selectedStash, stashEntries, worktreeState } from '../lib/stores'
+  import { busy, expandedTagSections, filters, mainView, mergeState, refs, selectRepo, selectStash, selectedRepoId, selectedStash, stashEntries, toggleTagsExpanded, worktreeState } from '../lib/stores'
   import type { Branch, StashEntry, Tag } from '../lib/types'
   import { changedCount } from '../lib/worktree'
   import { openMenu } from '../lib/ui'
@@ -11,7 +11,6 @@
   export let repoId: string
 
   let showRemotes = true
-  let showTags = true
   let showStash = true
   let openRemotes: Record<string, boolean> = {}
   let openGroups: Record<string, boolean> = {}
@@ -222,12 +221,15 @@
     {/if}
 
     <div class="section">
-      <button class="section-title" on:click={() => (showTags = !showTags)}>Tags</button>
+      <span class="section-heading">
+        <button class="section-title" on:click={() => toggleTagsExpanded(repoId)}>Tags</button>
+        <span class="count">{$refs.tags.length}</span>
+      </span>
       <button class="icon-btn" title="New tag at HEAD" on:click={() => newTag(repoId, 'HEAD', 'HEAD')}>
         <Icon name="plus" size={14} />
       </button>
     </div>
-    {#if showTags}
+    {#if $expandedTagSections.includes(repoId)}
       {#each $refs.tags as t (t.name)}
         <button
           class="row-item ref"
@@ -269,6 +271,7 @@
 <style>
   .refs { padding: 0 0 12px 12px; }
   .section { display: flex; align-items: center; justify-content: space-between; height: 30px; padding: 6px 4px 0 10px; }
+  .section-heading { display: flex; align-items: center; gap: 6px; }
   .ref { height: 26px; }
   .changes .count { margin-left: auto; font-size: 11px; padding: 0 6px; border-radius: 4px; background: var(--hover); color: var(--muted); }
   .section .count { font-size: 11px; color: var(--faint); }
