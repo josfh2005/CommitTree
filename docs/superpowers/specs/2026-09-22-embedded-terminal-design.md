@@ -73,8 +73,11 @@ Environment: the app's own (already repaired by `FixPath`) plus
   with no output fires `OnSettled` once and disarms. No Enter, no settle.
 - **Exit**: when the shell exits, `OnExit` reports its code. The tab stays in
   the map (so the frontend can keep its scrollback) until `Close`.
-- **Close**: SIGHUP to the process group, then SIGKILL after 2 s if still
-  alive; closes the pty. Closing a tab never asks for confirmation.
+- **Close**: SIGHUP to the shell's process group and to the terminal's
+  foreground process group (a job-control shell runs each job in its own
+  group), closes the pty, then SIGKILL to both groups after 2 s if the shell
+  is still alive. Background jobs get the shell's own SIGHUP forwarding, as
+  in Terminal.app; `nohup`ed jobs survive. Closing a tab never asks for confirmation.
 
 Tab IDs are opaque strings unique for the process lifetime.
 
@@ -87,6 +90,7 @@ func (a *App) TerminalOpen(repoID string, cols, rows int) (string, error)
 func (a *App) TerminalWrite(tab, data string) error
 func (a *App) TerminalResize(tab string, cols, rows int) error
 func (a *App) TerminalClose(tab string) error
+func (a *App) TerminalShell() string // basename of the shell, for tab labels
 ```
 
 `TerminalOpen` fails for an unknown or missing repository. Events:
@@ -133,8 +137,9 @@ The body of `startFocusRefresh`'s focus handler is extracted into
 `checkExternalChanges()` (reload merge and worktree state, compare the
 fingerprint, `refreshRepo` on a change). Window focus keeps calling it.
 `terminal:settled` calls it too when `repo` is the selected repository;
-otherwise the repository is marked pending and checked when it is next
-selected. Changes made by another program while the window stays focused are
+otherwise it only reloads the repository list, so the sidebar's branch label
+for that repository stays right. Nothing is kept pending: selecting a
+repository already reloads its refs, log and working tree. Changes made by another program while the window stays focused are
 still not seen until the next focus — unchanged from today.
 
 ## Safety
@@ -168,8 +173,8 @@ Stated in the specification as it is:
 - `internal/app`: `TerminalOpen` on an unknown or missing repository fails;
   `RemoveRepo` closes that repository's tabs.
 - Frontend (vitest), pure logic only: tab store (per-repo tabs, numbering,
-  visible set, exited state) and the settled rule (selected → check now,
-  other → pending until selected). xterm itself is not unit-tested.
+  visible set, exited state) and the settled rule (selected → full check,
+  other → repository list only). xterm itself is not unit-tested.
 - Manual: vim, htop, Ctrl-C on `sleep`, colours, resize, switching repos with
   a running process, and a `git commit` typed in the terminal updating the
   log without a focus change.
