@@ -50,9 +50,11 @@
           </span>
           <span class="ellipsis">{f.path}</span>
         </button>
-        {#each actions(f) as action (action.label)}
-          <button class="act" class:danger={action.danger} disabled={action.disabled} title={action.title} on:click={action.run}>{action.label}</button>
-        {/each}
+        <div class="acts">
+          {#each actions(f) as action (action.label)}
+            <button class="act" class:danger={action.danger} disabled={action.disabled} title={action.title} on:click={action.run}>{action.label}</button>
+          {/each}
+        </div>
       </div>
     {/each}
   {:else}
@@ -66,8 +68,12 @@
   .section:first-child { padding-top: 2px; }
   .row { position: relative; }
   .file { height: 24px; font-size: 12px; }
-  .row .file { padding-right: 64px; }
-  .act { position: absolute; right: 4px; top: 2px; height: 20px; padding: 0 8px; font-size: 11px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); visibility: hidden; }
+  .row .file { padding-right: 132px; }
+  /* One flex row for every action, so a second button sits BESIDE the first
+     instead of on top of it — absolutely positioning each button made only
+     the last one (Discard, Take theirs) visible and clickable. */
+  .acts { position: absolute; right: 4px; top: 2px; display: flex; gap: 4px; }
+  .act { height: 20px; padding: 0 8px; font-size: 11px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); visibility: hidden; }
   .row:hover .act, .row.active .act, .act:focus-visible { visibility: visible; }
   .act:hover:not(:disabled) { background: var(--hover); }
   .act.danger { color: var(--danger); border-color: var(--danger); }
