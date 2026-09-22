@@ -4,6 +4,7 @@ go 1.26
 
 require (
 	github.com/anthropics/anthropic-sdk-go v1.74.0
+	github.com/creack/pty v1.1.24
 	github.com/openai/openai-go v1.12.0
 	github.com/wailsapp/wails/v2 v2.16.0
 	github.com/zalando/go-keyring v0.2.8
