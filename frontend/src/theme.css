@@ -28,6 +28,35 @@
   --radius: 8px;
   --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  /* One indentation system for the refs sidebar (RepoRefs.svelte,
+     BranchRow.svelte), anchored to the repository row above it
+     (RepoRow.svelte) so the two can't drift apart. --row-base-indent is
+     the x of a repository's NAME - not of that row's own fold-chevron
+     gutter - and every section heading ("Branches", "Remotes", "Tags",
+     "Stash", and the "Changes" row, which reads as a peer of the headings)
+     sits on that same line. Every row under a heading sits one
+     --row-indent-step further in than the heading above it, and each
+     nesting level - a branch inside a folder, a remote's branches, a
+     folder inside a remote - adds one more step. A row with a marker
+     (current-branch tick, a chevron) puts it in the reserved gutter
+     *within* that step rather than adding to it: the marker (12px) plus
+     .ref's 8px flex gap (see RepoRefs.svelte) add up to exactly one step,
+     so a marker row's own padding-left is one step short of its text's
+     column, and the marker + gap make up the missing step. A row with no
+     marker still reserves that step (its padding-left already includes
+     it), so every row at a given depth - marked or not - starts its text
+     on the same line. --repo-row-inset is RepoRow's own gutter-plus-gap
+     (its fold icon-button is 20px, wider than a refs marker, plus its own
+     4px flex gap) subtracted the same way, so the repository name lands
+     exactly on --row-base-indent too. NOTE: .row-item's own default
+     padding-left is deliberately NOT tied to --row-base-indent - it is
+     shared by unrelated rows elsewhere (the sidebar's "Add repo" and
+     "Settings" rows, repo group headers, file rows) that must not move
+     when this block's anchor changes; RepoRefs.svelte's `.ref` rule opts
+     its own rows in explicitly instead. */
+  --row-base-indent: 28px;
+  --row-indent-step: 20px; /* also the refs marker gutter: 12px marker + 8px .ref gap */
+  --repo-row-inset: 24px; /* RepoRow's fold icon-button (20px) + its own 4px gap */
   color-scheme: light;
 }
 

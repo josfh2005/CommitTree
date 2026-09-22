@@ -46,7 +46,7 @@
   class:active
   class:missing={repo.missing}
   class:dragging
-  style="padding-left: {4 + depth * 16}px"
+  style="padding-left: calc(var(--row-base-indent) - var(--repo-row-inset) + {depth} * var(--row-indent-step))"
   draggable="true"
   on:contextmenu={repoMenu}
   on:dragstart={handleDragStart}

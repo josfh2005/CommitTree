@@ -178,7 +178,6 @@
           {@const grouped = groupBranches(remote.branches)}
           <button class="row-item ref" on:click={() => (openRemotes = { ...openRemotes, [remote.name]: !openRemotes[remote.name] })}>
             <span class="mark"><Icon name={openRemotes[remote.name] ? 'chevron-down' : 'chevron-right'} size={12} /></span>
-            <Icon name="cloud" size={14} />
             <span class="ellipsis">{remote.name}</span>
           </button>
           {#if openRemotes[remote.name]}
@@ -196,7 +195,11 @@
             {#each grouped.groups as group (group.name)}
               {@const key = `${remote.name}:${group.name}`}
               {@const open = isOpen(openGroups, key, group, $filters.branch)}
-              <button class="row-item ref group nested" on:click={() => toggleGroup(key)}>
+              <button
+                class="row-item ref group"
+                style="padding-left: calc(var(--row-base-indent) + var(--row-indent-step))"
+                on:click={() => toggleGroup(key)}
+              >
                 <span class="mark"><Icon name={open ? 'chevron-down' : 'chevron-right'} size={12} /></span>
                 <span class="ellipsis">{group.name}</span>
                 <span class="count">{group.branches.length}</span>
@@ -270,15 +273,24 @@
 
 <style>
   .refs { padding: 0 0 12px 12px; }
-  .section { display: flex; align-items: center; justify-content: space-between; height: 30px; padding: 6px 4px 0 10px; }
+  /* Section headings (and "Changes", their peer) sit at the base indent;
+     their rows sit one step in - see the --row-* custom properties in
+     theme.css. */
+  .section { display: flex; align-items: center; justify-content: space-between; height: 30px; padding: 6px 4px 0 var(--row-base-indent); }
   .section-heading { display: flex; align-items: center; gap: 6px; }
-  .ref { height: 26px; }
+  /* Opt this file's own rows into the shared refs indentation - see
+     --row-base-indent in theme.css - without moving unrelated .row-item
+     consumers elsewhere in the app that share the base class but not this
+     block's anchor (BranchRow overrides this inline for depth > 0). */
+  .ref { height: 26px; padding-left: var(--row-base-indent); }
   .changes .count { margin-left: auto; font-size: 11px; padding: 0 6px; border-radius: 4px; background: var(--hover); color: var(--muted); }
   .section .count { font-size: 11px; color: var(--faint); }
   .mark { width: 12px; flex: none; display: inline-grid; place-items: center; color: var(--muted); }
   .current { font-weight: 500; }
   .detached { color: var(--muted); }
-  .nested { padding-left: 26px; }
   .group .count { margin-left: auto; font-size: 11px; color: var(--faint); }
-  .none { padding: 2px 10px 0 30px; color: var(--faint); font-size: 12px; }
+  /* Empty-state lines stand in for the rows they describe (one step in
+     from the heading above them), so they align with that row TEXT - no
+     marker gutter of their own. */
+  .none { padding: 2px 10px 0 calc(var(--row-base-indent) + var(--row-indent-step)); color: var(--faint); font-size: 12px; }
 </style>

@@ -15,7 +15,7 @@
 <button
   class="row-item ref"
   class:active
-  style="padding-left: {10 + depth * 16}px"
+  style="padding-left: calc(var(--row-base-indent) + {depth} * var(--row-indent-step))"
   title={title || text}
   on:click={() => onSelect?.(branch)}
   on:dblclick={() => onCheckout(branch)}
