@@ -27,7 +27,7 @@ type Details struct {
 const detailsFormat = "%cn%x00%ce%x00%cI%x00%b"
 
 func GetDetails(ctx context.Context, dir, hash string) (Details, error) {
-	commits, err := Get(ctx, dir, Filters{Branch: hash}, 0, 1)
+	commits, err := Get(ctx, dir, Filters{Branch: hash}, OrderTopo, 0, 1)
 	if err != nil {
 		return Details{}, err
 	}

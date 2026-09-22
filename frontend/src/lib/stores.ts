@@ -1,15 +1,25 @@
 import { derived, get, writable, type Writable } from 'svelte/store'
 import { api } from './api'
 import { validSelectedStash, type SelectedStash } from './stash'
-import { emptyFilters, type AISettings, type AheadBehind, type Filters, type GitSettings, type MergeState, type Refs, type Repo, type StashEntry, type WorktreeState } from './types'
+import { emptyFilters, type AISettings, type AheadBehind, type Filters, type GitSettings, type LogOrder, type MergeState, type Refs, type Repo, type StashEntry, type WorktreeState } from './types'
+import { isLogOrder } from './logOrder'
 
-function persisted<T>(key: string, initial: T): Writable<T> {
+/** @param isValid For a value drawn from a constrained set (e.g. a union of
+ *  string literals): a type guard checked against whatever JSON.parse
+ *  returns, so a corrupt localStorage entry or one left by an older version
+ *  of the app with a since-removed option falls back to `initial` instead
+ *  of reaching the UI unvalidated. Omit it for values with no such
+ *  constraint (free-form strings, arrays, numbers, booleans). */
+export function persisted<T>(key: string, initial: T, isValid?: (value: unknown) => value is T): Writable<T> {
   let start = initial
   try {
     const raw = localStorage.getItem(key)
-    if (raw !== null) start = JSON.parse(raw)
+    if (raw !== null) {
+      const parsed = JSON.parse(raw)
+      start = !isValid || isValid(parsed) ? parsed : initial
+    }
   } catch {
-    // Storage unavailable: fall back to the default.
+    // Storage unavailable or corrupt JSON: fall back to the default.
   }
   const store = writable<T>(start)
   store.subscribe((value) => {
@@ -37,6 +47,11 @@ export const expandedTagSections = persisted<string[]>('expandedTagSections', []
 /** Ids of the sidebar repo groups that are collapsed — groups start
  *  expanded, so only the non-default (collapsed) state needs remembering. */
 export const collapsedRepoGroups = persisted<string[]>('collapsedRepoGroups', [])
+/** How the log is ordered — a global preference, not per repository, so it
+ *  is stored here alongside the other persisted UI preferences rather than
+ *  in a per-repo backend setting (contrast gitSettings below, which is
+ *  per-repository and backend-owned). */
+export const logOrder = persisted<LogOrder>('logOrder', 'topo', isLogOrder)
 
 export const repos = writable<Repo[]>([])
 export const refs = writable<Refs | null>(null)

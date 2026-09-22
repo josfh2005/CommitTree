@@ -6,7 +6,8 @@
   import {
     arrowAt, DOT_RADIUS, edgeSegment, graphWidth, laneColor, laneX, ROW_HEIGHT, rowCenterY, visibleRange,
   } from '../lib/geometry'
-  import { busy, chatOpen, filters, jumpTo, logVersion, mergeState, refs, selectedHash } from '../lib/stores'
+  import { isCurrentBranchRef } from '../lib/refBadge'
+  import { busy, chatOpen, filters, jumpTo, logOrder, logVersion, mergeState, refs, selectedHash } from '../lib/stores'
   import type { LogRow } from '../lib/types'
   import { copyText, errorMessage, openMenu, toast } from '../lib/ui'
 
@@ -30,7 +31,7 @@
   let viewport = 0
   let hover: { x: number; y: number; text: string } | null = null
 
-  $: reload(repoId, $filters, $logVersion)
+  $: reload(repoId, $filters, $logOrder, $logVersion)
 
   async function reload(..._deps: unknown[]) {
     const gen = ++generation
@@ -48,7 +49,7 @@
     if (loadingGen === gen) return
     loadingGen = gen
     try {
-      const page = await api.getLog(repoId, $filters, rows.length, PAGE)
+      const page = await api.getLog(repoId, $filters, $logOrder, rows.length, PAGE)
       if (gen !== generation) return
       page.rows.forEach((r, i) => byHash.set(r.hash, rows.length + i))
       rows = rows.concat(page.rows)
@@ -247,7 +248,7 @@
         >
           <span class="subject ellipsis">
             {#each row.refs.filter((r) => r.kind !== 'head') as ref}
-              <span class="badge {ref.kind}">{ref.name}</span>
+              <span class="badge {ref.kind}" class:current={isCurrentBranchRef(ref, row.isHead, $refs?.head ?? '')}>{ref.name}</span>
             {/each}
             {row.subject}
           </span>
@@ -290,13 +291,13 @@
     padding-right: 12px;
     text-align: left;
   }
-  .row:hover { background: var(--hover); }
   .row.selected { background: var(--selection); }
   .merge .subject { color: var(--merge-text); }
   .author, .date, .hash { color: var(--muted); font-size: 12px; }
-  .badge { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 4px; font-size: 11px; line-height: 17px; background: var(--hover); color: var(--muted); }
-  .badge.local { color: var(--text); background: var(--active); }
-  .badge.tag { color: var(--accent); }
+  .badge { display: inline-block; margin-right: 6px; padding: 1px 6px; border-radius: 6px; font-size: 11px; line-height: 15px; }
+  .badge.local, .badge.remote { background: var(--branch-badge-bg); color: var(--branch-badge-text); }
+  .badge.tag { background: var(--tag-badge-bg); color: var(--tag-badge-text); }
+  .badge.current { font-weight: 600; }
   .note { position: absolute; left: 0; right: 0; height: 28px; line-height: 28px; text-align: center; font-size: 12px; color: var(--faint); }
   .overlay { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); pointer-events: none; }
   .overlay.error { color: var(--danger); padding: 24px; white-space: pre-wrap; user-select: text; }

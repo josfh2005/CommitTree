@@ -65,8 +65,22 @@ func (f Filters) GraphVisible() bool {
 	return f.Text == "" && f.Author == "" && f.Since == "" && f.Until == ""
 }
 
-func Args(f Filters, skip, limit int) []string {
-	args := []string{"log", "--topo-order", "--parents", "--decorate=full", "--format=" + Format,
+// Order selects how commits are walked. OrderTopo (the default) keeps each
+// line of development together, so a merged branch's own history is not
+// interleaved with the trunk by date; OrderDate is a strict walk by commit
+// date. Callers pass this explicitly rather than the package reading any
+// setting itself — the same pattern ops.Pull follows for its strategy.
+const (
+	OrderTopo = "topo"
+	OrderDate = "date"
+)
+
+func Args(f Filters, order string, skip, limit int) []string {
+	orderFlag := "--topo-order"
+	if order == OrderDate {
+		orderFlag = "--date-order"
+	}
+	args := []string{"log", orderFlag, "--parents", "--decorate=full", "--format=" + Format,
 		fmt.Sprintf("--skip=%d", skip), fmt.Sprintf("-n%d", limit)}
 	if f.Author != "" {
 		args = append(args, "--author="+f.Author)
@@ -152,8 +166,8 @@ func parseRefs(decoration string) []Ref {
 	return refs
 }
 
-func Get(ctx context.Context, dir string, f Filters, skip, limit int) ([]Commit, error) {
-	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, Args(f, skip, limit)...)
+func Get(ctx context.Context, dir string, f Filters, order string, skip, limit int) ([]Commit, error) {
+	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, Args(f, order, skip, limit)...)
 	if err != nil {
 		return nil, err
 	}

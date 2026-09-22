@@ -1,5 +1,5 @@
 import * as Go from '../../wailsjs/go/app/App'
-import type { AIMessage, AISettings, AIStatus, AheadBehind, CommitInfo, ConflictFile, Details, Filters, GitSettings, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, WorktreeState } from './types'
+import type { AIMessage, AISettings, AIStatus, AheadBehind, CommitInfo, ConflictFile, Details, Filters, GitSettings, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, WorktreeState } from './types'
 
 // The generated bindings use Wails model classes; the JSON is identical to our
 // interfaces, so cast at this single boundary.
@@ -14,8 +14,8 @@ export const api = {
   renameRepoGroup: (oldName: string, newName: string) => call<void>(Go.RenameRepoGroup(oldName, newName)),
 
   getRefs: (id: string) => call<Refs>(Go.GetRefs(id)),
-  getLog: (id: string, filters: Filters, offset: number, limit: number) =>
-    call<LogPage>(Go.GetLog(id, filters as any, offset, limit)),
+  getLog: (id: string, filters: Filters, order: LogOrder, offset: number, limit: number) =>
+    call<LogPage>(Go.GetLog(id, filters as any, order, offset, limit)),
   getDetails: (id: string, hash: string) => call<Details>(Go.GetDetails(id, hash)),
   getDiff: (id: string, parent: string, hash: string, paths: string[]) => call<string>(Go.GetDiff(id, parent, hash, paths)),
   getAuthors: (id: string) => call<string[]>(Go.GetAuthors(id)),

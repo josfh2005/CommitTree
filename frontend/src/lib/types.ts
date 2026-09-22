@@ -53,6 +53,11 @@ export interface Filters {
 
 export const emptyFilters = (): Filters => ({ text: '', branch: '', author: '', since: '', until: '', paths: [] })
 
+/** How the log is walked. 'topo' (the default) keeps a merged branch's own
+ *  history together; 'date' is a strict walk by commit date. This is a
+ *  global preference (see stores.ts's logOrder), not per-repository. */
+export type LogOrder = 'topo' | 'date'
+
 export interface Repo {
   id: string
   name: string

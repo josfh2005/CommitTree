@@ -4,7 +4,8 @@
   import { api } from '../lib/api'
   import { untilDisplayValue, untilFilterValue } from '../lib/format'
   import { branchRef } from '../lib/actions'
-  import { filters, jumpTo, refs } from '../lib/stores'
+  import { filters, jumpTo, logOrder, refs } from '../lib/stores'
+  import { parseLogOrder } from '../lib/logOrder'
 
   export let repoId: string
 
@@ -60,6 +61,8 @@
   }
 
   const shortRef = (ref: string) => ref.replace(/^refs\/(heads|remotes|tags)\//, '')
+
+  const updateOrder = (event: Event) => logOrder.set(parseLogOrder((event.target as HTMLSelectElement).value))
 </script>
 
 <div class="bar">
@@ -94,6 +97,10 @@
   <input type="date" value={$filters.since} on:change={update('since')} title="Since" />
   <input type="date" value={untilDisplayValue($filters.until)} on:change={updateUntil} title="Until" />
   <input class="paths" placeholder="Paths, comma separated" bind:value={paths} on:change={applyPaths} />
+  <select value={$logOrder} on:change={updateOrder} title="Order">
+    <option value="topo">Topological order</option>
+    <option value="date">Date order</option>
+  </select>
 </div>
 
 <style>

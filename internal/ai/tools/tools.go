@@ -132,7 +132,7 @@ func fileHistory(ctx context.Context, dir string, args map[string]any) (string, 
 }
 
 func logLines(ctx context.Context, dir string, f gitlog.Filters, limit int) (string, error) {
-	commits, err := gitlog.Get(ctx, dir, f, 0, limit)
+	commits, err := gitlog.Get(ctx, dir, f, gitlog.OrderTopo, 0, limit)
 	if err != nil {
 		return "", err
 	}

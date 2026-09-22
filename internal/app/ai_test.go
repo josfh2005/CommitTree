@@ -267,7 +267,7 @@ func TestExplainInChatWritesTheAnswerToTheConversation(t *testing.T) {
 		prompt = msgs[1].(map[string]any)["content"].(string)
 	})
 	a, id, ev := newAIApp(t, srv.URL)
-	head, err := a.GetLog(id, gitlog.Filters{}, 0, 1)
+	head, err := a.GetLog(id, gitlog.Filters{}, gitlog.OrderTopo, 0, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -305,7 +305,7 @@ func TestExplainInChatWritesTheAnswerToTheConversation(t *testing.T) {
 func TestExplainInChatWithUnknownProvider(t *testing.T) {
 	srv := fakeOllama(t, nil)
 	a, id, _ := newAIApp(t, srv.URL)
-	head, _ := a.GetLog(id, gitlog.Filters{}, 0, 1)
+	head, _ := a.GetLog(id, gitlog.Filters{}, gitlog.OrderTopo, 0, 1)
 
 	if err := a.ExplainInChat(id, head.Rows[0].Hash, "acme", "exp-2"); err == nil {
 		t.Fatal("want an error for an unknown provider")
@@ -322,7 +322,7 @@ func TestExplainInChatIsBusyWhileChatting(t *testing.T) {
 	}))
 	defer srv.Close()
 	a, id, ev := newAIApp(t, srv.URL)
-	head, _ := a.GetLog(id, gitlog.Filters{}, 0, 1)
+	head, _ := a.GetLog(id, gitlog.Filters{}, gitlog.OrderTopo, 0, 1)
 
 	if err := a.SendChat(id, "hola", "run-1"); err != nil {
 		t.Fatal(err)

@@ -186,9 +186,9 @@ held, or if it is already the current branch); its context menu offers:
 ### Remotes
 
 Shown only when the repository has at least one remote. Each remote is a
-row (with a cloud icon) that toggles open to show that remote's
-remote-tracking branches, grouped exactly as local branches are grouped
-(loose names, then `/`-prefixed groups, one level deep). The `origin/HEAD`
+row that toggles open to show that remote's remote-tracking branches,
+grouped exactly as local branches are grouped (loose names, then
+`/`-prefixed groups, one level deep). The `origin/HEAD`
 pointer some remotes carry is filtered out entirely and never shown as a
 branch. The remotes section as a whole, and each individual remote's open
 state, are UI-only and not remembered across the section collapsing and
