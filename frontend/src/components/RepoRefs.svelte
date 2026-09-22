@@ -1,9 +1,9 @@
 <script lang="ts">
   import BranchRow from './BranchRow.svelte'
   import Icon from './Icon.svelte'
-  import { checkoutBranch, deleteBranch, deleteTag, mergeBranch, newBranch, newTag } from '../lib/actions'
+  import { checkoutBranch, deleteBranch, deleteTag, mergeBranch, newBranch, newTag, stashApply, stashDrop, stashPop } from '../lib/actions'
   import { groupBranches, leafName, type BranchGroup } from '../lib/branches'
-  import { busy, filters, mainView, mergeState, refs, selectRepo, selectedRepoId, worktreeState } from '../lib/stores'
+  import { busy, filters, mainView, mergeState, refs, selectRepo, selectedRepoId, stashEntries, worktreeState } from '../lib/stores'
   import type { Branch, Tag } from '../lib/types'
   import { changedCount } from '../lib/worktree'
   import { openMenu } from '../lib/ui'
@@ -12,6 +12,7 @@
 
   let showRemotes = true
   let showTags = true
+  let showStash = true
   let openRemotes: Record<string, boolean> = {}
   let openGroups: Record<string, boolean> = {}
 
@@ -86,6 +87,14 @@
     openMenu(event, [
       { label: 'New branch from here…', action: () => newBranch(repoId, `refs/tags/${t.name}`, t.name) },
       { label: 'Delete…', action: () => deleteTag(repoId, t.name), danger: true },
+    ])
+  }
+
+  function stashMenu(event: MouseEvent, entry: { index: number }) {
+    openMenu(event, [
+      { label: 'Apply', action: () => stashApply(repoId, entry.index), disabled: !!$busy },
+      { label: 'Pop', action: () => stashPop(repoId, entry.index), disabled: !!$busy },
+      { label: 'Drop', action: () => stashDrop(repoId, entry.index), danger: true, disabled: !!$busy },
     ])
   }
 </script>
@@ -216,6 +225,21 @@
         </button>
       {:else}
         <div class="none">No tags</div>
+      {/each}
+    {/if}
+
+    <div class="section">
+      <button class="section-title" on:click={() => (showStash = !showStash)}>Stash</button>
+      <span class="count">{$stashEntries.length}</span>
+    </div>
+    {#if showStash}
+      {#each $stashEntries as entry (entry.index)}
+        <button class="row-item ref" on:contextmenu={(e) => stashMenu(e, entry)}>
+          <span class="mark"><Icon name="download" size={12} /></span>
+          <span class="ellipsis">{entry.message}</span>
+        </button>
+      {:else}
+        <div class="none">No stashed changes</div>
       {/each}
     {/if}
   </div>

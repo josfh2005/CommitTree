@@ -70,9 +70,6 @@ export async function relocateRepo(id: string) {
   }
 }
 
-export const fetchRepo = (id: string) => run('Fetching…', () => api.fetch(id))
-export const pullRepo = (id: string) => run('Pulling…', () => api.pull(id))
-
 export const checkoutBranch = (id: string, branch: Branch) =>
   run('Checking out…', () =>
     branch.remote ? api.checkoutRemote(id, branch.remote, branch.name) : api.checkout(id, branch.name))
