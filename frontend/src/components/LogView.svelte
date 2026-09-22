@@ -7,7 +7,7 @@
   import Splitter from './Splitter.svelte'
   import Toolbar from './Toolbar.svelte'
   import { conflictOwnsScreen } from '../lib/remote'
-  import { chatOpen, detailsHeight, mergeState, selectedHash, selectedRepo, stashConflictDismissed } from '../lib/stores'
+  import { chatOpen, detailsHeight, mergeState, selectedHash, selectedRepo, stashConflictDismissed, terminalOpen } from '../lib/stores'
 </script>
 
 <div class="log-view">
@@ -20,6 +20,9 @@
     </div>
     {#if $selectedRepo && !$selectedRepo.missing}
       <Toolbar repoId={$selectedRepo.id} />
+    {/if}
+    {#if !$terminalOpen}
+      <button class="icon-btn" title="Show terminal (Ctrl+`)" disabled={!$selectedRepo || $selectedRepo.missing} on:click={() => terminalOpen.set(true)}><Icon name="terminal" /></button>
     {/if}
     {#if !$chatOpen}
       <button class="icon-btn" title="Show chat" on:click={() => chatOpen.set(true)}><Icon name="panel-right" /></button>

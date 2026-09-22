@@ -10,6 +10,7 @@ import { stashApplyAction } from './stash'
 import { choiceDialog, confirmDialog, confirmDialogWithCheckbox, errorMessage, promptDialog, toast } from './ui'
 import { resolveRepoDrop } from './repoDrop'
 import { classifyGroupRename, renameCollapsedGroup } from './repoGroupRename'
+import { removeRepoTabs, terminalState } from './terminal'
 
 export function branchRef(branch: Branch): string {
   return branch.remote ? `refs/remotes/${branch.remote}/${branch.name}` : `refs/heads/${branch.name}`
@@ -55,6 +56,7 @@ export async function removeRepo(repo: Repo) {
   if (!ok) return
   try {
     await api.removeRepo(repo.id)
+    terminalState.update((s) => removeRepoTabs(s, repo.id))
     if (get(selectedRepoId) === repo.id) selectedRepoId.set('')
     await loadRepos()
     await loadRefs()

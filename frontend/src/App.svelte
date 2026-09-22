@@ -9,10 +9,11 @@
   import Sidebar from './components/Sidebar.svelte'
   import Splitter from './components/Splitter.svelte'
   import StashView from './components/StashView.svelte'
+  import TerminalPanel from './components/TerminalPanel.svelte'
   import Toasts from './components/Toasts.svelte'
   import { startFocusRefresh } from './lib/actions'
   import { conflictOwnsScreen } from './lib/remote'
-  import { chatOpen, chatWidth, loadAISettings, loadRefs, loadRepos, mainView, mergeState, selectedHash, selectedRepo, selectedStash, sidebarWidth, stashConflictDismissed, stashEntries } from './lib/stores'
+  import { chatOpen, chatWidth, loadAISettings, loadRefs, loadRepos, mainView, mergeState, selectedHash, selectedRepo, selectedStash, sidebarWidth, stashConflictDismissed, stashEntries, terminalHeight, terminalOpen } from './lib/stores'
 
   // A merge in progress always wins: neither the Changes view nor a stash
   // preview has anything to show that the merge view (reached through the
@@ -37,12 +38,25 @@
 
   const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v))
 
+  let sideHeight = 0
+
+  // e.code, not e.key: on layouts where ` is a dead key (Spanish, among
+  // others) e.key is "Dead", but the physical key is still Backquote.
+  function toggleTerminal(e: KeyboardEvent) {
+    if (e.ctrlKey && !e.metaKey && !e.altKey && e.code === 'Backquote') {
+      e.preventDefault()
+      terminalOpen.update((v) => !v)
+    }
+  }
+
   onMount(() => {
     loadRepos().then(loadRefs)
     loadAISettings()
     return startFocusRefresh()
   })
 </script>
+
+<svelte:window on:keydown={toggleTerminal} />
 
 <div class="app">
   <aside style="width: {$sidebarWidth}px"><Sidebar /></aside>
@@ -56,9 +70,17 @@
       <LogView />
     {/if}
   </main>
-  {#if $chatOpen}
+  {#if $chatOpen || $terminalOpen}
     <Splitter on:drag={(e) => chatWidth.set(clamp($chatWidth - e.detail, 260, 560))} />
-    <section class="chat" style="width: {$chatWidth}px"><ChatPanel /></section>
+    <section class="side" style="width: {$chatWidth}px" bind:clientHeight={sideHeight}>
+      {#if $chatOpen}<div class="chat"><ChatPanel /></div>{/if}
+      {#if $chatOpen && $terminalOpen}
+        <Splitter direction="horizontal" on:drag={(e) => terminalHeight.set(clamp($terminalHeight - e.detail, 120, Math.max(120, sideHeight - 120)))} />
+      {/if}
+      {#if $terminalOpen}
+        <div class="terminal" style={$chatOpen ? `height: ${$terminalHeight}px` : 'flex: 1'}><TerminalPanel /></div>
+      {/if}
+    </section>
   {/if}
 </div>
 
@@ -71,5 +93,7 @@
   .app { display: flex; height: 100%; }
   aside { flex: none; min-width: 0; background: var(--sidebar); }
   main { flex: 1; min-width: 0; background: var(--surface); }
-  .chat { flex: none; min-width: 0; background: var(--bg); }
+  .side { flex: none; min-width: 0; display: flex; flex-direction: column; background: var(--bg); }
+  .chat { flex: 1; min-height: 0; }
+  .terminal { flex: none; min-height: 0; }
 </style>

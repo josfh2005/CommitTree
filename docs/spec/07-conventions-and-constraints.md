@@ -208,6 +208,13 @@ is not affected by another repository's lock; the two run independently.
 (The interface layered on top of this is more conservative: see "Busy
 state and blocking" above.) Read operations are never blocked by the lock.
 
+The embedded terminal (see Terminal) is the one deliberate exception: a
+shell typed into by the user neither takes nor waits on this lock, the same
+way an external terminal open on the same repository never has. Requiring
+it to would let a pager or editor left open in a shell hold the lock
+indefinitely, and pausing keystrokes while an app operation runs would
+freeze Ctrl-C during a long push.
+
 ### State kept in a handful of JSON files, not a database
 
 Everything the application needs to remember between runs is stored as
@@ -257,6 +264,13 @@ features are used. It exposes no local server or listening port, and sends
 no usage data or analytics anywhere. Everything it knows about the user's
 repositories and preferences stays in the JSON files and the secret store
 described above.
+
+### macOS and Linux only
+
+The embedded terminal (see Terminal) is built on a real pty (`github.com/
+creack/pty` on the backend, `@xterm/xterm` with `@xterm/addon-fit` in the
+frontend) and is only available on macOS and Linux; there is no Windows
+console (ConPTY) implementation. Every other feature is unaffected by this.
 
 ### How the backend tells the frontend that something changed
 

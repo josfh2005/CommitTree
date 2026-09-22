@@ -1,7 +1,7 @@
 # git-ui — Embedded terminal — Design
 
 Date: 2026-09-22
-Status: Approved, not implemented
+Status: Implemented (manual pass pending)
 Builds on: `2026-09-16-git-ui-design.md` (layout, write lock, focus refresh)
 and `2026-09-17-ai-foundation-design.md` (chat panel), both merged to `main`.
 

@@ -32,6 +32,7 @@ Then take the area documents in any order.
 | [Conflicts](04-conflicts.md) | One view for a merge, rebase, cherry-pick, revert, mailbox patch or stash conflict |
 | [Remote and stash](05-remote-and-stash.md) | Fetch, pull, push, and the full stash lifecycle |
 | [AI](06-ai.md) | Providers, the chat panel, generated commit messages, the conflict resolver |
+| [Terminal](08-terminal.md) | The embedded shell: tabs per repository, freshness, safety |
 | [Conventions and constraints](07-conventions-and-constraints.md) | What is true everywhere, plus the git appendix |
 
 ## What this specification is not
