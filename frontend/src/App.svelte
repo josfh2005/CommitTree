@@ -72,16 +72,17 @@
   </main>
   {#if $chatOpen || $terminalOpen}
     <Splitter on:drag={(e) => chatWidth.set(clamp($chatWidth - e.detail, 260, 560))} />
-    <section class="side" style="width: {$chatWidth}px" bind:clientHeight={sideHeight}>
-      {#if $chatOpen}<div class="chat"><ChatPanel /></div>{/if}
-      {#if $chatOpen && $terminalOpen}
-        <Splitter direction="horizontal" on:drag={(e) => terminalHeight.set(clamp($terminalHeight - e.detail, 120, Math.max(120, sideHeight - 120)))} />
-      {/if}
-      {#if $terminalOpen}
-        <div class="terminal" style={$chatOpen ? `height: ${$terminalHeight}px` : 'flex: 1'}><TerminalPanel /></div>
-      {/if}
-    </section>
   {/if}
+  <!-- TerminalPanel stays mounted for the app's lifetime (see below) even
+       while this column is closed, so its xterm instances and scrollback
+       survive hiding it; only its layout is toggled with CSS. -->
+  <section class="side" class:hidden={!($chatOpen || $terminalOpen)} style="width: {$chatWidth}px" bind:clientHeight={sideHeight}>
+    {#if $chatOpen}<div class="chat"><ChatPanel /></div>{/if}
+    {#if $chatOpen && $terminalOpen}
+      <Splitter direction="horizontal" on:drag={(e) => terminalHeight.set(clamp($terminalHeight - e.detail, 120, Math.max(120, sideHeight - 120)))} />
+    {/if}
+    <div class="terminal" class:hidden={!$terminalOpen} style={$chatOpen ? `height: ${$terminalHeight}px` : 'flex: 1'}><TerminalPanel /></div>
+  </section>
 </div>
 
 <ContextMenu />
@@ -94,6 +95,8 @@
   aside { flex: none; min-width: 0; background: var(--sidebar); }
   main { flex: 1; min-width: 0; background: var(--surface); }
   .side { flex: none; min-width: 0; display: flex; flex-direction: column; background: var(--bg); }
+  .side.hidden { display: none; }
   .chat { flex: 1; min-height: 0; }
   .terminal { flex: none; min-height: 0; }
+  .terminal.hidden { display: none; }
 </style>

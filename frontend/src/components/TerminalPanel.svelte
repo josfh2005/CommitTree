@@ -61,9 +61,12 @@
   $: active = repoId ? $terminalState.active[repoId] : undefined
   // Opening the panel on a repository with no tabs opens one. Tracked per
   // repository so closing the last tab leaves "Open shell" instead of
-  // immediately spawning another.
+  // immediately spawning another. The panel stays mounted even while
+  // hidden (so background shells and scrollback survive), so this must
+  // also require $terminalOpen — otherwise switching repositories while
+  // the terminal is closed would silently spawn a shell for each one.
   const autoOpened = new Set<string>()
-  $: if (repoId && tabs.length === 0 && !autoOpened.has(repoId)) {
+  $: if ($terminalOpen && repoId && tabs.length === 0 && !autoOpened.has(repoId)) {
     autoOpened.add(repoId)
     open(repoId)
   }
@@ -87,9 +90,12 @@
   </header>
   <div class="body">
     <!-- Every tab of every repository stays mounted so its scrollback
-         survives switching repositories; only the active one is shown. -->
+         survives switching repositories; only the active one is shown.
+         Also gated on $terminalOpen: TerminalPanel itself stays mounted
+         while the panel is hidden with CSS, so nothing here should be
+         "visible" until it is actually shown again. -->
     {#each $terminalState.tabs as t (t.id)}
-      <TerminalView tab={t.id} visible={t.repoId === repoId && t.id === active} {register} />
+      <TerminalView tab={t.id} visible={$terminalOpen && t.repoId === repoId && t.id === active} {register} />
     {/each}
     {#if repoId && tabs.length === 0}
       <div class="empty"><button class="btn" on:click={() => open(repoId)}>Open shell</button></div>

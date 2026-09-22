@@ -62,9 +62,13 @@ tab, across every repository, keeps a live terminal instance with its own
 scrollback (5 000 lines); only the selected repository's tabs are shown, the
 rest sit hidden. A long-running program such as `top`, left running in a
 background repository's tab, keeps running and is exactly where it was left
-when that repository is selected again. Tabs are not restored across an
-application restart — every tab, running or exited, is gone once the
-application closes.
+when that repository is selected again. Hiding the terminal panel itself —
+with either toggle or Ctrl+` — behaves the same way: every tab's shell keeps
+running and its scrollback is kept exactly as it was, since hiding only
+changes what is drawn, not what is mounted; nothing is torn down until a tab
+is closed explicitly or the application restarts. Tabs are not restored
+across an application restart — every tab, running or exited, is gone once
+the application closes.
 
 Resizing the panel (dragging either divider) resizes the visible terminal to
 match, the same as resizing a real terminal window would.
@@ -124,7 +128,9 @@ see Safety below for why it does not stop the user from typing.
 
 1. Tabs belong to a repository; only the selected repository's tabs are
    shown, and switching repositories never stops or restarts a hidden tab's
-   shell.
+   shell. Hiding the terminal panel itself has the same effect: every tab's
+   shell and scrollback survive until the tab is closed or the application
+   restarts.
 2. A tab's number is unique per repository for the life of the running
    application and is never reused, even after the tab it named is closed.
 3. An exited shell keeps its tab, labelled with its exit code, until closed
