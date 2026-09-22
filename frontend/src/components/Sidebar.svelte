@@ -13,6 +13,16 @@
   // handled once per section, not once per row inside it.
   let dragOverTarget: string | null = null
 
+  // Whether a repo drag is in progress anywhere in the sidebar, independent
+  // of which section the pointer is currently over. Needed because the
+  // loose area can be empty (every repo is in a group) and, with no rows
+  // and no min-height, would otherwise never get a dragover to react to —
+  // this flag lets the empty loose area show a placeholder for the whole
+  // duration of the drag, not just once the pointer happens to be over it.
+  // dragstart/dragend bubble, so a window-level listener sees them even
+  // though the drag originates inside a RepoRow.
+  let dragActive = false
+
   function isRepoDrag(event: DragEvent) {
     return !!event.dataTransfer?.types.includes(REPO_DRAG_MIME)
   }
@@ -43,10 +53,21 @@
     dropRepoOnGroup(id, target)
   }
 
+  function handleWindowDragStart(event: DragEvent) {
+    if (isRepoDrag(event)) dragActive = true
+  }
+
+  function handleWindowDragEnd() {
+    dragActive = false
+    dragOverTarget = null
+  }
+
   function groupMenu(event: MouseEvent, name: string) {
     openMenu(event, [{ label: 'Rename group…', action: () => renameGroup(name) }])
   }
 </script>
+
+<svelte:window on:dragstart={handleWindowDragStart} on:dragend={handleWindowDragEnd} />
 
 <div class="sidebar">
   <div class="titlebar drag"></div>
@@ -68,6 +89,9 @@
         {#each grouped.loose as repo (repo.id)}
           <RepoRow {repo} />
         {/each}
+        {#if grouped.loose.length === 0 && dragActive}
+          <p class="loose-placeholder">Drop here to remove from its group</p>
+        {/if}
       </div>
       {#each grouped.groups as group (group.name)}
         {@const collapsed = $collapsedRepoGroups.includes(group.name)}
@@ -113,7 +137,12 @@
   .heading { padding: 0 10px 6px; }
   .list { flex: 1; overflow-y: auto; min-height: 0; }
   .loose-section, .group-section { border-radius: var(--radius); }
+  /* A real drop surface even with zero rows, so a repo can always be
+     dragged back out of a group — an empty, heightless div can never
+     receive a dragover. */
+  .loose-section { min-height: 28px; }
   .loose-section.drag-over, .group-section.drag-over { background: var(--selection); }
+  .loose-placeholder { margin: 0; padding: 6px 10px; font-size: 12px; color: var(--faint); pointer-events: none; }
   .group-header { gap: 6px; }
   .mark { width: 12px; flex: none; display: inline-grid; place-items: center; color: var(--muted); }
   .group-header .count { margin-left: auto; font-size: 11px; color: var(--faint); }

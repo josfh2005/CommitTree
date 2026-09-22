@@ -34,5 +34,7 @@ export function classifyGroupRename(existingNames: string[], oldName: string, pr
  */
 export function renameCollapsedGroup(names: string[], oldName: string, newName: string): string[] {
   if (!names.includes(oldName)) return names
+  // On a merge (newName already existed) the result is collapsed if EITHER
+  // side was collapsed — a deliberate choice, not an accident of the Set.
   return [...new Set(names.filter((n) => n !== oldName).concat(newName))]
 }

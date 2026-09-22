@@ -138,8 +138,9 @@ export async function renameGroup(name: string) {
   if (action.kind === 'merge') {
     const ok = await confirmDialog({
       title: 'Merge groups',
-      message: `A group named "${action.name}" already exists. Renaming "${name}" to "${action.name}" will merge the two groups — every repository will end up together under "${action.name}".`,
+      message: `A group named "${action.name}" already exists. Renaming "${name}" to "${action.name}" merges the two into one group named "${action.name}" — every repository from both ends up together, and this cannot be undone.`,
       confirmLabel: 'Merge',
+      danger: true,
     })
     if (!ok) return
   }
