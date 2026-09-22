@@ -8,6 +8,7 @@ import { resetMessage } from './reset'
 import { discardMessage, neverCommitted } from './worktree'
 import { stashApplyAction } from './stash'
 import { choiceDialog, confirmDialog, confirmDialogWithCheckbox, errorMessage, promptDialog, toast } from './ui'
+import { resolveRepoDrop } from './repoDrop'
 
 export function branchRef(branch: Branch): string {
   return branch.remote ? `refs/remotes/${branch.remote}/${branch.name}` : `refs/heads/${branch.name}`
@@ -94,6 +95,24 @@ export async function moveRepoToGroup(repo: Repo) {
 
   try {
     await api.setRepoGroup(repo.id, group)
+    await loadRepos()
+  } catch (e) {
+    toast(errorMessage(e), 'error')
+  }
+}
+
+// dropRepoOnGroup is the drag-and-drop counterpart to moveRepoToGroup's
+// menu: same decision (resolveRepoDrop) and the same App method, just
+// triggered by a drop instead of a dialog choice. A no-op drop (dropped on
+// the group it is already in) never calls the backend.
+export async function dropRepoOnGroup(repoId: string, group: string) {
+  const repo = get(repos).find((r) => r.id === repoId)
+  if (!repo) return
+  const next = resolveRepoDrop(repo, { group })
+  if (next === null) return
+
+  try {
+    await api.setRepoGroup(repo.id, next)
     await loadRepos()
   } catch (e) {
     toast(errorMessage(e), 'error')
