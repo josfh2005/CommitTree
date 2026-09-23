@@ -11,6 +11,7 @@ import {merge} from '../models';
 import {refs} from '../models';
 import {ops} from '../models';
 import {stash} from '../models';
+import {submodules} from '../models';
 import {prompts} from '../models';
 
 export function AIStatus():Promise<app.AIStatus>;
@@ -92,6 +93,8 @@ export function GetStashEntries(arg1:string):Promise<Array<stash.Entry>>;
 export function GetStashFileDiff(arg1:string,arg2:number,arg3:string):Promise<string>;
 
 export function GetStashFiles(arg1:string,arg2:number):Promise<Array<stash.File>>;
+
+export function GetSubmodules(arg1:string):Promise<Array<submodules.Submodule>>;
 
 export function GetWorktreeDiff(arg1:string,arg2:string,arg3:boolean):Promise<string>;
 

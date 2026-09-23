@@ -162,6 +162,10 @@ export function GetStashFiles(arg1, arg2) {
   return window['go']['app']['App']['GetStashFiles'](arg1, arg2);
 }
 
+export function GetSubmodules(arg1) {
+  return window['go']['app']['App']['GetSubmodules'](arg1);
+}
+
 export function GetWorktreeDiff(arg1, arg2, arg3) {
   return window['go']['app']['App']['GetWorktreeDiff'](arg1, arg2, arg3);
 }

@@ -83,6 +83,21 @@ When a local branch is checked out in another worktree, switching to it is
 refused with "<branch> is checked out in another worktree (<path>)" rather
 than git's own message.
 
+### Submodules
+
+Every read of the repository list also detects each present item's
+submodules (recursively, into every initialised one), the same way it
+detects worktrees: nothing about them is stored, and the count and
+children are rebuilt from scratch at every read. Unlike a worktree, a
+detected submodule is never a row in this list — it carries a
+`submoduleCount` on the item that has it (a stored repository or a
+detected worktree), and, for each of its own submodules that is
+initialised, a child item nested under it the same way a worktree's
+sub-worktree would be, keyed by its own path-derived identifier. An
+uninitialised or unconfigured submodule still counts, but gets no item.
+These child items exist so a submodule can be opened as its own repository
+(see Per-repository sections); they are never sidebar rows themselves.
+
 ### Missing repositories
 
 A repository is flagged missing purely by checking, on every list read,

@@ -239,7 +239,7 @@ refs, so two of them can be written at the same moment; git's own ref
 locking still serialises the ref updates themselves, and a branch can only
 be checked out in one of them at a time (git refuses the second).
 
-### Repository identity and detected worktrees
+### Repository identity and detected worktrees and submodules
 
 Every per-repository operation names its repository by an identifier. A
 stored repository's identifier is derived from its path when it is first
@@ -247,11 +247,16 @@ added and never changes. A linked worktree detected under a listed
 repository gets an identifier derived from its path the same way, every
 time it is listed, so its conversation and remembered UI state survive
 restarts and return if a worktree is recreated at the same path (terminal
-shells never survive a restart, for any repository). An identifier is resolved against the stored repositories first and
-then against the worktrees the latest read of the repository list
-detected; a worktree that has since disappeared no longer resolves.
-Detected worktrees are not list entries: removing, grouping or relocating
-one is refused as an unknown repository.
+shells never survive a restart, for any repository). An initialised
+submodule detected under a repository gets an identifier derived from its
+absolute path the same way, every time it is listed, whether that parent is
+a stored repository or a detected worktree. An identifier is resolved
+against the stored repositories first, then against the worktrees, then
+against the submodules the latest read of the repository list detected; a
+worktree or a submodule that has since disappeared (removed, deinitialised,
+or its parent gone) no longer resolves. Detected worktrees and submodules
+are not list entries: removing, grouping or relocating one is refused as an
+unknown repository.
 
 ### State kept in a handful of JSON files, not a database
 

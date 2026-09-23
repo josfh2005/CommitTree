@@ -17,6 +17,7 @@ import (
 	"git-ui/internal/ops"
 	"git-ui/internal/refs"
 	"git-ui/internal/repos"
+	"git-ui/internal/submodules"
 	"git-ui/internal/terminal"
 	"git-ui/internal/worktrees"
 )
@@ -35,6 +36,15 @@ type RepoItem struct {
 	// Worktree marks a detected worktree: not a list entry, so it cannot be
 	// removed, grouped or relocated.
 	Worktree bool `json:"worktree,omitempty"`
+	// Submodule marks a detected, initialised submodule: like Worktree, not
+	// a list entry, nested under ParentID, which holds it at SubPath.
+	Submodule bool `json:"submodule,omitempty"`
+	// SubPath is Submodule's path relative to ParentID's repository,
+	// slash-separated.
+	SubPath string `json:"subPath,omitempty"`
+	// SubmoduleCount is the number of submodules (initialised or not) this
+	// item's own repository has, set on the item itself, not its children.
+	SubmoduleCount int `json:"submoduleCount,omitempty"`
 }
 
 type LogRow struct {
@@ -75,6 +85,12 @@ type App struct {
 	// is replaced wholesale on every list read.
 	wtMu      sync.Mutex
 	worktrees map[string]repos.Repo
+	// submodules are the initialised submodules the last ListRepos
+	// detected, by id. Like worktrees, they are not list entries: nothing
+	// about them is stored, and the map is replaced wholesale on every list
+	// read.
+	smMu       sync.Mutex
+	submodules map[string]repos.Repo
 }
 
 func New(store *repos.Store) *App {
@@ -99,15 +115,22 @@ func (a *App) dir(id string) (string, error) {
 }
 
 // repo resolves an id: a stored repository first, then a worktree the last
-// ListRepos detected. Every per-repository operation goes through here, so
-// a worktree works everywhere a repository does.
+// ListRepos detected, then a submodule it detected. Every per-repository
+// operation goes through here, so a worktree or a submodule works
+// everywhere a repository does.
 func (a *App) repo(id string) (repos.Repo, bool) {
 	if r, ok := a.store.Get(id); ok {
 		return r, true
 	}
 	a.wtMu.Lock()
-	defer a.wtMu.Unlock()
 	r, ok := a.worktrees[id]
+	a.wtMu.Unlock()
+	if ok {
+		return r, true
+	}
+	a.smMu.Lock()
+	defer a.smMu.Unlock()
+	r, ok = a.submodules[id]
 	return r, ok
 }
 
@@ -175,7 +198,67 @@ func (a *App) ListRepos() []RepoItem {
 			a.forgetLog(id)
 		}
 	}
+
+	// Every item found so far (stored or a detected worktree), but not
+	// itself a submodule, gets its own submodules detected: a count on the
+	// item, plus a child item for each initialised one. Submodules are
+	// recursive (submodules.List already flattens nested ones), so this
+	// only scans the items present before this pass, never one it appends.
+	n := len(items)
+	foundSub := map[string]repos.Repo{}
+	for i := 0; i < n; i++ {
+		item := items[i]
+		if item.Missing || item.Submodule || !submodules.HasAny(item.Path) {
+			continue
+		}
+		list, err := submodules.List(a.ctx, item.Path)
+		if err != nil {
+			continue
+		}
+		items[i].SubmoduleCount = len(list)
+		for _, s := range list {
+			if !s.Initialised {
+				continue
+			}
+			abs := filepath.Join(item.Path, filepath.FromSlash(s.Path))
+			repo := repos.Repo{ID: repos.IDFor(abs), Name: filepath.Base(abs), Path: abs}
+			items = append(items, RepoItem{
+				Repo:      repo,
+				Branch:    refs.CurrentLabel(a.ctx, abs),
+				ParentID:  item.ID,
+				Submodule: true,
+				SubPath:   s.Path,
+			})
+			foundSub[repo.ID] = repo
+		}
+	}
+	a.smMu.Lock()
+	goneSub := []string{}
+	for id := range a.submodules {
+		if _, ok := foundSub[id]; !ok {
+			goneSub = append(goneSub, id)
+		}
+	}
+	a.submodules = foundSub
+	a.smMu.Unlock()
+	// A submodule that disappeared (deinitialised, or its parent gone) takes
+	// its shells and log paging with it, the same as a vanished worktree.
+	for _, id := range goneSub {
+		if _, stored := a.store.Get(id); !stored {
+			a.term.CloseRepo(id)
+			a.forgetLog(id)
+		}
+	}
 	return items
+}
+
+// GetSubmodules reads id's submodules, flat and recursive.
+func (a *App) GetSubmodules(id string) ([]submodules.Submodule, error) {
+	dir, err := a.dir(id)
+	if err != nil {
+		return nil, err
+	}
+	return submodules.List(a.ctx, dir)
 }
 
 // canonical resolves symlinks (macOS temp and home paths often differ only
