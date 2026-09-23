@@ -1,7 +1,7 @@
 import { get } from 'svelte/store'
 import { api } from './api'
 import { busy, chatOpen, collapsedRepoGroups, filters, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, repos, selectRepo, selectedRepoId, stashConflictDismissed } from './stores'
-import type { Branch, FileStatus, MergeState, Repo, ResetInfo, ResetMode, WorktreeState } from './types'
+import type { Branch, FileStatus, MergeState, Repo, ResetInfo, ResetMode, Submodule, WorktreeState } from './types'
 import { PULL_UP_TO_DATE, UP_TO_DATE } from './types'
 import { abortWarning, commitWarning, takeMessage } from './merge'
 import { resetMessage } from './reset'
@@ -10,6 +10,7 @@ import { stashApplyAction } from './stash'
 import { choiceDialog, confirmDialog, confirmDialogWithCheckbox, errorMessage, promptDialog, toast } from './ui'
 import { resolveRepoDrop } from './repoDrop'
 import { classifyGroupRename, renameCollapsedGroup } from './repoGroupRename'
+import { updateMessage } from './submodules'
 import { removeRepoTabs, terminalState } from './terminal'
 
 export function branchRef(branch: Branch): string {
@@ -495,4 +496,44 @@ export async function discardFile(id: string, state: WorktreeState, file: FileSt
     danger: true,
   })
   if (ok) await run('Discarding…', () => api.discardFile(id, file.path))
+}
+
+// openSubmodule mirrors the log's click-to-deselect: a click on the already
+// selected submodule's row goes back to its parent, same as clicking an
+// open stash entry or the highlighted commit again.
+export function openSubmodule(parentId: string, s: Submodule) {
+  const id = get(repos).find((r) => r.parentId === parentId && r.subPath === s.path)?.id
+  if (!id) return
+  selectRepo(get(selectedRepoId) === id ? parentId : id)
+}
+
+export const initSubmodule = (parentId: string, s: Submodule) => run('Initialising…', () => api.initSubmodule(parentId, s.path))
+
+export async function updateSubmodule(parentId: string, s: Submodule) {
+  const ok = await confirmDialog({ title: 'Update submodule', message: updateMessage(s), confirmLabel: 'Update' })
+  if (ok) await run('Updating…', () => api.updateSubmodule(parentId, s.path))
+}
+
+export const syncSubmodule = (parentId: string, s: Submodule) => run('Syncing URL…', () => api.syncSubmodule(parentId, s.path))
+
+export async function initAllSubmodules(parentId: string, list: Submodule[]) {
+  const targets = list.filter((s) => s.configured && !s.initialised)
+  if (!targets.length) return
+  const ok = await confirmDialog({
+    title: 'Initialise all submodules',
+    message: `Initialise:\n${targets.map((s) => s.path).join('\n')}`,
+    confirmLabel: 'Initialise',
+  })
+  if (ok) await run('Initialising…', () => api.initAllSubmodules(parentId))
+}
+
+export async function updateAllSubmodules(parentId: string, list: Submodule[]) {
+  const targets = list.filter((s) => s.initialised && s.moved)
+  if (!targets.length) return
+  const ok = await confirmDialog({
+    title: 'Update all submodules',
+    message: `Update to their recorded commit:\n${targets.map((s) => s.path).join('\n')}`,
+    confirmLabel: 'Update',
+  })
+  if (ok) await run('Updating…', () => api.updateAllSubmodules(parentId))
 }

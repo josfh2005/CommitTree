@@ -221,12 +221,19 @@ clicked), then performs the row's own action.
 ## Per-repository sections
 
 Once expanded, a repository's row is followed by its own sections, in this
-fixed order: **Changes**, **Branches**, **Remotes**, **Tags**, **Stash**.
-These render only once refs have loaded for the repository; if they fail to
-load (for instance because the repository just went missing) they are
-hidden entirely. The current branch (or `HEAD (<short-hash>)` when the head
-is detached) is not part of this list; a detached head is shown as its own,
-non-interactive row above the branches.
+fixed order: **Changes**, **Branches**, **Remotes**, **Tags**, **Stash**, and,
+last and only when the repository has at least one submodule,
+**Submodules**. Changes/Branches/Remotes/Tags/Stash render only once refs
+have loaded for the repository; if they fail to load (for instance because
+the repository just went missing) they are hidden entirely. Submodules does
+not depend on refs: its header and count show as soon as the repository is
+expanded, independently of whether refs loaded. The current branch (or
+`HEAD (<short-hash>)` when the head is detached) is not part of this list; a
+detached head is shown as its own, non-interactive row above the branches.
+
+An opened submodule (see Submodules below) shows this same set of sections
+except Submodules itself — its own submodules, if any, are already part of
+the top repository's flat list.
 
 **Changes** is a single row that opens the Changes view for this repository;
 it shows a count badge when the working tree has changes and no badge
@@ -311,6 +318,54 @@ running instance of the application working against the same repository,
 since the stash is stored in the repository itself and is not private to
 one window.
 
+### Submodules
+
+Shown last, only when the repository has at least one submodule. The header
+always shows a count (initialised and not). Like Tags and Stash it starts
+collapsed, and whether it has been expanded is remembered per repository.
+Expanding it reads the flat, recursive list described above (Repository
+list › Submodules); a submodule read that fails shows an error row
+"Could not read submodules: &lt;reason&gt;" in place of the list, and an
+empty (but successfully read) list shows "No submodules".
+
+Each row shows the submodule's path — the leading folders dimmed, the last
+segment in normal weight — and, right-aligned, either its state markers or a
+dimmed label when it cannot be opened as-is:
+
+| State | Marker / label |
+|---|---|
+| In sync | none |
+| Moved | `↕` + the checked-out commit's short hash |
+| Modified content | `●` |
+| Untracked content only | `○` |
+| Conflict (unmerged gitlink) | `!` |
+| Not initialised | row dimmed, label "not initialised" |
+| Not configured (a `.gitmodules` entry with no gitlink, or a gitlink with no `.gitmodules` entry) | row dimmed, label "not configured" |
+
+"Moved" and "modified"/"untracked" markers combine when both apply. Hovering
+a row shows the recorded commit, the checked-out commit (and its branch, if
+any), the submodule's URL, and its name when it differs from its path.
+
+Clicking an initialised row opens it as its own repository (its Changes,
+Branches, Remotes, Tags and Stash appear under the same row — see above);
+clicking the already-open row again returns to the parent, the same
+click-to-deselect idea as the log. A row that is not initialised, or not
+configured, does nothing on click.
+
+A row's context menu offers Open, Initialise, Update to recorded commit,
+Sync URL, Show in Finder and Open terminal here, each shown only in the
+states given for the writes above (Repository list › Submodules) — Open,
+Show in Finder and Open terminal here alongside them whenever the row is
+initialised. The one exception: a "not configured" row's menu offers only
+Show in Finder, and only when it already has a working tree to show — git
+has no way to initialise or update a submodule with no `.gitmodules` entry,
+or clone one with no gitlink.
+
+If the submodule an opened row points at is deinitialised or removed while
+selected, the next read drops its item and the selection falls back to the
+parent repository — the parent stays selected and expanded, rather than the
+selection being cleared outright as it would be for a vanished worktree.
+
 ## What is refused while something else is running
 
 The application holds one write lock per repository (never a single global
@@ -352,10 +407,10 @@ including for a repository whose write lock is currently held.
 8. Branches and remote-tracking branches with a `/` in their name are
    grouped by their first path segment only, one level deep, even for a
    group that ends up with a single member.
-9. Tags and Stash start collapsed per repository, and their expanded state
-   is remembered per repository; branch groups and remotes each follow
-   their own, independent default-open rule and are not all remembered the
-   same way (see each section above).
+9. Tags, Stash and Submodules start collapsed per repository, and their
+   expanded state is remembered per repository; branch groups and remotes
+   each follow their own, independent default-open rule and are not all
+   remembered the same way (see each section above).
 10. Every write to a repository — branch, tag, stash, worktree or merge
     operations alike — is serialised through one lock per repository; a
     second concurrent write on the same repository is always refused, never

@@ -1,6 +1,7 @@
 import { derived, get, writable, type Writable } from 'svelte/store'
 import { api } from './api'
 import { validSelectedStash, type SelectedStash } from './stash'
+import { nextSelection } from './submodules'
 import { emptyFilters, type AISettings, type AheadBehind, type Filters, type GitSettings, type LogOrder, type MergeState, type Refs, type Repo, type StashEntry, type WorktreeState } from './types'
 import { isLogOrder } from './logOrder'
 import { removeRepoTabs, terminalState } from './terminal'
@@ -51,6 +52,9 @@ export const expandedTagSections = persisted<string[]>('expandedTagSections', []
 /** Ids of the repositories whose sidebar Stash section is expanded. Like
  *  Tags it starts collapsed, remembered per repository. */
 export const expandedStashSections = persisted<string[]>('expandedStashSections', [])
+/** Ids of the repositories whose sidebar Submodules section is expanded.
+ *  Like Tags and Stash it starts collapsed, remembered per repository. */
+export const expandedSubmoduleSections = persisted<string[]>('expandedSubmoduleSections', [])
 /** Ids of the sidebar repo groups that are collapsed — groups start
  *  expanded, so only the non-default (collapsed) state needs remembering. */
 export const collapsedRepoGroups = persisted<string[]>('collapsedRepoGroups', [])
@@ -132,28 +136,35 @@ export const stashConflictDismissed = writable<boolean>(false)
 export const selectedRepo = derived([repos, selectedRepoId], ([$repos, $id]) => $repos.find((r) => r.id === $id) ?? null)
 
 export async function loadRepos() {
+  // Captured before repos.set(list) below, so it reflects what was selected
+  // against the OLD list — nextSelection decides what to do with it once the
+  // new list is in.
+  const prevSelected = get(selectedRepo)
   const list = await api.listRepos()
   repos.set(list)
-  // A detected worktree can vanish between two reads (removed in a
-  // terminal, or by the tool that created it). Whatever is no longer listed
-  // loses its terminal tabs, and a selection pointing at it is cleared the
-  // same way removing a repository clears it.
+  // A detected worktree or submodule can vanish between two reads (removed
+  // in a terminal, deinitialised, or by the tool that created it). Whatever
+  // is no longer listed loses its terminal tabs, and a selection pointing at
+  // it either falls back to its parent or is cleared — see nextSelection.
   const ids = new Set(list.map((r) => r.id))
   terminalState.update((s) => {
     let next = s
     for (const t of s.tabs) if (!ids.has(t.repoId)) next = removeRepoTabs(next, t.repoId)
     return next
   })
-  const selected = get(selectedRepoId)
-  if (selected && !ids.has(selected)) {
-    selectedRepoId.set('')
-    selectedHash.set('')
-    uncommittedSelected.set(false)
-    mainView.set('log')
-    refs.set(null)
-    mergeState.set(null)
-    worktreeState.set(null)
+  const next = nextSelection(prevSelected, list)
+  if (next === null) return
+  if (next) {
+    selectRepo(next)
+    return
   }
+  selectedRepoId.set('')
+  selectedHash.set('')
+  uncommittedSelected.set(false)
+  mainView.set('log')
+  refs.set(null)
+  mergeState.set(null)
+  worktreeState.set(null)
 }
 
 export async function loadRefs() {
@@ -322,6 +333,10 @@ export function toggleTagsExpanded(repoId: string) {
 
 export function toggleStashExpanded(repoId: string) {
   expandedStashSections.update((ids) => (ids.includes(repoId) ? ids.filter((x) => x !== repoId) : [...ids, repoId]))
+}
+
+export function toggleSubmodulesExpanded(repoId: string) {
+  expandedSubmoduleSections.update((ids) => (ids.includes(repoId) ? ids.filter((x) => x !== repoId) : [...ids, repoId]))
 }
 
 export function toggleRepoGroupCollapsed(name: string) {
