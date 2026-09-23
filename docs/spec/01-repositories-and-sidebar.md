@@ -51,6 +51,14 @@ by this action. If the removed repository was selected, selection is
 cleared. Any embedded-terminal tabs open on the repository are closed along
 with it, without a separate confirmation (see Terminal).
 
+A repository row's context menu also offers to show the repository's
+working tree in the platform's file manager, labelled in the platform's own
+words: "Show in Finder" on macOS, "Show in Explorer" on Windows, "Open in
+File Manager" elsewhere (it hands the directory to `xdg-open`). The file
+manager is launched and not waited on. It is refused for a missing
+repository. The same mechanism opens the prompts folder from the AI
+settings, on every platform.
+
 ### Missing repositories
 
 A repository is flagged missing purely by checking, on every list read,
@@ -207,8 +215,9 @@ when clicked; its context menu offers "New branch from here…" and a
 
 ### Stash
 
-The Stash section shows a count and, when expanded (it starts open and its
-open/closed toggle is UI-only, not remembered), one row per stash entry,
+The Stash section header always shows a count. Like Tags, it starts
+collapsed, and whether it has been expanded is remembered per repository.
+When expanded it shows one row per stash entry,
 newest first, labelled with the stash's message. "No stashed changes" is
 shown in place of an empty list. Clicking an entry previews it (opens the
 stash preview in the main view); double-clicking applies it immediately
@@ -262,9 +271,10 @@ including for a repository whose write lock is currently held.
 8. Branches and remote-tracking branches with a `/` in their name are
    grouped by their first path segment only, one level deep, even for a
    group that ends up with a single member.
-9. Tags start collapsed per repository; branch groups, remotes, and the
-   stash section each follow their own, independent default-open rule and
-   are not all remembered the same way (see each section above).
+9. Tags and Stash start collapsed per repository, and their expanded state
+   is remembered per repository; branch groups and remotes each follow
+   their own, independent default-open rule and are not all remembered the
+   same way (see each section above).
 10. Every write to a repository — branch, tag, stash, worktree or merge
     operations alike — is serialised through one lock per repository; a
     second concurrent write on the same repository is always refused, never

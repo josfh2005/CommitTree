@@ -109,6 +109,8 @@ export function MergeBranch(arg1:string,arg2:string):Promise<merge.Result>;
 
 export function OpenPromptsFolder():Promise<void>;
 
+export function OpenRepoFolder(arg1:string):Promise<void>;
+
 export function OwedStashDrop(arg1:string):Promise<number>;
 
 export function Pull(arg1:string):Promise<ops.Result>;

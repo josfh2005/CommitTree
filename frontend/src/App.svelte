@@ -13,9 +13,9 @@
   import Toasts from './components/Toasts.svelte'
   import { startFocusRefresh } from './lib/actions'
   import { conflictOwnsScreen } from './lib/remote'
-  import { chatOpen, chatWidth, loadAISettings, loadRefs, loadRepos, loadWorktreeState, mainView, mergeState, refreshRepo, selectedHash, selectedRepo, selectedStash, sidebarWidth, stashConflictDismissed, stashEntries, terminalHeight, terminalOpen, uncommittedSelected } from './lib/stores'
+  import { chatOpen, chatWidth, loadAISettings, loadRefs, loadRepos, loadWorktreeState, mainView, mergeState, platform, refreshRepo, selectedHash, selectedRepo, selectedStash, sidebarWidth, stashConflictDismissed, stashEntries, terminalHeight, terminalOpen, uncommittedSelected } from './lib/stores'
   import type { RepoChangedEvent, WorktreeChangedEvent } from './lib/types'
-  import { EventsOn } from '../wailsjs/runtime/runtime'
+  import { Environment, EventsOn } from '../wailsjs/runtime/runtime'
 
   // A merge in progress always wins: neither the Changes view nor a stash
   // preview has anything to show that the merge view (reached through the
@@ -57,6 +57,7 @@
   onMount(() => {
     loadRepos().then(loadRefs)
     loadAISettings()
+    Environment().then((env) => platform.set(env.platform)).catch(() => {})
     const stopFocus = startFocusRefresh()
     // Every view of the working tree follows $worktreeState — the Changes
     // view and the log's "Uncommitted changes" row alike — so one app-wide

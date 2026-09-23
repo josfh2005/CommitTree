@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -573,7 +572,7 @@ func (a *App) OpenPromptsFolder() error {
 	if err := a.ai.deps.Prompts.EnsureFiles(); err != nil {
 		return err
 	}
-	return exec.Command("open", a.ai.deps.Prompts.Dir()).Start()
+	return openFolder(a.ai.deps.Prompts.Dir())
 }
 
 func (a *App) ResetPrompt(name string) error {

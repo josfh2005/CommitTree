@@ -9,6 +9,7 @@ export const api = {
   listRepos: () => call<Repo[]>(Go.ListRepos()),
   addRepo: () => call<Repo>(Go.AddRepo()),
   relocateRepo: (id: string) => call<Repo>(Go.RelocateRepo(id)),
+  openRepoFolder: (id: string) => call<void>(Go.OpenRepoFolder(id)),
   removeRepo: (id: string) => call<void>(Go.RemoveRepo(id)),
   setRepoGroup: (id: string, group: string) => call<void>(Go.SetRepoGroup(id, group)),
   renameRepoGroup: (oldName: string, newName: string) => call<void>(Go.RenameRepoGroup(oldName, newName)),

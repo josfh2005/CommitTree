@@ -22,6 +22,9 @@ history and inspects any single change in it.
 - **Details pane**: the panel that opens beneath the log once a commit is
   selected, showing that commit's metadata, its changed files, and the diff
   for whichever file is currently chosen.
+- **Uncommitted changes row**: a synthetic row above the newest commit,
+  present only while the working tree has changes, that opens the working
+  tree — not a commit — in the details pane.
 
 ## The log
 
@@ -182,6 +185,55 @@ is refused when there is no current branch to move, the head is detached, a
 merge is already in progress, the target is already where the branch points
 (nothing to move), or a write is already running.
 
+## The "Uncommitted changes" row
+
+A row reading "Uncommitted changes (N)" sits above the newest commit whenever
+the working tree has any staged, unstaged or untracked file; N is the number
+of distinct paths involved (a partially staged file counts once, not twice).
+The row exists regardless of the log's filters and ordering — it is not
+history, so it is never filtered or reordered away — and it disappears the
+moment the tree becomes clean. It carries no author, date or hash, and no
+context menu.
+
+Selecting the row (or landing on it, since it participates in the log's
+selection the same way a commit row does) opens the same working-tree view
+the sidebar's Changes view shows, in the details pane below the log: the
+file list with stage, unstage and discard, the diff, and the commit box. It
+is a second way into the same working-tree state, not a separate one —
+staging a file from the row and staging it from the Changes view show the
+same result, immediately, in both places. Selecting the row and selecting a
+commit are mutually exclusive: choosing one clears the other. While a
+conflict owns the screen, the conflict view is shown instead, regardless of
+which of the row or a commit was last selected.
+
+If the row was selected and the tree becomes clean (a commit, or a discard
+or stash that empties it), the selection moves on to whatever is now `HEAD`,
+so the details pane shows the commit that was just made; if there is no
+`HEAD` to move to, the selection is cleared and the details pane closes.
+
+### The row in the graph
+
+The row draws its own marker: a hollow, dashed dot, always joined to `HEAD`
+by a dashed line, in `HEAD`'s lane colour.
+
+- If `HEAD` is the newest commit (the log's first row), the dot sits
+  straight above it, in `HEAD`'s own lane.
+- If `HEAD` is further down the loaded rows (for example under commit-date
+  ordering, with newer commits on another branch shown first), a lane is
+  reserved to its left for the dashed line alone and the ordinary graph is
+  drawn one lane further right; the line runs down that reserved lane to
+  `HEAD`'s row and only then steps sideways into `HEAD`'s own lane, so it
+  never crosses another branch's line.
+- If `HEAD` has not been loaded yet but more pages remain, the line runs to
+  the end of what is currently loaded, and extends to meet `HEAD` once the
+  page containing it is fetched.
+- If `HEAD` is not in the log at all (filtered out, or an unborn branch with
+  no commits), the dot stands alone in the reserved lane with no line drawn.
+
+The row does not change the graph's paging, lane assignment or colour
+choices for the real commits below it — it only ever adds, at most, one
+reserved lane of its own to their left.
+
 ## Searching history
 
 There is no separate search feature: the free-text filter is history
@@ -216,13 +268,24 @@ needs, searching hides the graph column for the results it returns.
    resolves as a commit hash.
 8. A diff is rendered up to a fixed line cap and then explicitly truncated,
    never silently cut off without saying so.
+9. The "Uncommitted changes" row exists exactly while the working tree has
+   any staged, unstaged or untracked path, independent of the log's filters
+   and ordering, and selecting it is mutually exclusive with selecting a
+   commit.
 
 ## Known divergences
 
 None: no earlier design document describing the commit log or graph was
-found in this repository to compare the built behaviour against.
+found in this repository to compare the built behaviour against for the log
+itself. The "Uncommitted changes" row's design document originally left the
+row's dot unjoined to `HEAD` whenever `HEAD` was not the first row; that was
+revised, before this document was written, to the reserved-lane, dashed-line
+behaviour described above, so there is no remaining divergence to record for
+it either.
 
 Added since the previous revision of this document: ref badges are now
 coloured by kind (branch vs tag) rather than left uncoloured, the log can be
-ordered by commit date as an alternative to the topological default, and
-hovering a log row no longer highlights it (selecting one still does).
+ordered by commit date as an alternative to the topological default,
+hovering a log row no longer highlights it (selecting one still does), and
+an "Uncommitted changes" row above the newest commit gives the log its own
+way into the working tree.
