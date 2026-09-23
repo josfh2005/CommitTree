@@ -20,6 +20,9 @@ type Branch struct {
 	// Worktree is the path of another worktree that has this local branch
 	// checked out, or "" (filled in by the app, not by List).
 	Worktree string `json:"worktree,omitempty"`
+	// WorktreeGone: that worktree's directory no longer exists, but git
+	// still counts the branch as checked out there until it is pruned.
+	WorktreeGone bool `json:"worktreeGone,omitempty"`
 }
 
 type Remote struct {

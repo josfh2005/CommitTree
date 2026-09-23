@@ -127,3 +127,21 @@ describe('toggling the log selection', () => {
     expect(get(uncommittedSelected)).toBe(false)
   })
 })
+
+describe('loadRepos when a repository disappears', () => {
+  it('clears a selection whose repository is no longer listed and drops its terminal tabs', async () => {
+    const { api } = await import('./api')
+    const { terminalState, addTab, emptyTermState } = await import('./terminal')
+    const { loadRepos, selectedRepoId } = await import('./stores')
+    const repo = (id: string) => ({ id, name: id, path: `/${id}`, missing: false, branch: 'main' })
+    ;(api as Record<string, unknown>).listRepos = async () => [repo('main1'), repo('wt')]
+    await loadRepos()
+    selectedRepoId.set('wt')
+    terminalState.set(addTab(emptyTermState(), 'wt', 't1', 'zsh'))
+
+    ;(api as Record<string, unknown>).listRepos = async () => [repo('main1')]
+    await loadRepos()
+    expect(get(selectedRepoId)).toBe('')
+    expect(get(terminalState).tabs).toEqual([])
+  })
+})

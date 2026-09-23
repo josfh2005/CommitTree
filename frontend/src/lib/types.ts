@@ -79,6 +79,8 @@ export interface Branch {
   upstream: string
   /** Path of another worktree that has this branch checked out. */
   worktree?: string
+  /** That worktree's directory is gone but git has not pruned it yet. */
+  worktreeGone?: boolean
 }
 
 export interface Remote {

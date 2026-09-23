@@ -159,8 +159,22 @@ func (a *App) ListRepos() []RepoItem {
 		}
 	}
 	a.wtMu.Lock()
+	gone := []string{}
+	for id := range a.worktrees {
+		if _, ok := found[id]; !ok {
+			gone = append(gone, id)
+		}
+	}
 	a.worktrees = found
 	a.wtMu.Unlock()
+	// A worktree that disappeared takes its shells and log paging with it,
+	// the same as removing a repository from the list.
+	for _, id := range gone {
+		if _, stored := a.store.Get(id); !stored {
+			a.term.CloseRepo(id)
+			a.forgetLog(id)
+		}
+	}
 	return items
 }
 
@@ -230,14 +244,17 @@ func (a *App) GetRefs(id string) (refs.Refs, error) {
 	if err != nil {
 		return r, err
 	}
-	// Mark local branches another worktree has checked out. A failure to
-	// read worktrees just leaves no markers.
+	// Mark local branches another worktree has checked out — including one
+	// whose directory is gone but not yet pruned: git still refuses to check
+	// the branch out or delete it. A failure to read worktrees just leaves
+	// no markers.
 	if wts, err := worktrees.List(a.ctx, dir); err == nil {
 		here := canonical(dir)
 		for i, b := range r.Local {
 			for _, wt := range wts {
-				if wt.Branch == b.Name && !wt.Prunable && canonical(wt.Path) != here {
+				if wt.Branch == b.Name && canonical(wt.Path) != here {
 					r.Local[i].Worktree = wt.Path
+					r.Local[i].WorktreeGone = wt.Prunable
 				}
 			}
 		}

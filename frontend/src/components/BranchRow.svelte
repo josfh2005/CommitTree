@@ -11,7 +11,9 @@
   export let onCheckout: (b: Branch) => void
   export let onMenu: (event: MouseEvent, b: Branch) => void
 
-  $: elsewhere = branch.worktree ? `Checked out in ${branch.worktree.split(/[\\/]/).pop()}` : ''
+  $: elsewhere = branch.worktree
+    ? `Checked out in ${branch.worktree.split(/[\\/]/).pop()}` + (branch.worktreeGone ? ' (directory gone — run git worktree prune)' : '')
+    : ''
 </script>
 
 <button

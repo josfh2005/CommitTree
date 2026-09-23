@@ -615,6 +615,7 @@ export namespace refs {
 	    current: boolean;
 	    upstream: string;
 	    worktree?: string;
+	    worktreeGone?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Branch(source);
@@ -628,6 +629,7 @@ export namespace refs {
 	        this.current = source["current"];
 	        this.upstream = source["upstream"];
 	        this.worktree = source["worktree"];
+	        this.worktreeGone = source["worktreeGone"];
 	    }
 	}
 	export class Tag {

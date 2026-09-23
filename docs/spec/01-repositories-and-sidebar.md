@@ -73,6 +73,12 @@ entry and is never listed again as a child. A stored repository that is
 itself a linked worktree of another listed repository is shown as that
 repository's child instead of at the top level, keeping its own identifier,
 and gets no children of its own (git would list its siblings from it).
+Because worktrees come and go without touching the selected repository's
+refs, the list is re-read every time the window regains focus (and after the
+embedded terminal settles), not only when that repository changed. When a
+worktree stops being listed, its terminal tabs are closed and, if it was
+selected, the selection is cleared exactly as when a repository is removed.
+
 When a local branch is checked out in another worktree, switching to it is
 refused with "<branch> is checked out in another worktree (<path>)" rather
 than git's own message.
@@ -198,7 +204,10 @@ takes over that space.
 A local branch that another worktree of the same repository has checked
 out shows a "worktree" badge, and its tooltip reads "Checked out in
 <directory name>". Checking it out (double-click or the menu) and deleting
-it are disabled, since git would refuse both.
+it are disabled, since git would refuse both. That includes a worktree whose
+directory has been deleted but that git has not pruned yet — git still holds
+the branch for it — and the tooltip then adds that the directory is gone and
+`git worktree prune` releases it.
 
 Local branches whose name contains no `/` are listed loose, each showing a
 checkmark next to the current branch. A "+" control next to the section

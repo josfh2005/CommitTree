@@ -151,3 +151,44 @@ func TestChatResolvesADetectedWorktree(t *testing.T) {
 	}
 	ev.wait(t, agent.EventDone)
 }
+
+func TestBranchHeldByARemovedWorktreeIsStillMarked(t *testing.T) {
+	a, id := newTestApp(t)
+	_, wt := withWorktree(t, a, id)
+	if err := os.RemoveAll(wt); err != nil {
+		t.Fatal(err)
+	}
+	r, err := a.GetRefs(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, b := range r.Local {
+		if b.Name == "feature" && (b.Worktree == "" || !b.WorktreeGone) {
+			t.Fatalf("feature = %+v, want marked as held by a gone worktree", b)
+		}
+	}
+	var elsewhere *ops.ErrCheckedOutElsewhere
+	if err := a.Checkout(id, "feature"); !errors.As(err, &elsewhere) {
+		t.Fatalf("checkout err = %v", err)
+	}
+}
+
+func TestVanishedWorktreeLosesItsTerminals(t *testing.T) {
+	a, id := newTestApp(t)
+	// Terminal events need an emitter; the plain test app has none.
+	WithAI(a, AIDeps{Emit: newEvents().emit})
+	t.Cleanup(func() { a.Shutdown(nil) })
+	_, wt := withWorktree(t, a, id)
+	wtID := a.ListRepos()[1].ID
+	tab, err := a.TerminalOpen(wtID, 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(wt); err != nil {
+		t.Fatal(err)
+	}
+	a.ListRepos()
+	if err := a.TerminalWrite(tab, "x"); err == nil {
+		t.Fatal("the vanished worktree's terminal tab is still open")
+	}
+}

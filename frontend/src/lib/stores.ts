@@ -3,6 +3,7 @@ import { api } from './api'
 import { validSelectedStash, type SelectedStash } from './stash'
 import { emptyFilters, type AISettings, type AheadBehind, type Filters, type GitSettings, type LogOrder, type MergeState, type Refs, type Repo, type StashEntry, type WorktreeState } from './types'
 import { isLogOrder } from './logOrder'
+import { removeRepoTabs, terminalState } from './terminal'
 
 /** @param isValid For a value drawn from a constrained set (e.g. a union of
  *  string literals): a type guard checked against whatever JSON.parse
@@ -131,7 +132,28 @@ export const stashConflictDismissed = writable<boolean>(false)
 export const selectedRepo = derived([repos, selectedRepoId], ([$repos, $id]) => $repos.find((r) => r.id === $id) ?? null)
 
 export async function loadRepos() {
-  repos.set(await api.listRepos())
+  const list = await api.listRepos()
+  repos.set(list)
+  // A detected worktree can vanish between two reads (removed in a
+  // terminal, or by the tool that created it). Whatever is no longer listed
+  // loses its terminal tabs, and a selection pointing at it is cleared the
+  // same way removing a repository clears it.
+  const ids = new Set(list.map((r) => r.id))
+  terminalState.update((s) => {
+    let next = s
+    for (const t of s.tabs) if (!ids.has(t.repoId)) next = removeRepoTabs(next, t.repoId)
+    return next
+  })
+  const selected = get(selectedRepoId)
+  if (selected && !ids.has(selected)) {
+    selectedRepoId.set('')
+    selectedHash.set('')
+    uncommittedSelected.set(false)
+    mainView.set('log')
+    refs.set(null)
+    mergeState.set(null)
+    worktreeState.set(null)
+  }
 }
 
 export async function loadRefs() {

@@ -245,9 +245,9 @@ Every per-repository operation names its repository by an identifier. A
 stored repository's identifier is derived from its path when it is first
 added and never changes. A linked worktree detected under a listed
 repository gets an identifier derived from its path the same way, every
-time it is listed, so its conversation, terminal tabs and remembered UI
-state survive restarts and return if a worktree is recreated at the same
-path. An identifier is resolved against the stored repositories first and
+time it is listed, so its conversation and remembered UI state survive
+restarts and return if a worktree is recreated at the same path (terminal
+shells never survive a restart, for any repository). An identifier is resolved against the stored repositories first and
 then against the worktrees the latest read of the repository list
 detected; a worktree that has since disappeared no longer resolves.
 Detected worktrees are not list entries: removing, grouping or relocating
