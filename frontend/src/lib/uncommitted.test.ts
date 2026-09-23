@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { GRAPH_PADDING, LANE_WIDTH } from './geometry'
 import type { FileStatus, LogRow, WorktreeState } from './types'
-import { cleanTreeSelection, followHead, markerWidth, uncommittedCount, uncommittedMarker } from './uncommitted'
+import { cleanTreeSelection, followHead, uncommittedCount, uncommittedMarker } from './uncommitted'
 
 const f = (path: string, status = 'M'): FileStatus => ({ path, status })
 const state = (s: Partial<WorktreeState>): WorktreeState => ({ staged: [], unstaged: [], untracked: [], merging: false, ...s })
@@ -29,22 +28,18 @@ describe('uncommittedCount', () => {
 })
 
 describe('uncommittedMarker', () => {
-  it('joins HEAD when it is the first row', () => {
-    expect(uncommittedMarker([row('h', 1, true, 5), row('x', 0)])).toEqual({ lane: 1, color: 5, joined: true })
+  it('sits straight above HEAD when HEAD is the first row, without reserving a lane', () => {
+    expect(uncommittedMarker([row('h', 1, true, 5), row('x', 0)], false)).toEqual({ lane: 1, color: 5, shift: false, line: 'head', headIndex: 0, headLane: 1 })
   })
-  it('stands alone in HEAD\'s lane when HEAD is further down', () => {
-    expect(uncommittedMarker([row('x', 0), row('h', 2, true, 3)])).toEqual({ lane: 2, color: 3, joined: false })
+  it('reserves lane 0 and runs down to HEAD when HEAD is further down', () => {
+    expect(uncommittedMarker([row('x', 0), row('y', 1), row('h', 2, true, 3)], false)).toEqual({ lane: 0, color: 3, shift: true, line: 'head', headIndex: 2, headLane: 2 })
   })
-  it('falls back to lane 0 when HEAD is not loaded', () => {
-    expect(uncommittedMarker([row('x', 1), row('y', 2)])).toEqual({ lane: 0, color: 0, joined: false })
-    expect(uncommittedMarker([])).toEqual({ lane: 0, color: 0, joined: false })
+  it('runs to the end of the loaded rows while HEAD may still be paged in', () => {
+    expect(uncommittedMarker([row('x', 1), row('y', 2)], true)).toEqual({ lane: 0, color: 0, shift: true, line: 'end', headIndex: -1, headLane: 0 })
   })
-})
-
-describe('markerWidth', () => {
-  it('is the graph width needed to show the given lane', () => {
-    expect(markerWidth(0)).toBe(GRAPH_PADDING * 2 + LANE_WIDTH)
-    expect(markerWidth(3)).toBe(GRAPH_PADDING * 2 + 4 * LANE_WIDTH)
+  it('stands alone in lane 0 when HEAD is not in the log at all', () => {
+    expect(uncommittedMarker([row('x', 1), row('y', 2)], false)).toEqual({ lane: 0, color: 0, shift: false, line: 'none', headIndex: -1, headLane: 0 })
+    expect(uncommittedMarker([], false)).toEqual({ lane: 0, color: 0, shift: false, line: 'none', headIndex: -1, headLane: 0 })
   })
 })
 
