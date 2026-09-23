@@ -1,7 +1,7 @@
 # git-ui — Write tools for the AI chat — Design
 
 Date: 2026-09-23
-Status: Approved design, not implemented
+Status: Implemented (manual pass pending)
 Builds on: `2026-09-17-ai-foundation-design.md` (the chat agent and its
 read-only tools), `2026-09-21-working-tree-design.md` (2a: stage, commit) and
 `2026-09-21-push-pull-stash-design.md` (2b: fetch, push, pull, stash).

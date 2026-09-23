@@ -13,8 +13,8 @@
   import Toasts from './components/Toasts.svelte'
   import { startFocusRefresh } from './lib/actions'
   import { conflictOwnsScreen } from './lib/remote'
-  import { chatOpen, chatWidth, loadAISettings, loadRefs, loadRepos, loadWorktreeState, mainView, mergeState, selectedHash, selectedRepo, selectedStash, sidebarWidth, stashConflictDismissed, stashEntries, terminalHeight, terminalOpen, uncommittedSelected } from './lib/stores'
-  import type { WorktreeChangedEvent } from './lib/types'
+  import { chatOpen, chatWidth, loadAISettings, loadRefs, loadRepos, loadWorktreeState, mainView, mergeState, refreshRepo, selectedHash, selectedRepo, selectedStash, sidebarWidth, stashConflictDismissed, stashEntries, terminalHeight, terminalOpen, uncommittedSelected } from './lib/stores'
+  import type { RepoChangedEvent, WorktreeChangedEvent } from './lib/types'
   import { EventsOn } from '../wailsjs/runtime/runtime'
 
   // A merge in progress always wins: neither the Changes view nor a stash
@@ -64,9 +64,16 @@
     const offWorktree = EventsOn('worktree:changed', (payload: WorktreeChangedEvent) => {
       if (payload?.repoID === $selectedRepo?.id) loadWorktreeState()
     })
+    // A write the AI chat ran (commit, push, branch, …) after the user
+    // approved it: refresh the repo the same way any other external change
+    // would, whether or not that repo is currently selected.
+    const offRepoChanged = EventsOn('repo:changed', (payload: RepoChangedEvent) => {
+      if (payload?.repoID === $selectedRepo?.id) refreshRepo()
+    })
     return () => {
       stopFocus()
       offWorktree()
+      offRepoChanged()
     }
   })
 </script>

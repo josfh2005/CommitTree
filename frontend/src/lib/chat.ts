@@ -1,9 +1,10 @@
-import type { AIMessage, ChatDeltaEvent, ChatErrorEvent, ChatNoticeEvent, ChatStartEvent, ChatToolEvent, ChatToolResultEvent } from './types'
+import type { AIMessage, ChatConfirmEvent, ChatDeltaEvent, ChatErrorEvent, ChatNoticeEvent, ChatStartEvent, ChatToolEvent, ChatToolResultEvent } from './types'
 
 export interface ChatToolUse {
   name: string
   args: Record<string, unknown> | null
   summary?: string
+  confirm?: { id: string; title: string; details: string[]; state: 'pending' | 'done' | 'rejected' | 'failed' }
 }
 
 export interface ChatItem {
@@ -71,9 +72,37 @@ export function startRun(state: ChatState, text: string, runID: string): ChatSta
 // CHAT_EVENTS are every event applyEvent understands. The panel subscribes
 // to this list, so a new event added to the reducer reaches the UI instead of
 // being silently dropped.
-export const CHAT_EVENTS = ['chat:start', 'chat:delta', 'chat:tool', 'chat:tool_result', 'chat:notice', 'chat:done', 'chat:error'] as const
+export const CHAT_EVENTS = ['chat:start', 'chat:delta', 'chat:tool', 'chat:tool_result', 'chat:confirm', 'chat:notice', 'chat:done', 'chat:error'] as const
 
-type Payload = ChatStartEvent | ChatDeltaEvent | ChatToolEvent | ChatToolResultEvent | ChatNoticeEvent | ChatErrorEvent | { repoID: string; runID: string }
+type Payload = ChatStartEvent | ChatDeltaEvent | ChatToolEvent | ChatToolResultEvent | ChatConfirmEvent | ChatNoticeEvent | ChatErrorEvent | { repoID: string; runID: string }
+
+export function confirmState(summary: string): 'done' | 'rejected' | 'failed' {
+  if (summary.startsWith('done')) return 'done'
+  if (summary.startsWith('rejected')) return 'rejected'
+  return 'failed'
+}
+
+/** Puts a pending write confirmation on screen: on the tool the model is
+ *  waiting on, or — after the panel re-mounted and reloaded a history that
+ *  does not include the in-flight answer yet — on a fresh assistant item. */
+export function withPendingConfirm(state: ChatState, ev: ChatConfirmEvent): ChatState {
+  if (ev.repoID !== state.repoID) return state
+  const items = state.items.slice()
+  let last = items[items.length - 1]
+  if (!last || last.role !== 'assistant') {
+    last = { role: 'assistant', text: '', tools: [] }
+    items.push(last)
+  } else {
+    last = { ...last, tools: last.tools.slice() }
+    items[items.length - 1] = last
+  }
+  if (last.tools.some((t) => t.confirm?.id === ev.confirmID)) return state.runID === ev.runID ? state : { ...state, runID: ev.runID }
+  const confirm = { id: ev.confirmID, title: ev.title, details: ev.details ?? [], state: 'pending' as const }
+  const i = last.tools.findIndex((t) => t.name === ev.tool && t.summary === undefined && !t.confirm)
+  if (i >= 0) last.tools[i] = { ...last.tools[i], confirm }
+  else last.tools.push({ name: ev.tool, args: null, confirm })
+  return { ...state, runID: ev.runID, items }
+}
 
 export function applyEvent(state: ChatState, name: string, payload: Payload): ChatState {
   if (payload.repoID !== state.repoID) return state
@@ -99,9 +128,14 @@ export function applyEvent(state: ChatState, name: string, payload: Payload): Ch
     case 'chat:tool_result': {
       const p = payload as ChatToolResultEvent
       const i = last.tools.findIndex((t) => t.name === p.name && t.summary === undefined)
-      if (i >= 0) last.tools[i] = { ...last.tools[i], summary: p.summary }
+      if (i >= 0) {
+        const tool = last.tools[i]
+        last.tools[i] = { ...tool, summary: p.summary, ...(tool.confirm ? { confirm: { ...tool.confirm, state: confirmState(p.summary) } } : {}) }
+      }
       return { ...state, items }
     }
+    case 'chat:confirm':
+      return withPendingConfirm(state, payload as ChatConfirmEvent)
     case 'chat:notice': {
       const p = payload as ChatNoticeEvent
       last.notices = [...(last.notices ?? []), p.text]

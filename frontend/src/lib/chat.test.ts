@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { applyEvent, CHAT_EVENTS, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, type ChatState } from './chat'
-import type { AIMessage } from './types'
+import { applyEvent, CHAT_EVENTS, confirmState, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withPendingConfirm, type ChatState } from './chat'
+import type { AIMessage, ChatConfirmEvent } from './types'
 
 describe('fromMessages', () => {
   it('merges tool rounds into one assistant item', () => {
@@ -147,5 +147,53 @@ describe('CHAT_EVENTS', () => {
       { role: 'assistant', text: 'It repairs the session cookie.', tools: [] },
     ])
     expect(state.runID).toBeNull()
+  })
+})
+
+describe('write confirmations', () => {
+  const confirm = (over: Partial<ChatConfirmEvent> = {}): ChatConfirmEvent => ({
+    repoID: 'r', runID: 'run', confirmID: 'c1', tool: 'push', title: 'Push main to origin/main', details: ['a1b2c3d x'], ...over,
+  })
+  const running = () => {
+    let s = startRun(emptyChat('r'), 'push it', 'run')
+    s = applyEvent(s, 'chat:tool', { repoID: 'r', runID: 'run', name: 'push', args: {} })
+    return s
+  }
+
+  it('attaches a pending card to the waiting tool', () => {
+    const s = applyEvent(running(), 'chat:confirm', confirm())
+    const tool = s.items[s.items.length - 1].tools[0]
+    expect(tool.confirm).toEqual({ id: 'c1', title: 'Push main to origin/main', details: ['a1b2c3d x'], state: 'pending' })
+  })
+
+  it('resolves the card from the tool result', () => {
+    let s = applyEvent(running(), 'chat:confirm', confirm())
+    s = applyEvent(s, 'chat:tool_result', { repoID: 'r', runID: 'run', name: 'push', summary: 'rejected by the user' })
+    expect(s.items[s.items.length - 1].tools[0].confirm?.state).toBe('rejected')
+  })
+
+  it('maps summaries to card states', () => {
+    expect(confirmState('done: Push main to origin/main')).toBe('done')
+    expect(confirmState('rejected by the user')).toBe('rejected')
+    expect(confirmState('error: another operation is running')).toBe('failed')
+  })
+
+  it('restores a pending card into a reloaded conversation', () => {
+    const reloaded = { repoID: 'r', runID: null, items: [{ role: 'user' as const, text: 'push it', tools: [] }] }
+    const s = withPendingConfirm(reloaded, confirm())
+    expect(s.runID).toBe('run')
+    const last = s.items[s.items.length - 1]
+    expect(last.role).toBe('assistant')
+    expect(last.tools[0]).toMatchObject({ name: 'push', confirm: { id: 'c1', state: 'pending' } })
+    expect(withPendingConfirm(s, confirm())).toEqual(s)
+  })
+
+  it('ignores a confirmation for another repository', () => {
+    const s = running()
+    expect(withPendingConfirm(s, confirm({ repoID: 'other' }))).toBe(s)
+  })
+
+  it('subscribes to chat:confirm', () => {
+    expect(CHAT_EVENTS).toContain('chat:confirm')
   })
 })

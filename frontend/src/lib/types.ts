@@ -186,6 +186,8 @@ export interface ChatToolResultEvent { repoID: string; runID: string; name: stri
 export interface ChatNoticeEvent { repoID: string; runID: string; text: string }
 export interface ChatDoneEvent { repoID: string; runID: string }
 export interface ChatErrorEvent { repoID: string; runID: string; message: string; code: string }
+export interface ChatConfirmEvent { repoID: string; runID: string; confirmID: string; tool: string; title: string; details: string[] }
+export interface RepoChangedEvent { repoID: string }
 export interface ExplainDeltaEvent { runID: string; text: string }
 export interface ExplainDoneEvent { runID: string }
 export interface ExplainErrorEvent { runID: string; message: string }

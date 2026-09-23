@@ -3,7 +3,7 @@
   import { EventsOn } from '../../wailsjs/runtime/runtime'
   import Icon from './Icon.svelte'
   import { api } from '../lib/api'
-  import { applyEvent, CHAT_EVENTS, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, type ChatState } from '../lib/chat'
+  import { applyEvent, CHAT_EVENTS, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withPendingConfirm, type ChatState } from '../lib/chat'
   import { renderMarkdown } from '../lib/markdown'
   import { chatOpen, jumpTo, selectedRepo, settingsOpen } from '../lib/stores'
   import type { AIStatus } from '../lib/types'
@@ -14,6 +14,7 @@
   let input = ''
   let list: HTMLDivElement
   let loadError = ''
+  let deciding = new Set<string>()
 
   const offs = CHAT_EVENTS.map((name) =>
     EventsOn(name, (payload) => {
@@ -42,8 +43,27 @@
         state = fromMessages(repoID, messages)
         scrollDown()
       }
+      const confirm = await api.getChatConfirm(repoID)
+      if (confirm && state.repoID === repoID) {
+        state = withPendingConfirm(state, confirm)
+        scrollDown()
+      }
     } catch (e) {
       loadError = errorMessage(e)
+    }
+  }
+
+  async function decide(id: string, approve: boolean) {
+    if (!state.repoID || deciding.has(id)) return
+    deciding = new Set(deciding).add(id)
+    try {
+      await api.confirmChatAction(state.repoID, id, approve)
+    } catch (e) {
+      toast(errorMessage(e), 'error')
+    } finally {
+      deciding = new Set(deciding)
+      deciding.delete(id)
+      deciding = deciding
     }
   }
 
@@ -147,11 +167,29 @@
       {:else}
         <div class="msg assistant">
           {#each item.tools as tool}
-            <div class="tool" title={JSON.stringify(tool.args ?? {})}>
-              <Icon name="search" size={12} />
-              <span class="ellipsis">{toolLabel(tool)}</span>
-              {#if tool.summary}<span class="summary ellipsis">· {tool.summary}</span>{/if}
-            </div>
+            {#if tool.confirm}
+              {@const confirm = tool.confirm}
+              <div class="confirm">
+                <div class="confirm-title">{confirm.title}</div>
+                {#each confirm.details as line}<div class="confirm-detail">{line}</div>{/each}
+                {#if confirm.state === 'pending'}
+                  <div class="confirm-actions">
+                    <button class="btn" disabled={deciding.has(confirm.id)} on:click={() => decide(confirm.id, false)}>Reject</button>
+                    <button class="btn primary" disabled={deciding.has(confirm.id)} on:click={() => decide(confirm.id, true)}>Approve</button>
+                  </div>
+                {:else if confirm.state === 'failed'}
+                  <div class="confirm-result failed">Failed{tool.summary ? ` · ${tool.summary}` : ''}</div>
+                {:else}
+                  <div class="confirm-result">{confirm.state === 'done' ? 'Approved and done' : 'Rejected'}{tool.summary ? ` · ${tool.summary}` : ''}</div>
+                {/if}
+              </div>
+            {:else}
+              <div class="tool" title={JSON.stringify(tool.args ?? {})}>
+                <Icon name="search" size={12} />
+                <span class="ellipsis">{toolLabel(tool)}</span>
+                {#if tool.summary}<span class="summary ellipsis">· {tool.summary}</span>{/if}
+              </div>
+            {/if}
           {/each}
           {#if item.text}
             <div class="md">{@html renderMarkdown(item.text)}</div>
@@ -198,6 +236,12 @@
   .user { align-self: flex-end; max-width: 85%; padding: 8px 12px; border-radius: 12px; background: var(--active); white-space: pre-wrap; }
   .tool { display: flex; align-items: center; gap: 6px; max-width: 100%; margin-bottom: 4px; padding: 2px 8px; border-radius: 6px; background: var(--hover); color: var(--muted); font-size: 12px; }
   .summary { color: var(--faint); }
+  .confirm { margin-bottom: 6px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+  .confirm-title { font-weight: 500; }
+  .confirm-detail { margin-top: 4px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .confirm-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }
+  .confirm-result { margin-top: 6px; font-size: 12px; color: var(--muted); }
+  .confirm-result.failed { color: var(--danger); }
   .md :global(p) { margin: 0 0 6px; }
   .md :global(ul) { margin: 4px 0 6px; padding-left: 18px; }
   .md :global(code) { font-family: var(--mono); font-size: 12px; padding: 0 4px; border-radius: 4px; background: var(--hover); }
