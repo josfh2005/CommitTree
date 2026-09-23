@@ -7,6 +7,9 @@
   {#each $toasts as t (t.id)}
     <div class="toast" class:error={t.kind === 'error'}>
       <pre class="message">{t.message}</pre>
+      {#if t.action}
+        <button class="btn" on:click={() => { t.action?.run(); dismissToast(t.id) }}>{t.action.label}</button>
+      {/if}
       {#if t.kind === 'error'}
         <button class="icon-btn" title="Copy" on:click={() => copyText(t.message)}><Icon name="copy" size={14} /></button>
       {/if}

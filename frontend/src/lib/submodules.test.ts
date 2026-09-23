@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { markers, nextSelection, parseSubmoduleDiff, rowLabel, splitPath, submoduleRepoId, updateMessage } from './submodules'
+import { markers, movedMessage, nextSelection, parseSubmoduleDiff, rowLabel, splitPath, submoduleRepoId, updateMessage } from './submodules'
 import type { Repo, Submodule } from './types'
 
 const base: Submodule = { name: 'lib', path: 'vendor/lib', url: 'u', recorded: 'a'.repeat(40), checkedOut: 'a'.repeat(40), branch: '', initialised: true, configured: true, moved: false, modified: false, untracked: false, conflict: false }
@@ -63,6 +63,11 @@ describe('submoduleRepoId', () => {
     expect(submoduleRepoId(list, 't', 'missing')).toBeUndefined()
     expect(submoduleRepoId(list, 'unknown', 'lib')).toBeUndefined()
   })
+})
+
+describe('movedMessage', () => {
+  it('singular', () => expect(movedMessage(1)).toBe('1 submodule is not at the recorded commit'))
+  it('plural', () => expect(movedMessage(3)).toBe('3 submodules are not at the recorded commit'))
 })
 
 describe('nextSelection', () => {

@@ -366,6 +366,16 @@ selected, the next read drops its item and the selection falls back to the
 parent repository — the parent stays selected and expanded, rather than the
 selection being cleared outright as it would be for a vanished worktree.
 
+Checking out a branch, a remote branch or a commit, resetting the current
+branch, or merging a branch into it — each elsewhere in this repository, not
+in the Submodules section itself — can leave a submodule pointing behind its
+recorded commit: git only moves a submodule's checkout along with these when
+`submodule.recurse` is set, which git-ui honours (because git does) but does
+not set itself. When a write leaves any submodule moved, a toast reports how
+many and offers an "Update all" action that runs the same update the
+section header's own Update all does. There is no automatic update; the
+toast is the only nudge.
+
 ## What is refused while something else is running
 
 The application holds one write lock per repository (never a single global

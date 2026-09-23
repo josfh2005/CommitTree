@@ -66,6 +66,15 @@ but its own badge's text is bolder than an ordinary branch badge's — the
 one piece of the current-branch emphasis this view still carries, alongside
 the hollow `HEAD` dot in the graph.
 
+### The header
+
+The view's header normally shows the selected repository's name and path.
+When the selection is a submodule (it has no row of its own — see
+Repository list › Submodules in docs/spec/01-repositories-and-sidebar.md),
+it instead shows a breadcrumb: the parent repository's name as a clickable
+crumb, then its path relative to the top repository. Clicking the crumb
+selects the parent again.
+
 ### Paging
 
 Commits are fetched in pages of a fixed size; the next page is requested

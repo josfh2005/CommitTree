@@ -10,7 +10,7 @@ import { stashApplyAction } from './stash'
 import { choiceDialog, confirmDialog, confirmDialogWithCheckbox, errorMessage, promptDialog, toast } from './ui'
 import { resolveRepoDrop } from './repoDrop'
 import { classifyGroupRename, renameCollapsedGroup } from './repoGroupRename'
-import { updateMessage } from './submodules'
+import { movedMessage, updateMessage } from './submodules'
 import { removeRepoTabs, terminalState } from './terminal'
 
 export function branchRef(branch: Branch): string {
@@ -175,9 +175,11 @@ export async function relocateRepo(id: string) {
   }
 }
 
-export const checkoutBranch = (id: string, branch: Branch) =>
-  run('Checking out…', () =>
+export async function checkoutBranch(id: string, branch: Branch) {
+  const ok = await run('Checking out…', () =>
     branch.remote ? api.checkoutRemote(id, branch.remote, branch.name) : api.checkout(id, branch.name))
+  if (ok) await warnMovedSubmodules(id)
+}
 
 export async function checkoutCommit(id: string, hash: string) {
   const ok = await confirmDialog({
@@ -185,7 +187,7 @@ export async function checkoutCommit(id: string, hash: string) {
     message: `HEAD will be detached at ${hash.slice(0, 8)}. New commits made there won't belong to any branch.`,
     confirmLabel: 'Check out',
   })
-  if (ok) await run('Checking out…', () => api.checkoutDetached(id, hash))
+  if (ok && (await run('Checking out…', () => api.checkoutDetached(id, hash)))) await warnMovedSubmodules(id)
 }
 
 export async function resetBranch(id: string, hash: string, short: string, branch: string) {
@@ -209,7 +211,7 @@ export async function resetBranch(id: string, hash: string, short: string, branc
     confirmLabel: (m) => (m === 'hard' ? 'Reset and discard' : 'Reset'),
     danger: (m) => m === 'hard',
   })
-  if (mode) await run('Resetting…', () => api.resetBranch(id, hash, mode))
+  if (mode && (await run('Resetting…', () => api.resetBranch(id, hash, mode)))) await warnMovedSubmodules(id)
 }
 
 export async function newBranch(id: string, target: string, targetLabel: string) {
@@ -365,6 +367,7 @@ export async function mergeBranch(id: string, branch: Branch, into: string) {
   try {
     const result = await api.mergeBranch(id, label)
     if (result.outcome === UP_TO_DATE) toast(`${into} is already up to date with ${label}.`, 'info')
+    await warnMovedSubmodules(id)
   } catch (e) {
     toast(errorMessage(e), 'error')
   } finally {
@@ -429,6 +432,7 @@ export async function pull(id: string) {
   try {
     const result = await api.pull(id)
     if (result.outcome === PULL_UP_TO_DATE) toast('Already up to date.', 'info')
+    await warnMovedSubmodules(id)
   } catch (e) {
     toast(errorMessage(e), 'error')
   } finally {
@@ -536,4 +540,23 @@ export async function updateAllSubmodules(parentId: string, list: Submodule[]) {
     confirmLabel: 'Update',
   })
   if (ok) await run('Updating…', () => api.updateAllSubmodules(parentId))
+}
+
+// Warns after a successful write to a repository that git left submodules
+// pointing behind their recorded commit — git only moves them along with
+// the parent when submodule.recurse is set, which git-ui does not set (see
+// docs/spec/01-repositories-and-sidebar.md's Submodules section). Only a
+// repo item that reported having submodules triggers the lookup, so a
+// submodule's own writes don't retrigger this.
+export async function warnMovedSubmodules(id: string) {
+  const repo = get(repos).find((r) => r.id === id)
+  if (!repo?.submoduleCount) return
+  let list: Submodule[]
+  try {
+    list = await api.getSubmodules(id)
+  } catch {
+    return
+  }
+  const n = list.filter((s) => s.moved).length
+  if (n > 0) toast(movedMessage(n), 'info', { label: 'Update all', run: () => updateAllSubmodules(id, list) })
 }

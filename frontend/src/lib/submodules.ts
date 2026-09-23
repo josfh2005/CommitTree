@@ -109,6 +109,11 @@ export function updateMessage(s: Submodule): string {
   return s.branch ? `${base} Branch ${s.branch} itself is not changed.` : base
 }
 
+/** Toast text after a write leaves submodules behind their recorded commit. */
+export function movedMessage(n: number): string {
+  return `${n} submodule${n === 1 ? '' : 's'} ${n === 1 ? 'is' : 'are'} not at the recorded commit`
+}
+
 /**
  * Repository selection after the repo list refreshes: null keeps whatever
  * is currently selected, '' clears it, and any other string is the id to
