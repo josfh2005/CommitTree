@@ -50,12 +50,21 @@ The terminal lives in the same column as the chat panel, below it, separated
 by a draggable divider; its height is remembered between sessions. The chat
 and the terminal open and close independently of each other — closing one
 leaves the other filling the whole column. Two toggles open the terminal: a
-button in the log view's header (disabled when no repository is selected or
-the selected one is missing), and the same button in the terminal panel's
-own header to hide it again. **Ctrl+`** toggles it from anywhere in the
-window, matched on the physical key rather than the character it produces,
-so it still works on a layout (Spanish, among others) where backtick is a
-dead key and no literal "`" character is available to match against.
+button labelled "Terminal" (icon and text, so it is found without hunting)
+in the log view's header, disabled when no repository is selected or the
+selected one is missing, whose tooltip names the shortcuts; and the same
+button in the terminal panel's own header to hide it again. Two shortcuts
+toggle it from anywhere in the window, both matched on the physical key
+rather than the character it produces:
+
+- **Cmd+J** on macOS, **Ctrl+J** elsewhere — the one that works on every
+  keyboard layout. Ctrl+J is a line feed to a shell, so on Windows and Linux
+  it is left to the shell while focus is inside the terminal itself; Cmd+J
+  never reaches the shell and works there too.
+- **Ctrl+`**, kept for layouts where the backquote key is easy to reach. It
+  is matched on the physical key so it still fires where backtick is a dead
+  key, but on a Spanish ISO Mac keyboard it is awkward enough that Cmd+J is
+  the one to use.
 
 Switching the selected repository does not tear down any tab's shell: every
 tab, across every repository, keeps a live terminal instance with its own
@@ -63,7 +72,7 @@ scrollback (5 000 lines); only the selected repository's tabs are shown, the
 rest sit hidden. A long-running program such as `top`, left running in a
 background repository's tab, keeps running and is exactly where it was left
 when that repository is selected again. Hiding the terminal panel itself —
-with either toggle or Ctrl+` — behaves the same way: every tab's shell keeps
+with either toggle or a shortcut — behaves the same way: every tab's shell keeps
 running and its scrollback is kept exactly as it was, since hiding only
 changes what is drawn, not what is mounted; nothing is torn down until a tab
 is closed explicitly or the application restarts. Tabs are not restored

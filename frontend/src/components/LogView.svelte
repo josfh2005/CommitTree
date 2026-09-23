@@ -8,8 +8,9 @@
   import Splitter from './Splitter.svelte'
   import Toolbar from './Toolbar.svelte'
   import { conflictOwnsScreen } from '../lib/remote'
+  import { terminalShortcutLabel } from '../lib/terminal'
   import { uncommittedCount } from '../lib/uncommitted'
-  import { chatOpen, detailsHeight, mergeState, selectedHash, selectedRepo, stashConflictDismissed, terminalOpen, uncommittedSelected, worktreeState } from '../lib/stores'
+  import { chatOpen, detailsHeight, mergeState, platform, selectedHash, selectedRepo, stashConflictDismissed, terminalOpen, uncommittedSelected, worktreeState } from '../lib/stores'
 
   // The row can be selected a moment before the tree turns out clean (LogList
   // then moves the selection to HEAD); never open an empty Changes pane.
@@ -28,7 +29,7 @@
       <Toolbar repoId={$selectedRepo.id} />
     {/if}
     {#if !$terminalOpen}
-      <button class="icon-btn" title="Show terminal (Ctrl+`)" disabled={!$selectedRepo || $selectedRepo.missing} on:click={() => terminalOpen.set(true)}><Icon name="terminal" /></button>
+      <button class="btn terminal-btn" title={'Show terminal (' + terminalShortcutLabel($platform) + ' or Ctrl+`)'} disabled={!$selectedRepo || $selectedRepo.missing} on:click={() => terminalOpen.set(true)}><Icon name="terminal" /><span>Terminal</span></button>
     {/if}
     {#if !$chatOpen}
       <button class="icon-btn" title="Show chat" on:click={() => chatOpen.set(true)}><Icon name="panel-right" /></button>
@@ -63,6 +64,7 @@
   .log-view { display: flex; flex-direction: column; height: 100%; }
   header { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 10px 0 14px; flex: none; }
   .title { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; font-weight: 500; }
+  .terminal-btn { display: inline-flex; align-items: center; gap: 6px; }
   .path { font-weight: 400; font-size: 12px; color: var(--faint); }
   .list { flex: 1; min-height: 0; border-top: 1px solid var(--border); }
   .details { flex: none; min-height: 0; overflow: hidden; }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addTab, emptyTermState, markExited, removeRepoTabs, removeTab, setActive, settledAction, tabTitle, tabsFor } from './terminal'
+import { addTab, emptyTermState, isTerminalToggle, markExited, removeRepoTabs, removeTab, setActive, settledAction, tabTitle, tabsFor, terminalShortcutLabel, type ToggleKey } from './terminal'
 
 describe('terminal tabs', () => {
   it('numbers tabs per repository and makes the new one active', () => {
@@ -58,5 +58,27 @@ describe('settledAction', () => {
     expect(settledAction('r1', 'r1')).toBe('check')
     expect(settledAction('r1', 'r2')).toBe('list')
     expect(settledAction('', 'r2')).toBe('list')
+  })
+})
+
+describe('terminal toggle shortcut', () => {
+  const key = (over: Partial<ToggleKey>): ToggleKey => ({ code: '', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...over })
+
+  it('keeps Ctrl+` everywhere', () => {
+    expect(isTerminalToggle(key({ code: 'Backquote', ctrlKey: true }), 'windows', true)).toBe(true)
+    expect(isTerminalToggle(key({ code: 'Backquote', ctrlKey: true }), 'darwin', false)).toBe(true)
+  })
+  it('uses Cmd+J on macOS, even inside the terminal', () => {
+    expect(isTerminalToggle(key({ code: 'KeyJ', metaKey: true }), 'darwin', true)).toBe(true)
+    expect(isTerminalToggle(key({ code: 'KeyJ', ctrlKey: true }), 'darwin', false)).toBe(false)
+    expect(isTerminalToggle(key({ code: 'KeyJ', metaKey: true, shiftKey: true }), 'darwin', false)).toBe(false)
+  })
+  it('uses Ctrl+J elsewhere, but leaves it to the shell inside the terminal', () => {
+    expect(isTerminalToggle(key({ code: 'KeyJ', ctrlKey: true }), 'linux', false)).toBe(true)
+    expect(isTerminalToggle(key({ code: 'KeyJ', ctrlKey: true }), 'windows', true)).toBe(false)
+  })
+  it('names the shortcut for the platform', () => {
+    expect(terminalShortcutLabel('darwin')).toBe('⌘J')
+    expect(terminalShortcutLabel('linux')).toBe('Ctrl+J')
   })
 })

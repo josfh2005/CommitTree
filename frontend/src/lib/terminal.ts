@@ -75,3 +75,23 @@ export function settledAction(selectedRepoId: string, repo: string): 'check' | '
 }
 
 export const terminalState = writable<TermState>(emptyTermState())
+
+/** The parts of a keydown the terminal shortcut looks at. */
+export type ToggleKey = Pick<KeyboardEvent, 'code' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'>
+
+/** Whether a key press shows or hides the terminal panel. Ctrl+` works
+ *  where the backquote key is easy to reach; Cmd+J (macOS) / Ctrl+J
+ *  (elsewhere) is the layout-independent one — Ctrl+` is awkward on a
+ *  Spanish ISO keyboard. Ctrl+J is a line feed to a shell, so while focus is
+ *  inside the terminal it is left to the shell. `code`, not `key`: a dead
+ *  key reports key "Dead" but keeps its physical code. */
+export function isTerminalToggle(e: ToggleKey, platform: string, inTerminal: boolean): boolean {
+  if (e.ctrlKey && !e.metaKey && !e.altKey && e.code === 'Backquote') return true
+  if (e.code !== 'KeyJ' || e.altKey || e.shiftKey) return false
+  if (platform === 'darwin') return e.metaKey && !e.ctrlKey
+  return e.ctrlKey && !e.metaKey && !inTerminal
+}
+
+export function terminalShortcutLabel(platform: string): string {
+  return platform === 'darwin' ? '⌘J' : 'Ctrl+J'
+}
