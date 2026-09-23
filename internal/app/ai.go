@@ -22,6 +22,7 @@ import (
 	"git-ui/internal/ai/settings"
 	"git-ui/internal/ai/tasks"
 	"git-ui/internal/ai/tools"
+	"git-ui/internal/ai/writetools"
 	"git-ui/internal/gitlog"
 	"git-ui/internal/refs"
 )
@@ -45,6 +46,7 @@ type aiState struct {
 	mu         sync.Mutex
 	runs       map[string]context.CancelFunc // repo ID → running chat
 	pullCancel context.CancelFunc
+	confirms   map[string]*pendingConfirm // confirm ID → pending write proposal
 }
 
 type OllamaStatus struct {
@@ -87,7 +89,7 @@ type ModelDone struct {
 // once during wiring in main.go, not exposed as a Wails binding, so the
 // renderer cannot invoke it with empty or arbitrary deps.
 func WithAI(a *App, d AIDeps) {
-	a.ai = &aiState{deps: d, runs: map[string]context.CancelFunc{}}
+	a.ai = &aiState{deps: d, runs: map[string]context.CancelFunc{}, confirms: map[string]*pendingConfirm{}}
 }
 
 func (a *App) emit(name string, data any) {
@@ -354,13 +356,20 @@ func (a *App) SendChat(repoID, text, runID string) error {
 
 	a.emit(agent.EventStart, agent.StartEvent{RepoID: repoID, RunID: runID, Text: text})
 
+	gs, _ := a.gitSettings()
+
 	go func() {
 		run := agent.Run{
 			RepoID: repoID, RunID: runID,
 			Provider: provider, Model: cfg.ChatModel, System: system,
-			Tools:   tools.Specs(),
-			RunTool: func(ctx context.Context, call ai.ToolCall) string { return tools.Run(ctx, repo.Path, call) },
-			Emit:    a.emit,
+			Tools: append(tools.Specs(), writetools.Specs()...),
+			RunTool: func(ctx context.Context, call ai.ToolCall) string {
+				if writetools.IsWrite(call.Name) {
+					return a.runWriteTool(ctx, repoID, runID, repo.Path, call, writetools.Env{PullStrategy: gs.PullStrategy})
+				}
+				return tools.Run(ctx, repo.Path, call)
+			},
+			Emit: a.emit,
 		}
 		updated, runErr := agent.Execute(ctx, run, history)
 		saveErr := a.ai.deps.Chats.Save(repoID, updated)

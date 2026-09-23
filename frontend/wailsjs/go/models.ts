@@ -151,6 +151,28 @@ export namespace app {
 		    return a;
 		}
 	}
+	export class ConfirmEvent {
+	    repoID: string;
+	    runID: string;
+	    confirmID: string;
+	    tool: string;
+	    title: string;
+	    details: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ConfirmEvent(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.repoID = source["repoID"];
+	        this.runID = source["runID"];
+	        this.confirmID = source["confirmID"];
+	        this.tool = source["tool"];
+	        this.title = source["title"];
+	        this.details = source["details"];
+	    }
+	}
 	export class ConflictFile {
 	    path: string;
 	    resolved: boolean;

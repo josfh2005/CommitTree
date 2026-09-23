@@ -20,7 +20,7 @@ func TestDefaultsRenderVariables(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`"git-ui"`, "/src/git-ui", "main", "2026-09-17", "read-only"} {
+	for _, want := range []string{`"git-ui"`, "/src/git-ui", "main", "2026-09-17", "approves or rejects"} {
 		if !strings.Contains(chat, want) {
 			t.Errorf("chat prompt missing %q:\n%s", want, chat)
 		}

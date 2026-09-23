@@ -33,6 +33,8 @@ export function CommitChanges(arg1:string,arg2:string,arg3:boolean):Promise<void
 
 export function CommitMerge(arg1:string):Promise<void>;
 
+export function ConfirmChatAction(arg1:string,arg2:string,arg3:boolean):Promise<void>;
+
 export function CreateBranch(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<void>;
 
 export function CreateTag(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
@@ -60,6 +62,8 @@ export function GetAISettings():Promise<settings.Settings>;
 export function GetAuthors(arg1:string):Promise<Array<string>>;
 
 export function GetChat(arg1:string):Promise<Array<ai.Message>>;
+
+export function GetChatConfirm(arg1:string):Promise<app.ConfirmEvent>;
 
 export function GetCommitPreview(arg1:string):Promise<worktree.CommitInfo>;
 
