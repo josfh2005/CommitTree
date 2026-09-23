@@ -1,14 +1,42 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"git-ui/internal/repos"
+	"git-ui/internal/testrepo"
 	"git-ui/internal/worktree"
 )
+
+// newSubmoduleApp returns an App over a repository with lib added as a
+// submodule at "lib", committed and in sync.
+func newSubmoduleApp(t *testing.T) (*App, *testrepo.Repo, string) {
+	t.Helper()
+	lib := testrepo.New(t)
+	lib.WriteFile("a.txt", "a")
+	lib.Git("add", "a.txt")
+	lib.Git("commit", "-q", "-m", "lib one")
+	parent := testrepo.New(t)
+	parent.WriteFile("p.txt", "p")
+	parent.Commit("parent one")
+	parent.Git("-c", "protocol.file.allow=always", "submodule", "add", "-q", lib.Dir, "lib")
+	parent.Git("commit", "-q", "-m", "add submodule")
+
+	store, err := repos.Open(filepath.Join(t.TempDir(), "repos.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := store.Add(context.Background(), parent.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return New(store), parent, repo.ID
+}
 
 // The wrappers refuse a path git did not list, change nothing and announce
 // nothing; a real change is announced once as worktree:changed.
@@ -130,6 +158,25 @@ func TestGetWorktreeDiffTruncatesALargeDiff(t *testing.T) {
 	}
 	if strings.Contains(small, "truncated") {
 		t.Errorf("small diff = %q, want it untouched", small)
+	}
+}
+
+// A submodule's diff comes back as git's --submodule=log summary, not the
+// raw "Subproject commit" line: the pane must show what moved, not a hash.
+func TestGetWorktreeDiffOfASubmodulePointerMove(t *testing.T) {
+	a, r, id := newSubmoduleApp(t)
+	subDir := filepath.Join(r.Dir, "lib")
+	if err := os.WriteFile(filepath.Join(subDir, "a.txt"), []byte("changed"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r.Git("-C", subDir, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-am", "moved")
+
+	out, err := a.GetWorktreeDiff(id, "lib", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "Submodule lib ") {
+		t.Errorf("diff = %q, want the submodule=log summary", out)
 	}
 }
 

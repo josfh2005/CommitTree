@@ -173,12 +173,15 @@ of every parent.
 
 Each file in the list shows a one-letter status (added, deleted, renamed,
 copied, or modified) and its path; a rename or copy also shows the old path
-in its tooltip. Selecting a file loads that file's diff against the
-commit's first parent (or, for a commit with no parent at all, the file as
-introduced). The diff is rendered as plain text lines, coloured by whether
-a line is an addition, a deletion, a hunk header, or file-header metadata;
-it is truncated after a fixed number of lines with a note that it was cut,
-rather than rendering an arbitrarily long diff in full.
+in its tooltip. A file that is a submodule is flagged as such in the list.
+Selecting a file loads that file's diff against the commit's first parent
+(or, for a commit with no parent at all, the file as introduced). The diff
+is rendered as plain text lines, coloured by whether a line is an addition,
+a deletion, a hunk header, or file-header metadata; it is truncated after a
+fixed number of lines with a note that it was cut, rather than rendering an
+arbitrarily long diff in full. A submodule's diff is the same
+`--submodule=log` commit-range summary the Changes view shows, not a raw
+`Subproject commit` line.
 
 The details pane also offers, from the row's context menu, checking the
 commit out detached (with a confirmation naming the consequence — new

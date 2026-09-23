@@ -69,6 +69,13 @@ Diff lines are coloured by their leading character: `+` lines as additions,
 `-` lines as deletions, `@@` hunk headers and `diff`/`index`/`+++`/`---`
 lines as metadata; everything else is plain.
 
+A changed path that is a submodule shows git's `--submodule=log` summary
+instead of an ordinary diff: the old and new commit it points at, plus the
+subjects of the commits between them — not a raw `Subproject commit` line.
+Its status also reports, independently of the diff, whether the pointer
+itself moved and whether the submodule's own working tree has modified or
+untracked content.
+
 ## Staging, unstaging and discarding
 
 Every row offers the actions appropriate to its section, plus Discard,
