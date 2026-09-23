@@ -69,6 +69,12 @@ export interface Repo {
   parentId?: string
   /** A detected worktree: not a list entry (cannot be removed or grouped). */
   worktree?: boolean
+  /** An initialised submodule, listed under its parent repository. */
+  submodule?: boolean
+  /** Path of this submodule relative to its parent, when `submodule`. */
+  subPath?: string
+  /** Number of submodules this repository has (initialised or not). */
+  submoduleCount?: number
 }
 
 export interface Branch {
@@ -106,6 +112,7 @@ export interface FileChange {
   status: string
   path: string
   oldPath?: string
+  submodule?: boolean
 }
 
 export interface Details extends Commit {
@@ -269,7 +276,22 @@ export interface MergeChangedEvent { repoID: string }
 export type ResetMode = 'soft' | 'mixed' | 'hard'
 export interface ResetInfo { undone: number; gained: number; pushed: number; upstream: string }
 
-export interface FileStatus { path: string; oldPath?: string; status: string }
+export interface FileStatus { path: string; oldPath?: string; status: string; submodule?: boolean; subCommit?: boolean; subModified?: boolean; subUntracked?: boolean }
+
+export interface Submodule {
+  name: string
+  path: string
+  url: string
+  recorded: string
+  checkedOut: string
+  branch: string
+  initialised: boolean
+  configured: boolean
+  moved: boolean
+  modified: boolean
+  untracked: boolean
+  conflict: boolean
+}
 export interface WorktreeState { staged: FileStatus[]; unstaged: FileStatus[]; untracked: FileStatus[]; merging: boolean }
 export interface CommitInfo { stagedCount: number; canAmend: boolean; lastMessage: string; pushed: boolean; upstream: string }
 export interface WorktreeChangedEvent { repoID: string }

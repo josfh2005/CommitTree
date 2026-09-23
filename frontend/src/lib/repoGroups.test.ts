@@ -62,6 +62,20 @@ describe('groupRepos', () => {
     const { loose } = groupRepos([r('orphan', { parentId: 'gone' })])
     expect(ids(loose)).toEqual(['orphan'])
   })
+
+  it('drops submodules entirely: never loose, grouped, or a child', () => {
+    const repos = [
+      r('t'),
+      r('sub', { submodule: true, parentId: 't' }),
+      r('grouped', { group: 'work' }),
+      r('sub2', { submodule: true, parentId: 'grouped', group: 'work' }),
+    ]
+    const { loose, groups } = groupRepos(repos)
+    expect(ids(loose)).toEqual(['t'])
+    expect(loose[0].children).toEqual([])
+    expect(ids(groups.find((g) => g.name === 'work')!.repos)).toEqual(['grouped'])
+    expect(groups.find((g) => g.name === 'work')!.repos[0].children).toEqual([])
+  })
 })
 
 describe('compareRepos', () => {
