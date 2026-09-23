@@ -38,7 +38,8 @@ Each row shows a one-character status glyph and the path. The glyph is
 git's own letter for the change: `M` modified, `A` added, `D` deleted, `R`
 renamed, `T` type-changed, `?` untracked. A partially staged file therefore
 appears twice, once per section, each occurrence carrying only that side's
-letter (typically `A`/`M` staged and `M` unstaged, or similar).
+letter (typically `A`/`M` staged and `M` unstaged, or similar). A row for a
+submodule shows a package icon ahead of its status glyph.
 
 Selecting a row loads that file's diff into the content pane. Selection is
 tracked by path, not by list position: staging or unstaging a file moves it
@@ -76,6 +77,19 @@ Its status also reports, independently of the diff, whether the pointer
 itself moved and whether the submodule's own working tree has modified or
 untracked content.
 
+The pane renders that summary as its own layout, not diff lines: the
+submodule's path, the old and new commit it points at (7 characters each,
+or a muted note — "new submodule", "submodule deleted", "commits not
+present" — in place of the range when there is no ordinary range to show),
+the list of commits between them (each prefixed `>` or `<` for arriving or
+leaving, coloured the same as an addition or a deletion), and, when the
+submodule's own working tree has modified or untracked content, a note
+saying so plus an "Open submodule" link that selects it as a repository
+(shown only once it is initialised). For an unstaged submodule whose
+pointer has not moved — its own content is dirty but there is nothing to
+stage or update here — that note is replaced with "Commit inside the
+submodule first".
+
 ## Staging, unstaging and discarding
 
 Every row offers the actions appropriate to its section, plus Discard,
@@ -86,6 +100,15 @@ which is available from either side:
 | Staged    | Unstage, Discard |
 | Unstaged  | Stage, Discard |
 | Untracked | Stage, Discard |
+
+A submodule row departs from this table. It never offers Discard — a
+submodule's pointer is put right with Update, not thrown away, and its own
+dirty content can only be dealt with from inside the submodule itself —
+and Update to recorded commit takes Discard's place: Staged offers Unstage
++ Update, and Unstaged offers Stage + Update when the pointer has moved.
+When the pointer has not moved and only the submodule's own content is
+dirty, there is nothing stageable, so the row offers only Open submodule
+(once initialised).
 
 **Stage** adds an unstaged or untracked path to the index as it stands in
 the worktree right now.

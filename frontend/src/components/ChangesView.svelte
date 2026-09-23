@@ -1,13 +1,15 @@
 <script lang="ts">
   import CommitBox from './CommitBox.svelte'
   import FileList, { rowKey } from './FileList.svelte'
+  import SubmoduleDiffView from './SubmoduleDiff.svelte'
   import { api } from '../lib/api'
-  import { discardFile, stageFile, unstageFile } from '../lib/actions'
+  import { discardFile, stageFile, unstageFile, updateSubmodule } from '../lib/actions'
   import { lineClass } from '../lib/diff'
   import { hasStagedChanges, nextSelection, worktreeSections, type SelectionKey } from '../lib/worktree'
+  import { parseSubmoduleDiff, submoduleRepoId, type SubmoduleDiff } from '../lib/submodules'
   import type { FileStatus } from '../lib/types'
-  import { busy, worktreeState } from '../lib/stores'
-  import { errorMessage } from '../lib/ui'
+  import { busy, repos, selectRepo, worktreeState } from '../lib/stores'
+  import { errorMessage, toast } from '../lib/ui'
 
   export let repoId: string
 
@@ -29,6 +31,20 @@
   // same-path counterpart in the other section.
   $: fileSection = new Map(sections.flatMap((s) => s.files.map((f) => [f, s.title] as const)))
   $: selected = selection ? rowKey(selection.section, selection.path) : ''
+  $: selectedFile = files.find((f) => keyOf(f) === selected) ?? null
+  // A submodule's diff is git's `--submodule=log` summary, not a text diff
+  // — see submodules.ts. An unstaged submodule whose pointer hasn't moved
+  // (content-only: modified/untracked content inside it) can't be staged
+  // from here, so its note is overridden to say why, in place of whatever
+  // (empty) note the raw diff text carried.
+  $: sub = selectedFile?.submodule ? submoduleDiffFor(text, selectedFile) : null
+  $: subRepoId = selectedFile?.submodule ? submoduleRepoId($repos, repoId, selectedFile.path) : undefined
+
+  function submoduleDiffFor(diffText: string, file: FileStatus): SubmoduleDiff {
+    const parsed = parseSubmoduleDiff(diffText) ?? { path: file.path, from: '', to: '', note: '', commits: [], content: [] }
+    if (!isStaged(file) && !file.subCommit) return { ...parsed, note: 'Commit inside the submodule first' }
+    return parsed
+  }
   // Re-key the selection onto wherever its path now lives (staging or
   // unstaging moves a file to a different section, but it's still the file
   // the user had open) and re-read it — after a stage/unstage/discard, or a
@@ -90,6 +106,7 @@
   }
 
   function actionsFor(file: FileStatus) {
+    if (file.submodule) return submoduleActionsFor(file)
     const staged = isStaged(file)
     // The discard warning must reflect whether the PATH has staged content
     // anywhere, not which section this particular row came from: `git
@@ -101,6 +118,34 @@
       return [{ label: 'Unstage', run: () => unstageFile(repoId, file.path), disabled: !!$busy, title: 'Take out of the next commit' }, discard]
     }
     return [{ label: 'Stage', run: () => stageFile(repoId, file.path), disabled: !!$busy, title: 'Add to the next commit' }, discard]
+  }
+
+  // A submodule row never gets Discard: its "content" (dirty files inside
+  // it) can only be dealt with from inside the submodule itself, and its
+  // pointer is put right with Update, not thrown away.
+  function submoduleActionsFor(file: FileStatus) {
+    const update = { label: 'Update to recorded commit', run: () => updateSubmoduleAction(file.path), disabled: !!$busy, title: 'Check out the commit recorded for this submodule' }
+    if (isStaged(file)) {
+      return [{ label: 'Unstage', run: () => unstageFile(repoId, file.path), disabled: !!$busy, title: 'Take out of the next commit' }, update]
+    }
+    if (file.subCommit) {
+      return [{ label: 'Stage', run: () => stageFile(repoId, file.path), disabled: !!$busy, title: 'Add to the next commit' }, update]
+    }
+    // Pointer unchanged, only its own content is dirty: nothing here is
+    // stageable, so the only action is jumping into the submodule to
+    // commit, stage or discard there.
+    const id = submoduleRepoId($repos, repoId, file.path)
+    return id ? [{ label: 'Open submodule', run: () => selectRepo(id), disabled: !!$busy, title: 'Open this submodule as a repository' }] : []
+  }
+
+  async function updateSubmoduleAction(path: string) {
+    try {
+      const list = await api.getSubmodules(repoId)
+      const s = list.find((x) => x.path === path)
+      if (s) await updateSubmodule(repoId, s)
+    } catch (e) {
+      toast(errorMessage(e), 'error')
+    }
   }
 </script>
 
@@ -119,6 +164,8 @@
         <div class="empty">Nothing to show.</div>
       {:else if error}
         <div class="error">{error}</div>
+      {:else if sub}
+        <SubmoduleDiffView diff={sub} onOpen={subRepoId ? () => selectRepo(subRepoId) : null} />
       {:else}
         {#each text.split('\n') as line}
           <div class="line {lineClass(line)}">{line || ' '}</div>

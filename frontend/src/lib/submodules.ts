@@ -87,6 +87,22 @@ export function parseSubmoduleDiff(diff: string): SubmoduleDiff | null {
   return result
 }
 
+/**
+ * Finds the `$repos` item id for the submodule at `path`, relative to
+ * `repoId`'s own repository — by absolute path rather than parentId/subPath.
+ * `subPath` is always relative to the TOP repository, so it can't be
+ * compared against `path` directly once `repoId` is itself an opened
+ * submodule (a nested submodule's `path` here is relative to ITS parent);
+ * matching on the absolute filesystem path is correct in both cases.
+ * Returns undefined when the submodule isn't an opened repository item.
+ */
+export function submoduleRepoId(list: Repo[], repoId: string, path: string): string | undefined {
+  const repo = list.find((r) => r.id === repoId)
+  if (!repo) return undefined
+  const abs = `${repo.path}/${path}`
+  return list.find((r) => r.path === abs)?.id
+}
+
 /** Confirmation text for "Update to recorded commit". */
 export function updateMessage(s: Submodule): string {
   const base = `${s.path} will leave ${short(s.checkedOut)} and check out the recorded commit ${short(s.recorded)} on a detached HEAD.`
