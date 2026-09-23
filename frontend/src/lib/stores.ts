@@ -145,7 +145,8 @@ export async function loadRepos() {
   // A detected worktree or submodule can vanish between two reads (removed
   // in a terminal, deinitialised, or by the tool that created it). Whatever
   // is no longer listed loses its terminal tabs, and a selection pointing at
-  // it either falls back to its parent or is cleared — see nextSelection.
+  // it is cleared — except a vanished submodule, which falls back to its
+  // still-listed parent — see nextSelection.
   const ids = new Set(list.map((r) => r.id))
   terminalState.update((s) => {
     let next = s

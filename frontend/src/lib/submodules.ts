@@ -96,13 +96,17 @@ export function updateMessage(s: Submodule): string {
 /**
  * Repository selection after the repo list refreshes: null keeps whatever
  * is currently selected, '' clears it, and any other string is the id to
- * select instead. A submodule that vanished (removed, or its parent
+ * select instead. Only a submodule that vanished (removed, or its parent
  * repository closed) falls back to its parent when the parent is still
- * listed.
+ * listed — a vanished worktree's selection is cleared outright, same as any
+ * other removed repository (see docs/spec/01-repositories-and-sidebar.md's
+ * Worktrees section).
  */
 export function nextSelection(prevSelected: Repo | null, list: Repo[]): string | null {
   if (!prevSelected) return null
   if (list.some((r) => r.id === prevSelected.id)) return null
-  if (prevSelected.parentId && list.some((r) => r.id === prevSelected.parentId)) return prevSelected.parentId
+  if (prevSelected.submodule && prevSelected.parentId && list.some((r) => r.id === prevSelected.parentId)) {
+    return prevSelected.parentId
+  }
   return ''
 }

@@ -49,7 +49,9 @@ it('updateMessage names the commit left and the branch', () => {
 describe('nextSelection', () => {
   const top: Repo = { id: 't', name: 't', path: '/t', missing: false, branch: 'main' }
   const sub: Repo = { id: 's', name: 'lib', path: '/t/lib', missing: false, branch: 'main', submodule: true, parentId: 't', subPath: 'lib' }
+  const worktree: Repo = { id: 'w', name: 'wt', path: '/t/wt', missing: false, branch: 'main', worktree: true, parentId: 't' }
   it('keeps a listed selection', () => expect(nextSelection(sub, [top, sub])).toBeNull())
   it('falls back to the parent of a vanished submodule', () => expect(nextSelection(sub, [top])).toBe('t'))
+  it('clears a vanished worktree instead of falling back to its parent', () => expect(nextSelection(worktree, [top])).toBe(''))
   it('clears a vanished repository', () => expect(nextSelection(top, [])).toBe(''))
 })
