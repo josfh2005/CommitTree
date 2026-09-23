@@ -229,7 +229,9 @@ func isRepo(path string) bool {
 	return err == nil
 }
 
-func idFor(path string) string {
+// IDFor is the identifier derived from a path: a stored repository's when it
+// is first added, and a detected worktree's every time it is listed.
+func IDFor(path string) string {
 	sum := sha1.Sum([]byte(path))
 	return hex.EncodeToString(sum[:])[:12]
 }
@@ -238,9 +240,9 @@ func idFor(path string) string {
 // entry's ID (e.g. a Relocate that left the old ID pointing elsewhere).
 // Callers must hold s.mu.
 func (s *Store) uniqueID(path string) string {
-	id := idFor(path)
+	id := IDFor(path)
 	for n := 1; s.idInUse(id); n++ {
-		id = idFor(fmt.Sprintf("%s#%d", path, n))
+		id = IDFor(fmt.Sprintf("%s#%d", path, n))
 	}
 	return id
 }

@@ -17,6 +17,9 @@ type Branch struct {
 	Hash     string `json:"hash"`
 	Current  bool   `json:"current"`
 	Upstream string `json:"upstream"`
+	// Worktree is the path of another worktree that has this local branch
+	// checked out, or "" (filled in by the app, not by List).
+	Worktree string `json:"worktree,omitempty"`
 }
 
 type Remote struct {

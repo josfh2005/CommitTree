@@ -238,7 +238,7 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 	if runID == "" {
 		return errors.New("run id is required")
 	}
-	repo, ok := a.store.Get(repoID)
+	repo, ok := a.repo(repoID)
 	if !ok {
 		return fmt.Errorf("unknown repository %q", repoID)
 	}
