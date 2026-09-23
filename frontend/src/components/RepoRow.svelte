@@ -11,6 +11,8 @@
   export let repo: Repo
   /** Indentation level — 0 for a loose repo, 1 for one inside a group. */
   export let depth = 0
+  /** Shown under its main repository: a linked worktree. */
+  export let child = false
 
   // Dragging state is purely visual and local: dragend always fires, even
   // when the drag is cancelled (dropped outside the window, Escape), so
@@ -31,13 +33,24 @@
   $: expanded = $expandedRepos.includes(repo.id) && !repo.missing
 
   function repoMenu(event: MouseEvent) {
+    // A detected worktree is not a list entry: it follows its main
+    // repository, so nothing that edits the list applies to it.
+    if (repo.worktree) {
+      openMenu(event, [
+        { label: 'Fetch', action: () => fetchRemote(repo.id), disabled: !!$busy },
+        { label: 'Pull', action: () => pull(repo.id), disabled: !!$busy || !!$mergeState?.merging },
+        { label: 'Push', action: () => push(repo.id), disabled: !!$busy || !!$mergeState?.merging },
+        { label: revealLabel($platform), action: () => openRepoFolder(repo.id) },
+      ])
+      return
+    }
     openMenu(event, [
       ...(repo.missing ? [{ label: 'Locate…', action: () => relocateRepo(repo.id) }] : []),
       { label: 'Fetch', action: () => fetchRemote(repo.id), disabled: repo.missing || !!$busy },
       { label: 'Pull', action: () => pull(repo.id), disabled: repo.missing || !!$busy || !!$mergeState?.merging },
       { label: 'Push', action: () => push(repo.id), disabled: repo.missing || !!$busy || !!$mergeState?.merging },
       { label: revealLabel($platform), action: () => openRepoFolder(repo.id), disabled: repo.missing },
-      { label: 'Move to group…', action: () => moveRepoToGroup(repo) },
+      ...(child ? [] : [{ label: 'Move to group…', action: () => moveRepoToGroup(repo) }]),
       { label: 'Remove from list…', action: () => removeRepo(repo), danger: true },
     ])
   }
@@ -49,7 +62,7 @@
   class:missing={repo.missing}
   class:dragging
   style="padding-left: calc(var(--row-base-indent) - var(--repo-row-inset) + {depth} * var(--row-indent-step))"
-  draggable="true"
+  draggable={child ? 'false' : 'true'}
   on:contextmenu={repoMenu}
   on:dragstart={handleDragStart}
   on:dragend={handleDragEnd}
@@ -63,6 +76,7 @@
     <Icon name={expanded ? 'chevron-down' : 'chevron-right'} size={12} />
   </button>
   <button class="select" on:click={() => selectRepo(repo.id)}>
+    {#if child}<span class="child-mark" title="Worktree">↳</span>{/if}
     <span class="name ellipsis" class:selected={active}>{repo.name}</span>
     {#if repo.missing}
       <span class="badge">missing</span>
@@ -83,6 +97,7 @@
   .fold:disabled { opacity: 0; }
   .select { flex: 1; min-width: 0; height: 100%; display: flex; align-items: center; gap: 8px; color: var(--muted); }
   .name { color: var(--text); flex: none; max-width: 60%; }
+  .child-mark { flex: none; color: var(--faint); margin-right: -4px; }
   .name.selected { font-weight: 600; }
   .branch { margin-left: auto; font-size: 12px; color: var(--muted); }
   .missing .name { color: var(--faint); }

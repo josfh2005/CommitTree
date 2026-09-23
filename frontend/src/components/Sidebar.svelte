@@ -86,8 +86,11 @@
         on:dragleave={(e) => handleDragLeave(e, '')}
         on:drop={(e) => handleDrop(e, '')}
       >
-        {#each grouped.loose as repo (repo.id)}
-          <RepoRow {repo} />
+        {#each grouped.loose as node (node.repo.id)}
+          <RepoRow repo={node.repo} />
+          {#each node.children as child (child.id)}
+            <RepoRow repo={child} depth={1} child />
+          {/each}
         {/each}
         {#if grouped.loose.length === 0 && dragActive}
           <p class="loose-placeholder">Drop here to remove from its group</p>
@@ -113,8 +116,11 @@
             <span class="count">{group.repos.length}</span>
           </button>
           {#if !collapsed}
-            {#each group.repos as repo (repo.id)}
-              <RepoRow {repo} depth={1} />
+            {#each group.repos as node (node.repo.id)}
+              <RepoRow repo={node.repo} depth={1} />
+              {#each node.children as child (child.id)}
+                <RepoRow repo={child} depth={2} child />
+              {/each}
             {/each}
           {/if}
         </div>

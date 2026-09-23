@@ -143,9 +143,20 @@ collapsed group with an expanded one, the result is collapsed.
 
 ### Layout
 
-Loose repositories are listed first, in the order they appear in the
-underlying list, followed by one section per group, sorted alphabetically by
-group name. A group section is a header row (its name and a count of the
+Loose repositories are listed first, followed by one section per group,
+sorted alphabetically by group name. Within the loose area and within every
+group, repositories are sorted by display name, ignoring case and accents,
+with the path breaking ties — never by the order they were added.
+
+A repository's detected worktrees are rows directly under its own row (after
+its expanded sections, when it is expanded), indented one level deeper and
+marked "↳", sorted by name the same way. They follow their main repository
+wherever it is, whatever their own group field says, and are visible whether
+or not the main repository is expanded or selected. A worktree row selects
+and expands exactly like a repository row. Its context menu offers only
+Fetch, Pull, Push and the show-in-file-manager action; a stored repository
+shown nested (see Worktrees) keeps "Remove from list" and loses only "Move
+to group…". A worktree row cannot be dragged into a group. A group section is a header row (its name and a count of the
 repositories in it) that toggles the group between expanded and collapsed;
 collapsing hides its repository rows. Groups start expanded; only collapsed
 groups need to be remembered, and that memory is a plain list of collapsed
@@ -183,6 +194,11 @@ progress, the row instead always returns to the log, because the merge view
 takes over that space.
 
 ### Branches
+
+A local branch that another worktree of the same repository has checked
+out shows a "worktree" badge, and its tooltip reads "Checked out in
+<directory name>". Checking it out (double-click or the menu) and deleting
+it are disabled, since git would refuse both.
 
 Local branches whose name contains no `/` are listed loose, each showing a
 checkmark next to the current branch. A "+" control next to the section
@@ -233,7 +249,9 @@ when clicked; its context menu offers "New branch from here…" and a
 
 ### Stash
 
-The Stash section header always shows a count. Like Tags, it starts
+The Stash section header always shows a count. For a worktree, its tooltip
+says the stash is shared with the main repository and its other worktrees —
+git keeps one stash per repository. Like Tags, it starts
 collapsed, and whether it has been expanded is remembered per repository.
 When expanded it shows one row per stash entry,
 newest first, labelled with the stash's message. "No stashed changes" is

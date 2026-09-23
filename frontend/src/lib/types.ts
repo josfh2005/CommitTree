@@ -65,6 +65,10 @@ export interface Repo {
   missing: boolean
   branch: string
   group?: string
+  /** The main repository this is a linked worktree of, when listed. */
+  parentId?: string
+  /** A detected worktree: not a list entry (cannot be removed or grouped). */
+  worktree?: boolean
 }
 
 export interface Branch {
@@ -73,6 +77,8 @@ export interface Branch {
   hash: string
   current: boolean
   upstream: string
+  /** Path of another worktree that has this branch checked out. */
+  worktree?: string
 }
 
 export interface Remote {
