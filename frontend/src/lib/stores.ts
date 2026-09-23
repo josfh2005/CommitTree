@@ -75,6 +75,21 @@ export const aiSettings = writable<AISettings | null>(null)
  *  progress always wins over either — see conflictOwnsScreen in remote.ts,
  *  which App.svelte applies on top of this. */
 export const mainView = writable<'log' | 'changes' | 'stash'>('log')
+/** The log's synthetic "Uncommitted changes" row is selected, so the
+ *  details pane shows the Changes view. Mutually exclusive with
+ *  selectedHash: selectUncommitted clears the hash, and the subscription
+ *  below clears this whenever anything selects a commit — graph clicks,
+ *  jump arrows, context menus — without each of them knowing about it. */
+export const uncommittedSelected = writable(false)
+selectedHash.subscribe((hash) => {
+  if (hash) uncommittedSelected.set(false)
+})
+
+export function selectUncommitted() {
+  selectedHash.set('')
+  uncommittedSelected.set(true)
+  mainView.set('log')
+}
 /** Which stash the sidebar has selected for the preview pane, or null when
  *  none is. Identified by hash, not index — an index shifts whenever any
  *  entry below it is applied, popped or dropped, including from another
@@ -239,6 +254,7 @@ export function selectRepo(id: string) {
   if (get(selectedRepoId) !== id) {
     filters.set(emptyFilters())
     selectedHash.set('')
+    uncommittedSelected.set(false)
     mainView.set('log')
     stashConflictDismissed.set(false)
     selectedStash.set(null)

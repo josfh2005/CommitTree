@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('./api', () => ({ api: {} }))
 
 import { isLogOrder } from './logOrder'
-import { persisted } from './stores'
+import { mainView, persisted, selectedHash, selectUncommitted, uncommittedSelected } from './stores'
 
 /** A minimal in-memory Storage, since these tests don't run in a DOM
  *  environment and so have no real localStorage to read from. */
@@ -61,5 +61,31 @@ describe('persisted', () => {
       },
     })
     expect(get(persisted('logOrder', 'topo', isLogOrder))).toBe('topo')
+  })
+})
+
+describe('uncommitted row selection', () => {
+  afterEach(() => {
+    selectedHash.set('')
+    uncommittedSelected.set(false)
+    mainView.set('log')
+  })
+  it('selecting the row clears the selected commit and shows the log', () => {
+    selectedHash.set('abc')
+    mainView.set('changes')
+    selectUncommitted()
+    expect(get(uncommittedSelected)).toBe(true)
+    expect(get(selectedHash)).toBe('')
+    expect(get(mainView)).toBe('log')
+  })
+  it('selecting any commit deselects the row, whoever sets it', () => {
+    selectUncommitted()
+    selectedHash.set('def')
+    expect(get(uncommittedSelected)).toBe(false)
+  })
+  it('clearing the commit selection leaves the row selected', () => {
+    selectUncommitted()
+    selectedHash.set('')
+    expect(get(uncommittedSelected)).toBe(true)
   })
 })
