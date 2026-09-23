@@ -59,6 +59,7 @@ func main() {
 		AssetServer:      &assetserver.Options{Assets: assets},
 		BackgroundColour: &options.RGBA{R: 249, G: 248, B: 246, A: 255},
 		OnStartup:        api.Startup,
+		OnShutdown:       api.Shutdown,
 		Bind:             []interface{}{api},
 		Mac: &mac.Options{
 			TitleBar: mac.TitleBarHiddenInset(),

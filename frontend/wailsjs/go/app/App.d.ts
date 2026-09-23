@@ -153,6 +153,16 @@ export function StopChat(arg1:string):Promise<void>;
 
 export function TakeMergeSide(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function TerminalClose(arg1:string):Promise<void>;
+
+export function TerminalOpen(arg1:string,arg2:number,arg3:number):Promise<string>;
+
+export function TerminalResize(arg1:string,arg2:number,arg3:number):Promise<void>;
+
+export function TerminalShell():Promise<string>;
+
+export function TerminalWrite(arg1:string,arg2:string):Promise<void>;
+
 export function UnstageFile(arg1:string,arg2:string):Promise<void>;
 
 export function UnstageMergeFile(arg1:string,arg2:string):Promise<void>;

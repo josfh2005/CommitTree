@@ -10,6 +10,7 @@ import { stashApplyAction } from './stash'
 import { choiceDialog, confirmDialog, confirmDialogWithCheckbox, errorMessage, promptDialog, toast } from './ui'
 import { resolveRepoDrop } from './repoDrop'
 import { classifyGroupRename, renameCollapsedGroup } from './repoGroupRename'
+import { removeRepoTabs, terminalState } from './terminal'
 
 export function branchRef(branch: Branch): string {
   return branch.remote ? `refs/remotes/${branch.remote}/${branch.name}` : `refs/heads/${branch.name}`
@@ -55,6 +56,7 @@ export async function removeRepo(repo: Repo) {
   if (!ok) return
   try {
     await api.removeRepo(repo.id)
+    terminalState.update((s) => removeRepoTabs(s, repo.id))
     if (get(selectedRepoId) === repo.id) selectedRepoId.set('')
     await loadRepos()
     await loadRefs()
@@ -289,47 +291,49 @@ export async function deleteTag(id: string, name: string) {
   }
 }
 
-// Reloads refs and log when the repo changed outside the app while the window
-// was in the background. The merge state is reloaded on every focus: the
-// fingerprint covers refs and HEAD only, so a `git add` or `git merge --abort`
-// in a terminal would never reach the merge view through it.
+// Reloads refs and log when the selected repo changed behind the app's back
+// — in a terminal while the window was in the background, or in the
+// embedded terminal (see TerminalPanel's settle handling). The merge and
+// worktree state are reloaded on every check: the fingerprint covers refs
+// and HEAD only, so a `git add` or `git merge --abort` would never reach
+// those views through it.
+let knownFingerprint = ''
+let knownFingerprintId = ''
+
+async function rememberFingerprint() {
+  const id = get(selectedRepoId)
+  if (!id) return
+  try {
+    knownFingerprint = await api.fingerprint(id)
+    knownFingerprintId = id
+  } catch {
+    knownFingerprint = ''
+  }
+}
+
+export async function checkExternalChanges() {
+  const id = get(selectedRepoId)
+  if (!id) return
+  loadMergeState()
+  loadWorktreeState()
+  try {
+    const current = await api.fingerprint(id)
+    if (id === knownFingerprintId && knownFingerprint && current !== knownFingerprint) await refreshRepo()
+    knownFingerprint = current
+    knownFingerprintId = id
+  } catch {
+    // Missing repo: the sidebar already shows it.
+  }
+}
+
 export function startFocusRefresh(): () => void {
-  let known = ''
-  let knownId = ''
-
-  const remember = async () => {
-    const id = get(selectedRepoId)
-    if (!id) return
-    try {
-      known = await api.fingerprint(id)
-      knownId = id
-    } catch {
-      known = ''
-    }
-  }
-
-  const onFocus = async () => {
-    const id = get(selectedRepoId)
-    if (!id) return
-    loadMergeState()
-    loadWorktreeState()
-    try {
-      const current = await api.fingerprint(id)
-      if (id === knownId && known && current !== known) await refreshRepo()
-      known = current
-      knownId = id
-    } catch {
-      // Missing repo: the sidebar already shows it.
-    }
-  }
-
-  const stopVersion = logVersion.subscribe(() => remember())
-  const stopRepo = selectedRepoId.subscribe(() => remember())
-  window.addEventListener('focus', onFocus)
+  const stopVersion = logVersion.subscribe(() => rememberFingerprint())
+  const stopRepo = selectedRepoId.subscribe(() => rememberFingerprint())
+  window.addEventListener('focus', checkExternalChanges)
   return () => {
     stopVersion()
     stopRepo()
-    window.removeEventListener('focus', onFocus)
+    window.removeEventListener('focus', checkExternalChanges)
   }
 }
 

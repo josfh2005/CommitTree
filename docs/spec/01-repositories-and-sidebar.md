@@ -48,7 +48,8 @@ Removing a repository asks for confirmation, naming the repository and
 stating that files on disk are left untouched. Removal only deletes the list
 entry — no repository, missing or not, is ever deleted or modified on disk
 by this action. If the removed repository was selected, selection is
-cleared.
+cleared. Any embedded-terminal tabs open on the repository are closed along
+with it, without a separate confirmation (see Terminal).
 
 ### Missing repositories
 

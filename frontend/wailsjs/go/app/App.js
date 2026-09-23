@@ -282,6 +282,26 @@ export function TakeMergeSide(arg1, arg2, arg3) {
   return window['go']['app']['App']['TakeMergeSide'](arg1, arg2, arg3);
 }
 
+export function TerminalClose(arg1) {
+  return window['go']['app']['App']['TerminalClose'](arg1);
+}
+
+export function TerminalOpen(arg1, arg2, arg3) {
+  return window['go']['app']['App']['TerminalOpen'](arg1, arg2, arg3);
+}
+
+export function TerminalResize(arg1, arg2, arg3) {
+  return window['go']['app']['App']['TerminalResize'](arg1, arg2, arg3);
+}
+
+export function TerminalShell() {
+  return window['go']['app']['App']['TerminalShell']();
+}
+
+export function TerminalWrite(arg1, arg2) {
+  return window['go']['app']['App']['TerminalWrite'](arg1, arg2);
+}
+
 export function UnstageFile(arg1, arg2) {
   return window['go']['app']['App']['UnstageFile'](arg1, arg2);
 }

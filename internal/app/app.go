@@ -14,6 +14,7 @@ import (
 	"git-ui/internal/ops"
 	"git-ui/internal/refs"
 	"git-ui/internal/repos"
+	"git-ui/internal/terminal"
 )
 
 var (
@@ -58,10 +59,17 @@ type App struct {
 	// in production, a temp path in tests.
 	gitSettingsPath string
 	owedDrops       sync.Map // repo ID → stash index still to drop once resolved
+	term            *terminal.Manager
 }
 
 func New(store *repos.Store) *App {
-	return &App{ctx: context.Background(), store: store, logs: map[string]*logState{}}
+	a := &App{ctx: context.Background(), store: store, logs: map[string]*logState{}}
+	a.term = terminal.NewManager(terminal.Callbacks{
+		OnData:    func(tab, data string) { a.emit("terminal:data", TerminalData{tab, data}) },
+		OnSettled: func(tab, repo string) { a.emit("terminal:settled", TerminalSettled{tab, repo}) },
+		OnExit:    func(tab string, code int) { a.emit("terminal:exit", TerminalExit{tab, code}) },
+	})
+	return a
 }
 
 // Startup receives the Wails runtime context.
@@ -108,6 +116,7 @@ func (a *App) RelocateRepo(id string) (repos.Repo, error) {
 
 func (a *App) RemoveRepo(id string) error {
 	a.forgetLog(id)
+	a.term.CloseRepo(id)
 	return a.store.Remove(id)
 }
 
