@@ -1,18 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#fbfaf8"/>
-      <stop offset="1" stop-color="#e9e7e2"/>
-    </linearGradient>
-  </defs>
-  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
-  <g fill="none" stroke-width="36" stroke-linecap="round">
-    <path d="M290 180 V844" stroke="#4f9d4f"/>
-    <path d="M290 290 C290 380 734 350 734 450 V590 C734 690 290 670 290 770" stroke="#a4478f"/>
-    <path d="M734 520 C734 470 560 470 560 410 V180" stroke="#3f7fbf"/>
+  <!-- "ai" drawn as a git log graph: straight lanes, diagonal hops and
+       commits ringed in the background colour. The i's lane forks off the
+       a's stem at the commit where the a's bowl branches out. -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="#e3e2dd"/>
+  <g transform="translate(512 512) scale(1.25) translate(-580 -545)">
+    <g fill="none" stroke-width="48" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M440 440 L500 390 H540 L580 430 V720" stroke="#6d1b6e"/>
+      <path d="M580 550 L480 550 L440 590 V680 L480 720 H580" stroke="#6d1b6e"/>
+      <path d="M720 480 V720" stroke="#217373"/>
+      <path d="M580 550 H640 L720 480" stroke="#217373"/>
+    </g>
+    <g stroke="#e3e2dd" stroke-width="10">
+      <circle cx="440" cy="440" r="28" fill="#6d1b6e"/>
+      <circle cx="580" cy="550" r="32" fill="#6d1b6e"/>
+      <circle cx="580" cy="720" r="32" fill="#6d1b6e"/>
+      <circle cx="720" cy="480" r="30" fill="#217373"/>
+      <circle cx="720" cy="350" r="34" fill="#217373"/>
+    </g>
   </g>
-  <circle cx="290" cy="290" r="40" fill="#4f9d4f"/>
-  <circle cx="734" cy="520" r="40" fill="#a4478f"/>
-  <circle cx="290" cy="770" r="40" fill="#4f9d4f"/>
-  <text x="540" y="700" text-anchor="middle" font-family="-apple-system, 'SF Pro Display', Helvetica, sans-serif" font-weight="800" font-size="400" fill="#1f1e1c" stroke="#f4f3f0" stroke-width="28" paint-order="stroke">ai</text>
 </svg>
