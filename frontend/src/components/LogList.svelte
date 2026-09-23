@@ -10,7 +10,7 @@
   import { busy, chatOpen, filters, jumpTo, logOrder, logVersion, mergeState, refs, selectedHash, selectUncommitted, uncommittedSelected, worktreeState } from '../lib/stores'
   import type { LogRow } from '../lib/types'
   import { copyText, errorMessage, openMenu, toast } from '../lib/ui'
-  import { cleanTreeSelection, markerWidth, uncommittedCount, uncommittedMarker } from '../lib/uncommitted'
+  import { cleanTreeSelection, followHead, markerWidth, uncommittedCount, uncommittedMarker } from '../lib/uncommitted'
 
   export let repoId: string
 
@@ -39,14 +39,47 @@
   $: lead = count > 0 ? ROW_HEIGHT : 0
   $: marker = uncommittedMarker(rows)
 
+  // The row appearing/disappearing shifts every commit below it by
+  // ROW_HEIGHT; keep on-screen content still by shifting scrollTop the same
+  // amount, unless we're already at the top (scrollTop 0), where the new
+  // row should become visible instead of being scrolled past.
+  let prevLead = lead
+  $: if (lead !== prevLead) {
+    if (scroller && scroller.scrollTop > 0) scroller.scrollTop += lead - prevLead
+    prevLead = lead
+  }
+
   // A commit, discard or stash that empties the tree removes the row; if it
   // was selected, show HEAD instead of leaving an empty details pane.
+  //
+  // refreshRepo() loads refs before it bumps logVersion, so $refs.headHash
+  // can still be the parent at this point (the backend emits
+  // worktree:changed, which clears count, before CommitChanges/api call
+  // resolves and refreshRepo's later loadRefs runs). Remember the hash we
+  // selected as `followed`, along with the logVersion at the time, so the
+  // block below can jump to the real new HEAD once refs catch up.
+  let followed = ''
+  let followedVersion = -1
   $: {
     const next = cleanTreeSelection($uncommittedSelected, count, $refs?.headHash ?? '')
     if (next !== null) {
       uncommittedSelected.set(false)
-      if (next) selectedHash.set(next)
+      if (next) {
+        selectedHash.set(next)
+        followed = next
+        followedVersion = $logVersion
+      }
     }
+  }
+
+  // Fires on the next logVersion bump after a follow was set (not the same
+  // tick it was set in). If the selection is still the followed hash and
+  // HEAD has since moved on, follow it there; otherwise drop the follow
+  // without touching the selection.
+  $: if (followed && $logVersion !== followedVersion) {
+    const next = followHead(followed, $selectedHash, $refs?.headHash ?? '')
+    followed = ''
+    if (next) selectedHash.set(next)
   }
 
   $: reload(repoId, $filters, $logOrder, $logVersion)

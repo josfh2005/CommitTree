@@ -36,3 +36,17 @@ export function cleanTreeSelection(selected: boolean, count: number, headHash: s
   if (!selected || count > 0) return null
   return headHash
 }
+
+/** Once cleanTreeSelection lands the selection on `$refs.headHash` right
+ *  after a commit, refs may still be one round trip behind the worktree
+ *  state (refreshRepo loads refs before it bumps logVersion). `followed`
+ *  is that hash, remembered until the next logVersion tick: if the
+ *  selection is still there and headHash has since moved on, jump to the
+ *  now-current headHash so a commit or amend from the row lands on the new
+ *  HEAD, not the stale parent (or orphaned pre-amend commit). Returns null
+ *  to leave the selection alone — the caller drops the follow either way. */
+export function followHead(followed: string, selected: string, headHash: string): string | null {
+  if (!followed || selected !== followed) return null
+  if (!headHash || headHash === followed) return null
+  return headHash
+}

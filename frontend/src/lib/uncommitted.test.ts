@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { GRAPH_PADDING, LANE_WIDTH } from './geometry'
 import type { FileStatus, LogRow, WorktreeState } from './types'
-import { cleanTreeSelection, markerWidth, uncommittedCount, uncommittedMarker } from './uncommitted'
+import { cleanTreeSelection, followHead, markerWidth, uncommittedCount, uncommittedMarker } from './uncommitted'
 
 const f = (path: string, status = 'M'): FileStatus => ({ path, status })
 const state = (s: Partial<WorktreeState>): WorktreeState => ({ staged: [], unstaged: [], untracked: [], merging: false, ...s })
@@ -60,5 +60,23 @@ describe('cleanTreeSelection', () => {
   })
   it('clears the selection when there is no HEAD', () => {
     expect(cleanTreeSelection(true, 0, '')).toBe('')
+  })
+})
+
+describe('followHead', () => {
+  it('selects the new HEAD once refs catch up to the followed old HEAD', () => {
+    expect(followHead('old-head', 'old-head', 'new-head')).toBe('new-head')
+  })
+  it('does nothing once the user has selected something else', () => {
+    expect(followHead('old-head', 'something-else', 'new-head')).toBeNull()
+  })
+  it('does nothing while HEAD has not moved yet', () => {
+    expect(followHead('old-head', 'old-head', 'old-head')).toBeNull()
+  })
+  it('does nothing with an empty headHash', () => {
+    expect(followHead('old-head', 'old-head', '')).toBeNull()
+  })
+  it('does nothing when nothing is being followed', () => {
+    expect(followHead('', 'old-head', 'new-head')).toBeNull()
   })
 })

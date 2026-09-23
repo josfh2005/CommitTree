@@ -258,6 +258,7 @@ export function selectRepo(id: string) {
     mainView.set('log')
     stashConflictDismissed.set(false)
     selectedStash.set(null)
+    worktreeState.set(null)
   }
   selectedRepoId.set(id)
   // Selecting a folded repo unfolds it; folding it later keeps it selected.
