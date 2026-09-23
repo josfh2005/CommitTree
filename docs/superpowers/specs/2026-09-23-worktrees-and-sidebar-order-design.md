@@ -1,7 +1,7 @@
 # git-ui — Git worktrees in the sidebar, repos sorted by name, click to deselect a commit — Design
 
 Date: 2026-09-23
-Status: Approved design, not implemented
+Status: Implemented (manual pass pending)
 Builds on: `docs/spec/01-repositories-and-sidebar.md`, `docs/spec/02-log-and-history.md`.
 
 Three independent changes asked for together. Worktrees are the large one;
