@@ -239,6 +239,18 @@ refs, so two of them can be written at the same moment; git's own ref
 locking still serialises the ref updates themselves, and a branch can only
 be checked out in one of them at a time (git refuses the second).
 
+A submodule write (Initialise, Update, Sync, and their header "all"
+counterparts) is the one operation that holds more than one lock: the
+parent repository's, and the lock of every submodule id it touches (one for
+a single-submodule action, every submodule under the repository for
+Initialise all / Update all). Every one of those locks is acquired with the
+same non-waiting `TryLock` as an ordinary write, in order, before the
+command runs; if any of them is already held, the whole operation is
+refused with the same "busy" error and every lock it had already acquired
+is released, so a refused write never leaves one behind. These run with the
+same environment, timeout and credential handling as Fetch, since they may
+need the network.
+
 ### Repository identity and detected worktrees and submodules
 
 Every per-repository operation names its repository by an identifier. A

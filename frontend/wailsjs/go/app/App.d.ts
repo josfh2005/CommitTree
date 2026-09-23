@@ -100,6 +100,10 @@ export function GetWorktreeDiff(arg1:string,arg2:string,arg3:boolean):Promise<st
 
 export function GetWorktreeState(arg1:string):Promise<worktree.State>;
 
+export function InitAllSubmodules(arg1:string):Promise<void>;
+
+export function InitSubmodule(arg1:string,arg2:string):Promise<void>;
+
 export function IsShallow(arg1:string):Promise<boolean>;
 
 export function ListModels(arg1:string):Promise<Array<string>>;
@@ -160,6 +164,8 @@ export function StashPush(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
 export function StopChat(arg1:string):Promise<void>;
 
+export function SyncSubmodule(arg1:string,arg2:string):Promise<void>;
+
 export function TakeMergeSide(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function TerminalClose(arg1:string):Promise<void>;
@@ -175,3 +181,7 @@ export function TerminalWrite(arg1:string,arg2:string):Promise<void>;
 export function UnstageFile(arg1:string,arg2:string):Promise<void>;
 
 export function UnstageMergeFile(arg1:string,arg2:string):Promise<void>;
+
+export function UpdateAllSubmodules(arg1:string):Promise<void>;
+
+export function UpdateSubmodule(arg1:string,arg2:string):Promise<void>;

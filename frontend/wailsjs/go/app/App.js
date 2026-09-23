@@ -174,6 +174,14 @@ export function GetWorktreeState(arg1) {
   return window['go']['app']['App']['GetWorktreeState'](arg1);
 }
 
+export function InitAllSubmodules(arg1) {
+  return window['go']['app']['App']['InitAllSubmodules'](arg1);
+}
+
+export function InitSubmodule(arg1, arg2) {
+  return window['go']['app']['App']['InitSubmodule'](arg1, arg2);
+}
+
 export function IsShallow(arg1) {
   return window['go']['app']['App']['IsShallow'](arg1);
 }
@@ -294,6 +302,10 @@ export function StopChat(arg1) {
   return window['go']['app']['App']['StopChat'](arg1);
 }
 
+export function SyncSubmodule(arg1, arg2) {
+  return window['go']['app']['App']['SyncSubmodule'](arg1, arg2);
+}
+
 export function TakeMergeSide(arg1, arg2, arg3) {
   return window['go']['app']['App']['TakeMergeSide'](arg1, arg2, arg3);
 }
@@ -324,4 +336,12 @@ export function UnstageFile(arg1, arg2) {
 
 export function UnstageMergeFile(arg1, arg2) {
   return window['go']['app']['App']['UnstageMergeFile'](arg1, arg2);
+}
+
+export function UpdateAllSubmodules(arg1) {
+  return window['go']['app']['App']['UpdateAllSubmodules'](arg1);
+}
+
+export function UpdateSubmodule(arg1, arg2) {
+  return window['go']['app']['App']['UpdateSubmodule'](arg1, arg2);
 }

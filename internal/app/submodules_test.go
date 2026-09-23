@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"git-ui/internal/repos"
@@ -143,6 +144,56 @@ func TestGetSubmodules(t *testing.T) {
 	}
 	if _, err := a.GetSubmodules("nope"); !errors.Is(err, repos.ErrUnknownRepo) {
 		t.Fatalf("GetSubmodules(nope): %v", err)
+	}
+}
+
+func TestInitSubmoduleRefusesAPathThatIsNotASubmodule(t *testing.T) {
+	t.Setenv("GIT_CONFIG_COUNT", "1")
+	t.Setenv("GIT_CONFIG_KEY_0", "protocol.file.allow")
+	t.Setenv("GIT_CONFIG_VALUE_0", "always")
+	a, id, _ := newNestedSubmoduleApp(t)
+	err := a.InitSubmodule(id, "not-a-submodule")
+	if err == nil || err.Error() != `"not-a-submodule" is not a submodule of this repository` {
+		t.Fatalf("InitSubmodule(not-a-submodule) = %v", err)
+	}
+}
+
+// TestSubmoduleLocks checks the two-lock rule: a per-submodule write holds
+// both the parent repository's write lock and the submodule's own, so
+// either one already held by another operation must fail the write with
+// ErrBusy, and neither lock is left held afterwards.
+func TestSubmoduleLocks(t *testing.T) {
+	t.Setenv("GIT_CONFIG_COUNT", "1")
+	t.Setenv("GIT_CONFIG_KEY_0", "protocol.file.allow")
+	t.Setenv("GIT_CONFIG_VALUE_0", "always")
+	a, id, dir := newNestedSubmoduleApp(t)
+	subID := repos.IDFor(filepath.Join(dir, "vendor", "lib"))
+
+	lockOf := func(lockID string) *sync.Mutex {
+		m, _ := a.writes.LoadOrStore(lockID, &sync.Mutex{})
+		return m.(*sync.Mutex)
+	}
+
+	// The submodule's own lock is held elsewhere.
+	subMu := lockOf(subID)
+	subMu.Lock()
+	if err := a.UpdateSubmodule(id, "vendor/lib"); !errors.Is(err, ErrBusy) {
+		t.Fatalf("UpdateSubmodule with submodule lock held: %v", err)
+	}
+	subMu.Unlock()
+
+	// The parent's lock is held elsewhere.
+	topMu := lockOf(id)
+	topMu.Lock()
+	if err := a.UpdateSubmodule(id, "vendor/lib"); !errors.Is(err, ErrBusy) {
+		t.Fatalf("UpdateSubmodule with top lock held: %v", err)
+	}
+	topMu.Unlock()
+
+	// Both locks are free again after either failure: a normal call now
+	// succeeds.
+	if err := a.UpdateSubmodule(id, "vendor/lib"); err != nil {
+		t.Fatalf("UpdateSubmodule after releases: %v", err)
 	}
 }
 

@@ -252,15 +252,6 @@ func (a *App) ListRepos() []RepoItem {
 	return items
 }
 
-// GetSubmodules reads id's submodules, flat and recursive.
-func (a *App) GetSubmodules(id string) ([]submodules.Submodule, error) {
-	dir, err := a.dir(id)
-	if err != nil {
-		return nil, err
-	}
-	return submodules.List(a.ctx, dir)
-}
-
 // canonical resolves symlinks (macOS temp and home paths often differ only
 // by /private) so the same directory compares equal however it was named.
 func canonical(path string) string {
@@ -466,6 +457,29 @@ func (a *App) write(id string, fn func(ctx context.Context, dir string) error) e
 	}
 	defer mu.Unlock()
 	return fn(a.ctx, dir)
+}
+
+// writeAll runs fn under every id's write lock at once (TryLock on each, in
+// order), for an operation such as a submodule write that must hold both the
+// parent repository's lock and the lock of each submodule it touches. Any id
+// already busy fails the whole call with ErrBusy and releases whatever locks
+// it had already acquired, so a failed call never leaves a lock held.
+func (a *App) writeAll(ids []string, fn func(ctx context.Context) error) error {
+	var held []*sync.Mutex
+	defer func() {
+		for _, mu := range held {
+			mu.Unlock()
+		}
+	}()
+	for _, id := range ids {
+		m, _ := a.writes.LoadOrStore(id, &sync.Mutex{})
+		mu := m.(*sync.Mutex)
+		if !mu.TryLock() {
+			return ErrBusy
+		}
+		held = append(held, mu)
+	}
+	return fn(a.ctx)
 }
 
 func (a *App) Checkout(id, branch string) error {

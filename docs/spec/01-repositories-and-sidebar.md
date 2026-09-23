@@ -98,6 +98,27 @@ uninitialised or unconfigured submodule still counts, but gets no item.
 These child items exist so a submodule can be opened as its own repository
 (see Per-repository sections); they are never sidebar rows themselves.
 
+A submodule row's menu offers up to three writes, run under the two-lock
+rule (see "One write lock per repository" in Conventions and constraints):
+
+- **Initialise** (only when not initialised) runs
+  `git submodule update --init -- <path>`, cloning it if needed and
+  checking it out at the commit the parent's index records.
+- **Update to recorded commit** (only when initialised and moved) runs
+  `git submodule update -- <path>`, moving it back to the recorded commit.
+  It is refused, not forced, when doing so would overwrite local changes
+  inside the submodule; the refusal reads "<path> has local changes that
+  updating would overwrite. Commit or stash them inside the submodule
+  first."
+- **Sync URL** runs `git submodule sync -- <path>`, copying the current
+  URL from `.gitmodules` into the submodule's own remote configuration.
+
+The section header's menu offers **Initialise all**
+(`git submodule update --init --recursive`) and **Update all**
+(`git submodule update --recursive`, refused the same way as a single
+Update when it would overwrite local changes anywhere underneath), each
+touching every submodule under the repository at once.
+
 ### Missing repositories
 
 A repository is flagged missing purely by checking, on every list read,

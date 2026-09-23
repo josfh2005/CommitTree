@@ -322,6 +322,7 @@ export namespace gitlog {
 	    status: string;
 	    path: string;
 	    oldPath?: string;
+	    submodule?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new FileChange(source);
@@ -332,6 +333,7 @@ export namespace gitlog {
 	        this.status = source["status"];
 	        this.path = source["path"];
 	        this.oldPath = source["oldPath"];
+	        this.submodule = source["submodule"];
 	    }
 	}
 	export class Ref {
@@ -886,6 +888,10 @@ export namespace worktree {
 	    path: string;
 	    oldPath?: string;
 	    status: string;
+	    submodule?: boolean;
+	    subCommit?: boolean;
+	    subModified?: boolean;
+	    subUntracked?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new FileStatus(source);
@@ -896,6 +902,10 @@ export namespace worktree {
 	        this.path = source["path"];
 	        this.oldPath = source["oldPath"];
 	        this.status = source["status"];
+	        this.submodule = source["submodule"];
+	        this.subCommit = source["subCommit"];
+	        this.subModified = source["subModified"];
+	        this.subUntracked = source["subUntracked"];
 	    }
 	}
 	export class State {
