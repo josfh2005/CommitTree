@@ -86,8 +86,12 @@ type Run struct {
 	Provider      ai.Provider
 	Model, System string
 	Tools         []ai.ToolSpec
-	RunTool       func(ctx context.Context, call ai.ToolCall) string
-	Emit          func(name string, data any)
+	// RunTool executes one tool call. step is the index of the model
+	// round-trip the call belongs to (all the calls in one model response
+	// share the same step), so a caller can tell which calls came from the
+	// same assistant response without tracking it itself.
+	RunTool func(ctx context.Context, call ai.ToolCall, step int) string
+	Emit    func(name string, data any)
 	// MaxSteps caps the model/tool rounds for this run; 0 uses MaxSteps.
 	// Resolving a merge takes many more rounds than answering a question.
 	MaxSteps int
@@ -170,7 +174,7 @@ func Execute(ctx context.Context, r Run, history []ai.Message) ([]ai.Message, er
 
 		for _, call := range calls {
 			r.Emit(EventTool, ToolEvent{RepoID: r.RepoID, RunID: r.RunID, Name: call.Name, Args: call.Args})
-			result := r.RunTool(ctx, call)
+			result := r.RunTool(ctx, call, step)
 			r.Emit(EventToolResult, ToolResultEvent{RepoID: r.RepoID, RunID: r.RunID, Name: call.Name, Summary: summarize(result)})
 			msgs = append(msgs, ai.Message{Role: ai.RoleTool, ToolName: call.Name, Content: result})
 		}

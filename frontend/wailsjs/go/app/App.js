@@ -42,6 +42,10 @@ export function CommitMerge(arg1) {
   return window['go']['app']['App']['CommitMerge'](arg1);
 }
 
+export function ConfirmChatAction(arg1, arg2, arg3) {
+  return window['go']['app']['App']['ConfirmChatAction'](arg1, arg2, arg3);
+}
+
 export function CreateBranch(arg1, arg2, arg3, arg4) {
   return window['go']['app']['App']['CreateBranch'](arg1, arg2, arg3, arg4);
 }
@@ -96,6 +100,10 @@ export function GetAuthors(arg1) {
 
 export function GetChat(arg1) {
   return window['go']['app']['App']['GetChat'](arg1);
+}
+
+export function GetChatConfirm(arg1) {
+  return window['go']['app']['App']['GetChatConfirm'](arg1);
 }
 
 export function GetCommitPreview(arg1) {

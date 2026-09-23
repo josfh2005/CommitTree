@@ -26,11 +26,18 @@ show the same store, so staging in one is visible in the other.
   (anything staged, unstaged or untracked) and disappears when it is clean. It
   is shown regardless of the log's filters and ordering — those select
   history, and the row is not history.
-- **Graph**: a hollow, dashed circle in HEAD's lane. A dashed line joins it to
-  HEAD only when HEAD is the first loaded row; otherwise (newer commits on
-  other branches, date ordering) the dot stands alone so the line never
-  crosses other lanes. If HEAD is not among the loaded rows (filters, paging,
-  unborn branch), the dot goes in lane 0.
+- **Graph** (revised 2026-09-23 after the first manual look, Sourcetree
+  style): a hollow, dashed circle always joined to HEAD by a dashed line.
+  When HEAD is the first row, the dot sits in HEAD's lane straight above it.
+  When HEAD is further down (newer commits on other branches, date
+  ordering), lane 0 is reserved for the line — the real graph is drawn one
+  lane to the right — and the line runs down to HEAD's row and hops into
+  HEAD's lane there, so it never crosses another branch. When HEAD is not
+  loaded yet but more pages are coming, the line runs to the end of the
+  loaded rows. When HEAD is not in the log at all (filtered out, unborn
+  branch), the dot stands alone in lane 0 and nothing is reserved. (The
+  first version left the dot unjoined in HEAD's lane whenever HEAD was not
+  the first row; it read as an orphan dot with no context.)
 - **No context menu** on the row for now.
 - **Conflicts still win.** While `conflictOwnsScreen(...)` is true the details
   pane shows `MergeView`, whatever is selected — unchanged behaviour.
@@ -60,9 +67,9 @@ A new store, `uncommittedSelected = writable(false)`, mutually exclusive with
   distinct paths across staged, unstaged and untracked. A partially staged
   file (git status `MM`) is listed in both Staged and Unstaged and counts
   once. `null` → 0.
-- `uncommittedMarker(rows: LogRow[]): { lane: number; color: number; joined: boolean }` —
-  the lane and colour of the row with `isHead` (0 and 0 if none is loaded),
-  and `joined` true only when that row is `rows[0]`.
+- `uncommittedMarker(rows: LogRow[], hasMore: boolean): UncommittedMarker` —
+  `{ lane, color, shift, line: 'head' | 'end' | 'none', headIndex, headLane }`
+  implementing the Graph decision above; `shift` means lane 0 is reserved.
 
 The row offset itself is `offset = count > 0 ? 1 : 0`, applied in `LogList`.
 
@@ -74,12 +81,11 @@ The row offset itself is `offset = count > 0 ? 1 : 0`, applied in `LogList`.
   note, `visibleRange`, the canvas draw loop (`rowCenterY(i + offset)`,
   `edgeSegment(edge, i + offset)`), graph hit-testing (`arrowAt`, click and
   context menu row lookup), the load-more threshold and `jump()`'s scroll
-  target. The graph column is `graphWidth` of the visible real rows as today,
-  widened only if the marker is on screen and its lane (HEAD's, which may be
-  scrolled out of the visible slice) is further right.
-- Draws the marker: a dashed hollow circle at `(laneX(marker.lane),
-  rowCenterY(0))` in HEAD's lane colour, and when `joined` a dashed segment
-  from it to `rowCenterY(1)`.
+  target. The graph column is `graphWidth` of the visible real rows plus one lane
+  while a lane is reserved (`shiftX`, the horizontal counterpart of the
+  vertical `lead`: the canvas transform and graph hit-testing both apply it).
+- Draws the marker: a dashed hollow circle one row above the first commit,
+  in HEAD's lane colour, with its dashed line as described under Graph.
 - Renders the row as a `button.row` at `top: 0`, text
   `Uncommitted changes (N)` in the subject column, muted author/date/hash
   columns left empty, `class:selected={$uncommittedSelected}`. Click sets
@@ -127,7 +133,7 @@ Everything else inside the pane is `ChangesView`'s existing behaviour.
   Changes pane under the log; stage in the row's pane and see it in the
   sidebar's Changes view; commit → row disappears and HEAD is selected;
   `git add` in the embedded terminal updates the count; date ordering with a
-  newer commit on another branch → dot without a line; a merge in progress →
+  newer commit on another branch → the graph shifts one lane right and the dashed line runs down lane 0 to HEAD; a merge in progress →
   MergeView wins.
 
 ## Docs

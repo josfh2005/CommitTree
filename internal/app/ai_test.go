@@ -189,7 +189,7 @@ func TestSendChatRunsToolsStreamsAndSaves(t *testing.T) {
 	if names != "chat:start,chat:tool,chat:tool_result,chat:delta,chat:delta,chat:done" {
 		t.Fatalf("events = %s", names)
 	}
-	if !strings.Contains(system, "read-only") || !strings.Contains(system, "main") {
+	if !strings.Contains(system, "approves or rejects") || !strings.Contains(system, "main") {
 		t.Fatalf("system prompt = %q", system)
 	}
 

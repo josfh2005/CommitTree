@@ -22,6 +22,7 @@ import (
 	"git-ui/internal/ai/settings"
 	"git-ui/internal/ai/tasks"
 	"git-ui/internal/ai/tools"
+	"git-ui/internal/ai/writetools"
 	"git-ui/internal/gitlog"
 	"git-ui/internal/refs"
 )
@@ -45,6 +46,7 @@ type aiState struct {
 	mu         sync.Mutex
 	runs       map[string]context.CancelFunc // repo ID → running chat
 	pullCancel context.CancelFunc
+	confirms   map[string]*pendingConfirm // confirm ID → pending write proposal
 }
 
 type OllamaStatus struct {
@@ -87,7 +89,7 @@ type ModelDone struct {
 // once during wiring in main.go, not exposed as a Wails binding, so the
 // renderer cannot invoke it with empty or arbitrary deps.
 func WithAI(a *App, d AIDeps) {
-	a.ai = &aiState{deps: d, runs: map[string]context.CancelFunc{}}
+	a.ai = &aiState{deps: d, runs: map[string]context.CancelFunc{}, confirms: map[string]*pendingConfirm{}}
 }
 
 func (a *App) emit(name string, data any) {
@@ -355,12 +357,31 @@ func (a *App) SendChat(repoID, text, runID string) error {
 	a.emit(agent.EventStart, agent.StartEvent{RepoID: repoID, RunID: runID, Text: text})
 
 	go func() {
+		// skipStep is the step of a write call whose result did not start
+		// with "done:" (rejected, failed or skipped): every later write call
+		// in that same model response is refused without Prepare and
+		// without a card, so a rejected or failed write doesn't let the rest
+		// of the batch run anyway. A later step (a new model response)
+		// clears it.
+		skipStep := -1
 		run := agent.Run{
 			RepoID: repoID, RunID: runID,
 			Provider: provider, Model: cfg.ChatModel, System: system,
-			Tools:   tools.Specs(),
-			RunTool: func(ctx context.Context, call ai.ToolCall) string { return tools.Run(ctx, repo.Path, call) },
-			Emit:    a.emit,
+			Tools: append(tools.Specs(), writetools.Specs()...),
+			RunTool: func(ctx context.Context, call ai.ToolCall, step int) string {
+				if !writetools.IsWrite(call.Name) {
+					return tools.Run(ctx, repo.Path, call)
+				}
+				if step == skipStep {
+					return "error: skipped because the previous change was not approved or failed"
+				}
+				result := a.runWriteTool(ctx, repoID, runID, repo.Path, call)
+				if !strings.HasPrefix(result, "done:") {
+					skipStep = step
+				}
+				return result
+			},
+			Emit: a.emit,
 		}
 		updated, runErr := agent.Execute(ctx, run, history)
 		saveErr := a.ai.deps.Chats.Save(repoID, updated)

@@ -1,5 +1,5 @@
 import * as Go from '../../wailsjs/go/app/App'
-import type { AIMessage, AISettings, AIStatus, AheadBehind, CommitInfo, ConflictFile, Details, Filters, GitSettings, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, WorktreeState } from './types'
+import type { AIMessage, AISettings, AIStatus, AheadBehind, ChatConfirmEvent, CommitInfo, ConflictFile, Details, Filters, GitSettings, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, WorktreeState } from './types'
 
 // The generated bindings use Wails model classes; the JSON is identical to our
 // interfaces, so cast at this single boundary.
@@ -88,6 +88,8 @@ export const api = {
   getChat: (repoID: string) => call<AIMessage[]>(Go.GetChat(repoID)),
   sendChat: (repoID: string, text: string, runID: string) => call<void>(Go.SendChat(repoID, text, runID)),
   stopChat: (repoID: string) => call<void>(Go.StopChat(repoID)),
+  confirmChatAction: (repoID: string, confirmID: string, approve: boolean) => call<void>(Go.ConfirmChatAction(repoID, confirmID, approve)),
+  getChatConfirm: (repoID: string) => call<ChatConfirmEvent | null>(Go.GetChatConfirm(repoID) as Promise<ChatConfirmEvent | null>),
   clearChat: (repoID: string) => call<void>(Go.ClearChat(repoID)),
   explainInChat: (repoID: string, hash: string, provider: '' | ProviderName, runID: string) =>
     call<void>(Go.ExplainInChat(repoID, hash, provider, runID)),

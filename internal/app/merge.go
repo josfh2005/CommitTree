@@ -303,7 +303,7 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 			Provider: provider, Model: cfg.ChatModel, System: system,
 			Tools:    append(mergetools.Specs(), tools.Specs()...),
 			MaxSteps: MergeMaxSteps,
-			RunTool: func(ctx context.Context, call ai.ToolCall) string {
+			RunTool: func(ctx context.Context, call ai.ToolCall, step int) string {
 				if isMergeTool(call.Name) {
 					return a.runMergeTool(ctx, repoID, startedFor, call)
 				}

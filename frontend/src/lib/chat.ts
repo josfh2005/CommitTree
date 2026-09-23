@@ -1,10 +1,16 @@
-import type { AIMessage, ChatDeltaEvent, ChatErrorEvent, ChatNoticeEvent, ChatStartEvent, ChatToolEvent, ChatToolResultEvent } from './types'
+import type { AIMessage, ChatConfirmEvent, ChatDeltaEvent, ChatErrorEvent, ChatNoticeEvent, ChatStartEvent, ChatToolEvent, ChatToolResultEvent } from './types'
 
 export interface ChatToolUse {
   name: string
   args: Record<string, unknown> | null
   summary?: string
+  confirm?: { id: string; title: string; details: string[]; state: ConfirmState }
 }
+
+// 'approved'/'rejecting' are transitional: set the instant the user clicks,
+// before ConfirmChatAction returns, so the card stays disabled and doesn't
+// flash back to its buttons before chat:tool_result resolves it.
+export type ConfirmState = 'pending' | 'approved' | 'rejecting' | 'done' | 'rejected' | 'failed'
 
 export interface ChatItem {
   role: 'user' | 'assistant'
@@ -71,9 +77,83 @@ export function startRun(state: ChatState, text: string, runID: string): ChatSta
 // CHAT_EVENTS are every event applyEvent understands. The panel subscribes
 // to this list, so a new event added to the reducer reaches the UI instead of
 // being silently dropped.
-export const CHAT_EVENTS = ['chat:start', 'chat:delta', 'chat:tool', 'chat:tool_result', 'chat:notice', 'chat:done', 'chat:error'] as const
+export const CHAT_EVENTS = ['chat:start', 'chat:delta', 'chat:tool', 'chat:tool_result', 'chat:confirm', 'chat:notice', 'chat:done', 'chat:error'] as const
 
-type Payload = ChatStartEvent | ChatDeltaEvent | ChatToolEvent | ChatToolResultEvent | ChatNoticeEvent | ChatErrorEvent | { repoID: string; runID: string }
+type Payload = ChatStartEvent | ChatDeltaEvent | ChatToolEvent | ChatToolResultEvent | ChatConfirmEvent | ChatNoticeEvent | ChatErrorEvent | { repoID: string; runID: string }
+
+export function confirmState(summary: string): 'done' | 'rejected' | 'failed' {
+  if (summary.startsWith('done')) return 'done'
+  if (summary.startsWith('rejected')) return 'rejected'
+  return 'failed'
+}
+
+/** Puts a pending write confirmation on screen: on the tool the model is
+ *  waiting on, or — after the panel re-mounted and reloaded a history that
+ *  does not include the in-flight answer yet — on a fresh assistant item. */
+export function withPendingConfirm(state: ChatState, ev: ChatConfirmEvent): ChatState {
+  if (ev.repoID !== state.repoID) return state
+  const items = state.items.slice()
+  let last = items[items.length - 1]
+  if (!last || last.role !== 'assistant') {
+    last = { role: 'assistant', text: '', tools: [] }
+    items.push(last)
+  } else {
+    last = { ...last, tools: last.tools.slice() }
+    items[items.length - 1] = last
+  }
+  if (last.tools.some((t) => t.confirm?.id === ev.confirmID)) return state.runID === ev.runID ? state : { ...state, runID: ev.runID }
+  const confirm = { id: ev.confirmID, title: ev.title, details: ev.details ?? [], state: 'pending' as const }
+  const i = last.tools.findIndex((t) => t.name === ev.tool && t.summary === undefined && !t.confirm)
+  if (i >= 0) last.tools[i] = { ...last.tools[i], confirm }
+  else last.tools.push({ name: ev.tool, args: null, confirm })
+  return { ...state, runID: ev.runID, items }
+}
+
+// withConfirmDecision reflects the user's click immediately, before
+// ConfirmChatAction returns: the card leaves 'pending' so it can't be
+// double-clicked, and shows a transitional state until chat:tool_result
+// resolves it. Passing back 'pending' reverts it — used when the confirm
+// call itself failed, so the buttons come back.
+export function withConfirmDecision(state: ChatState, confirmID: string, next: 'approved' | 'rejecting' | 'pending'): ChatState {
+  const items = state.items.slice()
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i]
+    const idx = item.tools.findIndex((t) => t.confirm?.id === confirmID)
+    if (idx < 0) continue
+    const tool = item.tools[idx]
+    if (!tool.confirm) return state
+    const tools = item.tools.slice()
+    tools[idx] = { ...tool, confirm: { ...tool.confirm, state: next } }
+    items[i] = { ...item, tools }
+    return { ...state, items }
+  }
+  return state
+}
+
+const stripPrefix = (s: string, prefix: string) => (s.startsWith(prefix) ? s.slice(prefix.length) : s)
+
+// confirmResultText is the single line a decided card shows, with the tool
+// result's own "done: "/"error: " prefix removed so the outcome isn't stated
+// twice ("Approved and done · done: pushed …" duplicated "done").
+export function confirmResultText(tool: ChatToolUse): string {
+  const confirm = tool.confirm
+  if (!confirm) return ''
+  const summary = tool.summary ?? ''
+  switch (confirm.state) {
+    case 'done': {
+      const rest = stripPrefix(summary, 'done: ')
+      return rest ? `Approved and done · ${rest}` : 'Approved and done'
+    }
+    case 'rejected':
+      return 'Rejected'
+    case 'failed': {
+      const rest = stripPrefix(summary, 'error: ')
+      return rest ? `Failed: ${rest}` : 'Failed'
+    }
+    default:
+      return ''
+  }
+}
 
 export function applyEvent(state: ChatState, name: string, payload: Payload): ChatState {
   if (payload.repoID !== state.repoID) return state
@@ -83,6 +163,11 @@ export function applyEvent(state: ChatState, name: string, payload: Payload): Ch
     if (state.runID === payload.runID) return state
     return startRun(state, (payload as ChatStartEvent).text, payload.runID)
   }
+  // chat:confirm is handled before the runID guard: it can arrive after the
+  // panel re-mounted and reloaded history with no in-flight run (runID
+  // null), and withPendingConfirm itself checks repoID and adopts ev.runID
+  // — dropping it here would strand the run with no card and no Stop.
+  if (name === 'chat:confirm') return withPendingConfirm(state, payload as ChatConfirmEvent)
   if (payload.runID !== state.runID || state.runID === null) return state
   const items = state.items.slice()
   const last = { ...items[items.length - 1], tools: items[items.length - 1].tools.slice() }
@@ -99,7 +184,10 @@ export function applyEvent(state: ChatState, name: string, payload: Payload): Ch
     case 'chat:tool_result': {
       const p = payload as ChatToolResultEvent
       const i = last.tools.findIndex((t) => t.name === p.name && t.summary === undefined)
-      if (i >= 0) last.tools[i] = { ...last.tools[i], summary: p.summary }
+      if (i >= 0) {
+        const tool = last.tools[i]
+        last.tools[i] = { ...tool, summary: p.summary, ...(tool.confirm ? { confirm: { ...tool.confirm, state: confirmState(p.summary) } } : {}) }
+      }
       return { ...state, items }
     }
     case 'chat:notice': {

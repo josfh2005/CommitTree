@@ -4,13 +4,13 @@
   import { checkoutCommit, newBranch, newTag, resetBranch } from '../lib/actions'
   import { relativeDate } from '../lib/format'
   import {
-    arrowAt, DOT_RADIUS, edgeSegment, graphWidth, laneColor, laneX, ROW_HEIGHT, rowCenterY, visibleRange,
+    arrowAt, DOT_RADIUS, edgeSegment, graphWidth, LANE_WIDTH, laneColor, laneX, ROW_HEIGHT, rowCenterY, visibleRange,
   } from '../lib/geometry'
   import { isCurrentBranchRef } from '../lib/refBadge'
   import { busy, chatOpen, filters, jumpTo, logOrder, logVersion, mergeState, refs, selectedHash, selectUncommitted, uncommittedSelected, worktreeState } from '../lib/stores'
   import type { LogRow } from '../lib/types'
   import { copyText, errorMessage, openMenu, toast } from '../lib/ui'
-  import { cleanTreeSelection, followHead, markerWidth, uncommittedCount, uncommittedMarker } from '../lib/uncommitted'
+  import { cleanTreeSelection, followHead, uncommittedCount, uncommittedMarker } from '../lib/uncommitted'
 
   export let repoId: string
 
@@ -37,7 +37,11 @@
   // indices never change — only the index↔pixel mapping does.
   $: count = uncommittedCount($worktreeState)
   $: lead = count > 0 ? ROW_HEIGHT : 0
-  $: marker = uncommittedMarker(rows)
+  $: marker = uncommittedMarker(rows, hasMore)
+  // While the marker's line needs its own lane (HEAD is not the first row),
+  // the real graph is drawn one lane to the right: `shiftX` is to x what
+  // `lead` is to y.
+  $: shiftX = lead && marker.shift ? LANE_WIDTH : 0
 
   // The row appearing/disappearing shifts every commit below it by
   // ROW_HEIGHT; keep on-screen content still by shifting scrollTop the same
@@ -125,12 +129,10 @@
 
   $: range = visibleRange(Math.max(0, scrollTop - lead), viewport, rows.length)
   // Size the graph column to the rows on screen so one wide stretch of history
-  // doesn't squeeze the messages everywhere else — plus the marker's lane
-  // while the uncommitted row is on screen, since HEAD may be scrolled away.
-  $: width = graphVisible
-    ? Math.max(graphWidth(rows.slice(range.start, Math.min(rows.length, range.end + 1))), lead && scrollTop < lead ? markerWidth(marker.lane) : 0)
-    : 12
-  $: draw(canvas, rows, range, width, viewport, scrollTop, graphVisible, lead, marker)
+  // doesn't squeeze the messages everywhere else — plus the lane reserved for
+  // the uncommitted row's line, when there is one.
+  $: width = graphVisible ? graphWidth(rows.slice(range.start, Math.min(rows.length, range.end + 1))) + shiftX : 12
+  $: draw(canvas, rows, range, width, viewport, scrollTop, graphVisible, lead, marker, shiftX)
 
   function draw(..._deps: unknown[]) {
     if (!canvas || !graphVisible) return
@@ -139,8 +141,8 @@
     canvas.height = viewport * dpr
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    ctx.setTransform(dpr, 0, 0, dpr, 0, (lead - scrollTop) * dpr)
-    ctx.clearRect(0, scrollTop - lead, width, viewport)
+    ctx.setTransform(dpr, 0, 0, dpr, shiftX * dpr, (lead - scrollTop) * dpr)
+    ctx.clearRect(-shiftX, scrollTop - lead, width, viewport)
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
 
@@ -184,17 +186,26 @@
     }
 
     // The uncommitted row's marker, one row above the first commit: a hollow
-    // dashed dot, joined to HEAD only when HEAD is directly below it.
+    // dashed dot joined to HEAD by a dashed line (see uncommittedMarker).
+    // In the reserved lane the line runs straight down and hops into HEAD's
+    // lane on HEAD's row, so it never crosses another branch on the way.
     if (lead) {
-      const x = laneX(marker.lane)
+      const x = marker.shift ? laneX(0) - shiftX : laneX(marker.lane)
       const y = rowCenterY(-1)
       ctx.setLineDash([2, 2])
       ctx.strokeStyle = laneColor(marker.color)
       ctx.lineWidth = 1.6
-      if (marker.joined) {
+      if (marker.line !== 'none') {
         ctx.beginPath()
         ctx.moveTo(x, y + DOT_RADIUS)
-        ctx.lineTo(x, rowCenterY(0) - DOT_RADIUS)
+        if (marker.line === 'end') {
+          ctx.lineTo(x, rows.length * ROW_HEIGHT)
+        } else if (!marker.shift) {
+          ctx.lineTo(x, rowCenterY(0) - DOT_RADIUS)
+        } else {
+          ctx.lineTo(x, rowCenterY(marker.headIndex) - ROW_HEIGHT / 2)
+          ctx.lineTo(laneX(marker.headLane), rowCenterY(marker.headIndex) - DOT_RADIUS)
+        }
         ctx.stroke()
       }
       ctx.beginPath()
@@ -208,7 +219,7 @@
 
   function graphPoint(event: MouseEvent) {
     const rect = canvas.getBoundingClientRect()
-    return { x: event.clientX - rect.left, y: event.clientY - rect.top + scrollTop - lead }
+    return { x: event.clientX - rect.left - shiftX, y: event.clientY - rect.top + scrollTop - lead }
   }
 
   function onGraphMove(event: MouseEvent) {

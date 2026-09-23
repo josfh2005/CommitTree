@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { applyEvent, CHAT_EVENTS, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, type ChatState } from './chat'
-import type { AIMessage } from './types'
+import { applyEvent, CHAT_EVENTS, confirmResultText, confirmState, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from './chat'
+import type { AIMessage, ChatConfirmEvent } from './types'
 
 describe('fromMessages', () => {
   it('merges tool rounds into one assistant item', () => {
@@ -147,5 +147,90 @@ describe('CHAT_EVENTS', () => {
       { role: 'assistant', text: 'It repairs the session cookie.', tools: [] },
     ])
     expect(state.runID).toBeNull()
+  })
+})
+
+describe('write confirmations', () => {
+  const confirm = (over: Partial<ChatConfirmEvent> = {}): ChatConfirmEvent => ({
+    repoID: 'r', runID: 'run', confirmID: 'c1', tool: 'push', title: 'Push main to origin/main', details: ['a1b2c3d x'], ...over,
+  })
+  const running = () => {
+    let s = startRun(emptyChat('r'), 'push it', 'run')
+    s = applyEvent(s, 'chat:tool', { repoID: 'r', runID: 'run', name: 'push', args: {} })
+    return s
+  }
+
+  it('attaches a pending card to the waiting tool', () => {
+    const s = applyEvent(running(), 'chat:confirm', confirm())
+    const tool = s.items[s.items.length - 1].tools[0]
+    expect(tool.confirm).toEqual({ id: 'c1', title: 'Push main to origin/main', details: ['a1b2c3d x'], state: 'pending' })
+  })
+
+  it('resolves the card from the tool result', () => {
+    let s = applyEvent(running(), 'chat:confirm', confirm())
+    s = applyEvent(s, 'chat:tool_result', { repoID: 'r', runID: 'run', name: 'push', summary: 'rejected by the user' })
+    expect(s.items[s.items.length - 1].tools[0].confirm?.state).toBe('rejected')
+  })
+
+  it('maps summaries to card states', () => {
+    expect(confirmState('done: Push main to origin/main')).toBe('done')
+    expect(confirmState('rejected by the user')).toBe('rejected')
+    expect(confirmState('error: another operation is running')).toBe('failed')
+  })
+
+  it('restores a pending card into a reloaded conversation', () => {
+    const reloaded = { repoID: 'r', runID: null, items: [{ role: 'user' as const, text: 'push it', tools: [] }] }
+    const s = withPendingConfirm(reloaded, confirm())
+    expect(s.runID).toBe('run')
+    const last = s.items[s.items.length - 1]
+    expect(last.role).toBe('assistant')
+    expect(last.tools[0]).toMatchObject({ name: 'push', confirm: { id: 'c1', state: 'pending' } })
+    expect(withPendingConfirm(s, confirm())).toEqual(s)
+  })
+
+  it('ignores a confirmation for another repository', () => {
+    const s = running()
+    expect(withPendingConfirm(s, confirm({ repoID: 'other' }))).toBe(s)
+  })
+
+  it('subscribes to chat:confirm', () => {
+    expect(CHAT_EVENTS).toContain('chat:confirm')
+  })
+
+  it('attaches a card from chat:confirm even with no in-flight run (panel re-mounted)', () => {
+    // fromMessages always sets runID null; a chat:confirm that arrives after
+    // reload must still show the card and adopt the run, or the run hangs
+    // with no card and no Stop (I1).
+    const reloaded = { repoID: 'r', runID: null, items: [{ role: 'user' as const, text: 'push it', tools: [] }] }
+    const s = applyEvent(reloaded, 'chat:confirm', confirm())
+    expect(s.runID).toBe('run')
+    const last = s.items[s.items.length - 1]
+    expect(last.tools[0]).toMatchObject({ name: 'push', confirm: { id: 'c1', state: 'pending' } })
+  })
+
+  it('marks the card approved/rejecting immediately, and chat:tool_result still resolves it', () => {
+    let s = applyEvent(running(), 'chat:confirm', confirm())
+    s = withConfirmDecision(s, 'c1', 'approved')
+    expect(s.items[s.items.length - 1].tools[0].confirm?.state).toBe('approved')
+    s = applyEvent(s, 'chat:tool_result', { repoID: 'r', runID: 'run', name: 'push', summary: 'done: Push main to origin/main' })
+    expect(s.items[s.items.length - 1].tools[0].confirm?.state).toBe('done')
+  })
+
+  it('reverts to pending when the confirm call itself failed', () => {
+    let s = applyEvent(running(), 'chat:confirm', confirm())
+    s = withConfirmDecision(s, 'c1', 'rejecting')
+    s = withConfirmDecision(s, 'c1', 'pending')
+    expect(s.items[s.items.length - 1].tools[0].confirm?.state).toBe('pending')
+  })
+
+  it('formats the decided outcome once, without repeating the tool summary prefix', () => {
+    const doneTool = { name: 'push', args: null, summary: 'done: Push main to origin/main', confirm: { id: 'c1', title: 't', details: [], state: 'done' as const } }
+    expect(confirmResultText(doneTool)).toBe('Approved and done · Push main to origin/main')
+
+    const rejectedTool = { name: 'push', args: null, summary: 'rejected by the user', confirm: { id: 'c1', title: 't', details: [], state: 'rejected' as const } }
+    expect(confirmResultText(rejectedTool)).toBe('Rejected')
+
+    const failedTool = { name: 'push', args: null, summary: 'error: the repository changed', confirm: { id: 'c1', title: 't', details: [], state: 'failed' as const } }
+    expect(confirmResultText(failedTool)).toBe('Failed: the repository changed')
   })
 })

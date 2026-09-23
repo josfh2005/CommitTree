@@ -1,4 +1,3 @@
-import { GRAPH_PADDING, LANE_WIDTH } from './geometry'
 import type { LogRow, WorktreeState } from './types'
 
 /** Distinct paths with any uncommitted change. A partially staged file
@@ -11,21 +10,38 @@ export function uncommittedCount(state: WorktreeState | null): number {
   return paths.size
 }
 
-/** Where the "Uncommitted changes" row's dot sits in the graph: HEAD's lane
- *  and colour, joined to HEAD by a dashed line only when HEAD is the first
- *  row — anywhere lower, the line would cross other branches' lanes. With
- *  HEAD not loaded (filters, paging, an unborn branch) it falls back to
- *  lane 0 on its own. */
-export function uncommittedMarker(rows: LogRow[]): { lane: number; color: number; joined: boolean } {
-  const index = rows.findIndex((r) => r.isHead)
-  if (index < 0) return { lane: 0, color: 0, joined: false }
-  return { lane: rows[index].lane, color: rows[index].color, joined: index === 0 }
+/** How the "Uncommitted changes" row is drawn in the graph, Sourcetree
+ *  style: a hollow dashed dot joined to HEAD by a dashed line.
+ *  - HEAD is the first row: the dot sits in HEAD's own lane straight above
+ *    it; nothing else needs to move.
+ *  - HEAD is further down: lane 0 is reserved for the line (`shift` — the
+ *    real graph moves one lane right), which runs down to HEAD's row and
+ *    hops into HEAD's lane there, so it never crosses another branch.
+ *  - HEAD is not loaded yet but more pages are coming: the line runs to the
+ *    end of what is loaded and joins HEAD once it is paged in.
+ *  - HEAD is not in the log at all (filtered out, unborn branch): just the
+ *    dot, in lane 0, with nothing reserved. */
+export interface UncommittedMarker {
+  lane: number
+  color: number
+  shift: boolean
+  line: 'head' | 'end' | 'none'
+  headIndex: number
+  headLane: number
 }
 
-/** The graph column width that still shows the marker's lane — HEAD may be
- *  scrolled out of the visible slice that graphWidth measures. */
-export function markerWidth(lane: number): number {
-  return GRAPH_PADDING * 2 + (lane + 1) * LANE_WIDTH
+export function uncommittedMarker(rows: LogRow[], hasMore: boolean): UncommittedMarker {
+  const index = rows.findIndex((r) => r.isHead)
+  if (index === 0) {
+    const head = rows[0]
+    return { lane: head.lane, color: head.color, shift: false, line: 'head', headIndex: 0, headLane: head.lane }
+  }
+  if (index > 0) {
+    const head = rows[index]
+    return { lane: 0, color: head.color, shift: true, line: 'head', headIndex: index, headLane: head.lane }
+  }
+  if (hasMore) return { lane: 0, color: 0, shift: true, line: 'end', headIndex: -1, headLane: 0 }
+  return { lane: 0, color: 0, shift: false, line: 'none', headIndex: -1, headLane: 0 }
 }
 
 /** What to select once the tree is clean while the row was selected (a
