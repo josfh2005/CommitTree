@@ -149,7 +149,7 @@ func Files(ctx context.Context, dir string, index int) ([]File, error) {
 // ordinary change is two fields ("M\tpath"); a rename or copy is three
 // ("R070\told\tnew" — the status also carries a similarity score, which is
 // trimmed down to git's bare one-letter kind here, the same convention
-// gitlog.ParseNameStatus and worktree.Status already follow for a rename).
+// worktree.Status already follows for a rename).
 func parseNameStatusLine(line string, untracked bool) (File, bool) {
 	fields := strings.Split(line, "\t")
 	if len(fields) < 2 || fields[0] == "" {

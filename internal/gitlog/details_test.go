@@ -10,21 +10,6 @@ import (
 	"git-ui/internal/testrepo"
 )
 
-func TestParseNameStatus(t *testing.T) {
-	out := "M\x00a.go\x00R087\x00old.go\x00new.go\x00A\x00b c.txt\x00"
-	want := []gitlog.FileChange{
-		{Status: "M", Path: "a.go"},
-		{Status: "R", Path: "new.go", OldPath: "old.go"},
-		{Status: "A", Path: "b c.txt"},
-	}
-	if got := gitlog.ParseNameStatus(out); !reflect.DeepEqual(got, want) {
-		t.Fatalf("got %+v", got)
-	}
-	if got := gitlog.ParseNameStatus(""); got == nil || len(got) != 0 {
-		t.Fatalf("empty = %#v", got)
-	}
-}
-
 func TestGetDetailsAndDiff(t *testing.T) {
 	r := testrepo.New(t)
 	root := r.Commit("first")

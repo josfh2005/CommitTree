@@ -66,32 +66,6 @@ func GetDetails(ctx context.Context, dir, hash string) (Details, error) {
 	return d, nil
 }
 
-// ParseNameStatus parses `--name-status -z` output. Used by stash, which has
-// no tree to diff-tree against and so cannot use ParseRaw's raw format.
-func ParseNameStatus(out string) []FileChange {
-	parts := strings.Split(strings.TrimSuffix(out, "\x00"), "\x00")
-	files := []FileChange{}
-	for i := 0; i < len(parts); {
-		status := parts[i]
-		if status == "" {
-			i++
-			continue
-		}
-		kind := status[:1]
-		if (kind == "R" || kind == "C") && i+2 < len(parts) {
-			files = append(files, FileChange{Status: kind, OldPath: parts[i+1], Path: parts[i+2]})
-			i += 3
-			continue
-		}
-		if i+1 >= len(parts) {
-			break
-		}
-		files = append(files, FileChange{Status: kind, Path: parts[i+1]})
-		i += 2
-	}
-	return files
-}
-
 // ParseRaw parses `diff-tree -r --raw -z -M` output: each record is a header
 // field ":<srcmode> <dstmode> <srcsha> <dstsha> <status>" followed by one
 // path, or two (old, new) for a rename or copy. A gitlink (mode 160000) on
