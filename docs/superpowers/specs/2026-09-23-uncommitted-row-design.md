@@ -1,7 +1,7 @@
 # git-ui — "Uncommitted changes" row in the log — Design
 
 Date: 2026-09-23
-Status: Approved design, not implemented
+Status: Implemented (manual pass pending)
 Builds on: `2026-09-21-working-tree-design.md` (2a, the Changes view this
 row opens) and `2026-09-16-git-ui-design.md` (the log and its graph).
 
