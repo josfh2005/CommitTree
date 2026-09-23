@@ -110,7 +110,7 @@ reports which paths were staged.
 
 - `SendChat` passes `tools.Specs()` plus `writetools.Specs()`, and a
   `RunTool` that routes write tool names to `a.runWriteTool(ctx, repoID,
-  runID, dir, call)`. `ExplainInChat` is unchanged (read tools only).
+  runID, dir, call)`. `ExplainInChat` is unchanged (it runs on a task responder with no tools).
 - `runWriteTool` implements steps 1–6 above. Pending confirmations live in
   `a.ai.confirms map[string]pendingConfirm` (id → channel, repoID, the
   emitted event), guarded by `a.ai.mu`, and are removed when decided or
@@ -172,8 +172,8 @@ offers "Reset" for that.
   a ref moved between proposal and approval refuses; staged set changed
   refuses a commit; a held write lock returns the busy error; `StopChat`
   while waiting unblocks the tool as a rejection; `ConfirmChatAction` with an
-  unknown id errors; `GetChatConfirm` returns the pending card; the Explain
-  run's tool list has no write tools.
+  unknown id errors; `GetChatConfirm` returns the pending card; the chat's
+  tool list includes both the read and the write tools.
 - vitest: the reducer attaches `chat:confirm` to the right tool and resolves
   its state from the tool result; `CHAT_EVENTS` contains `chat:confirm`.
 - Manual: ask the chat to commit staged work, push, create and switch
