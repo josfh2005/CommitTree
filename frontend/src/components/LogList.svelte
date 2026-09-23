@@ -7,7 +7,7 @@
     arrowAt, DOT_RADIUS, edgeSegment, graphWidth, LANE_WIDTH, laneColor, laneX, ROW_HEIGHT, rowCenterY, visibleRange,
   } from '../lib/geometry'
   import { isCurrentBranchRef } from '../lib/refBadge'
-  import { busy, chatOpen, filters, jumpTo, logOrder, logVersion, mergeState, refs, selectedHash, selectUncommitted, uncommittedSelected, worktreeState } from '../lib/stores'
+  import { busy, chatOpen, filters, jumpTo, logOrder, logVersion, mergeState, refs, selectedHash, toggleCommit, toggleUncommitted, uncommittedSelected, worktreeState } from '../lib/stores'
   import type { LogRow } from '../lib/types'
   import { copyText, errorMessage, openMenu, toast } from '../lib/ui'
   import { cleanTreeSelection, followHead, uncommittedCount, uncommittedMarker } from '../lib/uncommitted'
@@ -245,11 +245,11 @@
       return
     }
     if (p.y < 0) {
-      if (lead) selectUncommitted()
+      if (lead) toggleUncommitted()
       return
     }
     const row = rows[Math.floor(p.y / ROW_HEIGHT)]
-    if (row) selectedHash.set(row.hash)
+    if (row) toggleCommit(row.hash)
   }
 
   function onGraphContext(event: MouseEvent) {
@@ -335,7 +335,7 @@
           class="row uncommitted"
           class:selected={$uncommittedSelected}
           style="top: 0; padding-left: {width}px"
-          on:click={selectUncommitted}
+          on:click={toggleUncommitted}
           on:contextmenu|preventDefault
         >
           <span class="subject ellipsis">Uncommitted changes ({count})</span>
@@ -348,7 +348,7 @@
           class:selected={row.hash === $selectedHash}
           class:merge={row.isMerge}
           style="top: {(range.start + i) * ROW_HEIGHT + lead}px; padding-left: {width}px"
-          on:click={() => selectedHash.set(row.hash)}
+          on:click={() => toggleCommit(row.hash)}
           on:contextmenu={(e) => commitMenu(e, row)}
         >
           <span class="subject ellipsis">

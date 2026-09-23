@@ -5,6 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -15,6 +18,7 @@ import (
 	"git-ui/internal/refs"
 	"git-ui/internal/repos"
 	"git-ui/internal/terminal"
+	"git-ui/internal/worktrees"
 )
 
 var (
@@ -25,6 +29,12 @@ var (
 type RepoItem struct {
 	repos.Repo
 	Branch string `json:"branch"`
+	// ParentID is the main repository this item is a linked worktree of,
+	// when that repository is listed; "" for a top-level entry.
+	ParentID string `json:"parentId,omitempty"`
+	// Worktree marks a detected worktree: not a list entry, so it cannot be
+	// removed, grouped or relocated.
+	Worktree bool `json:"worktree,omitempty"`
 }
 
 type LogRow struct {
@@ -60,6 +70,11 @@ type App struct {
 	gitSettingsPath string
 	owedDrops       sync.Map // repo ID → stash index still to drop once resolved
 	term            *terminal.Manager
+	// worktrees are the linked worktrees the last ListRepos detected, by id.
+	// They are not list entries: nothing about them is stored, and the map
+	// is replaced wholesale on every list read.
+	wtMu      sync.Mutex
+	worktrees map[string]repos.Repo
 }
 
 func New(store *repos.Store) *App {
@@ -76,11 +91,24 @@ func New(store *repos.Store) *App {
 func (a *App) Startup(ctx context.Context) { a.ctx = ctx }
 
 func (a *App) dir(id string) (string, error) {
-	r, ok := a.store.Get(id)
+	r, ok := a.repo(id)
 	if !ok {
 		return "", repos.ErrUnknownRepo
 	}
 	return r.Path, nil
+}
+
+// repo resolves an id: a stored repository first, then a worktree the last
+// ListRepos detected. Every per-repository operation goes through here, so
+// a worktree works everywhere a repository does.
+func (a *App) repo(id string) (repos.Repo, bool) {
+	if r, ok := a.store.Get(id); ok {
+		return r, true
+	}
+	a.wtMu.Lock()
+	defer a.wtMu.Unlock()
+	r, ok := a.worktrees[id]
+	return r, ok
 }
 
 // ---- Repos ----
@@ -88,13 +116,75 @@ func (a *App) dir(id string) (string, error) {
 func (a *App) ListRepos() []RepoItem {
 	list := a.store.List()
 	items := make([]RepoItem, len(list))
+	byPath := map[string]int{}
 	for i, r := range list {
 		items[i] = RepoItem{Repo: r}
 		if !r.Missing {
 			items[i].Branch = refs.CurrentLabel(a.ctx, r.Path)
+			byPath[canonical(r.Path)] = i
+		}
+	}
+
+	// A stored repository that is a main working tree gets its linked
+	// worktrees as children. git lists every worktree from any of them, so
+	// a stored entry that is itself a linked worktree gets none — it is
+	// nested under its main repository instead, when that one is listed.
+	found := map[string]repos.Repo{}
+	for _, r := range list {
+		if r.Missing {
+			continue
+		}
+		wts, err := worktrees.List(a.ctx, r.Path)
+		if err != nil || len(wts) == 0 || canonical(wts[0].Path) != canonical(r.Path) {
+			continue
+		}
+		for _, wt := range wts[1:] {
+			if wt.Bare || wt.Prunable {
+				continue
+			}
+			if _, err := os.Stat(wt.Path); err != nil {
+				continue
+			}
+			if i, ok := byPath[canonical(wt.Path)]; ok {
+				items[i].ParentID = r.ID
+				continue
+			}
+			label := wt.Branch
+			if label == "" {
+				label = fmt.Sprintf("HEAD (%.7s)", wt.Head)
+			}
+			repo := repos.Repo{ID: repos.IDFor(wt.Path), Name: filepath.Base(wt.Path), Path: wt.Path}
+			items = append(items, RepoItem{Repo: repo, Branch: label, ParentID: r.ID, Worktree: true})
+			found[repo.ID] = repo
+		}
+	}
+	a.wtMu.Lock()
+	gone := []string{}
+	for id := range a.worktrees {
+		if _, ok := found[id]; !ok {
+			gone = append(gone, id)
+		}
+	}
+	a.worktrees = found
+	a.wtMu.Unlock()
+	// A worktree that disappeared takes its shells and log paging with it,
+	// the same as removing a repository from the list.
+	for _, id := range gone {
+		if _, stored := a.store.Get(id); !stored {
+			a.term.CloseRepo(id)
+			a.forgetLog(id)
 		}
 	}
 	return items
+}
+
+// canonical resolves symlinks (macOS temp and home paths often differ only
+// by /private) so the same directory compares equal however it was named.
+func canonical(path string) string {
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		return real
+	}
+	return filepath.Clean(path)
 }
 
 func (a *App) AddRepo() (repos.Repo, error) {
@@ -115,6 +205,11 @@ func (a *App) RelocateRepo(id string) (repos.Repo, error) {
 }
 
 func (a *App) RemoveRepo(id string) error {
+	// Only list entries can be removed; a detected worktree is refused
+	// before anything of its state (log paging, terminal tabs) is touched.
+	if _, ok := a.store.Get(id); !ok {
+		return repos.ErrUnknownRepo
+	}
 	a.forgetLog(id)
 	a.term.CloseRepo(id)
 	return a.store.Remove(id)
@@ -145,7 +240,26 @@ func (a *App) GetRefs(id string) (refs.Refs, error) {
 	if err != nil {
 		return refs.Refs{}, err
 	}
-	return refs.List(a.ctx, dir)
+	r, err := refs.List(a.ctx, dir)
+	if err != nil {
+		return r, err
+	}
+	// Mark local branches another worktree has checked out — including one
+	// whose directory is gone but not yet pruned: git still refuses to check
+	// the branch out or delete it. A failure to read worktrees just leaves
+	// no markers.
+	if wts, err := worktrees.List(a.ctx, dir); err == nil {
+		here := canonical(dir)
+		for i, b := range r.Local {
+			for _, wt := range wts {
+				if wt.Branch == b.Name && canonical(wt.Path) != here {
+					r.Local[i].Worktree = wt.Path
+					r.Local[i].WorktreeGone = wt.Prunable
+				}
+			}
+		}
+	}
+	return r, nil
 }
 
 // GetLog reads a page of commit history. order selects the walk order

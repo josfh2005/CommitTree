@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('./api', () => ({ api: {} }))
 
 import { isLogOrder } from './logOrder'
-import { expandedStashSections, mainView, persisted, selectedHash, selectUncommitted, toggleStashExpanded, uncommittedSelected } from './stores'
+import { expandedStashSections, mainView, persisted, selectedHash, selectUncommitted, toggleCommit, toggleStashExpanded, toggleUncommitted, uncommittedSelected } from './stores'
 
 /** A minimal in-memory Storage, since these tests don't run in a DOM
  *  environment and so have no real localStorage to read from. */
@@ -99,5 +99,49 @@ describe('stash section expansion', () => {
     toggleStashExpanded('a')
     expect(get(expandedStashSections)).toEqual(['b'])
     toggleStashExpanded('b')
+  })
+})
+
+describe('toggling the log selection', () => {
+  afterEach(() => {
+    selectedHash.set('')
+    uncommittedSelected.set(false)
+  })
+  it('selects a commit, and clears it on a second click', () => {
+    toggleCommit('a')
+    expect(get(selectedHash)).toBe('a')
+    toggleCommit('a')
+    expect(get(selectedHash)).toBe('')
+  })
+  it('moves to another commit instead of clearing', () => {
+    toggleCommit('a')
+    toggleCommit('b')
+    expect(get(selectedHash)).toBe('b')
+  })
+  it('toggles the uncommitted row the same way', () => {
+    toggleCommit('a')
+    toggleUncommitted()
+    expect(get(uncommittedSelected)).toBe(true)
+    expect(get(selectedHash)).toBe('')
+    toggleUncommitted()
+    expect(get(uncommittedSelected)).toBe(false)
+  })
+})
+
+describe('loadRepos when a repository disappears', () => {
+  it('clears a selection whose repository is no longer listed and drops its terminal tabs', async () => {
+    const { api } = await import('./api')
+    const { terminalState, addTab, emptyTermState } = await import('./terminal')
+    const { loadRepos, selectedRepoId } = await import('./stores')
+    const repo = (id: string) => ({ id, name: id, path: `/${id}`, missing: false, branch: 'main' })
+    ;(api as Record<string, unknown>).listRepos = async () => [repo('main1'), repo('wt')]
+    await loadRepos()
+    selectedRepoId.set('wt')
+    terminalState.set(addTab(emptyTermState(), 'wt', 't1', 'zsh'))
+
+    ;(api as Record<string, unknown>).listRepos = async () => [repo('main1')]
+    await loadRepos()
+    expect(get(selectedRepoId)).toBe('')
+    expect(get(terminalState).tabs).toEqual([])
   })
 })

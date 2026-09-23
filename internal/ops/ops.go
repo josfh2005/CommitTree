@@ -51,6 +51,35 @@ func Checkout(ctx context.Context, dir, branch string) error {
 		return err
 	}
 	_, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "switch", branch)
+	return checkedOutElsewhere(branch, err)
+}
+
+// ErrCheckedOutElsewhere is git refusing to switch to a branch that another
+// worktree of the same repository has checked out.
+type ErrCheckedOutElsewhere struct {
+	Branch, Path string
+}
+
+func (e *ErrCheckedOutElsewhere) Error() string {
+	return fmt.Sprintf("%s is checked out in another worktree (%s)", e.Branch, e.Path)
+}
+
+// checkedOutElsewhere turns git's "is already used by worktree at '<path>'"
+// (older git: "is already checked out at '<path>'") into
+// ErrCheckedOutElsewhere; any other error is returned unchanged.
+func checkedOutElsewhere(branch string, err error) error {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	for _, marker := range []string{"is already used by worktree at '", "is already checked out at '"} {
+		if i := strings.Index(msg, marker); i >= 0 {
+			rest := msg[i+len(marker):]
+			if j := strings.Index(rest, "'"); j >= 0 {
+				return &ErrCheckedOutElsewhere{Branch: branch, Path: rest[:j]}
+			}
+		}
+	}
 	return err
 }
 

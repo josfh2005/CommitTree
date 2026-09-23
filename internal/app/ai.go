@@ -309,7 +309,7 @@ func (a *App) SendChat(repoID, text, runID string) error {
 	if text == "" || runID == "" {
 		return errors.New("message and run id are required")
 	}
-	repo, ok := a.store.Get(repoID)
+	repo, ok := a.repo(repoID)
 	if !ok {
 		return fmt.Errorf("unknown repository %q", repoID)
 	}
@@ -447,7 +447,7 @@ func (a *App) ExplainInChat(repoID, hash, provider, runID string) error {
 	if runID == "" || hash == "" {
 		return errors.New("commit and run id are required")
 	}
-	repo, ok := a.store.Get(repoID)
+	repo, ok := a.repo(repoID)
 	if !ok {
 		return fmt.Errorf("unknown repository %q", repoID)
 	}

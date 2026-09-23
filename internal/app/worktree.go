@@ -159,7 +159,7 @@ func (a *App) GenerateCommitMessage(id, runID string) error {
 	}
 	// a.dir already confirmed id exists, so the repo's name is available
 	// with no further error to check.
-	repo, _ := a.store.Get(id)
+	repo, _ := a.repo(id)
 	st, err := worktree.Status(a.ctx, dir)
 	if err != nil {
 		return err

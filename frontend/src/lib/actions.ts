@@ -320,6 +320,13 @@ async function rememberFingerprint() {
 }
 
 export async function checkExternalChanges() {
+  // Re-read the list first: worktrees appear and disappear without touching
+  // the selected repository's refs, so the fingerprint below never sees them.
+  try {
+    await loadRepos()
+  } catch {
+    // Keep the list as it was; the checks below still run.
+  }
   const id = get(selectedRepoId)
   if (!id) return
   loadMergeState()

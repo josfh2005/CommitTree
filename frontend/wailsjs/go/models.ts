@@ -288,6 +288,8 @@ export namespace app {
 	    missing: boolean;
 	    group?: string;
 	    branch: string;
+	    parentId?: string;
+	    worktree?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new RepoItem(source);
@@ -301,6 +303,8 @@ export namespace app {
 	        this.missing = source["missing"];
 	        this.group = source["group"];
 	        this.branch = source["branch"];
+	        this.parentId = source["parentId"];
+	        this.worktree = source["worktree"];
 	    }
 	}
 
@@ -610,6 +614,8 @@ export namespace refs {
 	    hash: string;
 	    current: boolean;
 	    upstream: string;
+	    worktree?: string;
+	    worktreeGone?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Branch(source);
@@ -622,6 +628,8 @@ export namespace refs {
 	        this.hash = source["hash"];
 	        this.current = source["current"];
 	        this.upstream = source["upstream"];
+	        this.worktree = source["worktree"];
+	        this.worktreeGone = source["worktreeGone"];
 	    }
 	}
 	export class Tag {

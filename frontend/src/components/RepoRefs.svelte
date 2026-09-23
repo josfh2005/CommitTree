@@ -3,7 +3,7 @@
   import Icon from './Icon.svelte'
   import { checkoutBranch, deleteBranch, deleteTag, mergeBranch, newBranch, newTag, stashApply, stashDrop, stashPop } from '../lib/actions'
   import { groupBranches, leafName, type BranchGroup } from '../lib/branches'
-  import { busy, expandedStashSections, expandedTagSections, filters, mainView, mergeState, refs, selectRepo, selectStash, selectedRepoId, selectedStash, stashEntries, toggleStashExpanded, toggleTagsExpanded, worktreeState } from '../lib/stores'
+  import { busy, expandedStashSections, repos, expandedTagSections, filters, mainView, mergeState, refs, selectRepo, selectStash, selectedRepoId, selectedStash, stashEntries, toggleStashExpanded, toggleTagsExpanded, worktreeState } from '../lib/stores'
   import type { Branch, StashEntry, Tag } from '../lib/types'
   import { changedCount } from '../lib/worktree'
   import { openMenu } from '../lib/ui'
@@ -11,6 +11,8 @@
   export let repoId: string
 
   let showRemotes = true
+  // git keeps one stash per repository, shared by all of its worktrees.
+  $: isWorktree = !!$repos.find((r) => r.id === repoId)?.parentId
   let openRemotes: Record<string, boolean> = {}
   let openGroups: Record<string, boolean> = {}
 
@@ -50,12 +52,12 @@
   }
 
   function checkout(b: Branch) {
-    if (!b.current && !$busy) checkoutBranch(repoId, b)
+    if (!b.current && !b.worktree && !$busy) checkoutBranch(repoId, b)
   }
 
   function branchMenu(event: MouseEvent, b: Branch) {
     openMenu(event, [
-      { label: 'Check out', action: () => checkoutBranch(repoId, b), disabled: b.current || !!$busy },
+      { label: 'Check out', action: () => checkoutBranch(repoId, b), disabled: b.current || !!b.worktree || !!$busy },
       {
         label: `Merge ${branchLabel(b)} into ${$refs?.head ?? ''}`,
         action: () => mergeBranch(repoId, b, $refs?.head ?? ''),
@@ -63,7 +65,7 @@
       },
       { label: 'New branch from here…', action: () => newBranch(repoId, branchLabel(b), branchLabel(b)) },
       { label: 'New tag here…', action: () => newTag(repoId, branchLabel(b), branchLabel(b)) },
-      { label: b.remote ? 'Delete on remote…' : 'Delete…', action: () => deleteBranch(repoId, b), danger: true, disabled: b.current },
+      { label: b.remote ? 'Delete on remote…' : 'Delete…', action: () => deleteBranch(repoId, b), danger: true, disabled: b.current || !!b.worktree },
     ])
   }
 
@@ -248,7 +250,10 @@
     {/if}
 
     <div class="section">
-      <button class="section-title" on:click={() => toggleStashExpanded(repoId)}>Stash</button>
+      <button
+        class="section-title"
+        title={isWorktree ? 'Shared with the main repository and its other worktrees' : undefined}
+        on:click={() => toggleStashExpanded(repoId)}>Stash</button>
       <span class="count">{$stashEntries.length}</span>
     </div>
     {#if $expandedStashSections.includes(repoId)}
