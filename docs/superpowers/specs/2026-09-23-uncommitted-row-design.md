@@ -60,9 +60,9 @@ A new store, `uncommittedSelected = writable(false)`, mutually exclusive with
   distinct paths across staged, unstaged and untracked. A partially staged
   file (git status `MM`) is listed in both Staged and Unstaged and counts
   once. `null` → 0.
-- `uncommittedMarker(rows: LogRow[]): { lane: number; joined: boolean }` —
-  the lane of the row with `isHead` (0 if none is loaded), and `joined` true
-  only when that row is `rows[0]`.
+- `uncommittedMarker(rows: LogRow[]): { lane: number; color: number; joined: boolean }` —
+  the lane and colour of the row with `isHead` (0 and 0 if none is loaded),
+  and `joined` true only when that row is `rows[0]`.
 
 The row offset itself is `offset = count > 0 ? 1 : 0`, applied in `LogList`.
 
@@ -74,8 +74,9 @@ The row offset itself is `offset = count > 0 ? 1 : 0`, applied in `LogList`.
   note, `visibleRange`, the canvas draw loop (`rowCenterY(i + offset)`,
   `edgeSegment(edge, i + offset)`), graph hit-testing (`arrowAt`, click and
   context menu row lookup), the load-more threshold and `jump()`'s scroll
-  target. `graphWidth` takes the visible real rows as today; the marker lives
-  in an existing lane so it never widens the graph.
+  target. The graph column is `graphWidth` of the visible real rows as today,
+  widened only if the marker is on screen and its lane (HEAD's, which may be
+  scrolled out of the visible slice) is further right.
 - Draws the marker: a dashed hollow circle at `(laneX(marker.lane),
   rowCenterY(0))` in HEAD's lane colour, and when `joined` a dashed segment
   from it to `rowCenterY(1)`.
@@ -94,10 +95,10 @@ The details pane opens when a conflict owns the screen, a hash is selected,
 ### Keeping the row fresh
 
 Today only a mounted `ChangesView` listens to `worktree:changed`. That
-subscription moves to a global place — beside `startFocusRefresh` in
-`lib/actions.ts`, started from `App.svelte` — calling `loadWorktreeState()`
-for the selected repository. `ChangesView` drops its own listener; it already
-follows `$worktreeState`. Window focus and the embedded terminal's settle
+subscription moves to `App.svelte`'s `onMount` (next to `startFocusRefresh`),
+calling `loadWorktreeState()` when the event is for the selected repository.
+It stays out of `lib/` so the lib tests never import the Wails runtime.
+`ChangesView` drops its own listener; it already follows `$worktreeState`. Window focus and the embedded terminal's settle
 check already call `loadWorktreeState()` and need nothing new.
 
 ### When the tree becomes clean while the row is selected
