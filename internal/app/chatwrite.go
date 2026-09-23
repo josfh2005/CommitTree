@@ -14,6 +14,7 @@ import (
 
 	"git-ui/internal/ai"
 	"git-ui/internal/ai/writetools"
+	"git-ui/internal/gitcmd"
 	"git-ui/internal/merge"
 	"git-ui/internal/ops"
 )
@@ -51,8 +52,16 @@ func newConfirmID() string {
 // approve it, and — on approval — re-checks and executes it. It is called
 // synchronously from within the agent's tool loop, so it blocks that run
 // (and only that run) until the user answers or the run is stopped.
-func (a *App) runWriteTool(ctx context.Context, repoID, runID, dir string, call ai.ToolCall, env writetools.Env) string {
-	p, err := writetools.Prepare(ctx, dir, call, env)
+func (a *App) runWriteTool(ctx context.Context, repoID, runID, dir string, call ai.ToolCall) string {
+	// Read fresh, not once for the whole SendChat run: a pull proposed early
+	// in a long-running chat should use the strategy configured by the time
+	// the user actually approves it, not the one in effect when the answer
+	// started.
+	gs, err := a.gitSettings()
+	if err != nil {
+		return "error: " + err.Error()
+	}
+	p, err := writetools.Prepare(ctx, dir, call, writetools.Env{PullStrategy: gs.PullStrategy})
 	if err != nil {
 		return "error: " + err.Error()
 	}
@@ -82,6 +91,11 @@ func (a *App) runWriteTool(ctx context.Context, repoID, runID, dir string, call 
 	if !approved {
 		return "rejected by the user"
 	}
+	// Recheck runs just before the App method below takes the per-repo
+	// write lock: the repository could still move in that gap (a millisecond
+	// window), but it's the same window every other write path has between
+	// its own precondition check and taking the lock, and is accepted here
+	// too.
 	if err := writetools.Recheck(ctx, dir, p, call.Name); err != nil {
 		return "error: " + err.Error()
 	}
@@ -89,10 +103,14 @@ func (a *App) runWriteTool(ctx context.Context, repoID, runID, dir string, call 
 	if errors.Is(err, ErrBusy) {
 		return "error: another operation is running in this repository; try again when it finishes"
 	}
+	// Emitted whenever execution was attempted, even on error: a partial
+	// effect (branch created but checkout failed, some paths staged before
+	// a failure, fetch succeeded before a pull error) can still have
+	// changed the repository, and the UI needs to refresh to show it.
+	a.emit(EventRepoChanged, RepoChangedEvent{RepoID: repoID})
 	if err != nil {
 		return "error: " + err.Error()
 	}
-	a.emit(EventRepoChanged, RepoChangedEvent{RepoID: repoID})
 	return "done: " + done
 }
 
@@ -121,6 +139,12 @@ func (a *App) executeWrite(repoID, tool string, p writetools.Proposal) (string, 
 		return p.Title, nil
 	case "create_branch":
 		if err := a.CreateBranch(repoID, p.Name, p.Start, p.Checkout); err != nil {
+			// CreateBranch creates the branch, then (with Checkout) switches
+			// to it: a failure can be the switch alone, after the branch
+			// already exists. Say so, or "nothing happened" would be wrong.
+			if p.Checkout && a.branchExists(repoID, p.Name) {
+				return "", fmt.Errorf("created branch %s but could not switch to it: %w", p.Name, err)
+			}
 			return "", err
 		}
 		return p.Title, nil
@@ -171,6 +195,16 @@ func (a *App) executeWrite(repoID, tool string, p writetools.Proposal) (string, 
 	default:
 		return "", fmt.Errorf("unknown tool %q", tool)
 	}
+}
+
+// branchExists reports whether repoID now has a local branch called name.
+func (a *App) branchExists(repoID, name string) bool {
+	dir, err := a.dir(repoID)
+	if err != nil {
+		return false
+	}
+	_, err = gitcmd.Run(a.ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--verify", "--quiet", "refs/heads/"+name)
+	return err == nil
 }
 
 // stagedSoFar reports a partial stage/unstage failure, naming the paths that

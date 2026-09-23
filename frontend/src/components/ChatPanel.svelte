@@ -3,7 +3,7 @@
   import { EventsOn } from '../../wailsjs/runtime/runtime'
   import Icon from './Icon.svelte'
   import { api } from '../lib/api'
-  import { applyEvent, CHAT_EVENTS, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withPendingConfirm, type ChatState } from '../lib/chat'
+  import { applyEvent, CHAT_EVENTS, confirmResultText, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from '../lib/chat'
   import { renderMarkdown } from '../lib/markdown'
   import { chatOpen, jumpTo, selectedRepo, settingsOpen } from '../lib/stores'
   import type { AIStatus } from '../lib/types'
@@ -14,7 +14,6 @@
   let input = ''
   let list: HTMLDivElement
   let loadError = ''
-  let deciding = new Set<string>()
 
   const offs = CHAT_EVENTS.map((name) =>
     EventsOn(name, (payload) => {
@@ -54,16 +53,17 @@
   }
 
   async function decide(id: string, approve: boolean) {
-    if (!state.repoID || deciding.has(id)) return
-    deciding = new Set(deciding).add(id)
+    if (!state.repoID) return
+    state = withConfirmDecision(state, id, approve ? 'approved' : 'rejecting')
     try {
       await api.confirmChatAction(state.repoID, id, approve)
     } catch (e) {
+      // Only a failed confirmChatAction re-enables the buttons: on success
+      // the card stays disabled, showing "Running…"/"Rejecting…", until
+      // chat:tool_result resolves it — ConfirmChatAction returning is not
+      // the same as the write finishing.
+      state = withConfirmDecision(state, id, 'pending')
       toast(errorMessage(e), 'error')
-    } finally {
-      deciding = new Set(deciding)
-      deciding.delete(id)
-      deciding = deciding
     }
   }
 
@@ -174,13 +174,17 @@
                 {#each confirm.details as line}<div class="confirm-detail">{line}</div>{/each}
                 {#if confirm.state === 'pending'}
                   <div class="confirm-actions">
-                    <button class="btn" disabled={deciding.has(confirm.id)} on:click={() => decide(confirm.id, false)}>Reject</button>
-                    <button class="btn primary" disabled={deciding.has(confirm.id)} on:click={() => decide(confirm.id, true)}>Approve</button>
+                    <button class="btn" on:click={() => decide(confirm.id, false)}>Reject</button>
+                    <button class="btn primary" on:click={() => decide(confirm.id, true)}>Approve</button>
                   </div>
+                {:else if confirm.state === 'approved'}
+                  <div class="confirm-result">Running…</div>
+                {:else if confirm.state === 'rejecting'}
+                  <div class="confirm-result">Rejecting…</div>
                 {:else if confirm.state === 'failed'}
-                  <div class="confirm-result failed">Failed{tool.summary ? ` · ${tool.summary}` : ''}</div>
+                  <div class="confirm-result failed">{confirmResultText(tool)}</div>
                 {:else}
-                  <div class="confirm-result">{confirm.state === 'done' ? 'Approved and done' : 'Rejected'}{tool.summary ? ` · ${tool.summary}` : ''}</div>
+                  <div class="confirm-result">{confirmResultText(tool)}</div>
                 {/if}
               </div>
             {:else}

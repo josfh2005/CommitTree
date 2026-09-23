@@ -3,6 +3,7 @@ package writetools_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -74,6 +75,69 @@ func TestPushProposals(t *testing.T) {
 	}
 	r.Git("switch", "-q", "--detach")
 	if _, err := prep(r.Dir, "push", nil); err == nil || !strings.Contains(err.Error(), "detached") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestCheckoutAndMergeRejectRevisionSuffixesAsBranchNames(t *testing.T) {
+	r := testrepo.New(t)
+	r.Commit("base")
+	r.Commit("second")
+	for _, bad := range []string{"main~2", "main@{u}"} {
+		if _, err := prep(r.Dir, "checkout_branch", map[string]any{"name": bad}); err == nil || !strings.Contains(err.Error(), fmt.Sprintf("no branch %q", bad)) {
+			t.Fatalf("checkout_branch(%q): err = %v", bad, err)
+		}
+		if _, err := prep(r.Dir, "merge_branch", map[string]any{"branch": bad}); err == nil || !strings.Contains(err.Error(), fmt.Sprintf("no branch %q", bad)) {
+			t.Fatalf("merge_branch(%q): err = %v", bad, err)
+		}
+	}
+}
+
+func TestMergeBranchOnADetachedHead(t *testing.T) {
+	r := testrepo.New(t)
+	r.Commit("base")
+	r.Git("branch", "topic")
+	r.Git("switch", "-q", "--detach")
+	if _, err := prep(r.Dir, "merge_branch", map[string]any{"branch": "topic"}); err == nil || !strings.Contains(err.Error(), "detached") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestPushNamesThePushRemoteInATriangularSetup(t *testing.T) {
+	src := testrepo.New(t)
+	src.Commit("base")
+	origin := testrepo.NewBareFrom(t, src)
+	fork := testrepo.NewBareFrom(t, src)
+	r := testrepo.Clone(t, origin)
+	r.Git("remote", "add", "fork", fork)
+	r.Git("fetch", "-q", "fork")
+	r.Git("config", "branch.main.pushRemote", "fork")
+	// push.default=simple refuses to resolve @{push} at all when the push
+	// remote differs from the upstream remote ("cannot resolve 'simple'
+	// push to a single destination"); "current" is what makes a triangular
+	// setup like this push anywhere.
+	r.Git("config", "push.default", "current")
+	r.Commit("new")
+
+	p, err := prep(r.Dir, "push", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Title != "Push main to fork/main" {
+		t.Fatalf("p = %+v", p)
+	}
+}
+
+func TestPushRefusesWhenPushDefaultIsMatching(t *testing.T) {
+	src := testrepo.New(t)
+	src.Commit("base")
+	remote := testrepo.NewBareFrom(t, src)
+	r := testrepo.Clone(t, remote)
+	r.Git("config", "push.default", "matching")
+	r.Commit("new")
+
+	_, err := prep(r.Dir, "push", nil)
+	if err == nil || !strings.Contains(err.Error(), `push.default is "matching"`) {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -165,7 +229,7 @@ func TestCreateBranchProposals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Title != "Create branch feature at "+short+" and switch to it" || p.Start != "HEAD" || !p.Checkout || p.Name != "feature" {
+	if p.Title != "Create branch feature at "+short+" and switch to it" || p.Start != hash || !p.Checkout || p.Name != "feature" {
 		t.Fatalf("p = %+v", p)
 	}
 	if len(p.Details) != 1 || !strings.HasPrefix(p.Details[0], short+" base") {
@@ -212,6 +276,53 @@ func TestCheckoutBranchProposals(t *testing.T) {
 		t.Fatal(err)
 	}
 	if p.Remote != "origin" || p.Name != "topic" || len(p.Details) != 1 || p.Details[0] != "creates local branch topic tracking origin/topic" {
+		t.Fatalf("p = %+v", p)
+	}
+}
+
+func TestCheckoutBranchOfARemoteWithAnExistingLocalBranch(t *testing.T) {
+	src := testrepo.New(t)
+	src.Commit("base")
+	src.Git("branch", "topic")
+	remote := testrepo.NewBareFrom(t, src)
+	src.Git("push", "-q", remote, "topic:topic")
+	r := testrepo.Clone(t, remote)
+	r.Git("fetch", "-q", "origin", "topic")
+	// A local "topic" already exists, ahead of origin/topic by one commit
+	// and behind by none: the card must say it switches to that existing
+	// branch, not that it creates one.
+	r.Git("branch", "topic", "origin/topic")
+	r.Git("switch", "-q", "topic")
+	r.Commit("local work")
+	r.Git("switch", "-q", "main")
+
+	p, err := prep(r.Dir, "checkout_branch", map[string]any{"name": "origin/topic"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Remote != "" || p.Name != "topic" {
+		t.Fatalf("p = %+v", p)
+	}
+	if len(p.Details) != 1 || p.Details[0] != "switches to existing local branch topic (1 ahead, 0 behind origin/topic)" {
+		t.Fatalf("details = %v", p.Details)
+	}
+}
+
+func TestCheckoutBranchResolvesTheRemoteByItsConfiguredName(t *testing.T) {
+	src := testrepo.New(t)
+	src.Commit("base")
+	remote := testrepo.NewBareFrom(t, src)
+	r := testrepo.Clone(t, remote)
+	r.Git("remote", "rename", "origin", "my/remote")
+	src.Git("branch", "topic")
+	src.Git("push", "-q", remote, "topic:topic")
+	r.Git("fetch", "-q", "my/remote")
+
+	p, err := prep(r.Dir, "checkout_branch", map[string]any{"name": "my/remote/topic"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Remote != "my/remote" || p.Name != "topic" {
 		t.Fatalf("p = %+v", p)
 	}
 }

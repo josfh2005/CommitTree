@@ -50,7 +50,7 @@ func baseRun(p ai.Provider, rec *recorder) agent.Run {
 	return agent.Run{
 		RepoID: "repo1", RunID: "run1", Provider: p, Model: "m", System: "sys",
 		Tools:   []ai.ToolSpec{{Name: "list_refs"}},
-		RunTool: func(ctx context.Context, call ai.ToolCall) string { return "main\nfeature" },
+		RunTool: func(ctx context.Context, call ai.ToolCall, step int) string { return "main\nfeature" },
 		Emit:    rec.emit,
 	}
 }

@@ -4,8 +4,13 @@ export interface ChatToolUse {
   name: string
   args: Record<string, unknown> | null
   summary?: string
-  confirm?: { id: string; title: string; details: string[]; state: 'pending' | 'done' | 'rejected' | 'failed' }
+  confirm?: { id: string; title: string; details: string[]; state: ConfirmState }
 }
+
+// 'approved'/'rejecting' are transitional: set the instant the user clicks,
+// before ConfirmChatAction returns, so the card stays disabled and doesn't
+// flash back to its buttons before chat:tool_result resolves it.
+export type ConfirmState = 'pending' | 'approved' | 'rejecting' | 'done' | 'rejected' | 'failed'
 
 export interface ChatItem {
   role: 'user' | 'assistant'
@@ -104,6 +109,52 @@ export function withPendingConfirm(state: ChatState, ev: ChatConfirmEvent): Chat
   return { ...state, runID: ev.runID, items }
 }
 
+// withConfirmDecision reflects the user's click immediately, before
+// ConfirmChatAction returns: the card leaves 'pending' so it can't be
+// double-clicked, and shows a transitional state until chat:tool_result
+// resolves it. Passing back 'pending' reverts it — used when the confirm
+// call itself failed, so the buttons come back.
+export function withConfirmDecision(state: ChatState, confirmID: string, next: 'approved' | 'rejecting' | 'pending'): ChatState {
+  const items = state.items.slice()
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i]
+    const idx = item.tools.findIndex((t) => t.confirm?.id === confirmID)
+    if (idx < 0) continue
+    const tool = item.tools[idx]
+    if (!tool.confirm) return state
+    const tools = item.tools.slice()
+    tools[idx] = { ...tool, confirm: { ...tool.confirm, state: next } }
+    items[i] = { ...item, tools }
+    return { ...state, items }
+  }
+  return state
+}
+
+const stripPrefix = (s: string, prefix: string) => (s.startsWith(prefix) ? s.slice(prefix.length) : s)
+
+// confirmResultText is the single line a decided card shows, with the tool
+// result's own "done: "/"error: " prefix removed so the outcome isn't stated
+// twice ("Approved and done · done: pushed …" duplicated "done").
+export function confirmResultText(tool: ChatToolUse): string {
+  const confirm = tool.confirm
+  if (!confirm) return ''
+  const summary = tool.summary ?? ''
+  switch (confirm.state) {
+    case 'done': {
+      const rest = stripPrefix(summary, 'done: ')
+      return rest ? `Approved and done · ${rest}` : 'Approved and done'
+    }
+    case 'rejected':
+      return 'Rejected'
+    case 'failed': {
+      const rest = stripPrefix(summary, 'error: ')
+      return rest ? `Failed: ${rest}` : 'Failed'
+    }
+    default:
+      return ''
+  }
+}
+
 export function applyEvent(state: ChatState, name: string, payload: Payload): ChatState {
   if (payload.repoID !== state.repoID) return state
   // A run can also start from the log ("Explain"); the panel's own send has
@@ -112,6 +163,11 @@ export function applyEvent(state: ChatState, name: string, payload: Payload): Ch
     if (state.runID === payload.runID) return state
     return startRun(state, (payload as ChatStartEvent).text, payload.runID)
   }
+  // chat:confirm is handled before the runID guard: it can arrive after the
+  // panel re-mounted and reloaded history with no in-flight run (runID
+  // null), and withPendingConfirm itself checks repoID and adopts ev.runID
+  // — dropping it here would strand the run with no card and no Stop.
+  if (name === 'chat:confirm') return withPendingConfirm(state, payload as ChatConfirmEvent)
   if (payload.runID !== state.runID || state.runID === null) return state
   const items = state.items.slice()
   const last = { ...items[items.length - 1], tools: items[items.length - 1].tools.slice() }
@@ -134,8 +190,6 @@ export function applyEvent(state: ChatState, name: string, payload: Payload): Ch
       }
       return { ...state, items }
     }
-    case 'chat:confirm':
-      return withPendingConfirm(state, payload as ChatConfirmEvent)
     case 'chat:notice': {
       const p = payload as ChatNoticeEvent
       last.notices = [...(last.notices ?? []), p.text]

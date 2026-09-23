@@ -395,10 +395,14 @@ func prepareCreateBranch(ctx context.Context, dir string, args map[string]any) (
 	}
 
 	return Proposal{
-		Title:    title,
-		Details:  []string{strings.TrimSpace(short + " " + subject)},
-		Name:     name,
-		Start:    start,
+		Title:   title,
+		Details: []string{strings.TrimSpace(short + " " + subject)},
+		Name:    name,
+		// The resolved commit, not the model's argument: the title already
+		// shows its short form, and execution must create the branch at
+		// exactly what was shown, even if "start" (e.g. a branch name) has
+		// since moved.
+		Start:    hash,
 		Checkout: checkout,
 	}, nil
 }
@@ -418,6 +422,9 @@ func prepareCheckoutBranch(ctx context.Context, dir string, args map[string]any)
 	if err != nil {
 		return Proposal{}, err
 	}
+	if err := validateBranchArg(ctx, dir, name); err != nil {
+		return Proposal{}, err
+	}
 	current := currentBranch(ctx, dir)
 
 	if verifyRef(ctx, dir, "refs/heads/"+name) {
@@ -433,10 +440,22 @@ func prepareCheckoutBranch(ctx context.Context, dir string, args map[string]any)
 	if !verifyRef(ctx, dir, "refs/remotes/"+name) {
 		return Proposal{}, fmt.Errorf("no branch %q", name)
 	}
-	parts := strings.SplitN(name, "/", 2)
-	remote, rest := parts[0], ""
-	if len(parts) > 1 {
-		rest = parts[1]
+	remote, rest, ok := splitRemoteBranch(ctx, dir, name)
+	if !ok {
+		return Proposal{}, fmt.Errorf("no branch %q", name)
+	}
+	if verifyRef(ctx, dir, "refs/heads/"+rest) {
+		// A local branch of that name already exists: this switches to it,
+		// it does not create anything, however the model phrased the name.
+		ahead, behind, err := aheadBehindCount(ctx, dir, rest, name)
+		if err != nil {
+			return Proposal{}, err
+		}
+		return Proposal{
+			Title:   fmt.Sprintf("Switch from %s to %s", current, name),
+			Details: []string{fmt.Sprintf("switches to existing local branch %s (%d ahead, %d behind %s)", rest, ahead, behind, name)},
+			Name:    rest,
+		}, nil
 	}
 	return Proposal{
 		Title:   fmt.Sprintf("Switch from %s to %s", current, name),
@@ -444,6 +463,47 @@ func prepareCheckoutBranch(ctx context.Context, dir string, args map[string]any)
 		Remote:  remote,
 		Name:    rest,
 	}, nil
+}
+
+// splitRemoteBranch splits "<remote>/<branch>" using the longest configured
+// remote name that prefixes it, so a remote whose own name contains a slash
+// (or a branch name that happens to start with another remote's name) is
+// not cut at the first slash regardless of which remote actually owns it.
+func splitRemoteBranch(ctx context.Context, dir, name string) (remote, rest string, ok bool) {
+	remotes, err := listRemotes(ctx, dir)
+	if err != nil {
+		return "", "", false
+	}
+	best := ""
+	for _, r := range remotes {
+		if strings.HasPrefix(name, r+"/") && len(r) > len(best) {
+			best = r
+		}
+	}
+	if best == "" {
+		return "", "", false
+	}
+	return best, strings.TrimPrefix(name, best+"/"), true
+}
+
+// aheadBehindCount reports how far a and b have diverged: commits reachable
+// only from a (ahead), then only from b (behind).
+func aheadBehindCount(ctx context.Context, dir, a, b string) (ahead, behind int, err error) {
+	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-list", "--left-right", "--count", a+"..."+b)
+	if err != nil {
+		return 0, 0, err
+	}
+	fields := strings.Fields(out)
+	if len(fields) != 2 {
+		return 0, 0, fmt.Errorf("writetools: parse rev-list left-right count: %q", out)
+	}
+	if ahead, err = strconv.Atoi(fields[0]); err != nil {
+		return 0, 0, fmt.Errorf("writetools: parse rev-list left-right count: %q", out)
+	}
+	if behind, err = strconv.Atoi(fields[1]); err != nil {
+		return 0, 0, fmt.Errorf("writetools: parse rev-list left-right count: %q", out)
+	}
+	return ahead, behind, nil
 }
 
 // --- stash_push ---
@@ -520,15 +580,28 @@ func preparePush(ctx context.Context, dir string) (Proposal, error) {
 	upstream, hasUpstream := upstreamOf(ctx, dir)
 
 	if hasUpstream {
-		count, err := revListCount(ctx, dir, upstream+"..HEAD")
+		// `git push` with an upstream but no refspec goes to @{push}
+		// (the "triangular" target, e.g. a fork's own branch) when one
+		// resolves, not necessarily @{upstream}: name the card after what
+		// will actually be pushed to, falling back to @{upstream} when
+		// @{push} doesn't resolve (no branch.<b>.pushRemote and no
+		// push.default=current, say).
+		target, ok := pushTargetOf(ctx, dir)
+		if !ok {
+			target = upstream
+		}
+		if mode, ok := configGet(ctx, dir, "push.default"); ok && mode == "matching" {
+			return Proposal{}, errors.New(`push.default is "matching", which would push other branches too; push from the toolbar instead`)
+		}
+		count, err := revListCount(ctx, dir, target+"..HEAD")
 		if err != nil {
 			return Proposal{}, err
 		}
 		if count == 0 {
-			return Proposal{}, fmt.Errorf("%s has nothing to push to %s", branch, upstream)
+			return Proposal{}, fmt.Errorf("%s has nothing to push to %s", branch, target)
 		}
-		title := fmt.Sprintf("Push %s to %s", branch, upstream)
-		details, err := logDetails(ctx, dir, []string{"log", "--oneline", "-n", "5", upstream + "..HEAD"}, count)
+		title := fmt.Sprintf("Push %s to %s", branch, target)
+		details, err := logDetails(ctx, dir, []string{"log", "--oneline", "-n", "5", target + "..HEAD"}, count)
 		if err != nil {
 			return Proposal{}, err
 		}
@@ -600,10 +673,16 @@ func prepareMergeBranch(ctx context.Context, dir string, args map[string]any) (P
 	if err != nil {
 		return Proposal{}, err
 	}
+	if err := validateBranchArg(ctx, dir, branch); err != nil {
+		return Proposal{}, err
+	}
 	if !verifyRef(ctx, dir, "refs/heads/"+branch) && !verifyRef(ctx, dir, "refs/remotes/"+branch) {
 		return Proposal{}, fmt.Errorf("no branch %q", branch)
 	}
 	current := currentBranch(ctx, dir)
+	if current == "" {
+		return Proposal{}, errors.New("HEAD is detached; check out a branch first")
+	}
 	if branch == current {
 		return Proposal{}, fmt.Errorf("cannot merge %s into itself", branch)
 	}
@@ -636,8 +715,46 @@ func verifyRef(ctx context.Context, dir, ref string) bool {
 	return err == nil
 }
 
+// validateBranchArg rejects a model-supplied branch argument before it is
+// used to build a "refs/heads/<name>" or "refs/remotes/<name>" lookup.
+// Prefixing with "refs/heads/" does not stop git from reading revision
+// syntax inside the rest of the string — "refs/heads/main~2" and
+// "refs/heads/main@{u}" both resolve happily when "main" exists — so
+// without this, a name like "main~2" would pass as if it were a real branch
+// called that. A leading "-" is rejected outright, since it reaches
+// check-ref-format (and later, execution) as a bare argument.
+func validateBranchArg(ctx context.Context, dir, name string) error {
+	if name == "" || strings.HasPrefix(name, "-") {
+		return fmt.Errorf("no branch %q", name)
+	}
+	if _, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "check-ref-format", "--branch", name); err != nil {
+		return fmt.Errorf("no branch %q", name)
+	}
+	return nil
+}
+
 func upstreamOf(ctx context.Context, dir string) (string, bool) {
 	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+	if err != nil {
+		return "", false
+	}
+	return strings.TrimSpace(out), true
+}
+
+// pushTargetOf resolves @{push}: what `git push` with no refspec actually
+// pushes to, which can differ from @{upstream} in a triangular workflow
+// (branch.<name>.pushRemote, or push.default=current).
+func pushTargetOf(ctx context.Context, dir string) (string, bool) {
+	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{push}")
+	if err != nil {
+		return "", false
+	}
+	return strings.TrimSpace(out), true
+}
+
+// configGet reads a single git config value, ok=false when it is unset.
+func configGet(ctx context.Context, dir, key string) (string, bool) {
+	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "config", "--get", key)
 	if err != nil {
 		return "", false
 	}

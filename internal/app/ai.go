@@ -356,18 +356,30 @@ func (a *App) SendChat(repoID, text, runID string) error {
 
 	a.emit(agent.EventStart, agent.StartEvent{RepoID: repoID, RunID: runID, Text: text})
 
-	gs, _ := a.gitSettings()
-
 	go func() {
+		// skipStep is the step of a write call whose result did not start
+		// with "done:" (rejected, failed or skipped): every later write call
+		// in that same model response is refused without Prepare and
+		// without a card, so a rejected or failed write doesn't let the rest
+		// of the batch run anyway. A later step (a new model response)
+		// clears it.
+		skipStep := -1
 		run := agent.Run{
 			RepoID: repoID, RunID: runID,
 			Provider: provider, Model: cfg.ChatModel, System: system,
 			Tools: append(tools.Specs(), writetools.Specs()...),
-			RunTool: func(ctx context.Context, call ai.ToolCall) string {
-				if writetools.IsWrite(call.Name) {
-					return a.runWriteTool(ctx, repoID, runID, repo.Path, call, writetools.Env{PullStrategy: gs.PullStrategy})
+			RunTool: func(ctx context.Context, call ai.ToolCall, step int) string {
+				if !writetools.IsWrite(call.Name) {
+					return tools.Run(ctx, repo.Path, call)
 				}
-				return tools.Run(ctx, repo.Path, call)
+				if step == skipStep {
+					return "error: skipped because the previous change was not approved or failed"
+				}
+				result := a.runWriteTool(ctx, repoID, runID, repo.Path, call)
+				if !strings.HasPrefix(result, "done:") {
+					skipStep = step
+				}
+				return result
 			},
 			Emit: a.emit,
 		}
