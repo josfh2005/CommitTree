@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('./api', () => ({ api: {} }))
 
 import { isLogOrder } from './logOrder'
-import { mainView, persisted, selectedHash, selectUncommitted, uncommittedSelected } from './stores'
+import { expandedStashSections, mainView, persisted, selectedHash, selectUncommitted, toggleStashExpanded, uncommittedSelected } from './stores'
 
 /** A minimal in-memory Storage, since these tests don't run in a DOM
  *  environment and so have no real localStorage to read from. */
@@ -87,5 +87,17 @@ describe('uncommitted row selection', () => {
     selectUncommitted()
     selectedHash.set('')
     expect(get(uncommittedSelected)).toBe(true)
+  })
+})
+
+describe('stash section expansion', () => {
+  it('starts collapsed and toggles per repository', () => {
+    expect(get(expandedStashSections)).toEqual([])
+    toggleStashExpanded('a')
+    expect(get(expandedStashSections)).toEqual(['a'])
+    toggleStashExpanded('b')
+    toggleStashExpanded('a')
+    expect(get(expandedStashSections)).toEqual(['b'])
+    toggleStashExpanded('b')
   })
 })

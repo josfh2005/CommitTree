@@ -1,9 +1,10 @@
 <script lang="ts">
   import Icon from './Icon.svelte'
   import RepoRefs from './RepoRefs.svelte'
-  import { fetchRemote, moveRepoToGroup, pull, push, relocateRepo, removeRepo } from '../lib/actions'
+  import { fetchRemote, moveRepoToGroup, openRepoFolder, pull, push, relocateRepo, removeRepo } from '../lib/actions'
   import { REPO_DRAG_MIME } from '../lib/repoDrop'
-  import { busy, expandedRepos, mergeState, selectRepo, selectedRepoId, toggleRepoExpanded } from '../lib/stores'
+  import { revealLabel } from '../lib/platform'
+  import { busy, expandedRepos, mergeState, platform, selectRepo, selectedRepoId, toggleRepoExpanded } from '../lib/stores'
   import type { Repo } from '../lib/types'
   import { openMenu } from '../lib/ui'
 
@@ -35,6 +36,7 @@
       { label: 'Fetch', action: () => fetchRemote(repo.id), disabled: repo.missing || !!$busy },
       { label: 'Pull', action: () => pull(repo.id), disabled: repo.missing || !!$busy || !!$mergeState?.merging },
       { label: 'Push', action: () => push(repo.id), disabled: repo.missing || !!$busy || !!$mergeState?.merging },
+      { label: revealLabel($platform), action: () => openRepoFolder(repo.id), disabled: repo.missing },
       { label: 'Move to group…', action: () => moveRepoToGroup(repo) },
       { label: 'Remove from list…', action: () => removeRepo(repo), danger: true },
     ])

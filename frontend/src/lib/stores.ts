@@ -47,6 +47,9 @@ export const expandedRepos = persisted<string[]>('expandedRepos', [])
  *  expandedRepos above. Keyed by repo id so expanding it in one repository
  *  doesn't expand it in another. */
 export const expandedTagSections = persisted<string[]>('expandedTagSections', [])
+/** Ids of the repositories whose sidebar Stash section is expanded. Like
+ *  Tags it starts collapsed, remembered per repository. */
+export const expandedStashSections = persisted<string[]>('expandedStashSections', [])
 /** Ids of the sidebar repo groups that are collapsed — groups start
  *  expanded, so only the non-default (collapsed) state needs remembering. */
 export const collapsedRepoGroups = persisted<string[]>('collapsedRepoGroups', [])
@@ -64,6 +67,8 @@ export const jumpTo = writable('')
 export const logVersion = writable(0)
 export const busy = writable('')
 export const settingsOpen = writable(false)
+/** Wails' Environment().platform, read once at startup (App.svelte). */
+export const platform = writable('')
 export const mergeState = writable<MergeState | null>(null)
 export const worktreeState = writable<WorktreeState | null>(null)
 /** The AI settings the commit box needs (auto-generation mode, task
@@ -277,6 +282,10 @@ export function toggleRepoExpanded(id: string) {
 
 export function toggleTagsExpanded(repoId: string) {
   expandedTagSections.update((ids) => (ids.includes(repoId) ? ids.filter((x) => x !== repoId) : [...ids, repoId]))
+}
+
+export function toggleStashExpanded(repoId: string) {
+  expandedStashSections.update((ids) => (ids.includes(repoId) ? ids.filter((x) => x !== repoId) : [...ids, repoId]))
 }
 
 export function toggleRepoGroupCollapsed(name: string) {

@@ -156,6 +156,14 @@ export async function renameGroup(name: string) {
   }
 }
 
+export async function openRepoFolder(id: string) {
+  try {
+    await api.openRepoFolder(id)
+  } catch (e) {
+    toast(errorMessage(e), 'error')
+  }
+}
+
 export async function relocateRepo(id: string) {
   try {
     const repo = await api.relocateRepo(id)

@@ -3,7 +3,7 @@
   import Icon from './Icon.svelte'
   import { checkoutBranch, deleteBranch, deleteTag, mergeBranch, newBranch, newTag, stashApply, stashDrop, stashPop } from '../lib/actions'
   import { groupBranches, leafName, type BranchGroup } from '../lib/branches'
-  import { busy, expandedTagSections, filters, mainView, mergeState, refs, selectRepo, selectStash, selectedRepoId, selectedStash, stashEntries, toggleTagsExpanded, worktreeState } from '../lib/stores'
+  import { busy, expandedStashSections, expandedTagSections, filters, mainView, mergeState, refs, selectRepo, selectStash, selectedRepoId, selectedStash, stashEntries, toggleStashExpanded, toggleTagsExpanded, worktreeState } from '../lib/stores'
   import type { Branch, StashEntry, Tag } from '../lib/types'
   import { changedCount } from '../lib/worktree'
   import { openMenu } from '../lib/ui'
@@ -11,7 +11,6 @@
   export let repoId: string
 
   let showRemotes = true
-  let showStash = true
   let openRemotes: Record<string, boolean> = {}
   let openGroups: Record<string, boolean> = {}
 
@@ -249,10 +248,10 @@
     {/if}
 
     <div class="section">
-      <button class="section-title" on:click={() => (showStash = !showStash)}>Stash</button>
+      <button class="section-title" on:click={() => toggleStashExpanded(repoId)}>Stash</button>
       <span class="count">{$stashEntries.length}</span>
     </div>
-    {#if showStash}
+    {#if $expandedStashSections.includes(repoId)}
       {#each $stashEntries as entry (entry.index)}
         <button
           class="row-item ref"
