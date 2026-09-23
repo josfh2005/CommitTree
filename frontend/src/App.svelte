@@ -12,6 +12,7 @@
   import TerminalPanel from './components/TerminalPanel.svelte'
   import Toasts from './components/Toasts.svelte'
   import { startFocusRefresh } from './lib/actions'
+  import { isTerminalToggle } from './lib/terminal'
   import { conflictOwnsScreen } from './lib/remote'
   import { chatOpen, chatWidth, loadAISettings, loadRefs, loadRepos, loadWorktreeState, mainView, mergeState, platform, refreshRepo, selectedHash, selectedRepo, selectedStash, sidebarWidth, stashConflictDismissed, stashEntries, terminalHeight, terminalOpen, uncommittedSelected } from './lib/stores'
   import type { RepoChangedEvent, WorktreeChangedEvent } from './lib/types'
@@ -42,10 +43,9 @@
 
   let sideHeight = 0
 
-  // e.code, not e.key: on layouts where ` is a dead key (Spanish, among
-  // others) e.key is "Dead", but the physical key is still Backquote.
   function toggleTerminal(e: KeyboardEvent) {
-    if (e.ctrlKey && !e.metaKey && !e.altKey && e.code === 'Backquote') {
+    const inTerminal = e.target instanceof Element && !!e.target.closest('.xterm')
+    if (isTerminalToggle(e, $platform, inTerminal)) {
       e.preventDefault()
       // Opening needs a selected, present repository — same condition the
       // header button is disabled under — so the shortcut can't open an
