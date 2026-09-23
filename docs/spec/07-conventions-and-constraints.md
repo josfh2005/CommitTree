@@ -91,6 +91,14 @@ though the confirmation dialog it opens is not styled dangerous. The two
 "dangerous" signals are decided independently; only the confirmation
 dialog's styling follows the reversibility rule above.
 
+The AI chat's approval card for a proposed write (see AI) is not this
+confirmation dialog: it lives inline in the chat conversation rather than as
+a modal, it names an operation the model chose rather than one the user
+already started, and it offers Reject and Approve rather than Cancel and a
+single confirm button. It plays the same role a confirmation dialog would —
+nothing the model proposes runs until the user approves that card — but is
+its own mechanism, scoped to the chat panel.
+
 A confirmation dialog may also carry a checkbox alongside its message, used
 when a choice needs to be remembered as part of confirming (for example,
 whether to also apply an action to a related item). The checkbox's state is
@@ -215,6 +223,15 @@ it to would let a pager or editor left open in a shell hold the lock
 indefinitely, and pausing keystrokes while an app operation runs would
 freeze Ctrl-C during a long push.
 
+A write proposed by the AI chat (see AI) does not take this lock while it
+waits for the user to approve or reject it — only the eventual, approved
+operation does, exactly as if the user had triggered it from the toolbar.
+The wait can be arbitrarily long, and taking the lock for its duration would
+let one unanswered chat card block every other write against that
+repository; instead, the repository is re-checked for changes at the moment
+of approval, immediately before the lock is taken, and the write is refused
+if anything moved in the meantime.
+
 ### State kept in a handful of JSON files, not a database
 
 Everything the application needs to remember between runs is stored as
@@ -275,16 +292,26 @@ implementation. Every other feature is unaffected by this.
 ### How the backend tells the frontend that something changed
 
 The backend does not poll and does not push a general "state changed"
-signal. Instead, after a mutating call completes successfully, the backend
-emits one of a small number of named events (that the working tree
-changed, that the merge state changed, plus a pair of events used only to
-stream a generated commit message into the box as it is produced and to
-mark that stream done). The frontend listens for these named events and
-re-reads whatever they concern from the backend rather than the event
-itself carrying the new state — the event is a signal to re-fetch, not a
-payload to render directly. Nothing is pushed to the frontend that was not
-caused by a call the frontend itself made, except for the window-focus
-checks described above, which the frontend initiates on its own.
+signal. Instead, after a mutating call completes, the backend emits one of a
+small number of named events (that the working tree changed, that the merge
+state changed, that a repository changed through some other means, plus a
+pair of events used only to stream a generated commit message into the box
+as it is produced and to mark that stream done). The frontend listens for
+these named events and re-reads whatever they concern from the backend
+rather than the event itself carrying the new state — the event is a signal
+to re-fetch, not a payload to render directly. Nothing is pushed to the
+frontend that was not caused by a call the frontend itself made, except for
+the window-focus checks described above, which the frontend initiates on
+its own.
+
+A write proposed and approved through the AI chat emits the repository-
+changed event on completion regardless of whether it succeeded or failed,
+as long as it was actually attempted (the write lock was taken) — a failure
+partway through, such as a branch created but not checked out, can still
+have changed the repository, so the frontend still needs to refresh. It is
+not emitted when nothing was attempted at all: the write was rejected, or
+refused because the repository had changed since it was proposed, or
+refused because the repository was already busy.
 
 ## Appendix: git command-line behaviour worth knowing
 

@@ -7,6 +7,13 @@ writes the commit that closes them. It is the ordinary, non-conflicted
 counterpart to Conflicts: when a merge, rebase or other conflict is in
 progress, Conflicts takes over the screen instead (see Conflicts).
 
+This same view is also reachable from the commit log's "Uncommitted
+changes" row (see Log and history): selecting that row opens it in the
+log's own details pane instead of the sidebar. Both are the same
+working-tree state — staging, unstaging or discarding a file in one is
+reflected in the other immediately, and everything in this document applies
+equally to either.
+
 ## Concepts
 
 - **Staged** — a path with an entry in the index that differs from HEAD (or,
