@@ -21,7 +21,9 @@ an ordinary edit has to be committed in a terminal.
   largest piece of the original scope and the file level makes the app usable
   on its own.
 - **A third mode in the main pane**, beside the log and the merge view, rather
-  than a permanent bottom panel or a synthetic row at the top of the log.
+  than a permanent bottom panel. Since 2026-09-23 a synthetic "Uncommitted
+  changes" row at the top of the log opens the same view in the details pane
+  as well — the two coexist (see `2026-09-23-uncommitted-row-design.md`).
 - **Amend is included**, because it is what people reach for a minute after
   committing. Anything that rewrites more than the last commit is not.
 - **Discarding an untracked file deletes it**, after a confirmation that says

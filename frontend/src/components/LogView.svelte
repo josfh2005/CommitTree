@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ChangesView from './ChangesView.svelte'
   import CommitDetails from './CommitDetails.svelte'
   import FilterBar from './FilterBar.svelte'
   import Icon from './Icon.svelte'
@@ -7,7 +8,12 @@
   import Splitter from './Splitter.svelte'
   import Toolbar from './Toolbar.svelte'
   import { conflictOwnsScreen } from '../lib/remote'
-  import { chatOpen, detailsHeight, mergeState, selectedHash, selectedRepo, stashConflictDismissed, terminalOpen } from '../lib/stores'
+  import { uncommittedCount } from '../lib/uncommitted'
+  import { chatOpen, detailsHeight, mergeState, selectedHash, selectedRepo, stashConflictDismissed, terminalOpen, uncommittedSelected, worktreeState } from '../lib/stores'
+
+  // The row can be selected a moment before the tree turns out clean (LogList
+  // then moves the selection to HEAD); never open an empty Changes pane.
+  $: showUncommitted = $uncommittedSelected && uncommittedCount($worktreeState) > 0
 </script>
 
 <div class="log-view">
@@ -33,11 +39,13 @@
     {#key $selectedRepo.id}
       <FilterBar repoId={$selectedRepo.id} />
       <div class="list"><LogList repoId={$selectedRepo.id} /></div>
-      {#if conflictOwnsScreen($mergeState, $stashConflictDismissed) || $selectedHash}
+      {#if conflictOwnsScreen($mergeState, $stashConflictDismissed) || $selectedHash || showUncommitted}
         <Splitter direction="horizontal" on:drag={(e) => detailsHeight.set(Math.min(720, Math.max(120, $detailsHeight - e.detail)))} />
         <div class="details" style="height: {$detailsHeight}px">
           {#if conflictOwnsScreen($mergeState, $stashConflictDismissed)}
             <MergeView repoId={$selectedRepo.id} />
+          {:else if showUncommitted}
+            <ChangesView repoId={$selectedRepo.id} />
           {:else if $selectedHash}
             <CommitDetails repoId={$selectedRepo.id} hash={$selectedHash} />
           {/if}

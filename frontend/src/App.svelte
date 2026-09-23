@@ -13,7 +13,9 @@
   import Toasts from './components/Toasts.svelte'
   import { startFocusRefresh } from './lib/actions'
   import { conflictOwnsScreen } from './lib/remote'
-  import { chatOpen, chatWidth, loadAISettings, loadRefs, loadRepos, mainView, mergeState, selectedHash, selectedRepo, selectedStash, sidebarWidth, stashConflictDismissed, stashEntries, terminalHeight, terminalOpen } from './lib/stores'
+  import { chatOpen, chatWidth, loadAISettings, loadRefs, loadRepos, loadWorktreeState, mainView, mergeState, selectedHash, selectedRepo, selectedStash, sidebarWidth, stashConflictDismissed, stashEntries, terminalHeight, terminalOpen, uncommittedSelected } from './lib/stores'
+  import type { WorktreeChangedEvent } from './lib/types'
+  import { EventsOn } from '../wailsjs/runtime/runtime'
 
   // A merge in progress always wins: neither the Changes view nor a stash
   // preview has anything to show that the merge view (reached through the
@@ -32,9 +34,9 @@
   // a different stash once entries below it shift.
   $: selectedStashEntry = $stashEntries.find((e) => e.hash === $selectedStash?.hash) ?? null
   $: showStash = $mainView === 'stash' && !conflictWins && !!$selectedRepo && !$selectedRepo.missing && !!selectedStashEntry
-  // Selecting a commit in the log means the user wants to look at history,
-  // not the working tree — switch the main pane back.
-  $: if ($selectedHash) mainView.set('log')
+  // Selecting a commit — or the log's uncommitted row — means the user
+  // wants the log pane, so switch the main pane back.
+  $: if ($selectedHash || $uncommittedSelected) mainView.set('log')
 
   const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v))
 
@@ -55,7 +57,17 @@
   onMount(() => {
     loadRepos().then(loadRefs)
     loadAISettings()
-    return startFocusRefresh()
+    const stopFocus = startFocusRefresh()
+    // Every view of the working tree follows $worktreeState — the Changes
+    // view and the log's "Uncommitted changes" row alike — so one app-wide
+    // listener keeps them fresh whether or not a Changes pane is mounted.
+    const offWorktree = EventsOn('worktree:changed', (payload: WorktreeChangedEvent) => {
+      if (payload?.repoID === $selectedRepo?.id) loadWorktreeState()
+    })
+    return () => {
+      stopFocus()
+      offWorktree()
+    }
   })
 </script>
 

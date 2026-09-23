@@ -7,9 +7,10 @@
     arrowAt, DOT_RADIUS, edgeSegment, graphWidth, laneColor, laneX, ROW_HEIGHT, rowCenterY, visibleRange,
   } from '../lib/geometry'
   import { isCurrentBranchRef } from '../lib/refBadge'
-  import { busy, chatOpen, filters, jumpTo, logOrder, logVersion, mergeState, refs, selectedHash } from '../lib/stores'
+  import { busy, chatOpen, filters, jumpTo, logOrder, logVersion, mergeState, refs, selectedHash, selectUncommitted, uncommittedSelected, worktreeState } from '../lib/stores'
   import type { LogRow } from '../lib/types'
   import { copyText, errorMessage, openMenu, toast } from '../lib/ui'
+  import { cleanTreeSelection, followHead, markerWidth, uncommittedCount, uncommittedMarker } from '../lib/uncommitted'
 
   export let repoId: string
 
@@ -30,6 +31,56 @@
   let scrollTop = 0
   let viewport = 0
   let hover: { x: number; y: number; text: string } | null = null
+
+  // The synthetic "Uncommitted changes" row sits above the first commit;
+  // every real row is pushed down by `lead` pixels while it is shown. Row
+  // indices never change — only the index↔pixel mapping does.
+  $: count = uncommittedCount($worktreeState)
+  $: lead = count > 0 ? ROW_HEIGHT : 0
+  $: marker = uncommittedMarker(rows)
+
+  // The row appearing/disappearing shifts every commit below it by
+  // ROW_HEIGHT; keep on-screen content still by shifting scrollTop the same
+  // amount, unless we're already at the top (scrollTop 0), where the new
+  // row should become visible instead of being scrolled past.
+  let prevLead = lead
+  $: if (lead !== prevLead) {
+    if (scroller && scroller.scrollTop > 0) scroller.scrollTop += lead - prevLead
+    prevLead = lead
+  }
+
+  // A commit, discard or stash that empties the tree removes the row; if it
+  // was selected, show HEAD instead of leaving an empty details pane.
+  //
+  // refreshRepo() loads refs before it bumps logVersion, so $refs.headHash
+  // can still be the parent at this point (the backend emits
+  // worktree:changed, which clears count, before CommitChanges/api call
+  // resolves and refreshRepo's later loadRefs runs). Remember the hash we
+  // selected as `followed`, along with the logVersion at the time, so the
+  // block below can jump to the real new HEAD once refs catch up.
+  let followed = ''
+  let followedVersion = -1
+  $: {
+    const next = cleanTreeSelection($uncommittedSelected, count, $refs?.headHash ?? '')
+    if (next !== null) {
+      uncommittedSelected.set(false)
+      if (next) {
+        selectedHash.set(next)
+        followed = next
+        followedVersion = $logVersion
+      }
+    }
+  }
+
+  // Fires on the next logVersion bump after a follow was set (not the same
+  // tick it was set in). If the selection is still the followed hash and
+  // HEAD has since moved on, follow it there; otherwise drop the follow
+  // without touching the selection.
+  $: if (followed && $logVersion !== followedVersion) {
+    const next = followHead(followed, $selectedHash, $refs?.headHash ?? '')
+    followed = ''
+    if (next) selectedHash.set(next)
+  }
 
   $: reload(repoId, $filters, $logOrder, $logVersion)
 
@@ -68,15 +119,18 @@
   function onScroll() {
     scrollTop = scroller.scrollTop
     hover = null
-    const nearEnd = scrollTop + viewport > (rows.length - 100) * ROW_HEIGHT
+    const nearEnd = scrollTop - lead + viewport > (rows.length - 100) * ROW_HEIGHT
     if (hasMore && loadingGen === -1 && nearEnd) loadPage(generation)
   }
 
-  $: range = visibleRange(scrollTop, viewport, rows.length)
+  $: range = visibleRange(Math.max(0, scrollTop - lead), viewport, rows.length)
   // Size the graph column to the rows on screen so one wide stretch of history
-  // doesn't squeeze the messages everywhere else.
-  $: width = graphVisible ? graphWidth(rows.slice(range.start, Math.min(rows.length, range.end + 1))) : 12
-  $: draw(canvas, rows, range, width, viewport, scrollTop, graphVisible)
+  // doesn't squeeze the messages everywhere else — plus the marker's lane
+  // while the uncommitted row is on screen, since HEAD may be scrolled away.
+  $: width = graphVisible
+    ? Math.max(graphWidth(rows.slice(range.start, Math.min(rows.length, range.end + 1))), lead && scrollTop < lead ? markerWidth(marker.lane) : 0)
+    : 12
+  $: draw(canvas, rows, range, width, viewport, scrollTop, graphVisible, lead, marker)
 
   function draw(..._deps: unknown[]) {
     if (!canvas || !graphVisible) return
@@ -85,8 +139,8 @@
     canvas.height = viewport * dpr
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    ctx.setTransform(dpr, 0, 0, dpr, 0, -scrollTop * dpr)
-    ctx.clearRect(0, scrollTop, width, viewport)
+    ctx.setTransform(dpr, 0, 0, dpr, 0, (lead - scrollTop) * dpr)
+    ctx.clearRect(0, scrollTop - lead, width, viewport)
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
 
@@ -128,11 +182,33 @@
         ctx.fill()
       }
     }
+
+    // The uncommitted row's marker, one row above the first commit: a hollow
+    // dashed dot, joined to HEAD only when HEAD is directly below it.
+    if (lead) {
+      const x = laneX(marker.lane)
+      const y = rowCenterY(-1)
+      ctx.setLineDash([2, 2])
+      ctx.strokeStyle = laneColor(marker.color)
+      ctx.lineWidth = 1.6
+      if (marker.joined) {
+        ctx.beginPath()
+        ctx.moveTo(x, y + DOT_RADIUS)
+        ctx.lineTo(x, rowCenterY(0) - DOT_RADIUS)
+        ctx.stroke()
+      }
+      ctx.beginPath()
+      ctx.arc(x, y, DOT_RADIUS, 0, Math.PI * 2)
+      ctx.fillStyle = surface
+      ctx.fill()
+      ctx.stroke()
+      ctx.setLineDash([])
+    }
   }
 
   function graphPoint(event: MouseEvent) {
     const rect = canvas.getBoundingClientRect()
-    return { x: event.clientX - rect.left, y: event.clientY - rect.top + scrollTop }
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top + scrollTop - lead }
   }
 
   function onGraphMove(event: MouseEvent) {
@@ -157,12 +233,18 @@
       jumpTo.set(s.target)
       return
     }
+    if (p.y < 0) {
+      if (lead) selectUncommitted()
+      return
+    }
     const row = rows[Math.floor(p.y / ROW_HEIGHT)]
     if (row) selectedHash.set(row.hash)
   }
 
   function onGraphContext(event: MouseEvent) {
-    const row = rows[Math.floor(graphPoint(event).y / ROW_HEIGHT)]
+    const p = graphPoint(event)
+    if (p.y < 0) return
+    const row = rows[Math.floor(p.y / ROW_HEIGHT)]
     if (row) commitMenu(event, row)
   }
 
@@ -213,7 +295,7 @@
     }
     selectedHash.set(hash)
     await tick()
-    scroller.scrollTop = Math.max(0, index * ROW_HEIGHT - viewport / 2)
+    scroller.scrollTop = Math.max(0, index * ROW_HEIGHT + lead - viewport / 2)
   }
 
   const stopJump = jumpTo.subscribe((hash) => {
@@ -226,7 +308,7 @@
 
 <div class="log">
   <div class="scroller" bind:this={scroller} bind:clientHeight={viewport} on:scroll={onScroll}>
-    <div class="spacer" style="height: {(rows.length + (shallow && !hasMore && rows.length ? 1 : 0)) * ROW_HEIGHT}px">
+    <div class="spacer" style="height: {(rows.length + (shallow && !hasMore && rows.length ? 1 : 0)) * ROW_HEIGHT + lead}px">
       {#if graphVisible}
         <canvas
           bind:this={canvas}
@@ -237,12 +319,24 @@
           on:contextmenu={onGraphContext}
         ></canvas>
       {/if}
+      {#if lead}
+        <button
+          class="row uncommitted"
+          class:selected={$uncommittedSelected}
+          style="top: 0; padding-left: {width}px"
+          on:click={selectUncommitted}
+          on:contextmenu|preventDefault
+        >
+          <span class="subject ellipsis">Uncommitted changes ({count})</span>
+          <span></span><span></span><span></span>
+        </button>
+      {/if}
       {#each rows.slice(range.start, range.end) as row, i (row.hash)}
         <button
           class="row"
           class:selected={row.hash === $selectedHash}
           class:merge={row.isMerge}
-          style="top: {(range.start + i) * ROW_HEIGHT}px; padding-left: {width}px"
+          style="top: {(range.start + i) * ROW_HEIGHT + lead}px; padding-left: {width}px"
           on:click={() => selectedHash.set(row.hash)}
           on:contextmenu={(e) => commitMenu(e, row)}
         >
@@ -258,7 +352,7 @@
         </button>
       {/each}
       {#if shallow && !hasMore && rows.length}
-        <div class="note" style="top: {rows.length * ROW_HEIGHT}px">Shallow clone: older history is not available locally.</div>
+        <div class="note" style="top: {rows.length * ROW_HEIGHT + lead}px">Shallow clone: older history is not available locally.</div>
       {/if}
     </div>
   </div>
@@ -293,6 +387,7 @@
   }
   .row.selected { background: var(--selection); }
   .merge .subject { color: var(--merge-text); }
+  .uncommitted .subject { font-style: italic; color: var(--muted); }
   .author, .date, .hash { color: var(--muted); font-size: 12px; }
   .badge { display: inline-block; margin-right: 6px; padding: 1px 6px; border-radius: 6px; font-size: 11px; line-height: 15px; }
   .badge.local, .badge.remote { background: var(--branch-badge-bg); color: var(--branch-badge-text); }

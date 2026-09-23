@@ -1,15 +1,13 @@
 <script lang="ts">
-  import { EventsOn } from '../../wailsjs/runtime/runtime'
   import CommitBox from './CommitBox.svelte'
   import FileList, { rowKey } from './FileList.svelte'
   import { api } from '../lib/api'
   import { discardFile, stageFile, unstageFile } from '../lib/actions'
   import { lineClass } from '../lib/diff'
   import { hasStagedChanges, nextSelection, worktreeSections, type SelectionKey } from '../lib/worktree'
-  import type { FileStatus, WorktreeChangedEvent } from '../lib/types'
-  import { busy, loadWorktreeState, worktreeState } from '../lib/stores'
+  import type { FileStatus } from '../lib/types'
+  import { busy, worktreeState } from '../lib/stores'
   import { errorMessage } from '../lib/ui'
-  import { onDestroy } from 'svelte'
 
   export let repoId: string
 
@@ -21,13 +19,6 @@
   let text = ''
   let error = ''
   let request = 0
-
-  // The pane follows $worktreeState (below), so the handler only reloads it.
-  const off = EventsOn('worktree:changed', (payload: WorktreeChangedEvent) => {
-    if (payload?.repoID !== repoId) return
-    loadWorktreeState()
-  })
-  onDestroy(off)
 
   $: sections = $worktreeState ? worktreeSections($worktreeState) : []
   $: files = sections.flatMap((s) => s.files)
