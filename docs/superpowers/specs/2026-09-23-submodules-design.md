@@ -1,7 +1,7 @@
 # git-ui — Git submodules — Design
 
 Date: 2026-09-23
-Status: Approved 2026-09-23 (all [proposed] decisions accepted as written)
+Status: Implemented (manual pass pending) — approved 2026-09-23
 Builds on: `docs/spec/01-repositories-and-sidebar.md`, `docs/spec/02-log-and-history.md`,
 `docs/spec/03-working-tree.md`, the worktrees design
 (`2026-09-23-worktrees-and-sidebar-order-design.md`).
