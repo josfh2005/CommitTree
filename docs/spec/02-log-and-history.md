@@ -158,7 +158,11 @@ unchanged, so the log doesn't read as banded. The selected row is still
 highlighted, and stays highlighted regardless of the pointer's position.
 
 Selecting a row (a click, or landing on it via a graph-arrow jump) opens the
-details pane beneath the log. The pane shows the commit's full subject and
+details pane beneath the log. A left click on the row — or its graph dot —
+that is already selected clears the selection instead, closing the details
+pane; the same holds for the "Uncommitted changes" row. Opening a row's
+context menu, following a graph arrow, and selecting from anywhere outside
+the log always select and never clear. The pane shows the commit's full subject and
 body, its author and email, its full commit date, its full hash (copyable)
 and a link for each of its parents that jumps the log to that parent. Below
 that is the list of files the commit changed; the first file is opened

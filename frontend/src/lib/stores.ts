@@ -95,6 +95,20 @@ export function selectUncommitted() {
   uncommittedSelected.set(true)
   mainView.set('log')
 }
+
+/** A left click on a log row or graph dot: select the commit, or clear the
+ *  selection (closing the details pane) when it is the one already
+ *  selected. Right-click menus and jumps keep using selectedHash.set, which
+ *  always selects. */
+export function toggleCommit(hash: string) {
+  selectedHash.set(get(selectedHash) === hash ? '' : hash)
+}
+
+/** The same toggle for the log's "Uncommitted changes" row. */
+export function toggleUncommitted() {
+  if (get(uncommittedSelected)) uncommittedSelected.set(false)
+  else selectUncommitted()
+}
 /** Which stash the sidebar has selected for the preview pane, or null when
  *  none is. Identified by hash, not index — an index shifts whenever any
  *  entry below it is applied, popped or dropped, including from another
