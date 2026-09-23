@@ -1,7 +1,7 @@
 # git-ui — Git submodules — Design
 
 Date: 2026-09-23
-Status: Proposed (decisions marked **[proposed]** await the owner's OK)
+Status: Approved 2026-09-23 (all [proposed] decisions accepted as written)
 Builds on: `docs/spec/01-repositories-and-sidebar.md`, `docs/spec/02-log-and-history.md`,
 `docs/spec/03-working-tree.md`, the worktrees design
 (`2026-09-23-worktrees-and-sidebar-order-design.md`).
@@ -117,6 +117,9 @@ Proposed here:
    > \> e4f5g6h Fix overflow in inflate
    > \> 9c8d7e6 Bump version
    > (from `git diff --submodule=log`; `<` lines when it moved backwards)
+
+   (git's `--submodule=log` lists each commit by subject only, without its
+   hash, so the rows show `> subject`.)
 
    plus a note "Contains modified content / untracked content — **Open
    submodule**" when that applies, with the link opening it. When the
