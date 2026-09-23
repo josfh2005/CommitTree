@@ -370,7 +370,20 @@ func prepareCreateBranch(ctx context.Context, dir string, args map[string]any) (
 	if verifyRef(ctx, dir, "refs/heads/"+name) {
 		return Proposal{}, fmt.Errorf("branch %q already exists", name)
 	}
-	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "log", "-1", "--format=%h%x09%s", start, "--")
+	// start is model-supplied and reaches git as a bare argument below: a
+	// value like "-5" or "--all" would otherwise be read as an option by
+	// `git log` instead of a revision. Reject a leading "-" outright, and
+	// resolve through --end-of-options so nothing after it can be parsed as
+	// an option either; only the resolved hash is ever used in a git call.
+	if strings.HasPrefix(start, "-") {
+		return Proposal{}, fmt.Errorf("%q is not a commit", start)
+	}
+	hashOut, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--verify", "--quiet", "--end-of-options", start+"^{commit}")
+	if err != nil {
+		return Proposal{}, fmt.Errorf("%q is not a commit", start)
+	}
+	hash := strings.TrimSpace(hashOut)
+	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "log", "-1", "--format=%h%x09%s", hash, "--")
 	if err != nil {
 		return Proposal{}, fmt.Errorf("%q is not a commit", start)
 	}
@@ -506,10 +519,6 @@ func preparePush(ctx context.Context, dir string) (Proposal, error) {
 
 	upstream, hasUpstream := upstreamOf(ctx, dir)
 
-	var title string
-	var logArgs []string
-	var total int
-
 	if hasUpstream {
 		count, err := revListCount(ctx, dir, upstream+"..HEAD")
 		if err != nil {
@@ -518,27 +527,40 @@ func preparePush(ctx context.Context, dir string) (Proposal, error) {
 		if count == 0 {
 			return Proposal{}, fmt.Errorf("%s has nothing to push to %s", branch, upstream)
 		}
-		title = fmt.Sprintf("Push %s to %s", branch, upstream)
-		logArgs = []string{"log", "--oneline", "-n", "5", upstream + "..HEAD"}
-		total = count
-	} else {
-		remotes, err := listRemotes(ctx, dir)
+		title := fmt.Sprintf("Push %s to %s", branch, upstream)
+		details, err := logDetails(ctx, dir, []string{"log", "--oneline", "-n", "5", upstream + "..HEAD"}, count)
 		if err != nil {
 			return Proposal{}, err
 		}
-		if !contains(remotes, "origin") {
-			return Proposal{}, errors.New(`no upstream and no "origin" remote`)
-		}
-		title = fmt.Sprintf("Publish %s to origin (sets upstream origin/%s)", branch, branch)
-		count, err := revListCount(ctx, dir, "HEAD")
-		if err != nil {
-			return Proposal{}, err
-		}
-		logArgs = []string{"log", "--oneline", "-n", "5", "HEAD"}
-		total = count
+		return Proposal{Title: title, Details: details}, nil
 	}
 
-	details, err := logDetails(ctx, dir, logArgs, total)
+	remotes, err := listRemotes(ctx, dir)
+	if err != nil {
+		return Proposal{}, err
+	}
+	if !contains(remotes, "origin") {
+		return Proposal{}, errors.New(`no upstream and no "origin" remote`)
+	}
+	if !verifyRef(ctx, dir, "HEAD") {
+		return Proposal{}, fmt.Errorf("%s has no commits to push", branch)
+	}
+
+	title := fmt.Sprintf("Publish %s to origin (sets upstream origin/%s)", branch, branch)
+	// Counted against every remote-tracking ref, not all of HEAD's history:
+	// otherwise a branch that shares history with an already-pushed branch
+	// would be reported as publishing hundreds of already-published commits.
+	count, err := revListCount(ctx, dir, "HEAD", "--not", "--remotes")
+	if err != nil {
+		return Proposal{}, err
+	}
+	if count == 0 {
+		return Proposal{
+			Title:   title,
+			Details: []string{fmt.Sprintf("no new commits; creates origin/%s", branch)},
+		}, nil
+	}
+	details, err := logDetails(ctx, dir, []string{"log", "--oneline", "-n", "5", "HEAD", "--not", "--remotes"}, count)
 	if err != nil {
 		return Proposal{}, err
 	}
@@ -630,8 +652,8 @@ func listRemotes(ctx context.Context, dir string) ([]string, error) {
 	return strings.Fields(out), nil
 }
 
-func revListCount(ctx context.Context, dir, revRange string) (int, error) {
-	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-list", "--count", revRange)
+func revListCount(ctx context.Context, dir string, revArgs ...string) (int, error) {
+	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, append([]string{"rev-list", "--count"}, revArgs...)...)
 	if err != nil {
 		return 0, err
 	}

@@ -288,6 +288,63 @@ func TestPullProposals(t *testing.T) {
 	}
 }
 
+func TestCreateBranchRejectsOptionLikeStart(t *testing.T) {
+	r := testrepo.New(t)
+	r.Commit("base")
+	if _, err := prep(r.Dir, "create_branch", map[string]any{"name": "x", "start": "-5"}); err == nil || !strings.Contains(err.Error(), `"-5" is not a commit`) {
+		t.Fatalf("err = %v", err)
+	}
+	if _, err := prep(r.Dir, "create_branch", map[string]any{"name": "y", "start": "--all"}); err == nil || !strings.Contains(err.Error(), `"--all" is not a commit`) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestCheckoutAndMergeRejectLeadingDashBranchNamesCleanly(t *testing.T) {
+	r := testrepo.New(t)
+	r.Commit("base")
+	if _, err := prep(r.Dir, "checkout_branch", map[string]any{"name": "-x"}); err == nil || !strings.Contains(err.Error(), `no branch "-x"`) {
+		t.Fatalf("err = %v", err)
+	}
+	if _, err := prep(r.Dir, "merge_branch", map[string]any{"branch": "-x"}); err == nil || !strings.Contains(err.Error(), `no branch "-x"`) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestPushPublishCountsOnlyCommitsNotOnAnyRemote(t *testing.T) {
+	src := testrepo.New(t)
+	src.Commit("base")
+	remote := testrepo.NewBareFrom(t, src)
+	r := testrepo.Clone(t, remote)
+	r.Git("branch", "topic")
+	r.Git("switch", "-q", "topic")
+
+	p, err := prep(r.Dir, "push", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Title != "Publish topic to origin (sets upstream origin/topic)" || strings.Join(p.Details, "|") != "no new commits; creates origin/topic" {
+		t.Fatalf("p = %+v", p)
+	}
+
+	r.Commit("new")
+	p, err = prep(r.Dir, "push", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Details) != 1 {
+		t.Fatalf("details = %v", p.Details)
+	}
+}
+
+func TestPushWithUnbornHeadAndOrigin(t *testing.T) {
+	remote := testrepo.NewBareFrom(t, testrepo.New(t))
+	r := testrepo.New(t)
+	r.Git("remote", "add", "origin", remote)
+	if _, err := prep(r.Dir, "push", nil); err == nil || !strings.Contains(err.Error(), "has no commits to push") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestMergeBranchProposals(t *testing.T) {
 	r := testrepo.New(t)
 	r.Commit("base")
