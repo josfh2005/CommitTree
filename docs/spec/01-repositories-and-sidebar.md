@@ -59,6 +59,24 @@ manager is launched and not waited on. It is refused for a missing
 repository. The same mechanism opens the prompts folder from the AI
 settings, on every platform.
 
+### Worktrees
+
+Every read of the repository list also asks git, for each present stored
+repository that is a main working tree, which linked worktrees it has
+(`git worktree list --porcelain -z`). Each linked worktree whose directory
+exists, and that git does not report as prunable or bare, is listed as a
+child of that repository, labelled with its directory's name and its
+current branch (or `HEAD (<short hash>)` when detached). Nothing about
+detected worktrees is stored: one removed elsewhere simply stops being
+listed at the next read. The main working tree is the repository's own
+entry and is never listed again as a child. A stored repository that is
+itself a linked worktree of another listed repository is shown as that
+repository's child instead of at the top level, keeping its own identifier,
+and gets no children of its own (git would list its siblings from it).
+When a local branch is checked out in another worktree, switching to it is
+refused with "<branch> is checked out in another worktree (<path>)" rather
+than git's own message.
+
 ### Missing repositories
 
 A repository is flagged missing purely by checking, on every list read,

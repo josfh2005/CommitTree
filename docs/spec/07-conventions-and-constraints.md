@@ -232,6 +232,27 @@ repository; instead, the repository is re-checked for changes at the moment
 of approval, immediately before the lock is taken, and the write is refused
 if anything moved in the meantime.
 
+A detected git worktree (see Repositories and sidebar) is a repository for
+this purpose: it has its own lock, independent of its main repository's and
+of its sibling worktrees'. They share one object database and one set of
+refs, so two of them can be written at the same moment; git's own ref
+locking still serialises the ref updates themselves, and a branch can only
+be checked out in one of them at a time (git refuses the second).
+
+### Repository identity and detected worktrees
+
+Every per-repository operation names its repository by an identifier. A
+stored repository's identifier is derived from its path when it is first
+added and never changes. A linked worktree detected under a listed
+repository gets an identifier derived from its path the same way, every
+time it is listed, so its conversation, terminal tabs and remembered UI
+state survive restarts and return if a worktree is recreated at the same
+path. An identifier is resolved against the stored repositories first and
+then against the worktrees the latest read of the repository list
+detected; a worktree that has since disappeared no longer resolves.
+Detected worktrees are not list entries: removing, grouping or relocating
+one is refused as an unknown repository.
+
 ### State kept in a handful of JSON files, not a database
 
 Everything the application needs to remember between runs is stored as
