@@ -33,15 +33,19 @@
   $: selected = selection ? rowKey(selection.section, selection.path) : ''
   $: selectedFile = files.find((f) => keyOf(f) === selected) ?? null
   // A submodule's diff is git's `--submodule=log` summary, not a text diff
-  // — see submodules.ts. An unstaged submodule whose pointer hasn't moved
-  // (content-only: modified/untracked content inside it) can't be staged
-  // from here, so its note is overridden to say why, in place of whatever
-  // (empty) note the raw diff text carried.
+  // — see submodules.ts. `text` is empty while the diff is still loading,
+  // and parseSubmoduleDiff returns null for that (and for any diff whose
+  // text genuinely isn't a submodule summary), so `sub` stays null and the
+  // raw-lines branch renders instead — same as for any other file, no
+  // flash of an empty "Submodule <path>" box. Only a successfully parsed,
+  // content-only, unstaged row (pointer hasn't moved, nothing to stage or
+  // update here) gets its note overridden to say why.
   $: sub = selectedFile?.submodule ? submoduleDiffFor(text, selectedFile) : null
   $: subRepoId = selectedFile?.submodule ? submoduleRepoId($repos, repoId, selectedFile.path) : undefined
 
-  function submoduleDiffFor(diffText: string, file: FileStatus): SubmoduleDiff {
-    const parsed = parseSubmoduleDiff(diffText) ?? { path: file.path, from: '', to: '', note: '', commits: [], content: [] }
+  function submoduleDiffFor(diffText: string, file: FileStatus): SubmoduleDiff | null {
+    const parsed = parseSubmoduleDiff(diffText)
+    if (!parsed) return null
     if (!isStaged(file) && !file.subCommit) return { ...parsed, note: 'Commit inside the submodule first' }
     return parsed
   }

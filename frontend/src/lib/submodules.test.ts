@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { markers, nextSelection, parseSubmoduleDiff, rowLabel, splitPath, updateMessage } from './submodules'
+import { markers, nextSelection, parseSubmoduleDiff, rowLabel, splitPath, submoduleRepoId, updateMessage } from './submodules'
 import type { Repo, Submodule } from './types'
 
 const base: Submodule = { name: 'lib', path: 'vendor/lib', url: 'u', recorded: 'a'.repeat(40), checkedOut: 'a'.repeat(40), branch: '', initialised: true, configured: true, moved: false, modified: false, untracked: false, conflict: false }
@@ -44,6 +44,25 @@ describe('parseSubmoduleDiff', () => {
 it('updateMessage names the commit left and the branch', () => {
   const s = { ...base, moved: true, checkedOut: 'b'.repeat(40), branch: 'main' }
   expect(updateMessage(s)).toBe('vendor/lib will leave bbbbbbb and check out the recorded commit aaaaaaa on a detached HEAD. Branch main itself is not changed.')
+})
+
+describe('submoduleRepoId', () => {
+  const top: Repo = { id: 't', name: 't', path: '/t', missing: false, branch: 'main' }
+  const lib: Repo = { id: 's', name: 'lib', path: '/t/lib', missing: false, branch: 'main', submodule: true, parentId: 't', subPath: 'lib' }
+  // A nested submodule's subPath is relative to the TOP repository ('lib/inner'),
+  // not to its immediate parent ('s') — the reason submoduleRepoId matches by
+  // absolute path instead of parentId/subPath.
+  const inner: Repo = { id: 'n', name: 'inner', path: '/t/lib/inner', missing: false, branch: 'main', submodule: true, parentId: 's', subPath: 'lib/inner' }
+  const list = [top, lib, inner]
+
+  it('resolves a top-level submodule by its path relative to the top repository', () =>
+    expect(submoduleRepoId(list, 't', 'lib')).toBe('s'))
+  it('resolves a nested submodule when the current repo is itself an opened submodule', () =>
+    expect(submoduleRepoId(list, 's', 'inner')).toBe('n'))
+  it('returns undefined when nothing matches', () => {
+    expect(submoduleRepoId(list, 't', 'missing')).toBeUndefined()
+    expect(submoduleRepoId(list, 'unknown', 'lib')).toBeUndefined()
+  })
 })
 
 describe('nextSelection', () => {
