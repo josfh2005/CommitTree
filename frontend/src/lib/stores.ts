@@ -1,5 +1,6 @@
 import { derived, get, writable, type Writable } from 'svelte/store'
 import { api } from './api'
+import type { BlameTarget } from './blame'
 import { validSelectedStash, type SelectedStash } from './stash'
 import { nextSelection } from './submodules'
 import { emptyFilters, type AISettings, type AheadBehind, type Filters, type GitSettings, type LogOrder, type MergeState, type Refs, type Repo, type StashEntry, type WorktreeState } from './types'
@@ -81,10 +82,53 @@ export const worktreeState = writable<WorktreeState | null>(null)
  *  refreshed after Settings saves — see SettingsDialog's save(). */
 export const aiSettings = writable<AISettings | null>(null)
 /** Which view the main pane shows: the log (with commit details / the merge
- *  view below it), the Changes view, or a stash preview. A merge in
- *  progress always wins over either — see conflictOwnsScreen in remote.ts,
- *  which App.svelte applies on top of this. */
-export const mainView = writable<'log' | 'changes' | 'stash'>('log')
+ *  view below it), the Changes view, a stash preview, or a file's blame. A
+ *  merge in progress always wins over either — see conflictOwnsScreen in
+ *  remote.ts, which App.svelte applies on top of this. */
+export const mainView = writable<'log' | 'changes' | 'stash' | 'blame'>('log')
+
+/** The file the Blame view shows, and the targets Blame previous revision
+ *  left behind, newest last, for Back to return to. */
+export const blameTarget = writable<BlameTarget | null>(null)
+export const blameStack = writable<BlameTarget[]>([])
+export const blameIgnoreWhitespace = persisted('blameIgnoreWhitespace', false)
+
+/** Opens the Blame view on path at rev ('' = working tree); Back returns to
+ *  the view it was opened from. */
+export function openBlame(path: string, rev: string) {
+  const from = get(mainView) === 'changes' ? 'changes' : 'log'
+  blameStack.set([])
+  blameTarget.set({ path, rev, from })
+  mainView.set('blame')
+}
+
+export function blamePrevious(path: string, rev: string) {
+  const current = get(blameTarget)
+  if (!current) return
+  blameStack.update((s) => [...s, current])
+  blameTarget.set({ path, rev, from: current.from })
+}
+
+export function blameBack() {
+  const stack = get(blameStack)
+  if (stack.length) {
+    blameTarget.set(stack[stack.length - 1])
+    blameStack.set(stack.slice(0, -1))
+    return
+  }
+  const from = get(blameTarget)?.from ?? 'log'
+  blameTarget.set(null)
+  mainView.set(from)
+}
+
+/** Selects a commit in the log. mainView is set explicitly: when the blame
+ *  was opened from this very commit, selectedHash does not change, so
+ *  App.svelte's "a selection means the log" rule would not fire. */
+export function showCommitInLog(hash: string) {
+  selectedHash.set(hash)
+  jumpTo.set(hash)
+  mainView.set('log')
+}
 /** The log's synthetic "Uncommitted changes" row is selected, so the
  *  details pane shows the Changes view. Mutually exclusive with
  *  selectedHash: selectUncommitted clears the hash, and the subscription
@@ -169,6 +213,8 @@ export async function loadRepos() {
   selectedHash.set('')
   uncommittedSelected.set(false)
   mainView.set('log')
+  blameTarget.set(null)
+  blameStack.set([])
   refs.set(null)
   mergeState.set(null)
   worktreeState.set(null)
@@ -315,6 +361,8 @@ export function selectRepo(id: string) {
     selectedHash.set('')
     uncommittedSelected.set(false)
     mainView.set('log')
+    blameTarget.set(null)
+    blameStack.set([])
     stashConflictDismissed.set(false)
     selectedStash.set(null)
     worktreeState.set(null)
