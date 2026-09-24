@@ -17,6 +17,9 @@ const (
 	Merged Outcome = iota
 	Conflicted
 	UpToDate
+	Rebased        // a rebase replayed or fast-forwarded the branch
+	Picked         // a cherry-pick made its commit
+	NothingToApply // a cherry-pick whose changes the branch already has
 )
 
 // Result is what Start produces; Conflicts is set only when Conflicted.
