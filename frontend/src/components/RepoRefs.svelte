@@ -1,12 +1,14 @@
 <script lang="ts">
   import BranchRow from './BranchRow.svelte'
   import Icon from './Icon.svelte'
-  import { checkoutBranch, deleteBranch, deleteTag, mergeBranch, newBranch, newTag, stashApply, stashDrop, stashPop } from '../lib/actions'
+  import { api } from '../lib/api'
+  import { checkoutBranch, deleteBranch, deleteTag, mergeBranch, newBranch, newTag, rebaseOnto, stashApply, stashDrop, stashPop } from '../lib/actions'
   import { groupBranches, leafName, type BranchGroup } from '../lib/branches'
+  import { rebaseBlocker } from '../lib/rebase'
   import { busy, expandedStashSections, repos, expandedTagSections, filters, mainView, mergeState, refs, selectRepo, selectStash, selectedRepoId, selectedStash, stashEntries, toggleStashExpanded, toggleTagsExpanded, worktreeState } from '../lib/stores'
   import type { Branch, StashEntry, Tag } from '../lib/types'
   import { changedCount } from '../lib/worktree'
-  import { openMenu } from '../lib/ui'
+  import { openMenu, openMenuAsync } from '../lib/ui'
 
   export let repoId: string
   /** Set when repoId is a submodule opened under its parent (see RepoRow):
@@ -61,17 +63,32 @@
   }
 
   function branchMenu(event: MouseEvent, b: Branch) {
-    openMenu(event, [
-      { label: 'Check out', action: () => checkoutBranch(repoId, b), disabled: b.current || !!b.worktree || !!$busy },
-      {
-        label: `Merge ${branchLabel(b)} into ${$refs?.head ?? ''}`,
-        action: () => mergeBranch(repoId, b, $refs?.head ?? ''),
-        disabled: b.current || !!$busy || !!$refs?.detached || !!$mergeState?.merging,
-      },
-      { label: 'New branch from here…', action: () => newBranch(repoId, branchLabel(b), branchLabel(b)) },
-      { label: 'New tag here…', action: () => newTag(repoId, branchLabel(b), branchLabel(b)) },
-      { label: b.remote ? 'Delete on remote…' : 'Delete…', action: () => deleteBranch(repoId, b), danger: true, disabled: b.current || !!b.worktree },
-    ])
+    const head = $refs?.head ?? ''
+    openMenuAsync(event, async () => {
+      const contained = b.current ? false : await api.isAncestorOfHead(repoId, branchLabel(b)).catch(() => false)
+      const rebaseWhy = rebaseBlocker(
+        { isHead: b.current, contained, detached: !!$refs?.detached, busy: !!$busy, kind: $mergeState?.merging ? $mergeState.kind : '' },
+        head,
+        branchLabel(b),
+      )
+      return [
+        { label: 'Check out', action: () => checkoutBranch(repoId, b), disabled: b.current || !!b.worktree || !!$busy },
+        {
+          label: `Merge ${branchLabel(b)} into ${head}`,
+          action: () => mergeBranch(repoId, b, head),
+          disabled: b.current || !!$busy || !!$refs?.detached || !!$mergeState?.merging,
+        },
+        {
+          label: `Rebase ${head} onto ${branchLabel(b)}`,
+          action: () => rebaseOnto(repoId, branchLabel(b), branchLabel(b), head),
+          disabled: rebaseWhy !== null,
+          title: rebaseWhy ?? undefined,
+        },
+        { label: 'New branch from here…', action: () => newBranch(repoId, branchLabel(b), branchLabel(b)) },
+        { label: 'New tag here…', action: () => newTag(repoId, branchLabel(b), branchLabel(b)) },
+        { label: b.remote ? 'Delete on remote…' : 'Delete…', action: () => deleteBranch(repoId, b), danger: true, disabled: b.current || !!b.worktree },
+      ]
+    })
   }
 
   // Clicking Changes under an expanded-but-not-selected repository must act

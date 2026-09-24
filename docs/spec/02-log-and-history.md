@@ -201,11 +201,25 @@ submodule is only ever shown differently in the details pane.
 The details pane also offers, from the row's context menu, checking the
 commit out detached (with a confirmation naming the consequence — new
 commits made there won't belong to any branch), creating a new branch or
-tag at that commit, resetting the current branch to it, copying its hash,
-and asking the AI assistant to explain the commit in the chat panel. Reset
+tag at that commit, cherry-picking the commit onto the current branch,
+rebasing the current branch onto the commit, resetting the current branch
+to it, copying its hash, and asking the AI assistant to explain the commit
+in the chat panel. Both cherry-pick and rebase confirm first. Reset
 is refused when there is no current branch to move, the head is detached, a
 merge is already in progress, the target is already where the branch points
 (nothing to move), or a write is already running.
+
+Cherry-pick is refused when the commit is a merge commit, it is already
+contained in `HEAD`, the head is detached, a write is running, or any
+conflicted operation is in progress; uncommitted changes to tracked files
+refuse it on click ("Commit or stash your changes first"). A cherry-pick
+whose changes the current branch already has reports "Nothing to apply"
+and leaves nothing in progress. Rebase is refused under the same
+conditions as the branch menu's "Rebase `<head>` onto `<branch>`" (see
+Repositories and sidebar): the commit is `HEAD`, the current branch already
+contains it, a write is running, the head is detached, any conflicted
+operation is in progress, or there are uncommitted changes to tracked
+files.
 
 ## The "Uncommitted changes" row
 

@@ -3,8 +3,8 @@
   import Icon from './Icon.svelte'
   import FileList, { rowKey } from './FileList.svelte'
   import { api } from '../lib/api'
-  import { abortMerge, commitMerge, dismissStashConflict, resolveConflicts, stageMergeFile, stashDrop, takeMergeSide, unstageMergeFile } from '../lib/actions'
-  import { conflictActions, conflictHeader, mergeSections, type MergeFile } from '../lib/merge'
+  import { abortMerge, commitMerge, dismissStashConflict, resolveConflicts, skipStep, stageMergeFile, stashDrop, takeMergeSide, unstageMergeFile } from '../lib/actions'
+  import { conflictActions, conflictHeader, mergeSections, sideLabel, type MergeFile } from '../lib/merge'
   import { lineClass } from '../lib/diff'
   import { nextSelection, type SelectionKey } from '../lib/worktree'
   import { busy, loadMergeState, mergeState, owedStashDrop } from '../lib/stores'
@@ -37,7 +37,7 @@
   $: fileSection = new Map(sections.flatMap((s) => s.files.map((f) => [f, s.title] as const)))
   $: pending = ($mergeState?.conflicts.length ?? 0) + ($mergeState?.manual.length ?? 0)
   $: head = $mergeState ? conflictHeader($mergeState) : null
-  $: acts = $mergeState ? conflictActions($mergeState) : { abort: null, confirm: null, ai: false, done: false }
+  $: acts = $mergeState ? conflictActions($mergeState) : { abort: null, confirm: null, ai: false, done: false, skip: false }
   $: selected = selection ? rowKey(selection.section, selection.path) : ''
   // Re-key the selection onto wherever its path now lives (a resolve/stage
   // moves a file Conflicts → Unstaged → Staged, but it's still the file the
@@ -90,11 +90,11 @@
   // it overwrites the worktree copy, which Unstage does not restore.
   function manualMenu(event: MouseEvent, file: { path: string; status: string }) {
     if (file.status !== 'manual') return
-    const into = $mergeState?.into ?? ''
-    const from = $mergeState?.from ?? ''
+    const ours = sideLabel($mergeState?.oursLabel, $mergeState?.into || 'ours')
+    const theirs = sideLabel($mergeState?.theirsLabel, $mergeState?.from || 'theirs')
     openMenu(event, [
-      { label: `Take ours (${into})`, action: () => takeMergeSide(repoId, file.path, 'ours', into), disabled: !!$busy },
-      { label: `Take theirs (${from})`, action: () => takeMergeSide(repoId, file.path, 'theirs', from), disabled: !!$busy },
+      { label: `Take ${ours}`, action: () => takeMergeSide(repoId, file.path, 'ours', ours), disabled: !!$busy },
+      { label: `Take ${theirs}`, action: () => takeMergeSide(repoId, file.path, 'theirs', theirs), disabled: !!$busy },
     ])
   }
 
@@ -137,6 +137,9 @@
     {/if}
     {#if acts.abort}
       <button class="btn" disabled={!!$busy} on:click={() => abortMerge(repoId)}>{acts.abort}</button>
+    {/if}
+    {#if acts.skip}
+      <button class="btn" disabled={!!$busy} on:click={() => skipStep(repoId)}>Skip this commit</button>
     {/if}
     {#if acts.confirm}
       <button class="btn primary" disabled={!!$busy || pending > 0} on:click={() => commitMerge(repoId)}>{acts.confirm}</button>

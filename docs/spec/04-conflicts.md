@@ -123,7 +123,17 @@ selection.
 | Conflict (has markers) | Stage | Same staging operation as a settled file; refused while any marker remains in the file (see "The marker check" below). |
 | Unstaged (settled, not staged) | Stage | Adds it to the index. |
 | Staged | Unstage | Removes it from the index, keeping its content in the worktree. |
-| Manual | Take ours / Take theirs (right-click) | Replaces the file wholly with one side's version — or deletes it, if that side deleted it — and stages the result. |
+| Manual | Take `<side>` (right-click) | Replaces the file wholly with one side's version — or deletes it, if that side deleted it — and stages the result. |
+
+The side is named for what it actually is, per kind: for a merge it is the
+current branch / the branch merged in; for a rebase, the branch being
+rebased onto / the commit being replayed (short hash plus subject); for a
+cherry-pick, the current branch / the picked commit. Revert, an applied
+patch and a stash conflict keep the plain "ours" / "theirs" labels. A
+rebase names its sides this way because git itself swaps ours and theirs
+for a rebase relative to a merge — the base being rebased onto is git's
+"ours", and the commit being replayed is git's "theirs" — so the view
+names each side for what it is rather than repeating git's swapped terms.
 
 Taking a side asks for confirmation: it overwrites whatever is in the
 worktree, including any hand edits, and unstaging afterwards does not bring
@@ -181,6 +191,23 @@ Both continue and abort stop any AI resolver run first, so an agent cannot
 go on editing a merge that the click just closed or discarded, and neither
 can it go on to resolve the next merge's conflicts if a rebase's next step
 immediately re-conflicts.
+
+### Skip this commit
+
+A rebase or a cherry-pick can also skip the step currently being replayed,
+dropping its changes from the result entirely rather than committing them.
+"Skip this commit" is always available for these two kinds (it needs
+nothing settled first, unlike Continue), asks for confirmation naming what
+is being dropped, stops any AI resolver run first the same way continue and
+abort do, and then runs git's own `--skip` for that operation. Skip is not
+offered for a merge, a revert, an applied patch or a stash conflict — none
+of git's `--skip` supports the same "drop this step and move on" for them
+the way rebase and cherry-pick do.
+
+When Continue fails because the step it just tried to close came out empty
+(the resolution left nothing to commit), the error offers Skip as a
+follow-up: dropping the now-empty step is usually what was meant, though
+the choice is still asked for rather than assumed.
 
 ## The stash conflict, specially
 
@@ -284,6 +311,8 @@ which still need a human, by name.
    replayed), and refuses to keep acting once the fingerprint changes.
 8. Only a path belonging to the operation currently in progress can be read
    or acted on through this view.
+9. Skip is offered only for a rebase or a cherry-pick, and stops any
+   resolver run before it runs.
 
 ## Known divergences
 
