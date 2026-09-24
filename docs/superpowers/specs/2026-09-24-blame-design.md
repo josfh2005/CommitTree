@@ -133,8 +133,10 @@ func (a *App) ExplainLinesInChat(repoID, rev, path string, start, end int, provi
      of the file instead. Diffs are trimmed to fit the budget, newest commit
      first.
 - **Prompt:** new editable prompt `explain-lines`
-  (`prompts.ExplainLines`, default in `prompts/defaults/explain-lines.md`),
-  listed in Settings as "Explain lines" next to "Explain commit".
+  (`prompts.ExplainLines`, default in `prompts/defaults/explain-lines.md`).
+  Settings' Prompts section lists every embedded default, so it appears there
+  without UI changes; it runs on the task provider chosen under
+  "Explain commit".
 
 ### `blame_file` chat tool
 
@@ -192,15 +194,17 @@ unit-tested.
     commit summary as a tooltip. Uncommitted blocks read "Not committed yet"
     in a faint colour; boundary blocks prefix the hash with `^`.
   - Then the line number and the line text.
-- **Hash click** → `selectedHash.set(hash)` and `jumpTo.set(hash)`; the
-  existing App.svelte rule switches `mainView` back to the log with the
-  commit selected. No link on uncommitted blocks.
+- **Hash click** → `selectedHash.set(hash)`, `jumpTo.set(hash)` and
+  `mainView.set('log')` explicitly: when the blame was opened from that same
+  commit, `selectedHash` does not change, so App.svelte's "a selection means
+  the log" rule would not fire on its own. No link on uncommitted blocks.
 - **Line selection:** click a line number to select it, shift-click to
   extend to a range. Right-clicking inside the selection acts on it;
   right-clicking elsewhere acts on that line's block.
 - **Context menu** (on a block or the selection):
   - **✨ Explain these lines in chat** — opens the chat and calls
-    `explainLinesInChat`; disabled when AI is off, as in the log.
+    `explainLinesInChat`; never disabled, like the log's "Explain in chat":
+    AI off, busy chat or a provider error comes back as a toast.
   - **Blame previous revision** — pushes the current target and opens the
     blame at `Previous` / `PrevPath`. Disabled when the range spans more
     than one commit, the block has no `Previous` (the lines were born
