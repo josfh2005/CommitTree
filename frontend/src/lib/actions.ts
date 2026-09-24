@@ -1,7 +1,7 @@
 import { get } from 'svelte/store'
 import { api } from './api'
 import { busy, chatOpen, collapsedRepoGroups, expandedRepos, filters, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, repos, selectRepo, selectedRepoId, stashConflictDismissed } from './stores'
-import type { Branch, FileStatus, MergeState, RebasePreview, Repo, ResetInfo, ResetMode, Submodule, WorktreeState } from './types'
+import type { Branch, FileStatus, MergeState, RebasePreview, Repo, ResetInfo, ResetMode, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
 import { PULL_UP_TO_DATE, UP_TO_DATE } from './types'
 import { abortWarning, commitWarning, isEmptyStepError, skipWarning, takeMessage } from './merge'
 import { doneMessage, rebaseMessage } from './rebase'
@@ -64,6 +64,68 @@ export async function removeRepo(repo: Repo) {
     await loadRefs()
   } catch (e) {
     toast(errorMessage(e), 'error')
+  }
+}
+
+// removeWorktree runs `git worktree remove` on a detected linked worktree
+// row, after a confirmation that names its folder and — when it has
+// uncommitted changes — how many will be lost. A non-detached worktree's
+// confirmation also offers to delete its branch, checked by default only
+// when info.merged says the branch is fully merged (what `git branch -d`
+// would accept without --force). If deleting the branch is refused because
+// it turned out not to be merged, the worktree is already gone by then —
+// only the branch survives — and confirmForceDeleteBranch offers the same
+// force-delete confirmation deleteBranch uses for that refusal, run against
+// the worktree's main repository (repo.parentId), since the worktree's own
+// id no longer resolves to anything once it is removed.
+export async function removeWorktree(repo: Repo) {
+  let info: WorktreeRemovalInfo
+  try {
+    info = await api.getWorktreeRemovalInfo(repo.id)
+  } catch (e) {
+    toast(errorMessage(e), 'error')
+    return
+  }
+  if (info.locked) {
+    toast('This worktree is locked (git worktree lock).', 'error')
+    return
+  }
+
+  const hasChanges = info.changes > 0
+  let message = `Its folder is deleted from disk.`
+  if (hasChanges) message += ` It has ${info.changes} uncommitted change${info.changes === 1 ? '' : 's'} that will be lost.`
+  const confirmLabel = hasChanges ? 'Remove anyway' : 'Remove'
+
+  let confirmed: boolean
+  let deleteBranch = false
+  if (info.detached) {
+    confirmed = await confirmDialog({ title: `Remove worktree ${repo.name}?`, message, confirmLabel, danger: true })
+  } else {
+    const result = await confirmDialogWithCheckbox({
+      title: `Remove worktree ${repo.name}?`,
+      message,
+      confirmLabel,
+      checkboxLabel: `Also delete branch ${info.branch}`,
+      checked: info.merged,
+      danger: true,
+    })
+    confirmed = result.ok
+    deleteBranch = result.checked
+  }
+  if (!confirmed) return
+
+  const parentId = repo.parentId
+  try {
+    await api.removeWorktree(repo.id, hasChanges, deleteBranch)
+  } catch (e) {
+    const message = errorMessage(e)
+    if (deleteBranch && parentId && message.includes('not fully merged')) {
+      await confirmForceDeleteBranch(parentId, info.branch)
+    } else {
+      toast(message, 'error')
+    }
+  } finally {
+    await refreshRepo()
   }
 }
 
@@ -228,6 +290,22 @@ export async function newBranch(id: string, target: string, targetLabel: string)
   await run('Creating branch…', () => api.createBranch(id, name, target, result.checked))
 }
 
+// confirmForceDeleteBranch offers the same "not merged" confirmation the
+// deleteBranch flow below shows when git refuses a plain `branch -d`, then
+// force-deletes id's local branch name if the user confirms. Shared with
+// removeWorktree, which hits the identical refusal (refs.ErrNotMerged) when
+// asked to also delete a worktree's branch that turns out not to be merged.
+async function confirmForceDeleteBranch(id: string, name: string): Promise<boolean> {
+  const force = await confirmDialog({
+    title: 'Branch not merged',
+    message: `${name} has commits that are not merged into any other branch. Force deleting loses them.`,
+    confirmLabel: 'Force delete',
+    danger: true,
+  })
+  if (!force) return false
+  return run('Deleting branch…', () => api.deleteBranch(id, name, true))
+}
+
 export async function deleteBranch(id: string, branch: Branch) {
   if (branch.remote) {
     const ok = await confirmDialog({
@@ -260,16 +338,7 @@ export async function deleteBranch(id: string, branch: Branch) {
       toast(message, 'error')
       return
     }
-    const force = await confirmDialog({
-      title: 'Branch not merged',
-      message: `${branch.name} has commits that are not merged into any other branch. Force deleting loses them.`,
-      confirmLabel: 'Force delete',
-      danger: true,
-    })
-    if (force) {
-      const deleted = await run('Deleting branch…', () => api.deleteBranch(id, branch.name, true))
-      if (deleted) clearBranchFilter(branchRef(branch))
-    }
+    if (await confirmForceDeleteBranch(id, branch.name)) clearBranchFilter(branchRef(branch))
     return
   } finally {
     busy.set('')
