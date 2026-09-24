@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	MaxOutput    = 8000
-	MaxDiffLines = 300
+	MaxOutput      = 8000
+	MaxDiffLines   = 300
+	MaxBlameBlocks = 200
 )
 
 func Specs() []ai.ToolSpec {
@@ -61,6 +62,16 @@ func Specs() []ai.ToolSpec {
 			Description: "List the commits that changed a file, newest first.",
 			Parameters:  obj(map[string]any{"path": str("File path"), "limit": num("Maximum commits (default 15, max 30)")}, "path"),
 		},
+		{
+			Name:        "blame_file",
+			Description: "Show which commit last changed each line of a file (git blame). Returns one line per block of lines: line range, short hash, date, author and commit subject. Without a line range, long files are cut; pass start_line and end_line to look at part of a file.",
+			Parameters: obj(map[string]any{
+				"path":       str("File path"),
+				"rev":        str("Commit hash, branch or tag to blame at (default HEAD)"),
+				"start_line": num("First line (1-based), optional"),
+				"end_line":   num("Last line, optional"),
+			}, "path"),
+		},
 	}
 }
 
@@ -80,6 +91,8 @@ func Run(ctx context.Context, dir string, call ai.ToolCall) string {
 		out, err = listRefs(ctx, dir)
 	case "file_history":
 		out, err = fileHistory(ctx, dir, call.Args)
+	case "blame_file":
+		out, err = blameFile(ctx, dir, call.Args)
 	default:
 		err = fmt.Errorf("unknown tool %q", call.Name)
 	}
@@ -129,6 +142,55 @@ func fileHistory(ctx context.Context, dir string, args map[string]any) (string, 
 		return "", fmt.Errorf("path is required")
 	}
 	return logLines(ctx, dir, gitlog.Filters{Paths: []string{path}}, argInt(args, "limit", 15, 30))
+}
+
+func blameFile(ctx context.Context, dir string, args map[string]any) (string, error) {
+	path := argString(args, "path")
+	if path == "" {
+		return "", fmt.Errorf("path is required")
+	}
+	rev := argString(args, "rev")
+	if rev == "" {
+		rev = "HEAD"
+	}
+	opts := gitlog.BlameOptions{Start: argInt(args, "start_line", 0, 1<<30), End: argInt(args, "end_line", 0, 1<<30)}
+	if opts.Start > 0 && opts.End == 0 {
+		opts.End = opts.Start
+	}
+	b, err := gitlog.GetBlame(ctx, dir, rev, path, opts)
+	if err != nil {
+		return "", err
+	}
+	blocks := b.Blocks
+	note := ""
+	if opts.Start == 0 && len(blocks) > MaxBlameBlocks {
+		blocks = blocks[:MaxBlameBlocks]
+		note = "\n… truncated; pass start_line/end_line to narrow"
+	}
+	out := FormatBlame(blocks)
+	// Keep the note itself from being crowded out by Run's MaxOutput
+	// truncation: if the blocks alone already fill the budget, drop
+	// blocks (not the cap) until the note fits.
+	for note != "" && len(out)+len(note) > MaxOutput && len(blocks) > 0 {
+		blocks = blocks[:len(blocks)-1]
+		out = FormatBlame(blocks)
+	}
+	return out + note, nil
+}
+
+// FormatBlame renders one line per block, without the file text, to keep
+// tool output and explanation prompts small.
+func FormatBlame(blocks []gitlog.BlameBlock) string {
+	lines := make([]string, 0, len(blocks))
+	for _, blk := range blocks {
+		span := fmt.Sprintf("L%d-%d", blk.Start, blk.Start+blk.Count-1)
+		if blk.Uncommitted {
+			lines = append(lines, span+"  (not committed yet)")
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("%s  %s  %s  %s  %s", span, blk.Short, blk.Date.Format("2006-01-02"), blk.Author, blk.Summary))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func logLines(ctx context.Context, dir string, f gitlog.Filters, limit int) (string, error) {

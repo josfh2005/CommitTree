@@ -8,6 +8,7 @@ import (
 
 	"git-ui/internal/ai"
 	"git-ui/internal/ai/tools"
+	"git-ui/internal/gitlog"
 	"git-ui/internal/testrepo"
 )
 
@@ -25,8 +26,72 @@ func TestSpecsListAllTools(t *testing.T) {
 			t.Errorf("%s: incomplete spec %+v", s.Name, s)
 		}
 	}
-	if strings.Join(names, ",") != "search_log,show_commit,diff_commit_file,list_refs,file_history" {
+	if strings.Join(names, ",") != "search_log,show_commit,diff_commit_file,list_refs,file_history,blame_file" {
 		t.Fatalf("names = %v", names)
+	}
+}
+
+func TestBlameFile(t *testing.T) {
+	r := testrepo.New(t)
+	r.WriteFile("a.txt", "one\ntwo\n")
+	r.Git("add", "a.txt")
+	r.Git("commit", "-q", "-m", "add a")
+	first := r.Git("rev-parse", "--short=7", "HEAD")
+	r.WriteFile("a.txt", "one\nTWO\n")
+	r.Git("commit", "-q", "-am", "edit a")
+	second := r.Git("rev-parse", "--short=7", "HEAD")
+	r.WriteFile("a.txt", "one\nTWO\nthree\n")
+
+	got := run(r.Dir, "blame_file", map[string]any{"path": "a.txt"})
+	want := []string{"L1-1  " + first, "add a", "L2-2  " + second, "edit a"}
+	for _, w := range want {
+		if !strings.Contains(got, w) {
+			t.Fatalf("blame_file missing %q:\n%s", w, got)
+		}
+	}
+	if strings.Contains(got, "not committed yet") {
+		t.Fatalf("default rev is HEAD, not the working tree:\n%s", got)
+	}
+
+	ranged := run(r.Dir, "blame_file", map[string]any{"path": "a.txt", "rev": "HEAD", "start_line": float64(2), "end_line": float64(2)})
+	if strings.Contains(ranged, "L1-1") || !strings.Contains(ranged, "L2-2  "+second) {
+		t.Fatalf("ranged:\n%s", ranged)
+	}
+	if !strings.HasPrefix(run(r.Dir, "blame_file", map[string]any{}), "error: ") {
+		t.Fatal("want an error without path")
+	}
+}
+
+func TestBlameFileCapsBlocks(t *testing.T) {
+	r := testrepo.New(t)
+	var b strings.Builder
+	for i := 0; i < tools.MaxBlameBlocks+5; i++ {
+		fmt.Fprintf(&b, "line %d\n", i)
+	}
+	r.WriteFile("big.txt", b.String())
+	r.Git("add", "big.txt")
+	r.Git("commit", "-q", "-m", "base")
+	// Rewrite every other line in a second commit so blocks alternate.
+	b.Reset()
+	for i := 0; i < tools.MaxBlameBlocks+5; i++ {
+		if i%2 == 0 {
+			fmt.Fprintf(&b, "LINE %d\n", i)
+		} else {
+			fmt.Fprintf(&b, "line %d\n", i)
+		}
+	}
+	r.WriteFile("big.txt", b.String())
+	r.Git("commit", "-q", "-am", "edit")
+	got := run(r.Dir, "blame_file", map[string]any{"path": "big.txt"})
+	if !strings.Contains(got, "pass start_line/end_line to narrow") {
+		t.Fatalf("want the cap note, got %d bytes", len(got))
+	}
+}
+
+func TestFormatBlameUncommitted(t *testing.T) {
+	got := tools.FormatBlame([]gitlog.BlameBlock{{Start: 3, Count: 2, Uncommitted: true}})
+	if got != "L3-4  (not committed yet)" {
+		t.Fatalf("got %q", got)
 	}
 }
 
