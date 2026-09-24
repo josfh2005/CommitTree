@@ -612,7 +612,7 @@ export async function updateAllSubmodules(parentId: string, list: Submodule[]) {
 
 // Warns after a successful write to a repository that git left submodules
 // pointing behind their recorded commit — git only moves them along with
-// the parent when submodule.recurse is set, which git-ui does not set (see
+// the parent when submodule.recurse is set, which CommitTree does not set (see
 // docs/spec/01-repositories-and-sidebar.md's Submodules section). Only a
 // repo item that reported having submodules triggers the lookup, so a
 // submodule's own writes don't retrigger this.

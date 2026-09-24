@@ -1,21 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <!-- "ai" drawn as a git log graph: straight lanes, diagonal hops and
-       commits ringed in the background colour. The i's lane forks off the
-       a's stem at the commit where the a's bowl branches out. -->
+  <!-- "Ai" drawn as a git log graph. The A is a lane that branches off a
+       commit and merges back further down; the i is a second lane with one
+       commit. Lanes run past their commits, and commits are ringed in the
+       background colour. -->
   <rect x="100" y="100" width="824" height="824" rx="185" fill="#e3e2dd"/>
-  <g transform="translate(512 512) scale(1.25) translate(-580 -545)">
-    <g fill="none" stroke-width="48" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M440 440 L500 390 H540 L580 430 V720" stroke="#6d1b6e"/>
-      <path d="M580 550 L480 550 L440 590 V680 L480 720 H580" stroke="#6d1b6e"/>
-      <path d="M720 480 V720" stroke="#217373"/>
-      <path d="M580 550 H640 L720 480" stroke="#217373"/>
-    </g>
-    <g stroke="#e3e2dd" stroke-width="10">
-      <circle cx="440" cy="440" r="28" fill="#6d1b6e"/>
-      <circle cx="580" cy="550" r="32" fill="#6d1b6e"/>
-      <circle cx="580" cy="720" r="32" fill="#6d1b6e"/>
-      <circle cx="720" cy="480" r="30" fill="#217373"/>
-      <circle cx="720" cy="350" r="34" fill="#217373"/>
-    </g>
+  <g fill="none" stroke-width="48" stroke-linecap="round" stroke-linejoin="round" stroke="#6d1b6e">
+    <path d="M340 230 V784"/>
+    <path d="M340 320 L540 560 V784"/>
+    <path d="M540 560 L340 700"/>
+  </g>
+  <path d="M690 230 V784" fill="none" stroke="#217373" stroke-width="48" stroke-linecap="round"/>
+  <g stroke="#e3e2dd" stroke-width="10">
+    <circle cx="340" cy="320" r="36" fill="#6d1b6e"/>
+    <circle cx="540" cy="560" r="34" fill="#6d1b6e"/>
+    <circle cx="340" cy="700" r="34" fill="#6d1b6e"/>
+    <circle cx="690" cy="470" r="36" fill="#217373"/>
   </g>
 </svg>

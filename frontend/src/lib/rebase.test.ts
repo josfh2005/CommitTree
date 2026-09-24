@@ -12,7 +12,7 @@ describe('rebaseMessage', () => {
   it('warns about published commits and flattened merges', () => {
     const m = rebaseMessage('feature', 'main', { commits: 1, merges: 1, published: 1, upstream: 'origin/feature' })
     expect(m).toContain('1 commit will be replayed')
-    expect(m).toContain("1 of these commits is already on origin/feature. After rebasing you'll need to force-push, which git-ui doesn't do.")
+    expect(m).toContain("1 of these commits is already on origin/feature. After rebasing you'll need to force-push, which CommitTree doesn't do.")
     expect(m).toContain('1 merge commit in this range will be flattened.')
   })
 })

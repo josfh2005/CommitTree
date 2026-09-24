@@ -108,7 +108,7 @@ of a result.
 
 A successful pull can leave a submodule pointing behind its recorded
 commit — git only moves a submodule's checkout along with the parent when
-`submodule.recurse` is set, which git-ui honours (because git does) but does
+`submodule.recurse` is set, which CommitTree honours (because git does) but does
 not set itself. When that happens, a toast reports how many submodules are
 affected and offers an "Update all" action (see the Submodules section of
 docs/spec/01-repositories-and-sidebar.md); there is no automatic update.

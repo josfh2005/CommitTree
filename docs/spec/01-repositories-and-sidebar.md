@@ -396,7 +396,7 @@ Checking out a branch, a remote branch or a commit, resetting the current
 branch, or merging a branch into it — each elsewhere in this repository, not
 in the Submodules section itself — can leave a submodule pointing behind its
 recorded commit: git only moves a submodule's checkout along with these when
-`submodule.recurse` is set, which git-ui honours (because git does) but does
+`submodule.recurse` is set, which CommitTree honours (because git does) but does
 not set itself. When a write leaves any submodule moved, a toast reports how
 many and offers an "Update all" action that runs the same update the
 section header's own Update all does. There is no automatic update; the

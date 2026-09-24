@@ -51,7 +51,7 @@ func main() {
 	})
 
 	err = wails.Run(&options.App{
-		Title:            "git-ui",
+		Title:            "CommitTree",
 		Width:            1440,
 		Height:           900,
 		MinWidth:         960,

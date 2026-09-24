@@ -27,8 +27,8 @@ const (
 	EventError      = "chat:error"
 	EventNotice     = "chat:notice"
 
-	noticeRecovered   = "The model wrote a tool call as text; git-ui ran it."
-	noticeUnrecovered = "The model wrote a tool call as text that git-ui could not run. Try a model with reliable tool calling."
+	noticeRecovered   = "The model wrote a tool call as text; CommitTree ran it."
+	noticeUnrecovered = "The model wrote a tool call as text that CommitTree could not run. Try a model with reliable tool calling."
 )
 
 // StartEvent announces a new answer, so the chat can show the question and an

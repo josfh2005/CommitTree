@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-APP := build/bin/git-ui.app
+APP := build/bin/CommitTree.app
 NODE := source ~/.nvm/nvm.sh && nvm use 22 >/dev/null &&
 
 .PHONY: build dev icon icon-previews
