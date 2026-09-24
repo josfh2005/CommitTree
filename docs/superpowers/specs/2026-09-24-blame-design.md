@@ -59,6 +59,7 @@ type BlameBlock struct {
     Email       string    `json:"email"`
     Date        time.Time `json:"date"`     // author time
     Summary     string    `json:"summary"`
+    Filename    string    `json:"filename"` // file path in that commit (porcelain "filename")
     Start       int       `json:"start"`    // first final line number, 1-based
     Count       int       `json:"count"`
     Previous    string    `json:"previous,omitempty"`  // porcelain "previous" commit
@@ -70,6 +71,7 @@ type BlameBlock struct {
 type Blame struct {
     Path      string       `json:"path"`
     Rev       string       `json:"rev"`   // "" = working tree
+    StartLine int          `json:"startLine"` // first line number (1 unless -L)
     Lines     []string     `json:"lines"` // file text, one entry per line
     Blocks    []BlameBlock `json:"blocks"` // ordered, cover Lines exactly
     Truncated bool         `json:"truncated"`

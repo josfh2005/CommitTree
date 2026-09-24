@@ -19,6 +19,9 @@ const (
 	// pre-commit lint or test run, or a signing passphrase prompt, takes far
 	// longer than an ordinary read.
 	HookTimeout = 2 * time.Minute
+	// BlameTimeout covers git blame, which walks a file's whole history and
+	// can take far longer than an ordinary read on a long-lived file.
+	BlameTimeout = 30 * time.Second
 )
 
 var ErrTimeout = errors.New("git command timed out")
