@@ -102,6 +102,10 @@ export function GetAuthors(arg1) {
   return window['go']['app']['App']['GetAuthors'](arg1);
 }
 
+export function GetBlame(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['App']['GetBlame'](arg1, arg2, arg3, arg4);
+}
+
 export function GetChat(arg1) {
   return window['go']['app']['App']['GetChat'](arg1);
 }

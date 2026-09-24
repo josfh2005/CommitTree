@@ -318,6 +318,102 @@ export namespace app {
 
 export namespace gitlog {
 	
+	export class BlameBlock {
+	    hash: string;
+	    short: string;
+	    author: string;
+	    email: string;
+	    // Go type: time
+	    date: any;
+	    summary: string;
+	    filename: string;
+	    start: number;
+	    count: number;
+	    previous?: string;
+	    prevPath?: string;
+	    boundary?: boolean;
+	    uncommitted?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new BlameBlock(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hash = source["hash"];
+	        this.short = source["short"];
+	        this.author = source["author"];
+	        this.email = source["email"];
+	        this.date = this.convertValues(source["date"], null);
+	        this.summary = source["summary"];
+	        this.filename = source["filename"];
+	        this.start = source["start"];
+	        this.count = source["count"];
+	        this.previous = source["previous"];
+	        this.prevPath = source["prevPath"];
+	        this.boundary = source["boundary"];
+	        this.uncommitted = source["uncommitted"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Blame {
+	    path: string;
+	    rev: string;
+	    startLine: number;
+	    lines: string[];
+	    blocks: BlameBlock[];
+	    truncated: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Blame(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.rev = source["rev"];
+	        this.startLine = source["startLine"];
+	        this.lines = source["lines"];
+	        this.blocks = this.convertValues(source["blocks"], BlameBlock);
+	        this.truncated = source["truncated"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class FileChange {
 	    status: string;
 	    path: string;

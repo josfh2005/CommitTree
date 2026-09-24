@@ -80,10 +80,11 @@ type Blame struct {
 func GetBlame(ctx context.Context, dir, rev, path string, opts BlameOptions) (Blame, error)
 ```
 
-- Runs `git blame --porcelain [-w] [-L s,e] [<rev>] --end-of-options -- <path>`
+- Runs `git blame --porcelain --root [-w] [-L s,e] [<rev>] -- <path>`
   (no `<rev>` for the working tree) through `gitcmd` with a new
   `gitcmd.BlameTimeout = 30 * time.Second`; `ReadTimeout` (10 s) is too short
-  for long-history files.
+  for long-history files. A rev starting with `-` is rejected outright, since
+  `git blame` has no `--end-of-options` to disambiguate it from a flag.
 - **Parser** (`parsePorcelain`, pure, table-tested): the porcelain header
   gives a commit's metadata only on its first appearance, so metadata is kept
   per hash; each content line (`\t`-prefixed) is appended to `Lines`. A block

@@ -4,9 +4,9 @@ import {app} from '../models';
 import {repos} from '../models';
 import {merge} from '../models';
 import {settings} from '../models';
+import {gitlog} from '../models';
 import {ai} from '../models';
 import {worktree} from '../models';
-import {gitlog} from '../models';
 import {gitsettings} from '../models';
 import {refs} from '../models';
 import {ops} from '../models';
@@ -64,6 +64,8 @@ export function GenerateCommitMessage(arg1:string,arg2:string):Promise<void>;
 export function GetAISettings():Promise<settings.Settings>;
 
 export function GetAuthors(arg1:string):Promise<Array<string>>;
+
+export function GetBlame(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<gitlog.Blame>;
 
 export function GetChat(arg1:string):Promise<Array<ai.Message>>;
 

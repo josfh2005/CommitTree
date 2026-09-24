@@ -127,6 +127,31 @@ export interface FileChange {
   submodule?: boolean
 }
 
+export interface BlameBlock {
+  hash: string
+  short: string
+  author: string
+  email: string
+  date: string
+  summary: string
+  filename: string
+  start: number
+  count: number
+  previous?: string
+  prevPath?: string
+  boundary?: boolean
+  uncommitted?: boolean
+}
+
+export interface Blame {
+  path: string
+  rev: string
+  startLine: number
+  lines: string[]
+  blocks: BlameBlock[]
+  truncated: boolean
+}
+
 export interface Details extends Commit {
   body: string
   committer: string
