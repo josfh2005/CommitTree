@@ -32,5 +32,5 @@
     box-shadow: var(--shadow);
   }
   .error { border-left: 3px solid var(--danger); }
-  .message { flex: 1; max-height: 200px; overflow: auto; user-select: text; }
+  .message { flex: 1; max-height: 200px; overflow: auto; -webkit-user-select: text; user-select: text; }
 </style>

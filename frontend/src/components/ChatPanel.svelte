@@ -236,7 +236,7 @@
   .notice { padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
   .notice p { margin: 4px 0 8px; color: var(--muted); }
   .actions { display: flex; gap: 6px; }
-  .msg { max-width: 100%; user-select: text; line-height: 1.5; }
+  .msg { max-width: 100%; -webkit-user-select: text; user-select: text; line-height: 1.5; }
   .user { align-self: flex-end; max-width: 85%; padding: 8px 12px; border-radius: 12px; background: var(--active); white-space: pre-wrap; }
   .tool { display: flex; align-items: center; gap: 6px; max-width: 100%; margin-bottom: 4px; padding: 2px 8px; border-radius: 6px; background: var(--hover); color: var(--muted); font-size: 12px; }
   .summary { color: var(--faint); }
