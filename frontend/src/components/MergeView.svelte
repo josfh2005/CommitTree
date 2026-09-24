@@ -4,7 +4,7 @@
   import FileList, { rowKey } from './FileList.svelte'
   import { api } from '../lib/api'
   import { abortMerge, commitMerge, dismissStashConflict, resolveConflicts, skipStep, stageMergeFile, stashDrop, takeMergeSide, unstageMergeFile } from '../lib/actions'
-  import { conflictActions, conflictHeader, mergeSections, sideLabel, type MergeFile } from '../lib/merge'
+  import { conflictActions, conflictHeader, mergeSections, takeLabels, type MergeFile } from '../lib/merge'
   import { lineClass } from '../lib/diff'
   import { nextSelection, type SelectionKey } from '../lib/worktree'
   import { busy, loadMergeState, mergeState, owedStashDrop } from '../lib/stores'
@@ -90,8 +90,7 @@
   // it overwrites the worktree copy, which Unstage does not restore.
   function manualMenu(event: MouseEvent, file: { path: string; status: string }) {
     if (file.status !== 'manual') return
-    const ours = sideLabel($mergeState?.oursLabel, $mergeState?.into || 'ours')
-    const theirs = sideLabel($mergeState?.theirsLabel, $mergeState?.from || 'theirs')
+    const { ours, theirs } = takeLabels($mergeState)
     openMenu(event, [
       { label: `Take ${ours}`, action: () => takeMergeSide(repoId, file.path, 'ours', ours), disabled: !!$busy },
       { label: `Take ${theirs}`, action: () => takeMergeSide(repoId, file.path, 'theirs', theirs), disabled: !!$busy },

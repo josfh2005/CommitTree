@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { abortWarning, commitWarning, conflictActions, conflictHeader, isEmptyStepError, mergeSections, sideLabel, skipWarning } from './merge'
+import { abortWarning, commitWarning, conflictActions, conflictHeader, isEmptyStepError, mergeSections, sideLabel, skipWarning, takeLabels } from './merge'
 import type { MergeState } from './types'
 
 const state = (over: Partial<MergeState> = {}): MergeState => ({
@@ -131,6 +131,32 @@ describe('sideLabel', () => {
     expect(sideLabel('main', 'ours')).toBe('main')
     expect(sideLabel('a1b2c3 ' + 'x'.repeat(60), 'theirs')).toHaveLength(40)
     expect(sideLabel('a1b2c3 ' + 'x'.repeat(60), 'theirs').endsWith('…')).toBe(true)
+  })
+})
+
+describe('takeLabels', () => {
+  it('uses the backend labels for merge, rebase and cherry-pick', () => {
+    const s = state({ kind: 'merge', oursLabel: 'main', theirsLabel: 'feature' })
+    expect(takeLabels(s)).toEqual({ ours: 'main', theirs: 'feature' })
+  })
+
+  it('keeps "ours (branch) / theirs (commit)" for revert, which has no named sides', () => {
+    const s = state({ kind: 'revert', into: 'main', from: 'a1b2c3', oursLabel: undefined, theirsLabel: undefined })
+    expect(takeLabels(s)).toEqual({ ours: 'ours (main)', theirs: 'theirs (a1b2c3)' })
+  })
+
+  it('names only the side am has (the current branch), not a nonexistent "from"', () => {
+    const s = state({ kind: 'am', into: 'main', from: '', oursLabel: undefined, theirsLabel: undefined })
+    expect(takeLabels(s)).toEqual({ ours: 'ours (main)', theirs: 'theirs' })
+  })
+
+  it('falls back to plain "ours"/"theirs" for stash, which names neither side', () => {
+    const s = state({ kind: 'stash', into: '', from: '', oursLabel: undefined, theirsLabel: undefined })
+    expect(takeLabels(s)).toEqual({ ours: 'ours', theirs: 'theirs' })
+  })
+
+  it('handles no merge state at all', () => {
+    expect(takeLabels(null)).toEqual({ ours: 'ours', theirs: 'theirs' })
   })
 })
 

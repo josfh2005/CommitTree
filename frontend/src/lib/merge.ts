@@ -55,6 +55,21 @@ export function sideLabel(label: string | undefined, fallback: string): string {
   return s.length > 40 ? s.slice(0, 39) + '…' : s
 }
 
+/**
+ * takeLabels is the "Take …" menu wording for a Manual file's two sides.
+ * The backend only names sides for merge, rebase and cherry-pick
+ * (nameSides): those always have oursLabel/theirsLabel set, and this
+ * fallback never runs for them. Revert, am and stash keep the plain
+ * "ours"/"theirs" wording instead, decorated with the branch or commit
+ * `into`/`from` names when the backend has one — so a revert's "theirs" is
+ * still named by the commit being reverted, never mistaken for its content.
+ */
+export function takeLabels(state: MergeState | undefined | null): { ours: string; theirs: string } {
+  const ours = sideLabel(state?.oursLabel, state?.into ? `ours (${state.into})` : 'ours')
+  const theirs = sideLabel(state?.theirsLabel, state?.from ? `theirs (${state.from})` : 'theirs')
+  return { ours, theirs }
+}
+
 export function skipWarning(state: MergeState): { title: string; message: string; confirmLabel: string } {
   const what = state.theirsLabel || 'This commit'
   return { title: 'Skip this commit', message: `${what} will not be applied. Its changes are dropped from the result.`, confirmLabel: 'Skip commit' }
