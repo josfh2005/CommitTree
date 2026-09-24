@@ -304,7 +304,7 @@ func TestExplainInChatWritesTheAnswerToTheConversation(t *testing.T) {
 
 func TestExplainInChatWithUnknownProvider(t *testing.T) {
 	srv := fakeOllama(t, nil)
-	a, id, _ := newAIApp(t, srv.URL)
+	a, id, ev := newAIApp(t, srv.URL)
 	head, _ := a.GetLog(id, gitlog.Filters{}, gitlog.OrderTopo, 0, 1)
 
 	if err := a.ExplainInChat(id, head.Rows[0].Hash, "acme", "exp-2"); err == nil {
@@ -313,6 +313,7 @@ func TestExplainInChatWithUnknownProvider(t *testing.T) {
 	if err := a.ExplainInChat(id, head.Rows[0].Hash, "ollama", "exp-3"); err != nil {
 		t.Fatalf("repo still busy after a failed explain: %v", err)
 	}
+	ev.wait(t, agent.EventDone)
 }
 
 func TestExplainInChatIsBusyWhileChatting(t *testing.T) {
@@ -407,6 +408,29 @@ func TestExplainLinesInChatValidatesAndIsBusyWhileChatting(t *testing.T) {
 	}
 	if err := a.StopChat(id); err != nil {
 		t.Fatal(err)
+	}
+	ev.wait(t, agent.EventDone)
+}
+
+// A git error while building the context (here: a path that does not exist)
+// must come back from ExplainLinesInChat itself, before anything is written
+// to the chat, and must not leave the repository's chat slot busy.
+func TestExplainLinesInChatWithBadPathReturnsErrorAndDoesNotBusyTheChat(t *testing.T) {
+	srv := fakeOllama(t, nil)
+	a, id, ev := newAIApp(t, srv.URL)
+
+	if err := a.ExplainLinesInChat(id, "HEAD", "no-such-file.txt", 1, 1, "ollama", "x"); err == nil {
+		t.Fatal("want an error for a path that does not exist")
+	}
+	history, err := a.GetChat(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(history) != 0 {
+		t.Fatalf("history = %#v, want it left empty by the failed explain", history)
+	}
+	if err := a.SendChat(id, "hola", "run-1"); err != nil {
+		t.Fatalf("chat still busy after a failed explain: %v", err)
 	}
 	ev.wait(t, agent.EventDone)
 }
