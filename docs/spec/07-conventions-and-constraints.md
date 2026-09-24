@@ -1,6 +1,6 @@
 # Conventions and constraints
 
-This document holds what is true everywhere in git-ui rather than in one
+This document holds what is true everywhere in CommitTree rather than in one
 screen: the vocabulary the interface uses for busy states, errors and
 confirmations; the constraints that follow from driving the git command line
 instead of a library; and, in the appendix, the git behaviour a rebuilder
@@ -164,9 +164,18 @@ another window is the only moment external changes are checked for.
 
 ## Architectural constraints that shape behaviour
 
+### The old name stays on disk
+
+The application was first called git-ui. It is now CommitTree, but
+everything that identifies stored data keeps the old name so that an
+existing install keeps its repositories, settings, chats and API keys:
+the settings folder (`~/Library/Application Support/git-ui/` on macOS),
+the secret-store service name (`git-ui`), and the prefixes of temporary
+files. Only what the user reads says CommitTree.
+
 ### The application drives the git command line
 
-git-ui has no embedded git implementation; every operation shells out to
+CommitTree has no embedded git implementation; every operation shells out to
 the system's `git` binary. This is not an incidental detail — several
 behaviours exist only because of it:
 

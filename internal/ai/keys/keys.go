@@ -13,7 +13,8 @@ import (
 )
 
 // Service is the entry name every key is stored under; the provider name is
-// the account.
+// the account. It keeps the app's first name on purpose: renaming it would
+// orphan every key already stored.
 const Service = "git-ui"
 
 var (

@@ -1,6 +1,6 @@
-# git-ui — specification
+# CommitTree — specification
 
-git-ui is a desktop git client for people who work across many repositories
+CommitTree is a desktop git client for people who work across many repositories
 and want an assistant inside the tool rather than beside it. It shows a
 repository's history, its working tree and its remotes, and it can call a
 language model to write a commit message, resolve a merge conflict, or —
@@ -11,7 +11,7 @@ that specific proposal.
 
 These documents describe **what the application does**, not how it is built.
 They are written so that someone who has never seen the codebase can rebuild
-git-ui in another language, with another UI toolkit, and end up with an
+CommitTree in another language, with another UI toolkit, and end up with an
 application that behaves the same. Where a behaviour only makes sense because
 of an architectural constraint, the constraint is stated with it.
 

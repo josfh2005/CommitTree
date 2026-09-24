@@ -91,8 +91,8 @@ describe('chat:notice', () => {
 
   it('appends the text to the running assistant item', () => {
     let s = startRun(emptyChat('r1'), 'hola', 'run1')
-    s = applyEvent(s, 'chat:notice', { repoID: 'r1', runID: 'run1', text: 'The model wrote a tool call as text; git-ui ran it.' })
-    expect(s.items[1].notices).toEqual(['The model wrote a tool call as text; git-ui ran it.'])
+    s = applyEvent(s, 'chat:notice', { repoID: 'r1', runID: 'run1', text: 'The model wrote a tool call as text; CommitTree ran it.' })
+    expect(s.items[1].notices).toEqual(['The model wrote a tool call as text; CommitTree ran it.'])
   })
 
   it('ignores a notice for another runID', () => {

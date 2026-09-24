@@ -8,7 +8,7 @@ export function rebaseMessage(head: string, onto: string, p: RebasePreview): str
   const parts = [`Rebase ${head} onto ${onto}? ${plural(p.commits, 'commit', 'commits')} will be replayed on top of ${onto}.`]
   if (p.published > 0 && p.upstream) {
     const these = p.published === 1 ? '1 of these commits is' : `${p.published} of these commits are`
-    parts.push(`⚠ ${these} already on ${p.upstream}. After rebasing you'll need to force-push, which git-ui doesn't do.`)
+    parts.push(`⚠ ${these} already on ${p.upstream}. After rebasing you'll need to force-push, which CommitTree doesn't do.`)
   }
   if (p.merges > 0) {
     parts.push(`⚠ ${plural(p.merges, 'merge commit', 'merge commits')} in this range will be flattened.`)

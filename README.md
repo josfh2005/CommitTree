@@ -1,4 +1,4 @@
-# git-ui
+# CommitTree
 
 AI-first desktop Git client (Wails + Go + Svelte).
 
@@ -29,7 +29,7 @@ cd frontend && npm test && npm run check
 ## Build
 
 ```bash
-make build   # → build/bin/git-ui.app
+make build   # → build/bin/CommitTree.app
 make icon    # re-render build/appicon.png from assets/icon.svg
 ```
 
