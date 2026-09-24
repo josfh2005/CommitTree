@@ -90,6 +90,17 @@ export interface Branch {
   worktreeGone?: boolean
 }
 
+/** What the "Remove worktree…" confirmation shows, from WorktreeRemovalInfo. */
+export interface WorktreeRemovalInfo {
+  branch: string
+  detached: boolean
+  changes: number
+  locked: boolean
+  /** Whether branch is merged into the main working tree's HEAD — what
+   *  `git branch -d` would accept. Meaningless when detached. */
+  merged: boolean
+}
+
 export interface Remote {
   name: string
   branches: Branch[]

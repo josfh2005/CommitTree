@@ -250,6 +250,10 @@ export function RemoveRepo(arg1) {
   return window['go']['app']['App']['RemoveRepo'](arg1);
 }
 
+export function RemoveWorktree(arg1, arg2, arg3) {
+  return window['go']['app']['App']['RemoveWorktree'](arg1, arg2, arg3);
+}
+
 export function RenameRepoGroup(arg1, arg2) {
   return window['go']['app']['App']['RenameRepoGroup'](arg1, arg2);
 }
@@ -364,4 +368,8 @@ export function UpdateAllSubmodules(arg1) {
 
 export function UpdateSubmodule(arg1, arg2) {
   return window['go']['app']['App']['UpdateSubmodule'](arg1, arg2);
+}
+
+export function WorktreeRemovalInfo(arg1) {
+  return window['go']['app']['App']['WorktreeRemovalInfo'](arg1);
 }

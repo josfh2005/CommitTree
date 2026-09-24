@@ -83,6 +83,38 @@ When a local branch is checked out in another worktree, switching to it is
 refused with "<branch> is checked out in another worktree (<path>)" rather
 than git's own message.
 
+A linked worktree's context menu offers "Remove worktree…", disabled while
+another operation runs against the repository and, separately, when git
+reports the worktree as locked (`git worktree lock`) — disabled with a
+tooltip explaining that it is locked, since removal is refused either way
+until it is unlocked. It never appears for the main repository itself or for
+an ordinary list entry.
+
+Choosing it first reads the worktree's state: its branch (or detached),
+how many uncommitted changes it has, and whether its branch is merged into
+the main working tree's HEAD — exactly what `git branch -d` would accept.
+The confirmation names the worktree's folder and states that the folder is
+deleted from disk; a worktree with uncommitted changes adds how many will
+be lost ("It has N uncommitted changes that will be lost", singular for
+one) and its button reads "Remove anyway" instead of "Remove" — removal
+then passes `--force` to `git worktree remove`, which is otherwise refused
+for a worktree with uncommitted changes. A non-detached worktree's
+confirmation also offers a checkbox, "Also delete branch <name>", checked
+by default only when the branch is already merged; a detached worktree gets
+no checkbox, since it has no branch to offer.
+
+Removal runs `git worktree remove` (with `--force` when there are
+uncommitted changes) from the main repository's directory, under the main
+repository's write lock, so it cannot interleave with a merge, rebase or
+cherry-pick on that repository. When the branch checkbox was checked, `git
+branch -d` (never `-D`) runs next, once the worktree itself is gone. If git
+refuses because the branch turns out not to be merged after all, the
+worktree stays removed — only the branch survives — and the app offers the
+same force-delete confirmation it shows when deleting an ordinary branch
+git refuses for the same reason; declining it simply leaves the branch in
+place. The repository list is refreshed once removal finishes, the same way
+every other write refreshes it.
+
 ### Submodules
 
 Every read of the repository list also detects each present item's

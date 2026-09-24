@@ -13,13 +13,15 @@ func TestParsePorcelain(t *testing.T) {
 	out := "worktree /r\x00HEAD aaa\x00branch refs/heads/main\x00\x00" +
 		"worktree /tmp/with space/wt\x00HEAD bbb\x00branch refs/heads/one\x00\x00" +
 		"worktree /tmp/det\x00HEAD ccc\x00detached\x00\x00" +
-		"worktree /tmp/gone\x00HEAD ddd\x00branch refs/heads/two\x00prunable gitdir file points to non-existent location\x00\x00"
+		"worktree /tmp/gone\x00HEAD ddd\x00branch refs/heads/two\x00prunable gitdir file points to non-existent location\x00\x00" +
+		"worktree /tmp/locked\x00HEAD eee\x00branch refs/heads/three\x00locked some reason\x00\x00"
 	got := parse(out)
 	want := []Worktree{
 		{Path: "/r", Head: "aaa", Branch: "main", Main: true},
 		{Path: "/tmp/with space/wt", Head: "bbb", Branch: "one"},
 		{Path: "/tmp/det", Head: "ccc", Detached: true},
 		{Path: "/tmp/gone", Head: "ddd", Branch: "two", Prunable: true},
+		{Path: "/tmp/locked", Head: "eee", Branch: "three", Locked: true, LockReason: "some reason"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d worktrees: %+v", len(got), got)
@@ -67,5 +69,27 @@ func TestListReadsRealWorktrees(t *testing.T) {
 	}
 	if len(list) != 3 || !byName(list, "det").Prunable || byName(list, "with space").Prunable {
 		t.Fatalf("after removing the directory: %+v", list)
+	}
+}
+
+func TestListReadsALockedWorktree(t *testing.T) {
+	r := testrepo.New(t)
+	r.Commit("base")
+	wt := filepath.Join(t.TempDir(), "wt")
+	r.Git("worktree", "add", "-q", wt, "-b", "one")
+	r.Git("worktree", "lock", wt, "--reason", "in use")
+
+	list, err := List(context.Background(), r.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found *Worktree
+	for i := range list {
+		if filepath.Base(list[i].Path) == "wt" {
+			found = &list[i]
+		}
+	}
+	if found == nil || !found.Locked || found.LockReason != "in use" {
+		t.Fatalf("worktree = %+v", found)
 	}
 }

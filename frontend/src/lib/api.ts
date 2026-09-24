@@ -1,5 +1,5 @@
 import * as Go from '../../wailsjs/go/app/App'
-import type { AIMessage, AISettings, AIStatus, AheadBehind, ChatConfirmEvent, CommitInfo, ConflictFile, Details, Filters, GitSettings, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeState } from './types'
+import type { AIMessage, AISettings, AIStatus, AheadBehind, ChatConfirmEvent, CommitInfo, ConflictFile, Details, Filters, GitSettings, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
 
 // The generated bindings use Wails model classes; the JSON is identical to our
 // interfaces, so cast at this single boundary.
@@ -11,6 +11,8 @@ export const api = {
   relocateRepo: (id: string) => call<Repo>(Go.RelocateRepo(id)),
   openRepoFolder: (id: string) => call<void>(Go.OpenRepoFolder(id)),
   removeRepo: (id: string) => call<void>(Go.RemoveRepo(id)),
+  getWorktreeRemovalInfo: (id: string) => call<WorktreeRemovalInfo>(Go.WorktreeRemovalInfo(id)),
+  removeWorktree: (id: string, force: boolean, deleteBranch: boolean) => call<void>(Go.RemoveWorktree(id, force, deleteBranch)),
   setRepoGroup: (id: string, group: string) => call<void>(Go.SetRepoGroup(id, group)),
   renameRepoGroup: (oldName: string, newName: string) => call<void>(Go.RenameRepoGroup(oldName, newName)),
 

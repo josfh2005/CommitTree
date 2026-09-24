@@ -2,12 +2,13 @@
   import Icon from './Icon.svelte'
   import RepoRefs from './RepoRefs.svelte'
   import SubmoduleSection from './SubmoduleSection.svelte'
-  import { fetchRemote, moveRepoToGroup, openRepoFolder, pull, push, relocateRepo, removeRepo } from '../lib/actions'
+  import { api } from '../lib/api'
+  import { fetchRemote, moveRepoToGroup, openRepoFolder, pull, push, relocateRepo, removeRepo, removeWorktree } from '../lib/actions'
   import { REPO_DRAG_MIME } from '../lib/repoDrop'
   import { revealLabel } from '../lib/platform'
   import { busy, expandedRepos, mergeState, platform, selectRepo, selectedRepo, selectedRepoId, toggleRepoExpanded } from '../lib/stores'
   import type { Repo } from '../lib/types'
-  import { openMenu } from '../lib/ui'
+  import { openMenu, openMenuAsync, type MenuItem } from '../lib/ui'
 
   export let repo: Repo
   /** Indentation level — 0 for a loose repo, 1 for one inside a group. */
@@ -39,14 +40,38 @@
 
   function repoMenu(event: MouseEvent) {
     // A detected worktree is not a list entry: it follows its main
-    // repository, so nothing that edits the list applies to it.
+    // repository, so nothing that edits the list applies to it — except
+    // removing the worktree itself, whose disabled/locked state needs a
+    // backend read first, hence openMenuAsync rather than the plain items
+    // below.
     if (repo.worktree) {
-      openMenu(event, [
-        { label: 'Fetch', action: () => fetchRemote(repo.id), disabled: !!$busy },
-        { label: 'Pull', action: () => pull(repo.id), disabled: !!$busy || !!$mergeState?.merging },
-        { label: 'Push', action: () => push(repo.id), disabled: !!$busy || !!$mergeState?.merging },
-        { label: revealLabel($platform), action: () => openRepoFolder(repo.id) },
-      ])
+      openMenuAsync(event, async () => {
+        let removeItem: MenuItem
+        try {
+          const info = await api.getWorktreeRemovalInfo(repo.id)
+          removeItem = info.locked
+            ? {
+                label: 'Remove worktree…',
+                action: () => {},
+                danger: true,
+                disabled: true,
+                title: 'This worktree is locked (git worktree lock)',
+              }
+            : { label: 'Remove worktree…', action: () => removeWorktree(repo), danger: true, disabled: !!$busy }
+        } catch {
+          // The removal-info read failed (e.g. the worktree just vanished);
+          // removeWorktree makes its own read and reports its own error, so
+          // the item is left enabled rather than silently dropped.
+          removeItem = { label: 'Remove worktree…', action: () => removeWorktree(repo), danger: true, disabled: !!$busy }
+        }
+        return [
+          { label: 'Fetch', action: () => fetchRemote(repo.id), disabled: !!$busy },
+          { label: 'Pull', action: () => pull(repo.id), disabled: !!$busy || !!$mergeState?.merging },
+          { label: 'Push', action: () => push(repo.id), disabled: !!$busy || !!$mergeState?.merging },
+          { label: revealLabel($platform), action: () => openRepoFolder(repo.id) },
+          removeItem,
+        ]
+      })
       return
     }
     openMenu(event, [

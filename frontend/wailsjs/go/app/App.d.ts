@@ -13,6 +13,7 @@ import {ops} from '../models';
 import {stash} from '../models';
 import {submodules} from '../models';
 import {prompts} from '../models';
+import {worktrees} from '../models';
 
 export function AIStatus():Promise<app.AIStatus>;
 
@@ -138,6 +139,8 @@ export function RelocateRepo(arg1:string):Promise<repos.Repo>;
 
 export function RemoveRepo(arg1:string):Promise<void>;
 
+export function RemoveWorktree(arg1:string,arg2:boolean,arg3:boolean):Promise<void>;
+
 export function RenameRepoGroup(arg1:string,arg2:string):Promise<void>;
 
 export function ResetBranch(arg1:string,arg2:string,arg3:string):Promise<void>;
@@ -195,3 +198,5 @@ export function UnstageMergeFile(arg1:string,arg2:string):Promise<void>;
 export function UpdateAllSubmodules(arg1:string):Promise<void>;
 
 export function UpdateSubmodule(arg1:string,arg2:string):Promise<void>;
+
+export function WorktreeRemovalInfo(arg1:string):Promise<worktrees.RemovalInfo>;
