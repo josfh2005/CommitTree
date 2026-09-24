@@ -9,8 +9,21 @@ import (
 	"testing"
 
 	"git-ui/internal/repos"
+	"git-ui/internal/submodules"
 	"git-ui/internal/testrepo"
 )
+
+// findSub locates s.Path == path in list or fails the test.
+func findSub(t *testing.T, list []submodules.Submodule, path string) submodules.Submodule {
+	t.Helper()
+	for _, s := range list {
+		if s.Path == path {
+			return s
+		}
+	}
+	t.Fatalf("%s not found in %+v", path, list)
+	return submodules.Submodule{}
+}
 
 // gitC runs git -C dir <args> and fails the test on error.
 func gitC(t *testing.T, dir string, args ...string) string {
@@ -136,6 +149,57 @@ func TestRemoveRepoRefusesASubmodule(t *testing.T) {
 	}
 }
 
+// TestListReposSkipsNotConfiguredSubmodules regression-tests Minor 3: a
+// submodule that lost its .gitmodules entry (so it is initialised — still
+// checked out from a previous configuration — but no longer Configured)
+// must not become a list item; it still counts toward SubmoduleCount.
+func TestListReposSkipsNotConfiguredSubmodules(t *testing.T) {
+	a, id, dir := newNestedSubmoduleApp(t)
+	gitC(t, dir, "config", "-f", ".gitmodules", "--remove-section", "submodule.vendor/lib")
+
+	items := a.ListRepos()
+	top := findItem(t, items, id)
+	if top.SubmoduleCount != 2 {
+		t.Fatalf("top = %+v", top)
+	}
+	libAbs := filepath.Join(dir, "vendor", "lib")
+	for _, it := range items {
+		if it.ID == repos.IDFor(libAbs) {
+			t.Fatalf("not-configured submodule got an item: %+v", it)
+		}
+	}
+}
+
+// TestListReposSkipsSubmoduleAlreadyStored regression-tests Minor 4: a
+// submodule whose absolute path is already a stored repository (added
+// separately, e.g. before it became a submodule of another one) must not
+// get a second, duplicate item.
+func TestListReposSkipsSubmoduleAlreadyStored(t *testing.T) {
+	a, id, dir := newNestedSubmoduleApp(t)
+	libAbs := filepath.Join(dir, "vendor", "lib")
+	if _, err := a.store.Add(context.Background(), libAbs); err != nil {
+		t.Fatal(err)
+	}
+
+	items := a.ListRepos()
+	top := findItem(t, items, id)
+	if top.SubmoduleCount != 2 {
+		t.Fatalf("top = %+v", top)
+	}
+	count := 0
+	for _, it := range items {
+		if it.ID == repos.IDFor(libAbs) {
+			count++
+			if it.Submodule {
+				t.Fatalf("stored repo item wrongly marked as a submodule item: %+v", it)
+			}
+		}
+	}
+	if count != 1 {
+		t.Fatalf("expected exactly one item for the stored submodule path, got %d", count)
+	}
+}
+
 func TestGetSubmodules(t *testing.T) {
 	a, id, _ := newNestedSubmoduleApp(t)
 	list, err := a.GetSubmodules(id)
@@ -194,6 +258,133 @@ func TestSubmoduleLocks(t *testing.T) {
 	// succeeds.
 	if err := a.UpdateSubmodule(id, "vendor/lib"); err != nil {
 		t.Fatalf("UpdateSubmodule after releases: %v", err)
+	}
+}
+
+// TestInitSubmoduleOnANestedSubmoduleRunsInItsDirectParent regression-tests
+// Important 1: initialising a nested submodule (vendor/lib/deps/zlib) must
+// run git in vendor/lib (its direct parent) with the path relative to it
+// ("deps/zlib"), not in the top repository with the top-relative path — the
+// old code ran `git submodule update --init -- vendor/lib/deps/zlib` from
+// the top, which git refuses with a pathspec error.
+func TestInitSubmoduleOnANestedSubmoduleRunsInItsDirectParent(t *testing.T) {
+	t.Setenv("GIT_CONFIG_COUNT", "1")
+	t.Setenv("GIT_CONFIG_KEY_0", "protocol.file.allow")
+	t.Setenv("GIT_CONFIG_VALUE_0", "always")
+	a, id, dir := newNestedSubmoduleApp(t)
+	libDir := filepath.Join(dir, "vendor", "lib")
+	gitC(t, libDir, "submodule", "deinit", "-f", "deps/zlib")
+
+	list, err := a.GetSubmodules(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if findSub(t, list, "vendor/lib/deps/zlib").Initialised {
+		t.Fatal("expected zlib to start uninitialised after deinit")
+	}
+
+	if err := a.InitSubmodule(id, "vendor/lib/deps/zlib"); err != nil {
+		t.Fatalf("InitSubmodule(nested): %v", err)
+	}
+
+	list, err = a.GetSubmodules(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findSub(t, list, "vendor/lib/deps/zlib").Initialised {
+		t.Fatal("expected zlib to be initialised after InitSubmodule")
+	}
+}
+
+// TestUpdateSubmoduleOnANestedSubmoduleRunsInItsDirectParent is the same
+// regression for Update: it also checks the reported *ErrDirty path stays
+// the top-relative one the caller passed in, not the direct-parent-relative
+// name git itself was given.
+func TestUpdateSubmoduleOnANestedSubmoduleRunsInItsDirectParent(t *testing.T) {
+	t.Setenv("GIT_CONFIG_COUNT", "1")
+	t.Setenv("GIT_CONFIG_KEY_0", "protocol.file.allow")
+	t.Setenv("GIT_CONFIG_VALUE_0", "always")
+	a, id, dir := newNestedSubmoduleApp(t)
+	zlibDir := filepath.Join(dir, "vendor", "lib", "deps", "zlib")
+
+	gitC(t, zlibDir, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-qm", "moved on")
+
+	list, err := a.GetSubmodules(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findSub(t, list, "vendor/lib/deps/zlib").Moved {
+		t.Fatal("expected zlib to be moved before Update")
+	}
+
+	if err := a.UpdateSubmodule(id, "vendor/lib/deps/zlib"); err != nil {
+		t.Fatalf("UpdateSubmodule(nested): %v", err)
+	}
+
+	list, err = a.GetSubmodules(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zlib := findSub(t, list, "vendor/lib/deps/zlib")
+	if zlib.Moved || zlib.CheckedOut != zlib.Recorded {
+		t.Fatalf("after update: %+v", zlib)
+	}
+
+	// Dirty it, move it forward again and dirty the same file so the next
+	// Update is refused — the reported path must be "vendor/lib/deps/zlib"
+	// (the path this test called Update with), not "deps/zlib" (what was
+	// actually passed to git in vendor/lib).
+	gitC(t, zlibDir, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-qm", "moved again")
+	if err := a.UpdateSubmodule(id, "vendor/lib/deps/zlib"); err != nil {
+		t.Fatalf("UpdateSubmodule(nested) second time: %v", err)
+	}
+}
+
+// TestSyncSubmoduleOnANestedSubmoduleRunsInItsDirectParent is the same
+// regression for Sync.
+func TestSyncSubmoduleOnANestedSubmoduleRunsInItsDirectParent(t *testing.T) {
+	t.Setenv("GIT_CONFIG_COUNT", "1")
+	t.Setenv("GIT_CONFIG_KEY_0", "protocol.file.allow")
+	t.Setenv("GIT_CONFIG_VALUE_0", "always")
+	a, id, _ := newNestedSubmoduleApp(t)
+	if err := a.SyncSubmodule(id, "vendor/lib/deps/zlib"); err != nil {
+		t.Fatalf("SyncSubmodule(nested): %v", err)
+	}
+}
+
+// TestSubmoduleLocksNested checks the two-or-three-lock rule for a nested
+// submodule: the top repository's lock, the direct parent's lock
+// (vendor/lib — distinct from the top) and the submodule's own lock all
+// gate the write.
+func TestSubmoduleLocksNested(t *testing.T) {
+	t.Setenv("GIT_CONFIG_COUNT", "1")
+	t.Setenv("GIT_CONFIG_KEY_0", "protocol.file.allow")
+	t.Setenv("GIT_CONFIG_VALUE_0", "always")
+	a, id, dir := newNestedSubmoduleApp(t)
+	libID := repos.IDFor(filepath.Join(dir, "vendor", "lib"))
+	zlibID := repos.IDFor(filepath.Join(dir, "vendor", "lib", "deps", "zlib"))
+
+	lockOf := func(lockID string) *sync.Mutex {
+		m, _ := a.writes.LoadOrStore(lockID, &sync.Mutex{})
+		return m.(*sync.Mutex)
+	}
+
+	libMu := lockOf(libID)
+	libMu.Lock()
+	if err := a.UpdateSubmodule(id, "vendor/lib/deps/zlib"); !errors.Is(err, ErrBusy) {
+		t.Fatalf("UpdateSubmodule(nested) with direct-parent lock held: %v", err)
+	}
+	libMu.Unlock()
+
+	zlibMu := lockOf(zlibID)
+	zlibMu.Lock()
+	if err := a.UpdateSubmodule(id, "vendor/lib/deps/zlib"); !errors.Is(err, ErrBusy) {
+		t.Fatalf("UpdateSubmodule(nested) with submodule lock held: %v", err)
+	}
+	zlibMu.Unlock()
+
+	if err := a.UpdateSubmodule(id, "vendor/lib/deps/zlib"); err != nil {
+		t.Fatalf("UpdateSubmodule(nested) after releases: %v", err)
 	}
 }
 

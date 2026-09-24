@@ -138,8 +138,10 @@ export const selectedRepo = derived([repos, selectedRepoId], ([$repos, $id]) => 
 export async function loadRepos() {
   // Captured before repos.set(list) below, so it reflects what was selected
   // against the OLD list — nextSelection decides what to do with it once the
-  // new list is in.
+  // new list is in. At startup `repos` is still empty, so this is always
+  // null then — prevId (the persisted id alone) covers that case below.
   const prevSelected = get(selectedRepo)
+  const prevId = get(selectedRepoId)
   const list = await api.listRepos()
   repos.set(list)
   // A detected worktree or submodule can vanish between two reads (removed
@@ -153,7 +155,11 @@ export async function loadRepos() {
     for (const t of s.tabs) if (!ids.has(t.repoId)) next = removeRepoTabs(next, t.repoId)
     return next
   })
-  const next = nextSelection(prevSelected, list)
+  // At startup there is no previous Repo object to run nextSelection's
+  // parent-fallback through (a vanished submodule's parentId was never
+  // fetched), so a stale persisted id that no longer exists is cleared
+  // outright, same as any other removed repository's default case.
+  const next = prevSelected ? nextSelection(prevSelected, list) : prevId && !ids.has(prevId) ? '' : null
   if (next === null) return
   if (next) {
     selectRepo(next)

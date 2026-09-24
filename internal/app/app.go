@@ -217,10 +217,14 @@ func (a *App) ListRepos() []RepoItem {
 		}
 		items[i].SubmoduleCount = len(list)
 		for _, s := range list {
-			if !s.Initialised {
+			if !s.Initialised || !s.Configured {
 				continue
 			}
 			abs := filepath.Join(item.Path, filepath.FromSlash(s.Path))
+			if _, ok := byPath[canonical(abs)]; ok {
+				// Already a stored repository of its own: no duplicate item.
+				continue
+			}
 			repo := repos.Repo{ID: repos.IDFor(abs), Name: filepath.Base(abs), Path: abs}
 			items = append(items, RepoItem{
 				Repo:      repo,

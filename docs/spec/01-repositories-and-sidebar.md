@@ -94,12 +94,25 @@ detected submodule is never a row in this list — it carries a
 detected worktree), and, for each of its own submodules that is
 initialised, a child item nested under it the same way a worktree's
 sub-worktree would be, keyed by its own path-derived identifier. An
-uninitialised or unconfigured submodule still counts, but gets no item.
+uninitialised or unconfigured submodule still counts, but gets no item. Nor
+does one whose absolute path is already a stored repository in its own
+right (added separately, before or after it became a submodule of
+another) — that path keeps its single, existing item rather than gaining a
+second, duplicate one.
 These child items exist so a submodule can be opened as its own repository
 (see Per-repository sections); they are never sidebar rows themselves.
 
-A submodule row's menu offers up to three writes, run under the two-lock
-rule (see "One write lock per repository" in Conventions and constraints):
+A submodule row's menu offers up to three writes. Each runs `git` in the
+submodule's **direct parent** — the top repository for a first-level
+submodule, or the absolute directory of the nearest submodule that
+contains it for a nested one (e.g. `vendor/lib` for `vendor/lib/deps/zlib`)
+— with the path passed to git relative to that direct parent, never the
+top-relative path run from the top (git refuses a pathspec that reaches
+into a different repository). Locking follows the same shape: the top
+repository's write lock, the direct parent's write lock (only when it
+differs from the top, i.e. for a nested submodule), and the submodule's own
+write lock are all taken (all `TryLock`; any already held → busy) — see
+"One write lock per repository" in Conventions and constraints.
 
 - **Initialise** (only when not initialised) runs
   `git submodule update --init -- <path>`, cloning it if needed and
@@ -109,7 +122,8 @@ rule (see "One write lock per repository" in Conventions and constraints):
   It is refused, not forced, when doing so would overwrite local changes
   inside the submodule; the refusal reads "<path> has local changes that
   updating would overwrite. Commit or stash them inside the submodule
-  first."
+  first." — `<path>` is always the top-relative path, even though the
+  command git ran used the path relative to the direct parent.
 - **Sync URL** runs `git submodule sync -- <path>`, copying the current
   URL from `.gitmodules` into the submodule's own remote configuration.
 
@@ -117,7 +131,12 @@ The section header's menu offers **Initialise all**
 (`git submodule update --init --recursive`) and **Update all**
 (`git submodule update --recursive`, refused the same way as a single
 Update when it would overwrite local changes anywhere underneath), each
-touching every submodule under the repository at once.
+touching every submodule under the repository at once, run once from the
+top (recursion is git's own, so no per-submodule direct-parent splitting
+applies here). When git's refusal does not name which submodule it
+refused, the message reads "A submodule has local changes that updating
+would overwrite. Commit or stash them inside the submodule first." instead
+of naming one.
 
 ### Missing repositories
 
@@ -349,8 +368,11 @@ any), the submodule's URL, and its name when it differs from its path.
 Clicking an initialised row opens it as its own repository (its Changes,
 Branches, Remotes, Tags and Stash appear under the same row — see above);
 clicking the already-open row again returns to the parent, the same
-click-to-deselect idea as the log. A row that is not initialised, or not
-configured, does nothing on click.
+click-to-deselect idea as the log. Opening a submodule also expands its
+parent repository's own row in the sidebar if it was folded, since the
+Submodules section — where the opened row is highlighted — only renders
+under an expanded row. A row that is not initialised, or not configured,
+does nothing on click.
 
 A row's context menu offers Open, Initialise, Update to recorded commit,
 Sync URL, Show in Finder and Open terminal here, each shown only in the

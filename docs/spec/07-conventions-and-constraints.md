@@ -240,10 +240,15 @@ locking still serialises the ref updates themselves, and a branch can only
 be checked out in one of them at a time (git refuses the second).
 
 A submodule write (Initialise, Update, Sync, and their header "all"
-counterparts) is the one operation that holds more than one lock: the
-parent repository's, and the lock of every submodule id it touches (one for
-a single-submodule action, every submodule under the repository for
-Initialise all / Update all). Every one of those locks is acquired with the
+counterparts) is the one operation that holds more than one lock: the top
+repository's, and the lock of every submodule id it touches (one for a
+single-submodule action, every submodule under the repository for
+Initialise all / Update all). A single-submodule action on a *nested*
+submodule (one that is itself inside another submodule, not the top
+repository) takes a third lock in between: its direct parent's — the
+command also runs there, with the submodule's path relative to it, rather
+than in the top repository with a top-relative path, which git refuses.
+Every one of those locks is acquired with the
 same non-waiting `TryLock` as an ordinary write, in order, before the
 command runs; if any of them is already held, the whole operation is
 refused with the same "busy" error and every lock it had already acquired

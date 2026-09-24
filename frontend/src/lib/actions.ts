@@ -1,6 +1,6 @@
 import { get } from 'svelte/store'
 import { api } from './api'
-import { busy, chatOpen, collapsedRepoGroups, filters, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, repos, selectRepo, selectedRepoId, stashConflictDismissed } from './stores'
+import { busy, chatOpen, collapsedRepoGroups, expandedRepos, filters, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, repos, selectRepo, selectedRepoId, stashConflictDismissed } from './stores'
 import type { Branch, FileStatus, MergeState, Repo, ResetInfo, ResetMode, Submodule, WorktreeState } from './types'
 import { PULL_UP_TO_DATE, UP_TO_DATE } from './types'
 import { abortWarning, commitWarning, takeMessage } from './merge'
@@ -508,6 +508,10 @@ export async function discardFile(id: string, state: WorktreeState, file: FileSt
 export function openSubmodule(parentId: string, s: Submodule) {
   const id = get(repos).find((r) => r.parentId === parentId && r.subPath === s.path)?.id
   if (!id) return
+  // The submodule has no row of its own (see RepoRow) — its Submodules
+  // section only renders once the parent's own row is expanded, so opening
+  // it must expand the parent, not just select the submodule.
+  expandedRepos.update((ids) => (ids.includes(parentId) ? ids : [...ids, parentId]))
   selectRepo(get(selectedRepoId) === id ? parentId : id)
 }
 

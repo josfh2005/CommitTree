@@ -16,7 +16,7 @@
 
   let showRemotes = true
   // git keeps one stash per repository, shared by all of its worktrees.
-  $: isWorktree = !!$repos.find((r) => r.id === repoId)?.parentId
+  $: isWorktree = !!$repos.find((r) => r.id === repoId)?.worktree
   $: parentId = $repos.find((r) => r.id === repoId)?.parentId ?? ''
   let openRemotes: Record<string, boolean> = {}
   let openGroups: Record<string, boolean> = {}

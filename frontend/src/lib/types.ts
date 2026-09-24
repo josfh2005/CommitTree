@@ -71,7 +71,8 @@ export interface Repo {
   worktree?: boolean
   /** An initialised submodule, listed under its parent repository. */
   submodule?: boolean
-  /** Path of this submodule relative to its parent, when `submodule`. */
+  /** Path of this submodule relative to the top repository, when
+   *  `submodule` (not its immediate parent — see submoduleRepoId). */
   subPath?: string
   /** Number of submodules this repository has (initialised or not). */
   submoduleCount?: number
