@@ -17,6 +17,12 @@ type Worktree struct {
 	Prunable bool   `json:"prunable"`
 	Bare     bool   `json:"bare"`
 	Main     bool   `json:"main"` // the first record: the main working tree
+	// Locked is true for a worktree `git worktree lock` has locked, which
+	// `git worktree remove` refuses without an explicit unlock first.
+	Locked bool `json:"locked"`
+	// LockReason is the optional text given to `git worktree lock`, "" when
+	// none was given (or the worktree isn't locked).
+	LockReason string `json:"lockReason,omitempty"`
 }
 
 // List runs `git worktree list --porcelain -z` in dir. Any of a
@@ -63,6 +69,9 @@ func parse(out string) []Worktree {
 			cur.Bare = true
 		case "prunable":
 			cur.Prunable = true
+		case "locked":
+			cur.Locked = true
+			cur.LockReason = value
 		}
 	}
 	if cur != nil {
