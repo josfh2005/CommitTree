@@ -85,6 +85,11 @@ type App struct {
 	// is replaced wholesale on every list read.
 	wtMu      sync.Mutex
 	worktrees map[string]repos.Repo
+	// wtParent maps a detected worktree's id to its main repository's id,
+	// replaced wholesale alongside worktrees on every list read. It is what
+	// lets a worktree removal run `git worktree remove` from the main
+	// repository's directory rather than the worktree's own.
+	wtParent map[string]string
 	// submodules are the initialised submodules the last ListRepos
 	// detected, by id. Like worktrees, they are not list entries: nothing
 	// about them is stored, and the map is replaced wholesale on every list
@@ -153,6 +158,7 @@ func (a *App) ListRepos() []RepoItem {
 	// a stored entry that is itself a linked worktree gets none — it is
 	// nested under its main repository instead, when that one is listed.
 	found := map[string]repos.Repo{}
+	foundParent := map[string]string{}
 	for _, r := range list {
 		if r.Missing {
 			continue
@@ -179,6 +185,7 @@ func (a *App) ListRepos() []RepoItem {
 			repo := repos.Repo{ID: repos.IDFor(wt.Path), Name: filepath.Base(wt.Path), Path: wt.Path}
 			items = append(items, RepoItem{Repo: repo, Branch: label, ParentID: r.ID, Worktree: true})
 			found[repo.ID] = repo
+			foundParent[repo.ID] = r.ID
 		}
 	}
 	a.wtMu.Lock()
@@ -189,6 +196,7 @@ func (a *App) ListRepos() []RepoItem {
 		}
 	}
 	a.worktrees = found
+	a.wtParent = foundParent
 	a.wtMu.Unlock()
 	// A worktree that disappeared takes its shells and log paging with it,
 	// the same as removing a repository from the list.

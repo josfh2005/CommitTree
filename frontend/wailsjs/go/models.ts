@@ -973,3 +973,28 @@ export namespace worktree {
 
 }
 
+export namespace worktrees {
+	
+	export class RemovalInfo {
+	    branch: string;
+	    detached: boolean;
+	    changes: number;
+	    locked: boolean;
+	    merged: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new RemovalInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.branch = source["branch"];
+	        this.detached = source["detached"];
+	        this.changes = source["changes"];
+	        this.locked = source["locked"];
+	        this.merged = source["merged"];
+	    }
+	}
+
+}
+
