@@ -134,8 +134,30 @@ func TestRebaseStoppedByAnUntrackedFileLeavesNothingBehind(t *testing.T) {
 func TestRebaseRefusesWhileAnotherOperationIsInProgress(t *testing.T) {
 	r := conflicting(t)
 	r.GitFails("cherry-pick", "feature")
-	if _, err := Rebase(context.Background(), r.Dir, "feature"); !errors.Is(err, ErrOperationInProgress) {
+	_, err := Rebase(context.Background(), r.Dir, "feature")
+	if !errors.Is(err, ErrOperationInProgress) {
 		t.Fatalf("err = %v, want ErrOperationInProgress", err)
+	}
+	if err.Error() != "Finish the cherry-pick in progress first" {
+		t.Errorf("err.Error() = %q, want exactly %q", err.Error(), "Finish the cherry-pick in progress first")
+	}
+}
+
+// TestSentinelErrorsCarryExactUserFacingCopy pins the literal text the user
+// sees for each preflight failure: no wrapping, no appended sentinel detail.
+func TestSentinelErrorsCarryExactUserFacingCopy(t *testing.T) {
+	if got, want := ErrDirtyWorktree.Error(), "Commit or stash your changes first"; got != want {
+		t.Errorf("ErrDirtyWorktree.Error() = %q, want %q", got, want)
+	}
+	if got, want := ErrDetachedHead.Error(), "No branch is checked out"; got != want {
+		t.Errorf("ErrDetachedHead.Error() = %q, want %q", got, want)
+	}
+	inProgress := &operationInProgressError{kind: KindRebase}
+	if got, want := inProgress.Error(), "Finish the rebase in progress first"; got != want {
+		t.Errorf("operationInProgressError.Error() = %q, want %q", got, want)
+	}
+	if !errors.Is(inProgress, ErrOperationInProgress) {
+		t.Error("operationInProgressError does not satisfy errors.Is(_, ErrOperationInProgress)")
 	}
 }
 

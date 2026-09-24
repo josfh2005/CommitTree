@@ -23,6 +23,22 @@ var (
 	ErrDetachedHead  = errors.New("No branch is checked out")
 )
 
+// operationInProgressError is ErrOperationInProgress with the kind filled
+// in, so Error() reads exactly "Finish the <kind> in progress first" — no
+// appended sentinel text — while errors.Is(err, ErrOperationInProgress)
+// still holds through Unwrap.
+type operationInProgressError struct {
+	kind Kind
+}
+
+func (e *operationInProgressError) Error() string {
+	return fmt.Sprintf("Finish the %s in progress first", e.kind)
+}
+
+func (e *operationInProgressError) Unwrap() error {
+	return ErrOperationInProgress
+}
+
 // HasTrackedChanges reports staged or unstaged changes to tracked files.
 // Untracked files don't count (git refuses on its own if one is in the way),
 // nor do submodules, which `git rebase` ignores when it checks for a clean tree.
@@ -45,7 +61,7 @@ func preflight(ctx context.Context, dir string) error {
 		return err
 	}
 	if st.Merging {
-		return fmt.Errorf("Finish the %s in progress first: %w", st.Kind, ErrOperationInProgress)
+		return &operationInProgressError{kind: st.Kind}
 	}
 	dirty, err := HasTrackedChanges(ctx, dir)
 	if err != nil {
