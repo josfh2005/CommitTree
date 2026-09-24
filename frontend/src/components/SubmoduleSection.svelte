@@ -126,7 +126,9 @@
 </div>
 
 <style>
-  .refs { padding: 0 0 12px 12px; }
+  /* Bottom spacing lives on RepoRow's wrapper (see RepoRefs), so it isn't
+     doubled when this section follows RepoRefs. */
+  .refs { padding: 0 0 0 12px; }
   .section { display: flex; align-items: center; justify-content: space-between; height: 30px; padding: 6px 4px 0 var(--row-base-indent); }
   .section-heading { display: flex; align-items: center; gap: 6px; }
   .section .count { font-size: 11px; color: var(--faint); }
