@@ -133,6 +133,16 @@ func TestSkipARebaseStep(t *testing.T) {
 	}
 }
 
+func TestSkipARebaseStepStopsOnTheNextConflict(t *testing.T) {
+	r := twoStepRebase(t)
+	if err := Skip(context.Background(), r.Dir); err != nil {
+		t.Fatalf("Skip() = %v, want nil: the sequencer moved to step 2's conflict", err)
+	}
+	if st := status(t, r.Dir); st.Kind != KindRebase || st.Step != 2 {
+		t.Fatalf("state = %+v, want stopped on step 2", st)
+	}
+}
+
 func TestSkipRefusesAMerge(t *testing.T) {
 	r := conflicting(t)
 	if _, err := Start(context.Background(), r.Dir, "feature"); err != nil {

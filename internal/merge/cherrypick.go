@@ -70,6 +70,18 @@ func Skip(ctx context.Context, dir string) error {
 	if st.Kind != KindRebase && st.Kind != KindCherryPick {
 		return ErrNothingToSkip
 	}
+	// Fingerprint the step being skipped before the attempt, the same way
+	// Continue does: `--skip` exits non-zero both when it actually fails
+	// and when it succeeds in dropping this commit but immediately stops
+	// the sequencer on the next commit's conflicts. Only the second is not
+	// a failure of this call.
+	before := Fingerprint(ctx, dir)
 	_, err = gitcmd.RunEnv(ctx, dir, gitcmd.HookTimeout, noEditor, sequencer[st.Kind], "--skip")
+	if err == nil {
+		return nil
+	}
+	if after := Fingerprint(ctx, dir); after != "" && after != before {
+		return nil
+	}
 	return err
 }
