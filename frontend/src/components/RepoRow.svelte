@@ -67,6 +67,8 @@
   class:missing={repo.missing}
   class:dragging
   style="padding-left: calc(var(--row-base-indent) - var(--repo-row-inset) + {depth} * var(--row-indent-step))"
+  role="group"
+  aria-label={repo.name}
   draggable={child ? 'false' : 'true'}
   on:contextmenu={repoMenu}
   on:dragstart={handleDragStart}

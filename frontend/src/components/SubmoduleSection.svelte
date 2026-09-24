@@ -83,7 +83,7 @@
      wrapper, so this repeats the section/row layout RepoRefs uses for
      Tags/Stash to line up the same way. -->
 <div class="refs">
-  <div class="section" on:contextmenu={headerMenu}>
+  <div class="section" role="group" aria-label="Submodules" on:contextmenu={headerMenu}>
     <span class="section-heading">
       <button class="section-title" on:click={() => toggleSubmodulesExpanded(parentId)}>Submodules</button>
       <span class="count">{count}</span>
