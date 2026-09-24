@@ -338,6 +338,79 @@ func TestExplainInChatIsBusyWhileChatting(t *testing.T) {
 	ev.wait(t, agent.EventDone)
 }
 
+func TestExplainLinesInChatWritesTheAnswerToTheConversation(t *testing.T) {
+	var system, prompt string
+	srv := fakeOllama(t, func(req map[string]any) {
+		msgs := req["messages"].([]any)
+		system = msgs[0].(map[string]any)["content"].(string)
+		prompt = msgs[1].(map[string]any)["content"].(string)
+	})
+	a, id, ev := newAIApp(t, srv.URL)
+	head, err := a.GetLog(id, gitlog.Filters{}, gitlog.OrderTopo, 0, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash := head.Rows[0].Hash
+
+	if err := a.ExplainLinesInChat(id, hash, "file-1.txt", 1, 1, "ollama", "lines-1"); err != nil {
+		t.Fatal(err)
+	}
+	start := ev.wait(t, agent.EventStart).data.(agent.StartEvent)
+	if start.Text != "Explain line 1 of file-1.txt (at "+hash[:7]+")" {
+		t.Fatalf("start = %#v", start)
+	}
+	ev.wait(t, agent.EventDone)
+	if !strings.Contains(system, "range of lines") || !strings.Contains(prompt, "Subject: base") {
+		t.Fatalf("system %q\nprompt %q", system, prompt)
+	}
+	history, err := a.GetChat(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(history) != 2 || history[0].Content != start.Text || history[1].Role != ai.RoleAssistant {
+		t.Fatalf("history = %#v", history)
+	}
+}
+
+func TestExplainLinesQuestion(t *testing.T) {
+	cases := map[string]string{
+		explainLinesQuestion("abcdef1234", "a.go", 40, 58): "Explain lines 40\u201358 of a.go (at abcdef1)",
+		explainLinesQuestion("", "a.go", 3, 3):              "Explain line 3 of a.go (working tree)",
+	}
+	for got, want := range cases {
+		if got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	}
+}
+
+func TestExplainLinesInChatValidatesAndIsBusyWhileChatting(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeLines(w, `{"message":{"role":"assistant","content":"Pensando"},"done":false}`)
+		<-r.Context().Done()
+	}))
+	defer srv.Close()
+	a, id, ev := newAIApp(t, srv.URL)
+
+	if err := a.ExplainLinesInChat(id, "HEAD", "", 1, 1, "ollama", "x"); err == nil {
+		t.Fatal("want an error without a path")
+	}
+	if err := a.ExplainLinesInChat(id, "HEAD", "file-1.txt", 5, 2, "ollama", "x"); err == nil {
+		t.Fatal("want an error for an inverted range")
+	}
+	if err := a.SendChat(id, "hola", "run-1"); err != nil {
+		t.Fatal(err)
+	}
+	ev.wait(t, agent.EventDelta)
+	if err := a.ExplainLinesInChat(id, "HEAD", "file-1.txt", 1, 1, "ollama", "x"); !errors.Is(err, ErrChatBusy) {
+		t.Fatalf("explain while chatting: %v", err)
+	}
+	if err := a.StopChat(id); err != nil {
+		t.Fatal(err)
+	}
+	ev.wait(t, agent.EventDone)
+}
+
 func TestSendChatEmitsStart(t *testing.T) {
 	srv := fakeOllama(t, nil)
 	a, id, ev := newAIApp(t, srv.URL)

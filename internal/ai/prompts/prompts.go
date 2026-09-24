@@ -16,6 +16,7 @@ import (
 const (
 	Chat             = "chat"
 	ExplainCommit    = "explain-commit"
+	ExplainLines     = "explain-lines"
 	ResolveConflicts = "resolve-conflicts"
 	CommitMessage    = "commit-message"
 )

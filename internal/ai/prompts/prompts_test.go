@@ -32,7 +32,7 @@ func TestDefaultsRenderVariables(t *testing.T) {
 	if err != nil || !strings.Contains(explain, "3 to 6") {
 		t.Fatalf("explain = %q, err %v", explain, err)
 	}
-	if !reflect.DeepEqual(prompts.Names(), []string{"chat", "commit-message", "explain-commit", "resolve-conflicts"}) {
+	if !reflect.DeepEqual(prompts.Names(), []string{"chat", "commit-message", "explain-commit", "explain-lines", "resolve-conflicts"}) {
 		t.Fatalf("names = %v", prompts.Names())
 	}
 }
@@ -68,7 +68,7 @@ func TestUserOverrideListAndReset(t *testing.T) {
 	if again, _ := s.Get(prompts.ExplainCommit, vars); again != got {
 		t.Fatal("EnsureFiles overwrote a user file")
 	}
-	want := []prompts.Info{{Name: "chat"}, {Name: "commit-message"}, {Name: "explain-commit", Customized: true}, {Name: "resolve-conflicts"}}
+	want := []prompts.Info{{Name: "chat"}, {Name: "commit-message"}, {Name: "explain-commit", Customized: true}, {Name: "explain-lines"}, {Name: "resolve-conflicts"}}
 	if !reflect.DeepEqual(s.List(), want) {
 		t.Fatalf("list = %+v", s.List())
 	}

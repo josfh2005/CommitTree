@@ -102,6 +102,8 @@ export const api = {
   clearChat: (repoID: string) => call<void>(Go.ClearChat(repoID)),
   explainInChat: (repoID: string, hash: string, provider: '' | ProviderName, runID: string) =>
     call<void>(Go.ExplainInChat(repoID, hash, provider, runID)),
+  explainLinesInChat: (repoID: string, rev: string, path: string, start: number, end: number, provider: '' | ProviderName, runID: string) =>
+    call<void>(Go.ExplainLinesInChat(repoID, rev, path, start, end, provider, runID)),
   listPrompts: () => call<PromptInfo[]>(Go.ListPrompts()),
   openPromptsFolder: () => call<void>(Go.OpenPromptsFolder()),
   resetPrompt: (name: string) => call<void>(Go.ResetPrompt(name)),
