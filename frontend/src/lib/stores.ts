@@ -121,6 +121,17 @@ export function blameBack() {
   mainView.set(from)
 }
 
+/** Clears the Blame view outright and leaves the log showing — used
+ *  wherever a stale blame target must not reappear later: a repository
+ *  switch (selectRepo), the repository list going empty (loadRepos), and
+ *  the selected repository becoming missing while blame is open
+ *  (App.svelte). */
+export function closeBlame() {
+  mainView.set('log')
+  blameTarget.set(null)
+  blameStack.set([])
+}
+
 /** Selects a commit in the log. mainView is set explicitly: when the blame
  *  was opened from this very commit, selectedHash does not change, so
  *  App.svelte's "a selection means the log" rule would not fire. */
@@ -212,9 +223,7 @@ export async function loadRepos() {
   selectedRepoId.set('')
   selectedHash.set('')
   uncommittedSelected.set(false)
-  mainView.set('log')
-  blameTarget.set(null)
-  blameStack.set([])
+  closeBlame()
   refs.set(null)
   mergeState.set(null)
   worktreeState.set(null)
@@ -360,9 +369,7 @@ export function selectRepo(id: string) {
     filters.set(emptyFilters())
     selectedHash.set('')
     uncommittedSelected.set(false)
-    mainView.set('log')
-    blameTarget.set(null)
-    blameStack.set([])
+    closeBlame()
     stashConflictDismissed.set(false)
     selectedStash.set(null)
     worktreeState.set(null)

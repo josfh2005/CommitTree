@@ -157,6 +157,9 @@ func blameFile(ctx context.Context, dir string, args map[string]any) (string, er
 	if opts.Start > 0 && opts.End == 0 {
 		opts.End = opts.Start
 	}
+	if opts.Start > 0 && opts.End > 0 && opts.End < opts.Start {
+		return "", fmt.Errorf("end_line must be >= start_line")
+	}
 	b, err := gitlog.GetBlame(ctx, dir, rev, path, opts)
 	if err != nil {
 		return "", err

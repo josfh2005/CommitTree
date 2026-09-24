@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('./api', () => ({ api: {} }))
 
 import { isLogOrder } from './logOrder'
-import { blameBack, blamePrevious, blameStack, blameTarget, expandedStashSections, expandedTagSections, mainView, openBlame, persisted, selectedHash, selectRepo, selectUncommitted, showCommitInLog, toggleCommit, toggleStashExpanded, toggleTagsExpanded, toggleUncommitted, uncommittedSelected } from './stores'
+import { blameBack, blamePrevious, blameStack, blameTarget, closeBlame, expandedStashSections, expandedTagSections, mainView, openBlame, persisted, selectedHash, selectRepo, selectUncommitted, showCommitInLog, toggleCommit, toggleStashExpanded, toggleTagsExpanded, toggleUncommitted, uncommittedSelected } from './stores'
 
 /** A minimal in-memory Storage, since these tests don't run in a DOM
  *  environment and so have no real localStorage to read from. */
@@ -194,5 +194,19 @@ describe('blame navigation', () => {
     expect(get(blameTarget)).toBeNull()
     expect(get(blameStack)).toEqual([])
     expect(get(mainView)).toBe('log')
+  })
+
+  // Exercises the helper App.svelte calls when the selected repository goes
+  // missing while blame is open, so a stale target does not reappear if the
+  // repository comes back (see the `showBlame`/`closeBlame` reactive
+  // statement in App.svelte).
+  it('closeBlame leaves the log showing with no target or stack', () => {
+    mainView.set('changes')
+    openBlame('a.txt', '')
+    blamePrevious('old.txt', 'abc')
+    closeBlame()
+    expect(get(mainView)).toBe('log')
+    expect(get(blameTarget)).toBeNull()
+    expect(get(blameStack)).toEqual([])
   })
 })

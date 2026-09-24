@@ -50,6 +50,33 @@ func TestParsePorcelainRepeatsMetadata(t *testing.T) {
 	}
 }
 
+func TestParsePorcelainUnquotesNonASCIIPaths(t *testing.T) {
+	out := strings.Join([]string{
+		h1 + " 1 1 1",
+		"author Ana", "author-mail <ana@x>", "author-time 1700000000", "author-tz +0000",
+		"summary first", `filename "a\303\261o.txt"`,
+		"\tone",
+		h2 + " 1 2 1",
+		"author Bea", "author-mail <bea@x>", "author-time 1700000100", "author-tz +0000",
+		"summary second", `previous ` + h1 + ` "a\303\261o.txt"`, `filename "a\303\261o.txt"`,
+		"\ttwo",
+		"",
+	}, "\n")
+	b, err := parsePorcelain(out, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(b.Blocks) != 2 {
+		t.Fatalf("blocks = %+v", b.Blocks)
+	}
+	if b.Blocks[0].Filename != "año.txt" {
+		t.Fatalf("filename = %q", b.Blocks[0].Filename)
+	}
+	if b.Blocks[1].PrevPath != "año.txt" {
+		t.Fatalf("prevPath = %q", b.Blocks[1].PrevPath)
+	}
+}
+
 func TestParsePorcelainGroupsConsecutiveLines(t *testing.T) {
 	out := h1 + " 1 1 2\nauthor A\nauthor-mail <a@x>\nauthor-time 1\nauthor-tz +0000\nsummary s\nboundary\nfilename f\n\ta\n" +
 		h1 + " 2 2\nfilename f\n\tb\n"
@@ -137,6 +164,44 @@ func TestGetBlameWorkingTreeRename(t *testing.T) {
 	u := b.Blocks[1]
 	if !u.Uncommitted || u.Author != "" || u.Summary != "" || u.Previous != "" || u.PrevPath != "" {
 		t.Fatalf("uncommitted block = %+v", u)
+	}
+}
+
+func TestGetBlameNonASCIIFilename(t *testing.T) {
+	r := testrepo.New(t)
+	r.WriteFile("año.txt", "uno\n")
+	r.Git("add", "año.txt")
+	r.Git("commit", "-q", "-m", "add")
+	r.WriteFile("año.txt", "uno\ndos\n")
+	r.Git("commit", "-q", "-am", "edit")
+
+	b, err := GetBlame(context.Background(), r.Dir, "", "año.txt", BlameOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(b.Blocks) == 0 {
+		t.Fatalf("blocks = %+v", b.Blocks)
+	}
+	for _, blk := range b.Blocks {
+		if blk.Filename != "año.txt" {
+			t.Fatalf("filename = %q, want año.txt (block %+v)", blk.Filename, blk)
+		}
+	}
+
+	r.Git("mv", "año.txt", "b.txt")
+	r.WriteFile("b.txt", "uno\ndos\ntres\n")
+	renamed, err := GetBlame(context.Background(), r.Dir, "", "b.txt", BlameOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, blk := range renamed.Blocks {
+		if blk.PrevPath == "año.txt" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("no block with prevPath año.txt: %+v", renamed.Blocks)
 	}
 }
 

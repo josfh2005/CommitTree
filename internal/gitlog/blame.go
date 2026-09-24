@@ -157,9 +157,11 @@ func parsePorcelain(out string, limit int) (Blame, error) {
 			case "summary":
 				cur.summary = val
 			case "filename":
-				cur.filename = val
+				cur.filename = unquoteGitPath(val)
 			case "previous":
-				cur.previous, cur.prevPath, _ = strings.Cut(val, " ")
+				var prevPath string
+				cur.previous, prevPath, _ = strings.Cut(val, " ")
+				cur.prevPath = unquoteGitPath(prevPath)
 			case "boundary":
 				cur.boundary = true
 			}
@@ -181,6 +183,18 @@ func (m *blameMeta) block(hash string, start int) BlameBlock {
 		blk.Author, blk.Email, blk.Summary, blk.Previous, blk.PrevPath = "", "", "", "", ""
 	}
 	return blk
+}
+
+// unquoteGitPath decodes a path that git porcelain quoted because it has
+// non-ASCII or otherwise unusual bytes, e.g. `"a\303\261o.txt"`. Paths that
+// were not quoted are returned unchanged.
+func unquoteGitPath(s string) string {
+	if len(s) >= 2 && s[0] == '"' {
+		if u, err := strconv.Unquote(s); err == nil {
+			return u
+		}
+	}
+	return s
 }
 
 // tzOffset turns git's "+0200" into a fixed zone.

@@ -60,6 +60,11 @@ func TestBlameFile(t *testing.T) {
 	if !strings.HasPrefix(run(r.Dir, "blame_file", map[string]any{}), "error: ") {
 		t.Fatal("want an error without path")
 	}
+
+	badRange := run(r.Dir, "blame_file", map[string]any{"path": "a.txt", "start_line": float64(3), "end_line": float64(1)})
+	if !strings.HasPrefix(badRange, "error: ") || !strings.Contains(badRange, "end_line must be >= start_line") {
+		t.Fatalf("want an end_line < start_line error, got %q", badRange)
+	}
 }
 
 func TestBlameFileCapsBlocks(t *testing.T) {

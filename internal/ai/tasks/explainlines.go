@@ -38,7 +38,7 @@ func ExplainLinesContext(ctx context.Context, dir, rev, path string, start, end,
 		fmt.Fprintf(&text, "%d: %s\n", b.StartLine+i, line)
 	}
 	out.WriteString(tools.Truncate(text.String(), budget/3))
-	fmt.Fprintf(&out, "\nBlame:\n%s\n", tools.FormatBlame(b.Blocks))
+	fmt.Fprintf(&out, "\nBlame:\n%s\n", tools.Truncate(tools.FormatBlame(b.Blocks), budget/3))
 
 	// Distinct commits, newest first; uncommitted lines are described by the
 	// working-tree diff instead.

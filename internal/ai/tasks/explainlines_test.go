@@ -62,6 +62,64 @@ func TestExplainLinesContextCapsCommitsAndBudget(t *testing.T) {
 	}
 }
 
+func TestExplainLinesContextMixedCommittedAndUncommitted(t *testing.T) {
+	r := testrepo.New(t)
+	r.WriteFile("a.txt", "one\ntwo\n")
+	r.Git("add", "a.txt")
+	r.Git("commit", "-q", "-m", "add")
+	r.WriteFile("a.txt", "one\ntwo\nthree\n")
+	got, err := tasks.ExplainLinesContext(context.Background(), r.Dir, "", "a.txt", 1, 3, tasks.OllamaDiffBudget)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "Uncommitted changes:") {
+		t.Fatalf("missing uncommitted section:\n%s", got)
+	}
+	if !strings.Contains(got, "Commit ") {
+		t.Fatalf("missing committed section:\n%s", got)
+	}
+}
+
+func TestExplainLinesContextBlameStaysWithinBudget(t *testing.T) {
+	r := testrepo.New(t)
+	n := 40
+	lines := make([]string, n)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("l%d", i)
+	}
+	r.WriteFile("a.txt", strings.Join(lines, "\n")+"\n")
+	r.Git("add", "a.txt")
+	r.Git("commit", "-q", "-m", "c0", fmt.Sprintf("--date=@%d", 1700000000-60))
+	// One commit per line, each with a long summary, so a whole-file blame
+	// produces many blocks and a large formatted blame section.
+	for i := range lines {
+		lines[i] = fmt.Sprintf("l%d changed", i)
+		r.WriteFile("a.txt", strings.Join(lines, "\n")+"\n")
+		msg := fmt.Sprintf("change line %d: %s", i, strings.Repeat("word ", 20))
+		r.Git("commit", "-q", "-am", msg, fmt.Sprintf("--date=@%d", 1700000000+(i+1)*60))
+	}
+	budget := 2000
+	got, err := tasks.ExplainLinesContext(context.Background(), r.Dir, "HEAD", "a.txt", 1, n, budget)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blameStart := strings.Index(got, "\nBlame:\n")
+	if blameStart < 0 {
+		t.Fatalf("no Blame section:\n%s", got)
+	}
+	blameEnd := strings.Index(got, "\n\nUncommitted changes:")
+	if blameEnd < 0 {
+		blameEnd = strings.Index(got, "\n\nCommit ")
+	}
+	if blameEnd < 0 {
+		t.Fatalf("cannot find end of Blame section:\n%s", got)
+	}
+	blameSection := got[blameStart:blameEnd]
+	if max := budget/3 + 100; len(blameSection) > max {
+		t.Fatalf("blame section %d bytes, want <= %d (budget/3 plus truncation slack):\n%s", len(blameSection), max, blameSection)
+	}
+}
+
 func TestExplainLinesContextWorkingTree(t *testing.T) {
 	r := testrepo.New(t)
 	r.WriteFile("a.txt", "one\n")

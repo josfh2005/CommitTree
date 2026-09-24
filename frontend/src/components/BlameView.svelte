@@ -14,11 +14,40 @@
   let request = 0
   let selection: LineRange | null = null
   let anchor: number | null = null
+  // Tracks the path/rev this component last loaded (or is loading), so a
+  // change to either can clear the stale `blame` synchronously — otherwise
+  // old rows stay under the new header until the new blame resolves. Not
+  // reset by an ignore-whitespace toggle, which reuses the same path/rev.
+  let loadedKey = ''
+  // The worktreeState value last seen, so a reactive statement that reads
+  // both target and worktreeState (to reload a working-tree blame on an
+  // edit) does not also refire on every target or ignore-whitespace change
+  // it happens to reference — see the two `$:` blocks below.
+  let lastWorktreeState: unknown
 
   $: target = $blameTarget
-  $: if (target) load(repoId, target.path, target.rev, $blameIgnoreWhitespace)
-  // A working-tree blame follows edits made while it is open.
-  $: if ($worktreeState && target?.rev === '') load(repoId, target.path, '', $blameIgnoreWhitespace)
+  $: if (target) {
+    const key = target.path + '\u0000' + target.rev
+    if (key !== loadedKey) {
+      loadedKey = key
+      blame = null
+      selection = null
+      anchor = null
+    }
+    load(repoId, target.path, target.rev, $blameIgnoreWhitespace)
+  }
+  // A working-tree blame follows edits made while it is open. Guarded on
+  // worktreeState actually changing (not just being read) so opening the
+  // view or toggling ignore-whitespace — which also touch this statement's
+  // dependencies — do not start a second, redundant blame alongside the
+  // one above.
+  $: {
+    const ws = $worktreeState
+    if (ws !== lastWorktreeState) {
+      lastWorktreeState = ws
+      if (target?.rev === '') load(repoId, target.path, '', $blameIgnoreWhitespace)
+    }
+  }
   $: owners = blame ? lineBlocks(blame) : []
 
   async function load(id: string, path: string, rev: string, ws: boolean) {
@@ -28,7 +57,8 @@
     try {
       const b = await api.getBlame(id, rev, path, ws)
       if (current !== request) return
-      if (blame?.path !== b.path || blame?.rev !== b.rev) { selection = null; anchor = null }
+      const contentChanged = blame?.lines.length !== b.lines.length || blame?.lines.join('\n') !== b.lines.join('\n')
+      if (blame?.path !== b.path || blame?.rev !== b.rev || contentChanged) { selection = null; anchor = null }
       blame = b
     } catch (e) {
       if (current === request) { blame = null; error = errorMessage(e) }
@@ -50,10 +80,13 @@
   }
 
   async function explain(range: LineRange) {
-    if (!target) return
+    // blame.path/blame.rev, not target: a row's line range only matches the
+    // blame that produced it, and target can already point at a different
+    // revision while that blame is still loading (see loadedKey above).
+    if (!blame) return
     chatOpen.set(true)
     try {
-      await api.explainLinesInChat(repoId, target.rev, target.path, range.start, range.end, '', crypto.randomUUID())
+      await api.explainLinesInChat(repoId, blame.rev, blame.path, range.start, range.end, '', crypto.randomUUID())
     } catch (e) {
       toast(errorMessage(e), 'error')
     }

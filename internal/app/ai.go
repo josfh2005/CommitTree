@@ -498,7 +498,7 @@ func (a *App) explainTask(repoID, provider, runID, promptName string, build func
 		return ErrAIDisabled
 	}
 	if runID == "" {
-		return errors.New("commit and run id are required")
+		return errors.New("run id is required")
 	}
 	repo, ok := a.repo(repoID)
 	if !ok {
