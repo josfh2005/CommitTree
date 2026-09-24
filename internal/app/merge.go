@@ -70,15 +70,6 @@ func (a *App) stopRun(id string) {
 	_ = a.StopChat(id)
 }
 
-// mergeHead returns the commit being merged in, or "" when not merging.
-func mergeHead(ctx context.Context, dir string) string {
-	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--verify", "--quiet", "MERGE_HEAD")
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(out)
-}
-
 // mergePaths lists every path this merge touches: the ones still unmerged,
 // and the settled ones, staged or not. Paths come from git verbatim, so a
 // caller's path is accepted only when it matches one exactly — a crafted
@@ -227,6 +218,38 @@ type MergeChangedEvent struct {
 // rounds; history trimming keeps the context bounded regardless.
 const MergeMaxSteps = 30
 
+// resolvable are the kinds the conflict agent works on. Each has a
+// fingerprint that changes when the operation (or, for a rebase, the step)
+// does, which is what keeps a run from reaching into the next one.
+var resolvable = map[merge.Kind]bool{merge.KindMerge: true, merge.KindRebase: true, merge.KindCherryPick: true}
+
+// resolveRequest is the user message a resolve run starts with.
+func resolveRequest(st merge.State) string {
+	switch st.Kind {
+	case merge.KindRebase:
+		s := fmt.Sprintf("Resolve the conflicts from rebasing %s onto %s", st.From, st.Into)
+		if st.Total > 0 {
+			s += fmt.Sprintf(" (commit %d of %d: %s)", st.Step, st.Total, st.Subject)
+		}
+		return s
+	case merge.KindCherryPick:
+		return fmt.Sprintf("Resolve the conflicts from cherry-picking %s %q onto %s", st.From, st.Subject, st.Into)
+	}
+	return fmt.Sprintf("Resolve the conflicts from merging %s into %s", st.From, st.Into)
+}
+
+// kindGuidance is appended to the (user-editable) resolver prompt, so the
+// model knows what each side is trying to do whatever the prompt says.
+func kindGuidance(k merge.Kind) string {
+	switch k {
+	case merge.KindRebase:
+		return "This is a rebase, one commit at a time. The base side is the code being rebased onto and is already final; re-apply the intent of the commit being replayed on top of it, without undoing what the base changed."
+	case merge.KindCherryPick:
+		return "This is a cherry-pick. The current branch's side is final; apply the intent of the commit being cherry-picked on top of it, without undoing what the current branch changed."
+	}
+	return "This is a merge. Keep the intent of both branches."
+}
+
 // ResolveConflicts runs the conflict agent over the merge in progress. It
 // shares the repository's chat slot with SendChat and ExplainInChat, so a
 // resolve run and a chat can never interleave, and it stops before
@@ -249,11 +272,16 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 	if !st.Merging {
 		return errors.New("this repository is not merging")
 	}
-	// The run belongs to this merge; its tools refuse to act on any other.
-	startedFor := mergeHead(a.ctx, repo.Path)
+	if !resolvable[st.Kind] {
+		return fmt.Errorf("the AI resolver handles merges, rebases and cherry-picks, not a %s", st.Kind)
+	}
+	// The run belongs to this operation (for a rebase, this step); its tools
+	// refuse to act on any other.
+	startedFor := merge.Fingerprint(a.ctx, repo.Path)
 	if startedFor == "" {
 		return errors.New("this repository is not merging")
 	}
+	sides := mergetools.Sides{Ours: st.OursDescription, Theirs: st.TheirsDescription}
 	cfg, err := a.aiSettings()
 	if err != nil {
 		return err
@@ -278,7 +306,7 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 		cancel()
 	}
 
-	text := fmt.Sprintf("Resolve the conflicts from merging %s into %s", st.From, st.Into)
+	text := resolveRequest(st)
 	history, err := a.ai.deps.Chats.Load(repoID)
 	if err == nil {
 		history = append(history, ai.Message{Role: ai.RoleUser, Content: text})
@@ -289,6 +317,9 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 		system, err = a.ai.deps.Prompts.Get(prompts.ResolveConflicts, prompts.Vars{
 			Repo: repo.Name, Path: repo.Path, Branch: st.Into, Date: time.Now().Format("2006-01-02"),
 		})
+		if err == nil {
+			system += "\n\n" + kindGuidance(st.Kind)
+		}
 	}
 	if err != nil {
 		finish()
@@ -305,7 +336,7 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 			MaxSteps: MergeMaxSteps,
 			RunTool: func(ctx context.Context, call ai.ToolCall, step int) string {
 				if isMergeTool(call.Name) {
-					return a.runMergeTool(ctx, repoID, startedFor, call)
+					return a.runMergeTool(ctx, repoID, startedFor, sides, call)
 				}
 				return tools.Run(ctx, repo.Path, call)
 			},
@@ -358,18 +389,18 @@ func resolveSummary(st merge.State) string {
 
 // runMergeTool runs one mergetools call under the repository's write lock,
 // so an agent edit and an abort or commit can never interleave, and only
-// while the merge the run was started for is still the one in progress. It
-// uses the run's ctx rather than the lock's, so stopping the run still
+// while the operation the run was started for is still the one in progress.
+// It uses the run's ctx rather than the lock's, so stopping the run still
 // reaches the tool.
-func (a *App) runMergeTool(ctx context.Context, repoID, startedFor string, call ai.ToolCall) string {
+func (a *App) runMergeTool(ctx context.Context, repoID, startedFor string, sides mergetools.Sides, call ai.ToolCall) string {
 	var out string
 	var changed bool
 	err := a.write(repoID, func(_ context.Context, dir string) error {
-		if mergeHead(ctx, dir) != startedFor {
-			out = "The merge this run was started for is no longer in progress; stop."
+		if merge.Fingerprint(ctx, dir) != startedFor {
+			out = "The operation this run was started for is no longer in progress; stop."
 			return nil
 		}
-		out, changed = mergetools.Run(ctx, dir, call)
+		out, changed = mergetools.Run(ctx, dir, call, sides)
 		return nil
 	})
 	switch {

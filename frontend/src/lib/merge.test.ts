@@ -86,12 +86,12 @@ describe('conflictActions', () => {
       abort: 'Abort merge', confirm: 'Commit merge', ai: true, done: false,
     })
   })
-  it('offers a rebase its own wording and no AI', () => {
+  it('offers a rebase its own wording and AI', () => {
     expect(conflictActions(state({ kind: 'rebase' }))).toEqual({
-      abort: 'Abort rebase', confirm: 'Continue rebase', ai: false, done: false,
+      abort: 'Abort rebase', confirm: 'Continue rebase', ai: true, done: false,
     })
   })
-  it.each(['cherry-pick', 'revert', 'am'] as const)('gives %s a real abort and continue', (kind) => {
+  it.each(['revert', 'am'] as const)('gives %s a real abort and continue, no AI', (kind) => {
     const a = conflictActions(state({ kind }))
     expect(a.abort).toBeTruthy()
     expect(a.confirm).toBeTruthy()
@@ -101,6 +101,11 @@ describe('conflictActions', () => {
     expect(conflictActions(state({ kind: 'stash' }))).toEqual({
       abort: null, confirm: null, ai: false, done: true,
     })
+  })
+  it('offers Resolve with AI for merge, rebase and cherry-pick only', () => {
+    const base = { merging: true, from: 'a', into: 'b', conflicts: ['x'], manual: [], staged: [], unstaged: [] }
+    for (const kind of ['merge', 'rebase', 'cherry-pick'] as const) expect(conflictActions({ ...base, kind }).ai).toBe(true)
+    for (const kind of ['revert', 'am', 'stash'] as const) expect(conflictActions({ ...base, kind }).ai).toBe(false)
   })
 })
 

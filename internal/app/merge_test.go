@@ -395,6 +395,91 @@ func TestResolveConflictsRefusesToEditADifferentMerge(t *testing.T) {
 	}
 }
 
+// newAIRebaseApp is newAIMergeApp stopped in a rebase of feature onto main
+// with two conflicting steps instead of in a merge.
+func newAIRebaseApp(t *testing.T, ollamaURL string) (*App, *testrepo.Repo, string, *events) {
+	t.Helper()
+	a, r, id, ev := newAIMergeApp(t, ollamaURL)
+	_ = a.AbortMerge(id)
+	r.Git("switch", "-q", "feature")
+	r.WriteFile("greeting.txt", "hola!!\n")
+	r.Git("commit", "-q", "-am", "shout")
+	r.GitFails("rebase", "main")
+	return a, r, id, ev
+}
+
+func TestResolveConflictsWorksOnARebase(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeLines(w, `{"message":{"role":"assistant","content":"Hecho."},"done":false}`, `{"message":{"content":""},"done":true}`)
+	}))
+	t.Cleanup(srv.Close)
+	a, _, id, ev := newAIRebaseApp(t, srv.URL)
+	if err := a.ResolveConflicts(id, "run1"); err != nil {
+		t.Fatal(err)
+	}
+	ev.wait(t, agent.EventStart)
+	ev.wait(t, agent.EventDone)
+	history, err := a.GetChat(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(history) == 0 || !strings.Contains(history[0].Content, "rebasing feature onto main") {
+		t.Errorf("history = %#v, want the request to name the rebase", history)
+	}
+}
+
+func TestResolveConflictsRefusesTheNextRebaseStep(t *testing.T) {
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		msgs := req["messages"].([]any)
+		if msgs[len(msgs)-1].(map[string]any)["role"] == "tool" {
+			writeLines(w, `{"message":{"role":"assistant","content":"Vale."},"done":false}`, `{"message":{"content":""},"done":true}`)
+			return
+		}
+		<-release
+		writeLines(w, `{"message":{"role":"assistant","content":"","tool_calls":[{"id":"call_1","function":{"name":"resolve_hunk","arguments":{"path":"greeting.txt","hunk":0,"resolved":"stale\n"}}}]},"done":false}`, `{"message":{"content":""},"done":true}`)
+	}))
+	t.Cleanup(srv.Close)
+	a, r, id, ev := newAIRebaseApp(t, srv.URL)
+	if err := a.ResolveConflicts(id, "run1"); err != nil {
+		t.Fatal(err)
+	}
+	ev.wait(t, agent.EventStart)
+	// Step 1 is finished behind the run's back (a terminal), leaving step 2.
+	r.WriteFile("greeting.txt", "step one\n")
+	r.Git("add", "greeting.txt")
+	if err := merge.Continue(context.Background(), r.Dir); err != nil {
+		t.Fatal(err)
+	}
+	close(release)
+	ev.wait(t, agent.EventDone)
+
+	data, _ := os.ReadFile(filepath.Join(r.Dir, "greeting.txt"))
+	if strings.Contains(string(data), "stale") || !strings.Contains(string(data), "<<<<<<<") {
+		t.Fatalf("greeting.txt = %q: the run edited the next step", data)
+	}
+}
+
+func TestResolveConflictsRefusesARevert(t *testing.T) {
+	a, r, id, _ := newAIMergeApp(t, "http://127.0.0.1:0")
+	_ = a.AbortMerge(id) // back on main, clean
+	r.WriteFile("greeting.txt", "a\n")
+	r.Git("commit", "-q", "-am", "a")
+	r.WriteFile("greeting.txt", "b\n")
+	r.Git("commit", "-q", "-am", "b")
+	middle := r.Git("rev-parse", "HEAD")
+	r.WriteFile("greeting.txt", "c\n")
+	r.Git("commit", "-q", "-am", "c")
+	r.GitFails("revert", "--no-edit", middle) // b→a conflicts with c
+
+	err := a.ResolveConflicts(id, "run1")
+	if err == nil || !strings.Contains(err.Error(), "merges, rebases and cherry-picks") {
+		t.Fatalf("err = %v, want a refusal naming the three kinds", err)
+	}
+}
+
 func TestResolveSummary(t *testing.T) {
 	cases := []struct {
 		name string

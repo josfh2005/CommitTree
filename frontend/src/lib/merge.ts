@@ -88,15 +88,16 @@ export interface ConflictActions {
   done: boolean
 }
 
-// "Resolve with AI" is merge-only: ResolveConflicts refuses anything without
-// MERGE_HEAD, so showing the button elsewhere only offers an error. A stash
-// conflict has no git-level abort or continue — it gets Done (and, when a
-// conflicted Pop still owes one, Drop stash, which MergeView adds itself
-// from OwedStashDrop rather than from this table).
+// "Resolve with AI" is offered for a merge, a rebase and a cherry-pick:
+// ResolveConflicts ties a run to that operation's fingerprint (for a rebase,
+// the step being replayed) and refuses every other kind. A stash conflict
+// has no git-level abort or continue — it gets Done (and, when a conflicted
+// Pop still owes one, Drop stash, which MergeView adds itself from
+// OwedStashDrop rather than from this table).
 const ACTIONS: Record<Exclude<ConflictKind, ''>, ConflictActions> = {
   merge: { abort: 'Abort merge', confirm: 'Commit merge', ai: true, done: false },
-  rebase: { abort: 'Abort rebase', confirm: 'Continue rebase', ai: false, done: false },
-  'cherry-pick': { abort: 'Abort cherry-pick', confirm: 'Continue cherry-pick', ai: false, done: false },
+  rebase: { abort: 'Abort rebase', confirm: 'Continue rebase', ai: true, done: false },
+  'cherry-pick': { abort: 'Abort cherry-pick', confirm: 'Continue cherry-pick', ai: true, done: false },
   revert: { abort: 'Abort revert', confirm: 'Continue revert', ai: false, done: false },
   am: { abort: 'Abort patch', confirm: 'Continue applying', ai: false, done: false },
   stash: { abort: null, confirm: null, ai: false, done: true },

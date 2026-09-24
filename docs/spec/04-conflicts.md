@@ -230,17 +230,25 @@ the chat panel, so a resolve run and an ordinary chat message can never
 run at once, and it is itself stopped whenever the operation is continued
 or aborted from this view.
 
-The button is offered for a merge only, and refuses to run for any other
-kind. This follows directly from how a run is tied to the merge it started
-for: it identifies "its" merge by `MERGE_HEAD`'s commit, and every tool
-call it makes is checked against that same commit still being current
-before being allowed to touch anything — which stops a run from continuing
-to edit a merge that has since been aborted or replaced by a different one,
-and stops it from silently reaching into a rebase's or cherry-pick's
-conflicts, which have no `MERGE_HEAD` for it to check against at all. A
-rebase, cherry-pick or revert conflict has no equivalent pseudo-ref this
-mechanism could be built on, so the resolver is not offered for them
-in this view.
+The button is offered for a merge, a rebase and a cherry-pick, and the
+resolver refuses to run for any other kind. A run is tied to the operation
+it started for by a fingerprint: the kind plus the commit being combined —
+`MERGE_HEAD` for a merge, `CHERRY_PICK_HEAD` for a cherry-pick, and for a
+rebase the commit currently being replayed (`REBASE_HEAD`, or `HEAD` on the
+older backend that has none). Every tool call re-checks that fingerprint
+before touching anything, which stops a run from editing a merge that has
+since been aborted or replaced, and — because a rebase's fingerprint changes
+with every step — from reaching into the next step's conflicts after the
+one it was started for has been continued or skipped. A rebase with several
+conflicting steps therefore needs one run per step. Revert, applied-patch
+and stash conflicts are not offered the resolver.
+
+What the resolver reads names each side for what it is rather than "ours"
+and "theirs", since a rebase swaps the two relative to a merge: for a rebase
+the base side is the branch being rebased onto and the other is the commit
+being replayed; for a cherry-pick, the current branch and the picked commit.
+Its instructions say, per kind, which side is final (a rebase's base, a
+cherry-pick's current branch) and whose intent is to be carried over.
 
 The resolver is unavailable outright when the application's AI features are
 turned off, and refuses to start a second run while one is already active
@@ -271,9 +279,9 @@ which still need a human, by name.
    conditionally, Drop stash take their place.
 6. A stash conflict's Done never changes the repository; it only stops this
    view owning the screen, and only for that one conflict.
-7. The AI resolver is offered only for a merge, ties itself to that merge's
-   commit, and refuses to keep acting once that commit is no longer the one
-   in progress.
+7. The AI resolver is offered only for a merge, a rebase or a cherry-pick,
+   ties itself to that operation's fingerprint (for a rebase, the step being
+   replayed), and refuses to keep acting once the fingerprint changes.
 8. Only a path belonging to the operation currently in progress can be read
    or acted on through this view.
 

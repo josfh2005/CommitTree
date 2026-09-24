@@ -1,7 +1,7 @@
 // Package mergetools gives the conflict agent its tools. Every write goes
 // through resolve_hunk or stage_file, and both refuse any path that is not a
-// conflicted file of the merge in progress, so the agent cannot reach code
-// the merge never touched.
+// conflicted file of the merge, rebase or cherry-pick in progress, so the
+// agent cannot reach code the operation never touched.
 package mergetools
 
 import (
@@ -59,15 +59,21 @@ func Specs() []ai.ToolSpec {
 	}
 }
 
+// Sides describes the two sides of a conflict for the model. A rebase swaps
+// git's ours and theirs relative to a merge, so the words come from the
+// caller, who knows which operation is in progress. The zero value keeps
+// the merge wording.
+type Sides struct{ Ours, Theirs string }
+
 // Run executes one tool call and reports whether it changed the working tree.
 // Errors come back as text for the model to read and retry, never as a Go
 // error.
-func Run(ctx context.Context, dir string, call ai.ToolCall) (string, bool) {
+func Run(ctx context.Context, dir string, call ai.ToolCall, sides Sides) (string, bool) {
 	switch call.Name {
 	case "list_conflicts":
 		return tools.Truncate(listConflicts(ctx, dir), MaxResult), false
 	case "read_conflict":
-		return tools.Truncate(readConflict(ctx, dir, call.Args), MaxResult), false
+		return tools.Truncate(readConflict(ctx, dir, call.Args, sides), MaxResult), false
 	case "resolve_hunk":
 		return resolveHunk(ctx, dir, call.Args)
 	case "stage_file":
@@ -82,7 +88,7 @@ func listConflicts(ctx context.Context, dir string) string {
 		return "Could not read the merge state: " + err.Error()
 	}
 	if !st.Merging {
-		return "This repository is not merging."
+		return "Nothing is being merged, rebased or cherry-picked."
 	}
 	var b strings.Builder
 	if len(st.Conflicts) == 0 {
@@ -107,7 +113,7 @@ func listConflicts(ctx context.Context, dir string) string {
 	return b.String()
 }
 
-func readConflict(ctx context.Context, dir string, args map[string]any) string {
+func readConflict(ctx context.Context, dir string, args map[string]any, sides Sides) string {
 	path, hunks, msg := open(ctx, dir, args)
 	if msg != "" {
 		return msg
@@ -117,14 +123,21 @@ func readConflict(ctx context.Context, dir string, args map[string]any) string {
 		return fmt.Sprintf("There is no region %d. %s", index, regionsLeft(path, len(hunks)))
 	}
 	h := hunks[index]
+	ours, theirs := sides.Ours, sides.Theirs
+	if ours == "" {
+		ours = "our side (the branch you are merging into)"
+	}
+	if theirs == "" {
+		theirs = "their side (the branch being merged)"
+	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s, conflict %d of %d\n\n", path, index, len(hunks))
 	fmt.Fprintf(&b, "--- lines before ---\n%s\n", h.Before)
 	if h.Base != "" {
 		fmt.Fprintf(&b, "--- common ancestor ---\n%s\n", h.Base)
 	}
-	fmt.Fprintf(&b, "--- our side (the branch you are merging into) ---\n%s\n", h.Ours)
-	fmt.Fprintf(&b, "--- their side (the branch being merged) ---\n%s\n", h.Theirs)
+	fmt.Fprintf(&b, "--- %s ---\n%s\n", ours, h.Ours)
+	fmt.Fprintf(&b, "--- %s ---\n%s\n", theirs, h.Theirs)
 	fmt.Fprintf(&b, "--- lines after ---\n%s", h.After)
 	return b.String()
 }
