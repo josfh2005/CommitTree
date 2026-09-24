@@ -176,7 +176,7 @@
   .count { font-size: 12px; color: var(--muted); }
   .spacer { flex: 1; }
   .body { display: grid; grid-template-columns: minmax(260px, 36%) 1fr; flex: 1; min-height: 0; }
-  .content { overflow: auto; padding: 8px 0; user-select: text; }
+  .content { overflow: auto; padding: 8px 0; -webkit-user-select: text; user-select: text; }
   .line { padding: 0 12px; white-space: pre; line-height: 18px; }
   .marker { background: var(--hover); color: var(--muted); font-weight: 600; }
   .add { background: var(--add-bg); }

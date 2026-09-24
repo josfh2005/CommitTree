@@ -93,7 +93,7 @@
   .branch { font-size: 11px; color: var(--faint); }
   .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .body { display: grid; grid-template-columns: minmax(260px, 36%) 1fr; flex: 1; min-height: 0; }
-  .content { overflow: auto; padding: 8px 0; user-select: text; }
+  .content { overflow: auto; padding: 8px 0; -webkit-user-select: text; user-select: text; }
   .line { padding: 0 12px; white-space: pre; line-height: 18px; }
   .add { background: var(--add-bg); }
   .del { background: var(--del-bg); }

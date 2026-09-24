@@ -416,6 +416,6 @@
   .badge.current { font-weight: 600; }
   .note { position: absolute; left: 0; right: 0; height: 28px; line-height: 28px; text-align: center; font-size: 12px; color: var(--faint); }
   .overlay { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); pointer-events: none; }
-  .overlay.error { color: var(--danger); padding: 24px; white-space: pre-wrap; user-select: text; }
+  .overlay.error { color: var(--danger); padding: 24px; white-space: pre-wrap; -webkit-user-select: text; user-select: text; }
   .tooltip { position: fixed; z-index: 30; max-width: 360px; padding: 4px 8px; border-radius: 6px; background: var(--text); color: var(--bg); font-size: 12px; pointer-events: none; }
 </style>

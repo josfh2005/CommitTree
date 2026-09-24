@@ -94,7 +94,7 @@ body {
   font: 13px/1.4 var(--font);
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
-  user-select: none;
+  -webkit-user-select: none; user-select: none;
   cursor: default;
 }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: default; }
@@ -107,7 +107,7 @@ input, textarea, select {
   border-radius: 7px;
   padding: 4px 8px;
   outline: none;
-  user-select: text;
+  -webkit-user-select: text; user-select: text;
 }
 input:focus, textarea:focus, select:focus { border-color: var(--faint); }
 pre { margin: 0; font: inherit; white-space: pre-wrap; }
