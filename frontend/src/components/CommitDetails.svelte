@@ -2,10 +2,11 @@
   import Icon from './Icon.svelte'
   import SubmoduleDiffView from './SubmoduleDiff.svelte'
   import { api } from '../lib/api'
-  import { jumpTo, repos, selectRepo } from '../lib/stores'
+  import { blameBlocker } from '../lib/blame'
+  import { jumpTo, openBlame, repos, selectRepo } from '../lib/stores'
   import { parseSubmoduleDiff, submoduleRepoId } from '../lib/submodules'
   import type { Details, FileChange } from '../lib/types'
-  import { copyText, errorMessage } from '../lib/ui'
+  import { copyText, errorMessage, openMenu } from '../lib/ui'
 
   export let repoId: string
   export let hash: string
@@ -55,6 +56,13 @@
     }
   }
 
+  function fileMenu(event: MouseEvent, f: FileChange) {
+    const hash = details?.hash
+    if (!hash) return
+    const why = blameBlocker(f)
+    openMenu(event, [{ label: 'Blame', action: () => openBlame(f.path, hash), disabled: why !== null, title: why ?? undefined }])
+  }
+
   function lineClass(line: string): string {
     if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('diff ') || line.startsWith('index ')) return 'meta'
     if (line.startsWith('@@')) return 'hunk'
@@ -89,6 +97,7 @@
             class:active={file === f}
             title={f.oldPath ? `${f.oldPath} → ${f.path}` : f.path}
             on:click={() => openFile(f)}
+            on:contextmenu={(e) => fileMenu(e, f)}
           >
             {#if f.submodule}<span class="sub-mark"><Icon name="package" size={12} /></span>{/if}
             <span class="status s-{f.status}">{f.status}</span>

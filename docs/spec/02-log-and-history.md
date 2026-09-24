@@ -270,6 +270,54 @@ The row does not change the graph's paging, lane assignment or colour
 choices for the real commits below it — it only ever adds, at most, one
 reserved lane of its own to their left.
 
+## Blame
+
+Right-clicking a file in the details pane's file list offers Blame, which
+shows that file as it stood at the selected commit, one origin per line. The
+entry is disabled, with a reason as its tooltip, for a deleted file
+(deleted files have nothing to blame) and for a submodule (submodules have
+no blame).
+
+Opening it replaces the main pane with the blame view: a header with Back,
+the file's path, the revision being blamed, and an Ignore whitespace
+checkbox whose setting is remembered across files and revisions. Each line
+carries a gutter showing, on the first line of a run of lines that share an
+origin, that origin's short hash, author and relative date, with the full
+commit summary on hover; runs alternate background bands so long ones stay
+easy to tell apart. A `^` ahead of the hash marks a boundary commit — the
+oldest one available in a shallow clone, past which blame cannot go further
+back. Working-tree lines not yet committed show "Not committed yet" instead
+of a hash, and refresh as the working tree changes while the view is open.
+Clicking a hash shows that commit in the log.
+
+Lines can be selected: a click selects one line, and a shift-click extends
+the selection from the last plain click. Right-clicking a line — selected
+or not — opens a menu scoped to the selection when the click lands inside
+it, or to the clicked line's own run otherwise:
+
+- **Explain these lines in chat** opens the chat and asks it to explain the
+  selected range.
+- **Blame previous revision** reblames the file as it stood just before the
+  commit that introduced these lines, pushing the current file and revision
+  onto a stack. It is disabled when the lines come from more than one
+  commit, when they are not committed, when they were added in this commit
+  (there is no earlier revision to show), or when the commit is the
+  boundary of a shallow clone — each with its own reason as the tooltip.
+- **Show commit** and **Copy hash** act on the run's commit, and are
+  disabled when the selection spans more than one.
+
+Back walks back one step through that stack at a time, revisiting each
+earlier file and revision Blame previous revision produced, and once the
+stack is empty, returns to wherever the view was opened from — the details
+pane or the Changes view.
+
+Blame caps a file at the first 20 000 lines, with a notice when a file was
+truncated. A binary file or a path that no longer exists at the requested
+revision is shown as an error with a Retry button rather than any lines.
+Changing the selected repository closes the blame view, and a merge in
+progress takes the main pane as it always does, ahead of blame the same as
+ahead of the Changes view or a stash preview.
+
 ## Searching history
 
 There is no separate search feature: the free-text filter is history
