@@ -275,7 +275,7 @@
           on:dblclick={() => !$busy && stashApply(repoId, entry.index)}
           on:contextmenu={(e) => stashMenu(e, entry)}
         >
-          <span class="mark"><Icon name="download" size={12} /></span>
+          <span class="mark"></span>
           <span class="ellipsis">{entry.message}</span>
         </button>
       {:else}
