@@ -140,6 +140,5 @@
   .dim .mark { color: var(--faint); }
   .row-label { margin-left: auto; font-size: 11px; color: var(--faint); flex: none; }
   .marker { margin-left: 6px; font-size: 11px; color: var(--muted); flex: none; }
-  .marker.modified, .marker.conflict { color: var(--text); }
   .submodule .ellipsis { margin-right: auto; }
 </style>
