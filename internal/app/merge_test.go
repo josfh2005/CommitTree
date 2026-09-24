@@ -480,6 +480,24 @@ func TestResolveConflictsRefusesARevert(t *testing.T) {
 	}
 }
 
+func TestResolveConflictsRefusesAStash(t *testing.T) {
+	a, r, id, _ := newAIMergeApp(t, "http://127.0.0.1:0")
+	_ = a.AbortMerge(id) // back on main, clean
+	r.WriteFile("a.txt", "one\n")
+	r.Git("add", "a.txt")
+	r.Git("commit", "-q", "-m", "base")
+	r.WriteFile("a.txt", "stashed\n")
+	r.Git("stash", "push", "-q", "-m", "wip")
+	r.WriteFile("a.txt", "conflicting\n")
+	r.Git("commit", "-q", "-am", "conflicting")
+	r.GitFails("stash", "pop")
+
+	err := a.ResolveConflicts(id, "run1")
+	if err == nil || !strings.Contains(err.Error(), "merges, rebases and cherry-picks") {
+		t.Fatalf("err = %v, want a refusal naming the three kinds", err)
+	}
+}
+
 func TestResolveSummary(t *testing.T) {
 	cases := []struct {
 		name string

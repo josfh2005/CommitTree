@@ -29,7 +29,7 @@ func TestRebaseOntoLeavesConflictsForTheView(t *testing.T) {
 }
 
 func TestCherryPickAndPreviewThroughTheApp(t *testing.T) {
-	a, r, id := newMergeApp(t) // on main; feature conflicts with it
+	a, _, id := newMergeApp(t) // on main; feature conflicts with it
 	p, err := a.GetRebasePreview(id, "feature")
 	if err != nil || p.Commits != 1 {
 		t.Fatalf("preview = %+v, %v", p, err)
@@ -42,5 +42,4 @@ func TestCherryPickAndPreviewThroughTheApp(t *testing.T) {
 	if err != nil || result.Outcome != merge.Conflicted {
 		t.Fatalf("result = %+v, %v", result, err)
 	}
-	_ = r
 }

@@ -320,3 +320,14 @@ None found: no older design document for this area was available to
 compare against; the behaviour above was derived directly from the merge,
 stash and app-layer Go packages and their tests, and from the conflict view
 components and stores.
+
+## Known limitations
+
+With `rerere.autoupdate` turned on, git can fully stage a rebase or
+cherry-pick step's recorded resolution by itself: no unmerged paths are
+left, but the sequencer (`CHERRY_PICK_HEAD`, or the rebase directory) is
+still there and the index differs from HEAD. The app does not recognise
+this as a resolved step — it takes the "any other failure" branch, aborts
+the operation, and reports git's "could not apply" error. Nothing is lost,
+but the step cannot currently be continued from the app; it only affects
+people who have `rerere.autoupdate` enabled.

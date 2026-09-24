@@ -72,7 +72,7 @@ export function takeLabels(state: MergeState | undefined | null): { ours: string
 
 export function skipWarning(state: MergeState): { title: string; message: string; confirmLabel: string } {
   const what = state.theirsLabel || 'This commit'
-  return { title: 'Skip this commit', message: `${what} will not be applied. Its changes are dropped from the result.`, confirmLabel: 'Skip commit' }
+  return { title: 'Skip this commit', message: `${what} will not be applied. Its changes are dropped from the result.`, confirmLabel: 'Skip this commit' }
 }
 
 /** isEmptyStepError recognises git refusing to continue a step whose resolution left nothing to commit. */
