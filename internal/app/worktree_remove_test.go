@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"git-ui/internal/refs"
@@ -173,5 +174,27 @@ func TestRemoveWorktreeRefusesALockedWorktree(t *testing.T) {
 	}
 	if err := a.RemoveWorktree(wtID, false, false); err == nil {
 		t.Fatal("want an error removing a locked worktree")
+	}
+}
+
+// RemoveWorktree must hold the worktree's own write lock in addition to the
+// main repository's: otherwise a Pull, Push or AI chat tool call already
+// running against the worktree itself (which only takes that lock, not the
+// main repository's) could have its directory deleted out from under it.
+func TestRemoveWorktreeRefusesWhileTheWorktreesOwnLockIsHeld(t *testing.T) {
+	a, id := newTestApp(t)
+	WithAI(a, AIDeps{Emit: newEvents().emit})
+	wtID, wtDir := removeTestWorktree(t, a, id, "wtbranch")
+
+	m, _ := a.writes.LoadOrStore(wtID, &sync.Mutex{})
+	mu := m.(*sync.Mutex)
+	mu.Lock()
+	defer mu.Unlock()
+
+	if err := a.RemoveWorktree(wtID, false, false); !errors.Is(err, ErrBusy) {
+		t.Fatalf("err = %v, want ErrBusy", err)
+	}
+	if _, statErr := os.Stat(wtDir); statErr != nil {
+		t.Fatalf("worktree dir gone despite the busy refusal: %v", statErr)
 	}
 }

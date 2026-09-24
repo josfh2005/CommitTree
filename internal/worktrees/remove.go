@@ -31,10 +31,11 @@ type RemovalInfo struct {
 	Merged   bool   `json:"merged"`
 }
 
-// Info reports path's removal state, resolved from mainDir — the main
-// working tree's directory, since git worktree metadata is shared across a
-// repository's worktrees and can be read from any of them, but this mirrors
-// Remove's own use of mainDir for consistency.
+// Info reports path's removal state, resolved from mainDir. Worktree
+// metadata is shared across a repository's worktrees, so it could equally
+// be read from path itself; mainDir is used because callers already have it
+// at hand — the same directory Remove requires (see its own comment) for
+// the removal this reports on.
 func Info(ctx context.Context, mainDir, path string) (RemovalInfo, error) {
 	list, err := List(ctx, mainDir)
 	if err != nil {
