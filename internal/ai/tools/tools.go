@@ -167,15 +167,29 @@ func blameFile(ctx context.Context, dir string, args map[string]any) (string, er
 		blocks = blocks[:MaxBlameBlocks]
 		note = "\n… truncated; pass start_line/end_line to narrow"
 	}
-	out := FormatBlame(blocks)
-	// Keep the note itself from being crowded out by Run's MaxOutput
-	// truncation: if the blocks alone already fill the budget, drop
-	// blocks (not the cap) until the note fits.
-	for note != "" && len(out)+len(note) > MaxOutput && len(blocks) > 0 {
-		blocks = blocks[:len(blocks)-1]
-		out = FormatBlame(blocks)
+	if note != "" {
+		// Real files routinely push 200 formatted blocks past Run's
+		// MaxOutput on their own, which would crowd the note out under
+		// Run's truncation. Cut to however many blocks actually fit
+		// alongside the note, in one pass over their formatted lengths,
+		// so the cap can land below MaxBlameBlocks without reformatting
+		// the whole slice on every trim.
+		budget := MaxOutput - len(note)
+		size, n := 0, 0
+		for _, blk := range blocks {
+			add := len(formatBlameLine(blk))
+			if n > 0 {
+				add++ // "\n" joiner
+			}
+			if size+add > budget {
+				break
+			}
+			size += add
+			n++
+		}
+		blocks = blocks[:n]
 	}
-	return out + note, nil
+	return FormatBlame(blocks) + note, nil
 }
 
 // FormatBlame renders one line per block, without the file text, to keep
@@ -183,14 +197,17 @@ func blameFile(ctx context.Context, dir string, args map[string]any) (string, er
 func FormatBlame(blocks []gitlog.BlameBlock) string {
 	lines := make([]string, 0, len(blocks))
 	for _, blk := range blocks {
-		span := fmt.Sprintf("L%d-%d", blk.Start, blk.Start+blk.Count-1)
-		if blk.Uncommitted {
-			lines = append(lines, span+"  (not committed yet)")
-			continue
-		}
-		lines = append(lines, fmt.Sprintf("%s  %s  %s  %s  %s", span, blk.Short, blk.Date.Format("2006-01-02"), blk.Author, blk.Summary))
+		lines = append(lines, formatBlameLine(blk))
 	}
 	return strings.Join(lines, "\n")
+}
+
+func formatBlameLine(blk gitlog.BlameBlock) string {
+	span := fmt.Sprintf("L%d-%d", blk.Start, blk.Start+blk.Count-1)
+	if blk.Uncommitted {
+		return span + "  (not committed yet)"
+	}
+	return fmt.Sprintf("%s  %s  %s  %s  %s", span, blk.Short, blk.Date.Format("2006-01-02"), blk.Author, blk.Summary)
 }
 
 func logLines(ctx context.Context, dir string, f gitlog.Filters, limit int) (string, error) {

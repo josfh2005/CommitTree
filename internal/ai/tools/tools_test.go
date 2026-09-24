@@ -86,6 +86,13 @@ func TestBlameFileCapsBlocks(t *testing.T) {
 	if !strings.Contains(got, "pass start_line/end_line to narrow") {
 		t.Fatalf("want the cap note, got %d bytes", len(got))
 	}
+	if len(got) > tools.MaxOutput {
+		t.Fatalf("want output within MaxOutput (Run did not truncate it), got %d bytes", len(got))
+	}
+	n := strings.Count(got, "\nL") + 1 // lines start with "L"; +1 for the first line
+	if n <= 0 || n > tools.MaxBlameBlocks {
+		t.Fatalf("want 0 < block lines <= %d, got %d", tools.MaxBlameBlocks, n)
+	}
 }
 
 func TestFormatBlameUncommitted(t *testing.T) {
