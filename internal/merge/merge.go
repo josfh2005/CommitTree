@@ -98,6 +98,17 @@ func Continue(ctx context.Context, dir string) error {
 	// beat core.editor and open a real editor the app can never close.
 	// noEditor also covers hooks, which is why this uses HookTimeout.
 	_, err = gitcmd.RunEnv(ctx, dir, gitcmd.HookTimeout, noEditor, cmd, "--continue")
+	if err == nil {
+		return nil
+	}
+	// git exits non-zero both when --continue itself fails (nothing to
+	// commit, a real hook failure) and when it succeeds in moving past the
+	// resolved commit but immediately stops the sequencer on the next
+	// commit's conflicts — the latter is not a failure of this call, so
+	// only surface err when the sequencer is no longer in progress.
+	if st2, stErr := Status(ctx, dir); stErr == nil && st2.Merging {
+		return nil
+	}
 	return err
 }
 

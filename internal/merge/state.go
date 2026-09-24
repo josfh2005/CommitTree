@@ -50,6 +50,15 @@ type State struct {
 	Step    int    `json:"step,omitempty"`
 	Total   int    `json:"total,omitempty"`
 	Subject string `json:"subject,omitempty"`
+	// OursLabel and TheirsLabel name the two sides of a conflict for the
+	// view ("main", "a1b2c3 fix login"); the descriptions add what each
+	// side is, for the AI resolver. A rebase swaps git's ours and theirs
+	// relative to a merge, which is why the names come from here. Set for
+	// merge, rebase and cherry-pick only.
+	OursLabel         string `json:"oursLabel,omitempty"`
+	TheirsLabel       string `json:"theirsLabel,omitempty"`
+	OursDescription   string `json:"oursDescription,omitempty"`
+	TheirsDescription string `json:"theirsDescription,omitempty"`
 }
 
 // Status reports whether dir is in the middle of a merge, a rebase, or a
@@ -98,6 +107,7 @@ func Status(ctx context.Context, dir string) (State, error) {
 			st.Kind = KindStash
 		}
 	}
+	nameSides(ctx, dir, &st)
 	if st.Kind == "" {
 		return st, nil
 	}
@@ -153,6 +163,32 @@ func Status(ctx context.Context, dir string) (State, error) {
 		}
 	}
 	return st, nil
+}
+
+// nameSides fills OursLabel/TheirsLabel and their descriptions for the kinds
+// where a conflict has two named sides: merge, cherry-pick and rebase.
+func nameSides(ctx context.Context, dir string, st *State) {
+	commit := func(short, subject string) string { return strings.TrimSpace(short + " " + subject) }
+	switch st.Kind {
+	case KindMerge:
+		st.OursLabel, st.TheirsLabel = st.Into, st.From
+		st.OursDescription = st.Into + " (the branch you are merging into)"
+		st.TheirsDescription = st.From + " (the branch being merged)"
+	case KindCherryPick:
+		st.OursLabel, st.TheirsLabel = st.Into, commit(st.From, st.Subject)
+		st.OursDescription = st.Into + " (the current branch)"
+		st.TheirsDescription = st.From + " \"" + st.Subject + "\" (the commit being cherry-picked)"
+	case KindRebase:
+		st.OursLabel = st.Into
+		st.OursDescription = st.Into + " (the base being rebased onto)"
+		if short, subject := sequencerFromInto(ctx, dir, "REBASE_HEAD"); short != "" {
+			st.TheirsLabel = commit(short, subject)
+			st.TheirsDescription = short + " \"" + subject + "\" (your commit being replayed)"
+		} else {
+			st.TheirsLabel = st.From
+			st.TheirsDescription = st.From + " (your commits being replayed)"
+		}
+	}
 }
 
 // pickedCommit returns the full hash CHERRY_PICK_HEAD or REVERT_HEAD points
