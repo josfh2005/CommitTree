@@ -260,11 +260,13 @@
     {/if}
 
     <div class="section">
-      <button
-        class="section-title"
-        title={isWorktree ? 'Shared with the main repository and its other worktrees' : undefined}
-        on:click={() => toggleStashExpanded(repoId)}>Stash</button>
-      <span class="count">{$stashEntries.length}</span>
+      <span class="section-heading">
+        <button
+          class="section-title"
+          title={isWorktree ? 'Shared with the main repository and its other worktrees' : undefined}
+          on:click={() => toggleStashExpanded(repoId)}>Stash</button>
+        <span class="count">{$stashEntries.length}</span>
+      </span>
     </div>
     {#if $expandedStashSections.includes(repoId)}
       {#each $stashEntries as entry (entry.index)}
