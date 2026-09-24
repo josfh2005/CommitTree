@@ -220,6 +220,22 @@ func TestContinueFinishesARebase(t *testing.T) {
 	}
 }
 
+// Continue must not swallow a real failure: calling it while the current
+// commit's conflict is still unresolved leaves the sequencer exactly where
+// it was, and that must come back as an error, not a silent success.
+func TestContinueFailsWithAnUnresolvedConflict(t *testing.T) {
+	r := conflicting(t)
+	r.Git("switch", "-q", "feature")
+	r.GitFails("rebase", "main")
+
+	if err := Continue(context.Background(), r.Dir); err == nil {
+		t.Fatal("want an error: the conflict was never resolved")
+	}
+	if st := status(t, r.Dir); !st.Merging || st.Step != 1 {
+		t.Fatalf("state = %+v, want still stopped on step 1", st)
+	}
+}
+
 // Abort on a rebase restores the branch to where it was.
 func TestAbortStopsARebase(t *testing.T) {
 	r := testrepo.New(t)
