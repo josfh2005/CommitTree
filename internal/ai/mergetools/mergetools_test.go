@@ -49,7 +49,7 @@ func TestSpecsCoverTheFourTools(t *testing.T) {
 
 func TestListConflicts(t *testing.T) {
 	r := conflicted(t)
-	out, changed := mergetools.Run(context.Background(), r.Dir, call("list_conflicts", nil))
+	out, changed := mergetools.Run(context.Background(), r.Dir, call("list_conflicts", nil), mergetools.Sides{})
 	if changed {
 		t.Error("changed = true, but listing writes nothing")
 	}
@@ -60,7 +60,7 @@ func TestListConflicts(t *testing.T) {
 
 func TestReadConflictShowsAllThreeSides(t *testing.T) {
 	r := conflicted(t)
-	out, _ := mergetools.Run(context.Background(), r.Dir, call("read_conflict", map[string]any{"path": "greeting.txt", "hunk": float64(0)}))
+	out, _ := mergetools.Run(context.Background(), r.Dir, call("read_conflict", map[string]any{"path": "greeting.txt", "hunk": float64(0)}), mergetools.Sides{})
 	for _, want := range []string{"hi", "hola", "hello"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("out = %q, want it to contain %q", out, want)
@@ -71,7 +71,7 @@ func TestReadConflictShowsAllThreeSides(t *testing.T) {
 func TestResolveHunkWritesTheFile(t *testing.T) {
 	r := conflicted(t)
 	out, changed := mergetools.Run(context.Background(), r.Dir,
-		call("resolve_hunk", map[string]any{"path": "greeting.txt", "hunk": float64(0), "resolved": "hi / hola\n"}))
+		call("resolve_hunk", map[string]any{"path": "greeting.txt", "hunk": float64(0), "resolved": "hi / hola\n"}), mergetools.Sides{})
 	if !changed {
 		t.Error("changed = false, want true")
 	}
@@ -107,7 +107,7 @@ func TestStageFileRefusesANoMergeAttributePath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, changed := mergetools.Run(context.Background(), r.Dir, call("stage_file", map[string]any{"path": "deps.lock"}))
+	out, changed := mergetools.Run(context.Background(), r.Dir, call("stage_file", map[string]any{"path": "deps.lock"}), mergetools.Sides{})
 	if changed {
 		t.Errorf("changed = true, want stage_file to refuse a Manual path; out = %q", out)
 	}
@@ -149,7 +149,7 @@ func TestStageFileRefusesANoMergeAttributePathEvenWhenTheirsDropsTheAttribute(t 
 		t.Fatal(err)
 	}
 
-	out, changed := mergetools.Run(context.Background(), r.Dir, call("stage_file", map[string]any{"path": "deps.lock"}))
+	out, changed := mergetools.Run(context.Background(), r.Dir, call("stage_file", map[string]any{"path": "deps.lock"}), mergetools.Sides{})
 	if changed {
 		t.Errorf("changed = true, want stage_file to refuse a Manual path; out = %q", out)
 	}
@@ -172,7 +172,7 @@ func TestStageFileRefusesANoMergeAttributePathEvenWhenTheirsDropsTheAttribute(t 
 func TestResolveHunkRefusesMarkers(t *testing.T) {
 	r := conflicted(t)
 	out, changed := mergetools.Run(context.Background(), r.Dir,
-		call("resolve_hunk", map[string]any{"path": "greeting.txt", "hunk": float64(0), "resolved": "<<<<<<< HEAD\nhi\n"}))
+		call("resolve_hunk", map[string]any{"path": "greeting.txt", "hunk": float64(0), "resolved": "<<<<<<< HEAD\nhi\n"}), mergetools.Sides{})
 	if changed {
 		t.Error("changed = true, but nothing should have been written")
 	}
@@ -188,7 +188,7 @@ func TestToolsRefuseAPathThatIsNotConflicted(t *testing.T) {
 	r.WriteFile("untouched.txt", "keep me\n")
 	for _, path := range []string{"untouched.txt", "../escape.txt", "/etc/hosts"} {
 		out, changed := mergetools.Run(context.Background(), r.Dir,
-			call("resolve_hunk", map[string]any{"path": path, "hunk": float64(0), "resolved": "x\n"}))
+			call("resolve_hunk", map[string]any{"path": path, "hunk": float64(0), "resolved": "x\n"}), mergetools.Sides{})
 		if changed {
 			t.Fatalf("%s: changed = true", path)
 		}
@@ -203,7 +203,7 @@ func TestToolsRefuseAPathThatIsNotConflicted(t *testing.T) {
 
 func TestStageFileRefusesWhileMarkersRemain(t *testing.T) {
 	r := conflicted(t)
-	out, _ := mergetools.Run(context.Background(), r.Dir, call("stage_file", map[string]any{"path": "greeting.txt"}))
+	out, _ := mergetools.Run(context.Background(), r.Dir, call("stage_file", map[string]any{"path": "greeting.txt"}), mergetools.Sides{})
 	if !strings.Contains(strings.ToLower(out), "marker") {
 		t.Errorf("out = %q", out)
 	}
@@ -212,8 +212,8 @@ func TestStageFileRefusesWhileMarkersRemain(t *testing.T) {
 func TestStageFileAfterResolving(t *testing.T) {
 	r := conflicted(t)
 	mergetools.Run(context.Background(), r.Dir,
-		call("resolve_hunk", map[string]any{"path": "greeting.txt", "hunk": float64(0), "resolved": "hi / hola\n"}))
-	out, changed := mergetools.Run(context.Background(), r.Dir, call("stage_file", map[string]any{"path": "greeting.txt"}))
+		call("resolve_hunk", map[string]any{"path": "greeting.txt", "hunk": float64(0), "resolved": "hi / hola\n"}), mergetools.Sides{})
+	out, changed := mergetools.Run(context.Background(), r.Dir, call("stage_file", map[string]any{"path": "greeting.txt"}), mergetools.Sides{})
 	if !changed {
 		t.Error("changed = false, want true")
 	}
@@ -245,7 +245,7 @@ func TestToolsRefuseAnUnmergedSymlink(t *testing.T) {
 	}
 
 	out, changed := mergetools.Run(context.Background(), r.Dir,
-		call("resolve_hunk", map[string]any{"path": "greeting.txt", "hunk": float64(0), "resolved": "pwned\n"}))
+		call("resolve_hunk", map[string]any{"path": "greeting.txt", "hunk": float64(0), "resolved": "pwned\n"}), mergetools.Sides{})
 	if changed {
 		t.Error("changed = true, want false")
 	}
@@ -290,13 +290,13 @@ func TestStageFileTreatsThePathLiterally(t *testing.T) {
 	r.WriteFile("untracked.txt", "not part of the merge\n")
 
 	if _, changed := mergetools.Run(context.Background(), r.Dir,
-		call("resolve_hunk", map[string]any{"path": "*.txt", "hunk": float64(0), "resolved": "merged glob\n"})); !changed {
+		call("resolve_hunk", map[string]any{"path": "*.txt", "hunk": float64(0), "resolved": "merged glob\n"}), mergetools.Sides{}); !changed {
 		t.Fatal("resolve_hunk on *.txt changed nothing")
 	}
 	if data, _ := os.ReadFile(glob); string(data) != "merged glob\n" {
 		t.Fatalf("*.txt = %q", data)
 	}
-	out, changed := mergetools.Run(context.Background(), r.Dir, call("stage_file", map[string]any{"path": "*.txt"}))
+	out, changed := mergetools.Run(context.Background(), r.Dir, call("stage_file", map[string]any{"path": "*.txt"}), mergetools.Sides{})
 	if !changed {
 		t.Fatalf("stage_file(*.txt) changed = false: %q", out)
 	}
@@ -337,7 +337,7 @@ func TestStageFileRefusesAModifyDeleteConflict(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, changed := mergetools.Run(context.Background(), r.Dir, call("stage_file", map[string]any{"path": "gone.txt"}))
+	out, changed := mergetools.Run(context.Background(), r.Dir, call("stage_file", map[string]any{"path": "gone.txt"}), mergetools.Sides{})
 	if changed {
 		t.Error("changed = true, want false")
 	}
@@ -358,8 +358,8 @@ func TestStageFileRefusesAModifyDeleteConflict(t *testing.T) {
 func TestListConflictsAsksToStageAResolvedFile(t *testing.T) {
 	r := conflicted(t)
 	mergetools.Run(context.Background(), r.Dir,
-		call("resolve_hunk", map[string]any{"path": "greeting.txt", "hunk": float64(0), "resolved": "hi / hola\n"}))
-	out, _ := mergetools.Run(context.Background(), r.Dir, call("list_conflicts", nil))
+		call("resolve_hunk", map[string]any{"path": "greeting.txt", "hunk": float64(0), "resolved": "hi / hola\n"}), mergetools.Sides{})
+	out, _ := mergetools.Run(context.Background(), r.Dir, call("list_conflicts", nil), mergetools.Sides{})
 	if !strings.Contains(out, "greeting.txt — 0 conflict(s) left; call stage_file") {
 		t.Errorf("out = %q, want greeting.txt listed as ready to stage", out)
 	}
@@ -393,7 +393,7 @@ func twoRegions(t *testing.T) *testrepo.Repo {
 // region 0 is gone must be told the one left is now region 0.
 func TestResolveHunkSaysTheNextRegionIsZero(t *testing.T) {
 	r := twoRegions(t)
-	out, _ := mergetools.Run(context.Background(), r.Dir, call("resolve_hunk", map[string]any{"path": "pair.txt", "hunk": 0, "resolved": "a\n"}))
+	out, _ := mergetools.Run(context.Background(), r.Dir, call("resolve_hunk", map[string]any{"path": "pair.txt", "hunk": 0, "resolved": "a\n"}), mergetools.Sides{})
 	if !strings.Contains(out, "1 conflict(s) left") || !strings.Contains(out, "region 0") {
 		t.Errorf("out = %q, want the count and that the next one is region 0", out)
 	}
@@ -401,8 +401,8 @@ func TestResolveHunkSaysTheNextRegionIsZero(t *testing.T) {
 
 func TestReadConflictPastTheEndNamesTheValidRegions(t *testing.T) {
 	r := twoRegions(t)
-	mergetools.Run(context.Background(), r.Dir, call("resolve_hunk", map[string]any{"path": "pair.txt", "hunk": 0, "resolved": "a\n"}))
-	out, _ := mergetools.Run(context.Background(), r.Dir, call("read_conflict", map[string]any{"path": "pair.txt", "hunk": 1}))
+	mergetools.Run(context.Background(), r.Dir, call("resolve_hunk", map[string]any{"path": "pair.txt", "hunk": 0, "resolved": "a\n"}), mergetools.Sides{})
+	out, _ := mergetools.Run(context.Background(), r.Dir, call("read_conflict", map[string]any{"path": "pair.txt", "hunk": 1}), mergetools.Sides{})
 	if !strings.Contains(out, "no region 1") || !strings.Contains(out, "numbered 0 to 0") {
 		t.Errorf("out = %q, want it to name the valid range", out)
 	}
@@ -410,7 +410,7 @@ func TestReadConflictPastTheEndNamesTheValidRegions(t *testing.T) {
 
 func TestResolveHunkPastTheEndNamesTheValidRegions(t *testing.T) {
 	r := twoRegions(t)
-	out, changed := mergetools.Run(context.Background(), r.Dir, call("resolve_hunk", map[string]any{"path": "pair.txt", "hunk": 2, "resolved": "x\n"}))
+	out, changed := mergetools.Run(context.Background(), r.Dir, call("resolve_hunk", map[string]any{"path": "pair.txt", "hunk": 2, "resolved": "x\n"}), mergetools.Sides{})
 	if changed {
 		t.Error("changed = true for a region that does not exist")
 	}
@@ -421,8 +421,23 @@ func TestResolveHunkPastTheEndNamesTheValidRegions(t *testing.T) {
 
 func TestResolveHunkOnTheLastRegionSaysToStage(t *testing.T) {
 	r := conflicted(t)
-	out, _ := mergetools.Run(context.Background(), r.Dir, call("resolve_hunk", map[string]any{"path": "greeting.txt", "hunk": 0, "resolved": "hi\n"}))
+	out, _ := mergetools.Run(context.Background(), r.Dir, call("resolve_hunk", map[string]any{"path": "greeting.txt", "hunk": 0, "resolved": "hi\n"}), mergetools.Sides{})
 	if !strings.Contains(out, "no conflicts left") || !strings.Contains(out, "stage_file") {
 		t.Errorf("out = %q, want it to say to stage the file", out)
+	}
+}
+
+func TestReadConflictPrintsTheGivenSides(t *testing.T) {
+	r := conflicted(t)
+	c := call("read_conflict", map[string]any{"path": "greeting.txt", "hunk": 0.0})
+	out, _ := mergetools.Run(context.Background(), r.Dir, c, mergetools.Sides{
+		Ours: "main (the base being rebased onto)", Theirs: `a1b2c3 "fix" (your commit being replayed)`,
+	})
+	if !strings.Contains(out, "--- main (the base being rebased onto) ---") || !strings.Contains(out, `--- a1b2c3 "fix" (your commit being replayed) ---`) {
+		t.Fatalf("out = %s", out)
+	}
+	out, _ = mergetools.Run(context.Background(), r.Dir, c, mergetools.Sides{})
+	if !strings.Contains(out, "--- our side (the branch you are merging into) ---") {
+		t.Fatalf("zero Sides must keep the merge wording; out = %s", out)
 	}
 }

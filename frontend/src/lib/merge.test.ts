@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { abortWarning, commitWarning, conflictActions, conflictHeader, mergeSections } from './merge'
+import { abortWarning, commitWarning, conflictActions, conflictHeader, isEmptyStepError, mergeSections, sideLabel, skipWarning, takeLabels } from './merge'
 import type { MergeState } from './types'
 
 const state = (over: Partial<MergeState> = {}): MergeState => ({
@@ -83,15 +83,15 @@ describe('conflictHeader', () => {
 describe('conflictActions', () => {
   it('offers AI, abort and commit for a merge', () => {
     expect(conflictActions(state({ kind: 'merge' }))).toEqual({
-      abort: 'Abort merge', confirm: 'Commit merge', ai: true, done: false,
+      abort: 'Abort merge', confirm: 'Commit merge', ai: true, done: false, skip: false,
     })
   })
-  it('offers a rebase its own wording and no AI', () => {
+  it('offers a rebase its own wording and AI', () => {
     expect(conflictActions(state({ kind: 'rebase' }))).toEqual({
-      abort: 'Abort rebase', confirm: 'Continue rebase', ai: false, done: false,
+      abort: 'Abort rebase', confirm: 'Continue rebase', ai: true, done: false, skip: true,
     })
   })
-  it.each(['cherry-pick', 'revert', 'am'] as const)('gives %s a real abort and continue', (kind) => {
+  it.each(['revert', 'am'] as const)('gives %s a real abort and continue, no AI', (kind) => {
     const a = conflictActions(state({ kind }))
     expect(a.abort).toBeTruthy()
     expect(a.confirm).toBeTruthy()
@@ -99,8 +99,13 @@ describe('conflictActions', () => {
   })
   it('gives a stash conflict Done instead of abort/continue', () => {
     expect(conflictActions(state({ kind: 'stash' }))).toEqual({
-      abort: null, confirm: null, ai: false, done: true,
+      abort: null, confirm: null, ai: false, done: true, skip: false,
     })
+  })
+  it('offers Resolve with AI for merge, rebase and cherry-pick only', () => {
+    const base = { merging: true, from: 'a', into: 'b', conflicts: ['x'], manual: [], staged: [], unstaged: [] }
+    for (const kind of ['merge', 'rebase', 'cherry-pick'] as const) expect(conflictActions({ ...base, kind }).ai).toBe(true)
+    for (const kind of ['revert', 'am', 'stash'] as const) expect(conflictActions({ ...base, kind }).ai).toBe(false)
   })
 })
 
@@ -117,5 +122,57 @@ describe('commitWarning', () => {
   it('is null for anything but a merge — nothing else writes a merge commit', () => {
     expect(commitWarning(state({ kind: 'rebase', unstaged: ['a.ts'] }))).toBeNull()
     expect(commitWarning(state({ kind: 'cherry-pick', unstaged: ['a.ts'] }))).toBeNull()
+  })
+})
+
+describe('sideLabel', () => {
+  it('falls back and truncates', () => {
+    expect(sideLabel(undefined, 'ours')).toBe('ours')
+    expect(sideLabel('main', 'ours')).toBe('main')
+    expect(sideLabel('a1b2c3 ' + 'x'.repeat(60), 'theirs')).toHaveLength(40)
+    expect(sideLabel('a1b2c3 ' + 'x'.repeat(60), 'theirs').endsWith('…')).toBe(true)
+  })
+})
+
+describe('takeLabels', () => {
+  it('uses the backend labels for merge, rebase and cherry-pick', () => {
+    const s = state({ kind: 'merge', oursLabel: 'main', theirsLabel: 'feature' })
+    expect(takeLabels(s)).toEqual({ ours: 'main', theirs: 'feature' })
+  })
+
+  it('keeps "ours (branch) / theirs (commit)" for revert, which has no named sides', () => {
+    const s = state({ kind: 'revert', into: 'main', from: 'a1b2c3', oursLabel: undefined, theirsLabel: undefined })
+    expect(takeLabels(s)).toEqual({ ours: 'ours (main)', theirs: 'theirs (a1b2c3)' })
+  })
+
+  it('names only the side am has (the current branch), not a nonexistent "from"', () => {
+    const s = state({ kind: 'am', into: 'main', from: '', oursLabel: undefined, theirsLabel: undefined })
+    expect(takeLabels(s)).toEqual({ ours: 'ours (main)', theirs: 'theirs' })
+  })
+
+  it('falls back to plain "ours"/"theirs" for stash, which names neither side', () => {
+    const s = state({ kind: 'stash', into: '', from: '', oursLabel: undefined, theirsLabel: undefined })
+    expect(takeLabels(s)).toEqual({ ours: 'ours', theirs: 'theirs' })
+  })
+
+  it('handles no merge state at all', () => {
+    expect(takeLabels(null)).toEqual({ ours: 'ours', theirs: 'theirs' })
+  })
+})
+
+describe('skipWarning', () => {
+  it('names the commit being skipped', () => {
+    const w = skipWarning({ kind: 'rebase', merging: true, from: 'feature', into: 'main', conflicts: [], manual: [], staged: [], unstaged: [], theirsLabel: 'a1b2c3 fix login' })
+    expect(w.title).toBe('Skip this commit')
+    expect(w.message).toBe('a1b2c3 fix login will not be applied. Its changes are dropped from the result.')
+  })
+})
+
+describe('isEmptyStepError', () => {
+  it('recognises git’s empty-step messages', () => {
+    expect(isEmptyStepError("No changes - did you forget to use 'git add'?")).toBe(true)
+    expect(isEmptyStepError('The previous cherry-pick is now empty, possibly due to conflict resolution.')).toBe(true)
+    expect(isEmptyStepError('nothing to commit, working tree clean')).toBe(true)
+    expect(isEmptyStepError('fatal: bad revision')).toBe(false)
   })
 })

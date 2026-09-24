@@ -1,9 +1,10 @@
 import { get } from 'svelte/store'
 import { api } from './api'
 import { busy, chatOpen, collapsedRepoGroups, expandedRepos, filters, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, repos, selectRepo, selectedRepoId, stashConflictDismissed } from './stores'
-import type { Branch, FileStatus, MergeState, Repo, ResetInfo, ResetMode, Submodule, WorktreeState } from './types'
+import type { Branch, FileStatus, MergeState, RebasePreview, Repo, ResetInfo, ResetMode, Submodule, WorktreeState } from './types'
 import { PULL_UP_TO_DATE, UP_TO_DATE } from './types'
-import { abortWarning, commitWarning, takeMessage } from './merge'
+import { abortWarning, commitWarning, isEmptyStepError, skipWarning, takeMessage } from './merge'
+import { doneMessage, rebaseMessage } from './rebase'
 import { resetMessage } from './reset'
 import { discardMessage, neverCommitted } from './worktree'
 import { stashApplyAction } from './stash'
@@ -390,19 +391,82 @@ export async function commitMerge(id: string) {
     const ok = await confirmDialog({ title: 'Commit merge', message: warning, confirmLabel: 'Commit anyway', danger: true })
     if (!ok) return
   }
-  await run('Committing merge…', () => api.commitMerge(id))
+  const kind = state?.kind
+  const label = kind === 'rebase' || kind === 'cherry-pick' ? 'Continuing…' : 'Committing merge…'
+  try {
+    busy.set(label)
+    await api.commitMerge(id)
+  } catch (e) {
+    const message = errorMessage(e)
+    if ((kind === 'rebase' || kind === 'cherry-pick') && isEmptyStepError(message)) {
+      const skip = await confirmDialog({ title: 'Nothing to commit', message: `${message}\n\nSkip this commit instead?`, confirmLabel: 'Skip this commit' })
+      if (skip) await run('Skipping…', () => api.skipStep(id))
+    } else {
+      toast(message, 'error')
+    }
+  } finally {
+    busy.set('')
+    await refreshRepo()
+  }
 }
 
 export const stageMergeFile = (id: string, path: string) => run('Staging…', () => api.stageMergeFile(id, path))
 export const unstageMergeFile = (id: string, path: string) => run('Unstaging…', () => api.unstageMergeFile(id, path))
 export async function takeMergeSide(id: string, path: string, side: 'ours' | 'theirs', branch: string) {
   const ok = await confirmDialog({
-    title: side === 'ours' ? 'Take ours' : 'Take theirs',
+    title: `Take ${branch}`,
     message: takeMessage(path, branch),
-    confirmLabel: side === 'ours' ? 'Take ours' : 'Take theirs',
+    confirmLabel: `Take ${branch}`,
     danger: true,
   })
   if (ok) await run(side === 'ours' ? 'Taking ours…' : 'Taking theirs…', () => api.takeMergeSide(id, path, side))
+}
+
+export async function rebaseOnto(id: string, onto: string, ontoLabel: string, head: string) {
+  let preview: RebasePreview
+  try {
+    preview = await api.getRebasePreview(id, onto)
+  } catch (e) {
+    toast(errorMessage(e), 'error')
+    return
+  }
+  const ok = await confirmDialog({ title: 'Rebase', message: rebaseMessage(head, ontoLabel, preview), confirmLabel: 'Rebase' })
+  if (!ok) return
+  busy.set('Rebasing…')
+  try {
+    const result = await api.rebaseOnto(id, onto)
+    const msg = doneMessage(result.outcome, { op: 'rebase', head, target: ontoLabel, commits: preview.commits })
+    if (msg) toast(msg, 'info')
+    await warnMovedSubmodules(id)
+  } catch (e) {
+    toast(errorMessage(e), 'error')
+  } finally {
+    busy.set('')
+    await refreshRepo()
+  }
+}
+
+export async function cherryPick(id: string, hash: string, short: string, subject: string, head: string) {
+  const ok = await confirmDialog({ title: 'Cherry-pick', message: `Cherry-pick ${short} ${subject} onto ${head}?`, confirmLabel: 'Cherry-pick' })
+  if (!ok) return
+  busy.set('Cherry-picking…')
+  try {
+    const result = await api.cherryPick(id, hash)
+    const msg = doneMessage(result.outcome, { op: 'cherry-pick', head, target: short })
+    if (msg) toast(msg, 'info')
+    await warnMovedSubmodules(id)
+  } catch (e) {
+    toast(errorMessage(e), 'error')
+  } finally {
+    busy.set('')
+    await refreshRepo()
+  }
+}
+
+export async function skipStep(id: string) {
+  const state = get(mergeState)
+  const ok = await confirmDialog({ ...skipWarning(state ?? ({ kind: 'rebase' } as MergeState)), danger: true })
+  if (ok) await run('Skipping…', () => api.skipStep(id))
 }
 
 export async function resolveConflicts(id: string) {

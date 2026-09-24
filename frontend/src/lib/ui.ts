@@ -102,6 +102,7 @@ export interface MenuItem {
   action: () => void
   danger?: boolean
   disabled?: boolean
+  title?: string
 }
 
 export const menu = writable<{ x: number; y: number; items: MenuItem[] } | null>(null)
@@ -110,6 +111,14 @@ export function openMenu(event: MouseEvent, items: MenuItem[]) {
   event.preventDefault()
   event.stopPropagation()
   menu.set({ x: event.clientX, y: event.clientY, items })
+}
+
+/** openMenuAsync opens a menu whose items need a backend answer first (e.g. whether a commit is already in HEAD). */
+export async function openMenuAsync(event: MouseEvent, build: () => Promise<MenuItem[]>) {
+  event.preventDefault()
+  event.stopPropagation()
+  const { clientX: x, clientY: y } = event
+  menu.set({ x, y, items: await build() })
 }
 
 export async function copyText(text: string) {

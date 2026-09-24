@@ -222,6 +222,8 @@ export interface MergeState {
   step?: number
   total?: number
   subject?: string
+  oursLabel?: string
+  theirsLabel?: string
 }
 
 export interface AheadBehind {
@@ -260,10 +262,20 @@ export interface StashFile {
 export const MERGED = 0
 export const CONFLICTED = 1
 export const UP_TO_DATE = 2
+export const REBASED = 3
+export const PICKED = 4
+export const NOTHING_TO_APPLY = 5
 
 export interface MergeResult {
   outcome: number
   conflicts: string[]
+}
+
+export interface RebasePreview {
+  commits: number
+  merges: number
+  published: number
+  upstream: string
 }
 
 export interface ConflictFile {

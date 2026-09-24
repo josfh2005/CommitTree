@@ -293,9 +293,12 @@ held, or if it is already the current branch); its context menu offers:
 |---|---|
 | Check out | It is the current branch, or a write is already running. |
 | Merge `<branch>` into `<head>` | It is the current branch, a write is running, the head is detached, or a merge is already in progress. |
+| Rebase `<head>` onto `<branch>` | It is the current branch, the head already contains it, a write is running, the head is detached, or any conflicted operation is in progress. Uncommitted changes to tracked files refuse it on click ("Commit or stash your changes first"). The confirmation states how many commits are replayed and warns, without blocking, when some are already on the upstream (a force-push, which the application does not offer, would be needed) or when merge commits in the range will be flattened. |
 | New branch from here… | Never. |
 | New tag here… | Never. |
 | Delete… (local) / Delete on remote… (remote-tracking) | It is the current branch. |
+
+A disabled entry that has a reason shows it as a tooltip.
 
 ### Remotes
 
@@ -405,8 +408,9 @@ The application holds one write lock per repository (never a single global
 lock — two different repositories can be written to at the same time).
 Checking out a branch, a remote branch or a commit, resetting the current
 branch, creating or deleting a branch, creating or deleting a tag, and every
-stash write (push, apply, pop, drop) and worktree/merge write share this
-same per-repository lock. A second write attempted against a repository
+stash write (push, apply, pop, drop) and worktree/merge write — including a
+rebase, a cherry-pick and skipping a step of either — share this same
+per-repository lock. A second write attempted against a repository
 while one is already running on it is refused outright, with no queueing —
 the caller must retry once the first has finished. Fetch, pull and push from
 a repository row's menu are likewise refused while a write is already

@@ -17,6 +17,9 @@ const (
 	Merged Outcome = iota
 	Conflicted
 	UpToDate
+	Rebased        // a rebase replayed or fast-forwarded the branch
+	Picked         // a cherry-pick made its commit
+	NothingToApply // a cherry-pick whose changes the branch already has
 )
 
 // Result is what Start produces; Conflicts is set only when Conflicted.
@@ -90,11 +93,29 @@ func Continue(ctx context.Context, dir string) error {
 	if !ok {
 		return nil // KindStash, or nothing in progress
 	}
+	// Fingerprint the commit being resolved before the attempt: it is how
+	// a real failure (the conflict is still unresolved, a hook rejected it)
+	// is told apart below from --continue succeeding but immediately
+	// stopping again on the next commit's conflicts.
+	before := Fingerprint(ctx, dir)
 	// GIT_EDITOR through the environment, not -c core.editor: git resolves
 	// GIT_EDITOR first, so a value inherited from the user's shell would
 	// beat core.editor and open a real editor the app can never close.
 	// noEditor also covers hooks, which is why this uses HookTimeout.
 	_, err = gitcmd.RunEnv(ctx, dir, gitcmd.HookTimeout, noEditor, cmd, "--continue")
+	if err == nil {
+		return nil
+	}
+	// git exits non-zero both when --continue itself fails outright — the
+	// conflict it was asked to continue past is still unresolved, or a real
+	// hook failure — and when it succeeds in moving past the resolved
+	// commit but immediately stops the sequencer on the next commit's
+	// conflicts. Only the second is not a failure of this call, and the two
+	// are told apart by whether the operation actually advanced: a real
+	// failure leaves the same commit fingerprinted as before the attempt.
+	if after := Fingerprint(ctx, dir); after != "" && after != before {
+		return nil
+	}
 	return err
 }
 

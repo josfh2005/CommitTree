@@ -1,15 +1,16 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte'
   import { api } from '../lib/api'
-  import { checkoutCommit, newBranch, newTag, resetBranch } from '../lib/actions'
+  import { checkoutCommit, cherryPick, newBranch, newTag, rebaseOnto, resetBranch } from '../lib/actions'
   import { relativeDate } from '../lib/format'
   import {
     arrowAt, DOT_RADIUS, edgeSegment, graphWidth, LANE_WIDTH, laneColor, laneX, ROW_HEIGHT, rowCenterY, visibleRange,
   } from '../lib/geometry'
   import { isCurrentBranchRef } from '../lib/refBadge'
+  import { cherryPickBlocker, rebaseBlocker } from '../lib/rebase'
   import { busy, chatOpen, filters, jumpTo, logOrder, logVersion, mergeState, refs, selectedHash, toggleCommit, toggleUncommitted, uncommittedSelected, worktreeState } from '../lib/stores'
   import type { LogRow } from '../lib/types'
-  import { copyText, errorMessage, openMenu, toast } from '../lib/ui'
+  import { copyText, errorMessage, openMenuAsync, toast } from '../lib/ui'
   import { cleanTreeSelection, followHead, uncommittedCount, uncommittedMarker } from '../lib/uncommitted'
 
   export let repoId: string
@@ -283,14 +284,23 @@
 
   function commitMenu(event: MouseEvent, row: LogRow) {
     selectedHash.set(row.hash)
-    openMenu(event, [
-      { label: '✨ Explain in chat', action: () => explain(row) },
-      { label: 'Check out (detached)…', action: () => checkoutCommit(repoId, row.hash) },
-      { label: 'New branch here…', action: () => newBranch(repoId, row.hash, row.short) },
-      { label: 'New tag here…', action: () => newTag(repoId, row.hash, row.short) },
-      resetItem(row),
-      { label: 'Copy hash', action: () => copyText(row.hash) },
-    ])
+    const head = $refs?.head ?? ''
+    const common = { detached: !!$refs?.detached || !head, busy: !!$busy, kind: $mergeState?.merging ? $mergeState.kind : ('' as const) }
+    openMenuAsync(event, async () => {
+      const contained = await api.isAncestorOfHead(repoId, row.hash).catch(() => false)
+      const rebaseWhy = rebaseBlocker({ ...common, isHead: row.hash === $refs?.headHash, contained }, head, row.short)
+      const pickWhy = cherryPickBlocker({ ...common, contained, isMerge: row.parents.length > 1 })
+      return [
+        { label: '✨ Explain in chat', action: () => explain(row) },
+        { label: 'Check out (detached)…', action: () => checkoutCommit(repoId, row.hash) },
+        { label: 'New branch here…', action: () => newBranch(repoId, row.hash, row.short) },
+        { label: 'New tag here…', action: () => newTag(repoId, row.hash, row.short) },
+        { label: `Cherry-pick onto ${head || 'branch'}`, action: () => cherryPick(repoId, row.hash, row.short, row.subject, head), disabled: pickWhy !== null, title: pickWhy ?? undefined },
+        { label: `Rebase ${head || 'branch'} onto this commit`, action: () => rebaseOnto(repoId, row.hash, row.short, head), disabled: rebaseWhy !== null, title: rebaseWhy ?? undefined },
+        resetItem(row),
+        { label: 'Copy hash', action: () => copyText(row.hash) },
+      ]
+    })
   }
 
   async function jump(hash: string) {

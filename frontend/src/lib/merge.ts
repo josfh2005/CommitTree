@@ -49,6 +49,37 @@ export function takeMessage(path: string, branch: string): string {
   return `Replace ${path} with ${branch}'s version, or delete it if ${branch} deleted it? Edits you made to it are lost; Unstage won't bring them back.`
 }
 
+/** sideLabel is a conflict side's name for a menu: the backend's label, or the fallback, kept short. */
+export function sideLabel(label: string | undefined, fallback: string): string {
+  const s = label || fallback
+  return s.length > 40 ? s.slice(0, 39) + '…' : s
+}
+
+/**
+ * takeLabels is the "Take …" menu wording for a Manual file's two sides.
+ * The backend only names sides for merge, rebase and cherry-pick
+ * (nameSides): those always have oursLabel/theirsLabel set, and this
+ * fallback never runs for them. Revert, am and stash keep the plain
+ * "ours"/"theirs" wording instead, decorated with the branch or commit
+ * `into`/`from` names when the backend has one — so a revert's "theirs" is
+ * still named by the commit being reverted, never mistaken for its content.
+ */
+export function takeLabels(state: MergeState | undefined | null): { ours: string; theirs: string } {
+  const ours = sideLabel(state?.oursLabel, state?.into ? `ours (${state.into})` : 'ours')
+  const theirs = sideLabel(state?.theirsLabel, state?.from ? `theirs (${state.from})` : 'theirs')
+  return { ours, theirs }
+}
+
+export function skipWarning(state: MergeState): { title: string; message: string; confirmLabel: string } {
+  const what = state.theirsLabel || 'This commit'
+  return { title: 'Skip this commit', message: `${what} will not be applied. Its changes are dropped from the result.`, confirmLabel: 'Skip this commit' }
+}
+
+/** isEmptyStepError recognises git refusing to continue a step whose resolution left nothing to commit. */
+export function isEmptyStepError(message: string): boolean {
+  return /No changes - did you forget|is now empty|nothing to commit/i.test(message)
+}
+
 export interface ConflictHeader {
   lead: string
   from: string
@@ -86,20 +117,22 @@ export interface ConflictActions {
   confirm: string | null
   ai: boolean
   done: boolean
+  skip: boolean
 }
 
-// "Resolve with AI" is merge-only: ResolveConflicts refuses anything without
-// MERGE_HEAD, so showing the button elsewhere only offers an error. A stash
-// conflict has no git-level abort or continue — it gets Done (and, when a
-// conflicted Pop still owes one, Drop stash, which MergeView adds itself
-// from OwedStashDrop rather than from this table).
+// "Resolve with AI" is offered for a merge, a rebase and a cherry-pick:
+// ResolveConflicts ties a run to that operation's fingerprint (for a rebase,
+// the step being replayed) and refuses every other kind. A stash conflict
+// has no git-level abort or continue — it gets Done (and, when a conflicted
+// Pop still owes one, Drop stash, which MergeView adds itself from
+// OwedStashDrop rather than from this table).
 const ACTIONS: Record<Exclude<ConflictKind, ''>, ConflictActions> = {
-  merge: { abort: 'Abort merge', confirm: 'Commit merge', ai: true, done: false },
-  rebase: { abort: 'Abort rebase', confirm: 'Continue rebase', ai: false, done: false },
-  'cherry-pick': { abort: 'Abort cherry-pick', confirm: 'Continue cherry-pick', ai: false, done: false },
-  revert: { abort: 'Abort revert', confirm: 'Continue revert', ai: false, done: false },
-  am: { abort: 'Abort patch', confirm: 'Continue applying', ai: false, done: false },
-  stash: { abort: null, confirm: null, ai: false, done: true },
+  merge: { abort: 'Abort merge', confirm: 'Commit merge', ai: true, done: false, skip: false },
+  rebase: { abort: 'Abort rebase', confirm: 'Continue rebase', ai: true, done: false, skip: true },
+  'cherry-pick': { abort: 'Abort cherry-pick', confirm: 'Continue cherry-pick', ai: true, done: false, skip: true },
+  revert: { abort: 'Abort revert', confirm: 'Continue revert', ai: false, done: false, skip: false },
+  am: { abort: 'Abort patch', confirm: 'Continue applying', ai: false, done: false, skip: false },
+  stash: { abort: null, confirm: null, ai: false, done: true, skip: false },
 }
 
 export function conflictActions(state: MergeState): ConflictActions {

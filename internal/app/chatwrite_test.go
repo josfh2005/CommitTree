@@ -494,3 +494,109 @@ func TestPullStrategyIsReadFreshEachTimeRunWriteToolPrepares(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// newAIAppFromRepo is newAIApp for a repository the test built itself
+// (rather than newTestApp's fixed fixture), needed for cherry_pick's
+// execution tests since that fixture's "feature work" commit is already an
+// ancestor of main.
+func newAIAppFromRepo(t *testing.T, r *testrepo.Repo, ollamaURL string) (*App, string, *events) {
+	t.Helper()
+	store, err := repos.Open(filepath.Join(t.TempDir(), "repos.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := store.Add(context.Background(), r.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := New(store)
+	dir := t.TempDir()
+	ev := newEvents()
+	WithAI(a, AIDeps{
+		SettingsPath: filepath.Join(dir, "ai.json"),
+		Chats:        chatstore.New(filepath.Join(dir, "chats")),
+		Prompts:      prompts.New(filepath.Join(dir, "prompts")),
+		Emit:         ev.emit,
+	})
+	s, err := a.GetAISettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.OllamaURL = ollamaURL
+	if err := a.SaveAISettings(s); err != nil {
+		t.Fatal(err)
+	}
+	return a, repo.ID, ev
+}
+
+// TestChatCherryPickCleanRuns covers a clean cherry_pick proposal: approving
+// it applies the picked commit on top of the current branch and reports the
+// proposal's title, the same as every other clean write.
+func TestChatCherryPickCleanRuns(t *testing.T) {
+	r := testrepo.New(t)
+	r.Commit("base")
+	r.Git("switch", "-q", "-c", "feature")
+	picked := r.Commit("fix login")
+	r.Git("switch", "-q", "main")
+	short := r.Git("rev-parse", "--short", picked)
+
+	a, id, ev := newAIAppFromRepo(t, r, fakeWriteOllama(t, "cherry_pick", `{"commit":"`+picked+`"}`).URL)
+
+	if err := a.SendChat(id, "cherry-pick the login fix", "run-1"); err != nil {
+		t.Fatal(err)
+	}
+	confirm := ev.wait(t, EventChatConfirm).data.(ConfirmEvent)
+	wantTitle := "Cherry-pick " + short + " fix login onto main"
+	if confirm.Tool != "cherry_pick" || confirm.Title != wantTitle {
+		t.Fatalf("confirm = %+v", confirm)
+	}
+
+	if err := a.ConfirmChatAction(id, confirm.ConfirmID, true); err != nil {
+		t.Fatal(err)
+	}
+	ev.wait(t, EventRepoChanged)
+	ev.wait(t, agent.EventDone)
+
+	if res := toolResult(t, a, id); res != "done: "+wantTitle {
+		t.Fatalf("tool result = %q", res)
+	}
+	subject := r.Git("log", "-1", "--format=%s", "main")
+	if subject != "fix login" {
+		t.Fatalf("HEAD of main = %q, want the picked commit applied", subject)
+	}
+}
+
+// TestChatCherryPickConflictOpensTheConflictView covers a cherry_pick whose
+// approval ends in conflicts: the result names the conflict view instead of
+// claiming the pick finished.
+func TestChatCherryPickConflictOpensTheConflictView(t *testing.T) {
+	r := testrepo.New(t)
+	r.Commit("base")
+	r.Git("switch", "-q", "-c", "side")
+	r.WriteFile("file-1.txt", "side change\n")
+	r.Git("add", "file-1.txt")
+	r.Git("commit", "-q", "-m", "side change")
+	picked := r.Git("rev-parse", "HEAD")
+	r.Git("switch", "-q", "main")
+	r.WriteFile("file-1.txt", "main change\n")
+	r.Git("add", "file-1.txt")
+	r.Git("commit", "-q", "-m", "main change")
+
+	a, id, ev := newAIAppFromRepo(t, r, fakeWriteOllama(t, "cherry_pick", `{"commit":"`+picked+`"}`).URL)
+
+	if err := a.SendChat(id, "cherry-pick the side change", "run-1"); err != nil {
+		t.Fatal(err)
+	}
+	confirm := ev.wait(t, EventChatConfirm).data.(ConfirmEvent)
+
+	if err := a.ConfirmChatAction(id, confirm.ConfirmID, true); err != nil {
+		t.Fatal(err)
+	}
+	ev.wait(t, EventRepoChanged)
+	ev.wait(t, agent.EventDone)
+
+	res := toolResult(t, a, id)
+	if !strings.Contains(res, "cherry-pick stopped with conflicts in 1 file(s)") {
+		t.Fatalf("tool result = %q", res)
+	}
+}

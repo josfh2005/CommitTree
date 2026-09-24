@@ -13,6 +13,7 @@ import (
 
 	"git-ui/internal/ai"
 	"git-ui/internal/gitcmd"
+	"git-ui/internal/merge"
 	"git-ui/internal/refs"
 	"git-ui/internal/worktree"
 )
@@ -32,6 +33,7 @@ var writeToolNames = map[string]bool{
 	"push":            true,
 	"pull":            true,
 	"merge_branch":    true,
+	"cherry_pick":     true,
 }
 
 // IsWrite reports whether name is one of the write tools.
@@ -59,6 +61,7 @@ type Proposal struct {
 	Paths            []string
 	Checkout         bool
 	IncludeUntracked bool
+	Commit           string
 }
 
 func Specs() []ai.ToolSpec {
@@ -132,6 +135,11 @@ func Specs() []ai.ToolSpec {
 			Description: "Merge another branch into the current branch, always creating a merge commit.",
 			Parameters:  obj(map[string]any{"branch": str("Branch to merge into the current branch")}, "branch"),
 		},
+		{
+			Name:        "cherry_pick",
+			Description: "Apply one commit from elsewhere on top of the current branch, as a new commit. Not for merge commits.",
+			Parameters:  obj(map[string]any{"commit": str("Hash (full or abbreviated) of the commit to apply")}, "commit"),
+		},
 	}
 }
 
@@ -162,6 +170,8 @@ func Prepare(ctx context.Context, dir string, call ai.ToolCall, env Env) (Propos
 		p, err = preparePull(ctx, dir, env)
 	case "merge_branch":
 		p, err = prepareMergeBranch(ctx, dir, call.Args)
+	case "cherry_pick":
+		p, err = prepareCherryPick(ctx, dir, call.Args)
 	default:
 		return Proposal{}, fmt.Errorf("unknown tool %q", call.Name)
 	}
@@ -697,6 +707,59 @@ func prepareMergeBranch(ctx context.Context, dir string, args map[string]any) (P
 		Title:   fmt.Sprintf("Merge %s into %s", branch, current),
 		Details: []string{fmt.Sprintf("%d commit(s)", count), "a merge commit is always created"},
 		Branch:  branch,
+	}, nil
+}
+
+// --- cherry_pick ---
+
+func prepareCherryPick(ctx context.Context, dir string, args map[string]any) (Proposal, error) {
+	commit, err := stringArg(args, "commit")
+	if err != nil {
+		return Proposal{}, err
+	}
+	if commit == "" || strings.HasPrefix(commit, "-") {
+		return Proposal{}, fmt.Errorf("invalid commit %q", commit)
+	}
+	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--verify", "--quiet", commit+"^{commit}")
+	if err != nil {
+		return Proposal{}, fmt.Errorf("no commit %q", commit)
+	}
+	hash := strings.TrimSpace(out)
+	current := currentBranch(ctx, dir)
+	if current == "" {
+		return Proposal{}, errors.New("HEAD is detached; check out a branch first")
+	}
+	if st, err := merge.Status(ctx, dir); err != nil {
+		return Proposal{}, err
+	} else if st.Merging {
+		return Proposal{}, fmt.Errorf("finish the %s in progress first", st.Kind)
+	}
+	parents, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-list", "--parents", "-n", "1", hash)
+	if err != nil {
+		return Proposal{}, err
+	}
+	if len(strings.Fields(parents)) > 2 {
+		return Proposal{}, errors.New("that is a merge commit; cherry-picking a merge commit isn't supported")
+	}
+	meta, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "log", "-1", "--format=%h%x00%s", hash)
+	if err != nil {
+		return Proposal{}, err
+	}
+	short, subject, _ := strings.Cut(strings.TrimSpace(meta), "\x00")
+	if contained, err := merge.IsAncestorOfHead(ctx, dir, hash); err != nil {
+		return Proposal{}, err
+	} else if contained {
+		return Proposal{}, fmt.Errorf("%s is already on %s", short, current)
+	}
+	if dirty, err := merge.HasTrackedChanges(ctx, dir); err != nil {
+		return Proposal{}, err
+	} else if dirty {
+		return Proposal{}, errors.New("there are uncommitted changes; commit or stash your changes first")
+	}
+	return Proposal{
+		Title:   fmt.Sprintf("Cherry-pick %s %s onto %s", short, subject, current),
+		Details: []string{"creates one new commit on " + current},
+		Commit:  hash,
 	}, nil
 }
 

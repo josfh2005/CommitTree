@@ -476,6 +476,24 @@ export namespace graph {
 
 export namespace merge {
 	
+	export class Preview {
+	    commits: number;
+	    merges: number;
+	    published: number;
+	    upstream: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Preview(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.commits = source["commits"];
+	        this.merges = source["merges"];
+	        this.published = source["published"];
+	        this.upstream = source["upstream"];
+	    }
+	}
 	export class Result {
 	    outcome: number;
 	    conflicts: string[];
@@ -502,6 +520,10 @@ export namespace merge {
 	    step?: number;
 	    total?: number;
 	    subject?: string;
+	    oursLabel?: string;
+	    theirsLabel?: string;
+	    oursDescription?: string;
+	    theirsDescription?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new State(source);
@@ -520,6 +542,10 @@ export namespace merge {
 	        this.step = source["step"];
 	        this.total = source["total"];
 	        this.subject = source["subject"];
+	        this.oursLabel = source["oursLabel"];
+	        this.theirsLabel = source["theirsLabel"];
+	        this.oursDescription = source["oursDescription"];
+	        this.theirsDescription = source["theirsDescription"];
 	    }
 	}
 

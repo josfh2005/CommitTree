@@ -123,7 +123,17 @@ selection.
 | Conflict (has markers) | Stage | Same staging operation as a settled file; refused while any marker remains in the file (see "The marker check" below). |
 | Unstaged (settled, not staged) | Stage | Adds it to the index. |
 | Staged | Unstage | Removes it from the index, keeping its content in the worktree. |
-| Manual | Take ours / Take theirs (right-click) | Replaces the file wholly with one side's version — or deletes it, if that side deleted it — and stages the result. |
+| Manual | Take `<side>` (right-click) | Replaces the file wholly with one side's version — or deletes it, if that side deleted it — and stages the result. |
+
+The side is named for what it actually is, per kind: for a merge it is the
+current branch / the branch merged in; for a rebase, the branch being
+rebased onto / the commit being replayed (short hash plus subject); for a
+cherry-pick, the current branch / the picked commit. Revert, an applied
+patch and a stash conflict keep the plain "ours" / "theirs" labels. A
+rebase names its sides this way because git itself swaps ours and theirs
+for a rebase relative to a merge — the base being rebased onto is git's
+"ours", and the commit being replayed is git's "theirs" — so the view
+names each side for what it is rather than repeating git's swapped terms.
 
 Taking a side asks for confirmation: it overwrites whatever is in the
 worktree, including any hand edits, and unstaging afterwards does not bring
@@ -182,6 +192,23 @@ go on editing a merge that the click just closed or discarded, and neither
 can it go on to resolve the next merge's conflicts if a rebase's next step
 immediately re-conflicts.
 
+### Skip this commit
+
+A rebase or a cherry-pick can also skip the step currently being replayed,
+dropping its changes from the result entirely rather than committing them.
+"Skip this commit" is always available for these two kinds (it needs
+nothing settled first, unlike Continue), asks for confirmation naming what
+is being dropped, stops any AI resolver run first the same way continue and
+abort do, and then runs git's own `--skip` for that operation. Skip is not
+offered for a merge, a revert, an applied patch or a stash conflict — none
+of git's `--skip` supports the same "drop this step and move on" for them
+the way rebase and cherry-pick do.
+
+When Continue fails because the step it just tried to close came out empty
+(the resolution left nothing to commit), the error offers Skip as a
+follow-up: dropping the now-empty step is usually what was meant, though
+the choice is still asked for rather than assumed.
+
 ## The stash conflict, specially
 
 A conflicted stash apply or pop has no git-level "continue" or "abort" at
@@ -230,17 +257,25 @@ the chat panel, so a resolve run and an ordinary chat message can never
 run at once, and it is itself stopped whenever the operation is continued
 or aborted from this view.
 
-The button is offered for a merge only, and refuses to run for any other
-kind. This follows directly from how a run is tied to the merge it started
-for: it identifies "its" merge by `MERGE_HEAD`'s commit, and every tool
-call it makes is checked against that same commit still being current
-before being allowed to touch anything — which stops a run from continuing
-to edit a merge that has since been aborted or replaced by a different one,
-and stops it from silently reaching into a rebase's or cherry-pick's
-conflicts, which have no `MERGE_HEAD` for it to check against at all. A
-rebase, cherry-pick or revert conflict has no equivalent pseudo-ref this
-mechanism could be built on, so the resolver is not offered for them
-in this view.
+The button is offered for a merge, a rebase and a cherry-pick, and the
+resolver refuses to run for any other kind. A run is tied to the operation
+it started for by a fingerprint: the kind plus the commit being combined —
+`MERGE_HEAD` for a merge, `CHERRY_PICK_HEAD` for a cherry-pick, and for a
+rebase the commit currently being replayed (`REBASE_HEAD`, or `HEAD` on the
+older backend that has none). Every tool call re-checks that fingerprint
+before touching anything, which stops a run from editing a merge that has
+since been aborted or replaced, and — because a rebase's fingerprint changes
+with every step — from reaching into the next step's conflicts after the
+one it was started for has been continued or skipped. A rebase with several
+conflicting steps therefore needs one run per step. Revert, applied-patch
+and stash conflicts are not offered the resolver.
+
+What the resolver reads names each side for what it is rather than "ours"
+and "theirs", since a rebase swaps the two relative to a merge: for a rebase
+the base side is the branch being rebased onto and the other is the commit
+being replayed; for a cherry-pick, the current branch and the picked commit.
+Its instructions say, per kind, which side is final (a rebase's base, a
+cherry-pick's current branch) and whose intent is to be carried over.
 
 The resolver is unavailable outright when the application's AI features are
 turned off, and refuses to start a second run while one is already active
@@ -271,11 +306,13 @@ which still need a human, by name.
    conditionally, Drop stash take their place.
 6. A stash conflict's Done never changes the repository; it only stops this
    view owning the screen, and only for that one conflict.
-7. The AI resolver is offered only for a merge, ties itself to that merge's
-   commit, and refuses to keep acting once that commit is no longer the one
-   in progress.
+7. The AI resolver is offered only for a merge, a rebase or a cherry-pick,
+   ties itself to that operation's fingerprint (for a rebase, the step being
+   replayed), and refuses to keep acting once the fingerprint changes.
 8. Only a path belonging to the operation currently in progress can be read
    or acted on through this view.
+9. Skip is offered only for a rebase or a cherry-pick, and stops any
+   resolver run before it runs.
 
 ## Known divergences
 
@@ -283,3 +320,14 @@ None found: no older design document for this area was available to
 compare against; the behaviour above was derived directly from the merge,
 stash and app-layer Go packages and their tests, and from the conflict view
 components and stores.
+
+## Known limitations
+
+With `rerere.autoupdate` turned on, git can fully stage a rebase or
+cherry-pick step's recorded resolution by itself: no unmerged paths are
+left, but the sequencer (`CHERRY_PICK_HEAD`, or the rebase directory) is
+still there and the index differs from HEAD. The app does not recognise
+this as a resolved step — it takes the "any other failure" branch, aborts
+the operation, and reports git's "could not apply" error. Nothing is lost,
+but the step cannot currently be continued from the app; it only affects
+people who have `rerere.autoupdate` enabled.

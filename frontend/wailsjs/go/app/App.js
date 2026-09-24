@@ -30,6 +30,10 @@ export function CheckoutRemote(arg1, arg2, arg3) {
   return window['go']['app']['App']['CheckoutRemote'](arg1, arg2, arg3);
 }
 
+export function CherryPick(arg1, arg2) {
+  return window['go']['app']['App']['CherryPick'](arg1, arg2);
+}
+
 export function ClearChat(arg1) {
   return window['go']['app']['App']['ClearChat'](arg1);
 }
@@ -134,6 +138,10 @@ export function GetMergeState(arg1) {
   return window['go']['app']['App']['GetMergeState'](arg1);
 }
 
+export function GetRebasePreview(arg1, arg2) {
+  return window['go']['app']['App']['GetRebasePreview'](arg1, arg2);
+}
+
 export function GetRefs(arg1) {
   return window['go']['app']['App']['GetRefs'](arg1);
 }
@@ -182,6 +190,10 @@ export function InitSubmodule(arg1, arg2) {
   return window['go']['app']['App']['InitSubmodule'](arg1, arg2);
 }
 
+export function IsAncestorOfHead(arg1, arg2) {
+  return window['go']['app']['App']['IsAncestorOfHead'](arg1, arg2);
+}
+
 export function IsShallow(arg1) {
   return window['go']['app']['App']['IsShallow'](arg1);
 }
@@ -224,6 +236,10 @@ export function PullModel(arg1) {
 
 export function Push(arg1) {
   return window['go']['app']['App']['Push'](arg1);
+}
+
+export function RebaseOnto(arg1, arg2) {
+  return window['go']['app']['App']['RebaseOnto'](arg1, arg2);
 }
 
 export function RelocateRepo(arg1) {
@@ -272,6 +288,10 @@ export function SetProviderKey(arg1, arg2) {
 
 export function SetRepoGroup(arg1, arg2) {
   return window['go']['app']['App']['SetRepoGroup'](arg1, arg2);
+}
+
+export function SkipStep(arg1) {
+  return window['go']['app']['App']['SkipStep'](arg1);
 }
 
 export function StageFile(arg1, arg2) {

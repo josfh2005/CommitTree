@@ -1,5 +1,5 @@
 import * as Go from '../../wailsjs/go/app/App'
-import type { AIMessage, AISettings, AIStatus, AheadBehind, ChatConfirmEvent, CommitInfo, ConflictFile, Details, Filters, GitSettings, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeState } from './types'
+import type { AIMessage, AISettings, AIStatus, AheadBehind, ChatConfirmEvent, CommitInfo, ConflictFile, Details, Filters, GitSettings, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeState } from './types'
 
 // The generated bindings use Wails model classes; the JSON is identical to our
 // interfaces, so cast at this single boundary.
@@ -60,6 +60,11 @@ export const api = {
   deleteTag: (id: string, name: string) => call<void>(Go.DeleteTag(id, name)),
 
   mergeBranch: (id: string, branch: string) => call<MergeResult>(Go.MergeBranch(id, branch)),
+  rebaseOnto: (id: string, onto: string) => call<MergeResult>(Go.RebaseOnto(id, onto)),
+  getRebasePreview: (id: string, onto: string) => call<RebasePreview>(Go.GetRebasePreview(id, onto)),
+  cherryPick: (id: string, rev: string) => call<MergeResult>(Go.CherryPick(id, rev)),
+  skipStep: (id: string) => call<void>(Go.SkipStep(id)),
+  isAncestorOfHead: (id: string, rev: string) => call<boolean>(Go.IsAncestorOfHead(id, rev)),
   getMergeState: (id: string) => call<MergeState>(Go.GetMergeState(id)),
   abortMerge: (id: string) => call<void>(Go.AbortMerge(id)),
   commitMerge: (id: string) => call<void>(Go.CommitMerge(id)),
