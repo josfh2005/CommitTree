@@ -130,6 +130,50 @@ func TestSyncUpdatesTheRemoteURL(t *testing.T) {
 	}
 }
 
+func TestUpdateAllWithDirtyFileReturnsErrDirtyWithPathExtracted(t *testing.T) {
+	setFileTransport(t)
+	parent, _ := withSub(t, "lib")
+	sub := filepath.Join(parent.Dir, "lib")
+	run := func(args ...string) {
+		parent.Git(append([]string{"-C", sub, "-c", "user.name=t", "-c", "user.email=t@t"}, args...)...)
+	}
+	// Move the submodule forward and dirty the same tracked file, so
+	// checking back out to the recorded commit would overwrite it — the
+	// same setup as TestUpdateWithDirtyFileReturnsErrDirty, but through
+	// UpdateAll, which has no path of its own to pass asDirty and must
+	// recover one from git's stderr instead.
+	os.WriteFile(filepath.Join(sub, "a.txt"), []byte("moved"), 0o644)
+	run("commit", "-q", "-am", "moved on")
+	os.WriteFile(filepath.Join(sub, "a.txt"), []byte("dirty"), 0o644)
+
+	err := submodules.UpdateAll(context.Background(), parent.Dir)
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	var derr *submodules.ErrDirty
+	if !errors.As(err, &derr) {
+		t.Fatalf("expected *ErrDirty, got %v (%T)", err, err)
+	}
+	if derr.Path != "lib" {
+		t.Fatalf("ErrDirty.Path = %q, want %q", derr.Path, "lib")
+	}
+	if got, want := derr.Error(), "lib has local changes that updating would overwrite. Commit or stash them inside the submodule first."; got != want {
+		t.Fatalf("Error() = %q, want %q", got, want)
+	}
+}
+
+// TestErrDirtyFallbackMessageWhenPathUnknown covers the case UpdateAll can
+// still hit: git's stderr reports the overwrite refusal but never names
+// which submodule (an older git, or a message shape submodulePathRe does
+// not match), leaving Path "".
+func TestErrDirtyFallbackMessageWhenPathUnknown(t *testing.T) {
+	err := &submodules.ErrDirty{Path: ""}
+	want := "A submodule has local changes that updating would overwrite. Commit or stash them inside the submodule first."
+	if got := err.Error(); got != want {
+		t.Fatalf("Error() = %q, want %q", got, want)
+	}
+}
+
 func TestPathWithSpaceUsesLiteralPathspec(t *testing.T) {
 	setFileTransport(t)
 	parent, _ := withSub(t, "third party/lib")

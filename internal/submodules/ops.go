@@ -4,19 +4,30 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"git-ui/internal/gitcmd"
 )
 
 // ErrDirty is returned by Update or UpdateAll when checking a submodule out
-// to its recorded commit would overwrite local changes. Path is "" for
-// UpdateAll, which does not know in advance which submodule git will refuse.
+// to its recorded commit would overwrite local changes. Path names the
+// submodule when known; UpdateAll falls back to "" only when git's message
+// does not name one (submodulePathRe below extracts it when it does).
 type ErrDirty struct{ Path string }
 
 func (e *ErrDirty) Error() string {
+	if e.Path == "" {
+		return "A submodule has local changes that updating would overwrite. Commit or stash them inside the submodule first."
+	}
 	return fmt.Sprintf("%s has local changes that updating would overwrite. Commit or stash them inside the submodule first.", e.Path)
 }
+
+// submodulePathRe pulls the submodule's path out of git's
+// "fatal: Unable to checkout '<hash>' in submodule path '<path>'" line, the
+// only place UpdateAll's single stderr blob names which submodule it
+// refused.
+var submodulePathRe = regexp.MustCompile(`in submodule path '([^']*)'`)
 
 // Init initialises and checks out the submodule at path (relative to dir,
 // slash-separated) at its recorded commit, cloning it first if needed.
@@ -67,6 +78,11 @@ func asDirty(err error, path string) error {
 	}
 	var gerr *gitcmd.Error
 	if errors.As(err, &gerr) && strings.Contains(gerr.Stderr, "would be overwritten") {
+		if path == "" {
+			if m := submodulePathRe.FindStringSubmatch(gerr.Stderr); m != nil {
+				path = m[1]
+			}
+		}
 		return &ErrDirty{Path: path}
 	}
 	return err
