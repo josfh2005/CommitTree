@@ -106,6 +106,13 @@ reported elsewhere (see Conflicts). Any other failure — network,
 authentication, a rejected push, and so on — is returned as an error instead
 of a result.
 
+A successful pull can leave a submodule pointing behind its recorded
+commit — git only moves a submodule's checkout along with the parent when
+`submodule.recurse` is set, which git-ui honours (because git does) but does
+not set itself. When that happens, a toast reports how many submodules are
+affected and offers an "Update all" action (see the Submodules section of
+docs/spec/01-repositories-and-sidebar.md); there is no automatic update.
+
 ### Ahead/behind
 
 The count is read fresh whenever asked, by comparing the current branch with

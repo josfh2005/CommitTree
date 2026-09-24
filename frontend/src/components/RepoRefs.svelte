@@ -9,10 +9,15 @@
   import { openMenu } from '../lib/ui'
 
   export let repoId: string
+  /** Set when repoId is a submodule opened under its parent (see RepoRow):
+   *  its path relative to the top repository, shown as a breadcrumb row so
+   *  the sections below are clearly the submodule's, not the parent's. */
+  export let submodulePath = ''
 
   let showRemotes = true
   // git keeps one stash per repository, shared by all of its worktrees.
-  $: isWorktree = !!$repos.find((r) => r.id === repoId)?.parentId
+  $: isWorktree = !!$repos.find((r) => r.id === repoId)?.worktree
+  $: parentId = $repos.find((r) => r.id === repoId)?.parentId ?? ''
   let openRemotes: Record<string, boolean> = {}
   let openGroups: Record<string, boolean> = {}
 
@@ -116,6 +121,11 @@
 
 {#if $refs}
   <div class="refs">
+    {#if submodulePath}
+      <button class="row-item ref breadcrumb" title="Back to the repository" on:click={() => selectRepo(parentId)}>
+        <span class="ellipsis">↳ {submodulePath}</span>
+      </button>
+    {/if}
     <button
       class="row-item ref changes"
       class:active={$mainView === 'changes' && !$mergeState?.merging}
@@ -292,6 +302,7 @@
   .mark { width: 12px; flex: none; display: inline-grid; place-items: center; color: var(--muted); }
   .current { font-weight: 500; }
   .detached { color: var(--muted); }
+  .breadcrumb { color: var(--muted); }
   .group .count { margin-left: auto; font-size: 11px; color: var(--faint); }
   /* Empty-state lines stand in for the rows they describe (one step in
      from the heading above them), so they align with that row TEXT - no

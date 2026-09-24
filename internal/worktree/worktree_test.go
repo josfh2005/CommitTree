@@ -23,6 +23,24 @@ func base(t *testing.T) *testrepo.Repo {
 	return r
 }
 
+// withSub returns a parent repo with lib (from a separate repo) added at
+// path, copied from internal/submodules/submodules_test.go's helper.
+func withSub(t *testing.T, path string) (*testrepo.Repo, *testrepo.Repo) {
+	t.Helper()
+	lib := testrepo.New(t)
+	lib.WriteFile("a.txt", "a")
+	// Tracked explicitly (not via Commit, which only adds its own generated
+	// file) so later tests can modify a.txt and see it as a tracked change.
+	lib.Git("add", "a.txt")
+	lib.Git("commit", "-q", "-m", "lib one")
+	parent := testrepo.New(t)
+	parent.WriteFile("p.txt", "p")
+	parent.Commit("parent one")
+	parent.Git("-c", "protocol.file.allow=always", "submodule", "add", "-q", lib.Dir, path)
+	parent.Git("commit", "-q", "-m", "add submodule")
+	return parent, lib
+}
+
 func paths(files []worktree.FileStatus) []string {
 	out := []string{}
 	for _, f := range files {
@@ -222,5 +240,65 @@ func TestStatusReportsATypeChange(t *testing.T) {
 	}
 	if got.Path != "a.txt" {
 		t.Errorf("entry = %+v, want a.txt", got)
+	}
+}
+
+// commitInSub advances the submodule's checked-out commit without touching
+// the parent's index. The submodule clone has no identity of its own, so an
+// identity is passed per command.
+func commitInSub(t *testing.T, parent *testrepo.Repo, sub string) {
+	t.Helper()
+	subDir := filepath.Join(parent.Dir, sub)
+	os.WriteFile(filepath.Join(subDir, "a.txt"), []byte("changed"), 0o644)
+	parent.Git("-C", subDir, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-am", "moved")
+}
+
+// A commit inside the submodule moves its checked-out pointer away from what
+// the parent's index records, without the submodule's own working tree being
+// dirty: unstaged M with the pointer-moved flag, not the modified one.
+func TestStatusReportsASubmodulePointerMove(t *testing.T) {
+	r, _ := withSub(t, "lib")
+	commitInSub(t, r, "lib")
+
+	st := status(t, r.Dir)
+	if len(st.Unstaged) != 1 {
+		t.Fatalf("unstaged = %+v, want one entry", st.Unstaged)
+	}
+	got := st.Unstaged[0]
+	if got.Path != "lib" || got.Status != "M" || !got.Submodule || !got.SubCommit || got.SubModified || got.SubUntracked {
+		t.Errorf("entry = %+v, want lib M submodule with SubCommit only", got)
+	}
+}
+
+// Dirtying the submodule's working tree without committing inside it is
+// reported as modified content, not a pointer move.
+func TestStatusReportsASubmoduleWorkingTreeChange(t *testing.T) {
+	r, _ := withSub(t, "lib")
+	os.WriteFile(filepath.Join(r.Dir, "lib", "a.txt"), []byte("dirty"), 0o644)
+
+	st := status(t, r.Dir)
+	if len(st.Unstaged) != 1 {
+		t.Fatalf("unstaged = %+v, want one entry", st.Unstaged)
+	}
+	got := st.Unstaged[0]
+	if !got.Submodule || got.SubCommit || !got.SubModified || got.SubUntracked {
+		t.Errorf("entry = %+v, want SubModified only", got)
+	}
+}
+
+// Staging a moved submodule pointer still flags it as a submodule entry, on
+// the staged side.
+func TestStatusReportsAStagedSubmodulePointerMove(t *testing.T) {
+	r, _ := withSub(t, "lib")
+	commitInSub(t, r, "lib")
+	r.Git("add", "lib")
+
+	st := status(t, r.Dir)
+	if len(st.Staged) != 1 {
+		t.Fatalf("staged = %+v, want one entry", st.Staged)
+	}
+	got := st.Staged[0]
+	if got.Path != "lib" || got.Status != "M" || !got.Submodule {
+		t.Errorf("entry = %+v, want lib M submodule", got)
 	}
 }

@@ -1,7 +1,7 @@
 import { get } from 'svelte/store'
 import { api } from './api'
-import { busy, chatOpen, collapsedRepoGroups, filters, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, repos, selectRepo, selectedRepoId, stashConflictDismissed } from './stores'
-import type { Branch, FileStatus, MergeState, Repo, ResetInfo, ResetMode, WorktreeState } from './types'
+import { busy, chatOpen, collapsedRepoGroups, expandedRepos, filters, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, repos, selectRepo, selectedRepoId, stashConflictDismissed } from './stores'
+import type { Branch, FileStatus, MergeState, Repo, ResetInfo, ResetMode, Submodule, WorktreeState } from './types'
 import { PULL_UP_TO_DATE, UP_TO_DATE } from './types'
 import { abortWarning, commitWarning, takeMessage } from './merge'
 import { resetMessage } from './reset'
@@ -10,6 +10,7 @@ import { stashApplyAction } from './stash'
 import { choiceDialog, confirmDialog, confirmDialogWithCheckbox, errorMessage, promptDialog, toast } from './ui'
 import { resolveRepoDrop } from './repoDrop'
 import { classifyGroupRename, renameCollapsedGroup } from './repoGroupRename'
+import { movedMessage, updateMessage } from './submodules'
 import { removeRepoTabs, terminalState } from './terminal'
 
 export function branchRef(branch: Branch): string {
@@ -174,9 +175,11 @@ export async function relocateRepo(id: string) {
   }
 }
 
-export const checkoutBranch = (id: string, branch: Branch) =>
-  run('Checking out…', () =>
+export async function checkoutBranch(id: string, branch: Branch) {
+  const ok = await run('Checking out…', () =>
     branch.remote ? api.checkoutRemote(id, branch.remote, branch.name) : api.checkout(id, branch.name))
+  if (ok) await warnMovedSubmodules(id)
+}
 
 export async function checkoutCommit(id: string, hash: string) {
   const ok = await confirmDialog({
@@ -184,7 +187,7 @@ export async function checkoutCommit(id: string, hash: string) {
     message: `HEAD will be detached at ${hash.slice(0, 8)}. New commits made there won't belong to any branch.`,
     confirmLabel: 'Check out',
   })
-  if (ok) await run('Checking out…', () => api.checkoutDetached(id, hash))
+  if (ok && (await run('Checking out…', () => api.checkoutDetached(id, hash)))) await warnMovedSubmodules(id)
 }
 
 export async function resetBranch(id: string, hash: string, short: string, branch: string) {
@@ -208,7 +211,7 @@ export async function resetBranch(id: string, hash: string, short: string, branc
     confirmLabel: (m) => (m === 'hard' ? 'Reset and discard' : 'Reset'),
     danger: (m) => m === 'hard',
   })
-  if (mode) await run('Resetting…', () => api.resetBranch(id, hash, mode))
+  if (mode && (await run('Resetting…', () => api.resetBranch(id, hash, mode)))) await warnMovedSubmodules(id)
 }
 
 export async function newBranch(id: string, target: string, targetLabel: string) {
@@ -364,6 +367,7 @@ export async function mergeBranch(id: string, branch: Branch, into: string) {
   try {
     const result = await api.mergeBranch(id, label)
     if (result.outcome === UP_TO_DATE) toast(`${into} is already up to date with ${label}.`, 'info')
+    await warnMovedSubmodules(id)
   } catch (e) {
     toast(errorMessage(e), 'error')
   } finally {
@@ -428,6 +432,7 @@ export async function pull(id: string) {
   try {
     const result = await api.pull(id)
     if (result.outcome === PULL_UP_TO_DATE) toast('Already up to date.', 'info')
+    await warnMovedSubmodules(id)
   } catch (e) {
     toast(errorMessage(e), 'error')
   } finally {
@@ -495,4 +500,67 @@ export async function discardFile(id: string, state: WorktreeState, file: FileSt
     danger: true,
   })
   if (ok) await run('Discarding…', () => api.discardFile(id, file.path))
+}
+
+// openSubmodule mirrors the log's click-to-deselect: a click on the already
+// selected submodule's row goes back to its parent, same as clicking an
+// open stash entry or the highlighted commit again.
+export function openSubmodule(parentId: string, s: Submodule) {
+  const id = get(repos).find((r) => r.parentId === parentId && r.subPath === s.path)?.id
+  if (!id) return
+  // The submodule has no row of its own (see RepoRow) — its Submodules
+  // section only renders once the parent's own row is expanded, so opening
+  // it must expand the parent, not just select the submodule.
+  expandedRepos.update((ids) => (ids.includes(parentId) ? ids : [...ids, parentId]))
+  selectRepo(get(selectedRepoId) === id ? parentId : id)
+}
+
+export const initSubmodule = (parentId: string, s: Submodule) => run('Initialising…', () => api.initSubmodule(parentId, s.path))
+
+export async function updateSubmodule(parentId: string, s: Submodule) {
+  const ok = await confirmDialog({ title: 'Update submodule', message: updateMessage(s), confirmLabel: 'Update' })
+  if (ok) await run('Updating…', () => api.updateSubmodule(parentId, s.path))
+}
+
+export const syncSubmodule = (parentId: string, s: Submodule) => run('Syncing URL…', () => api.syncSubmodule(parentId, s.path))
+
+export async function initAllSubmodules(parentId: string, list: Submodule[]) {
+  const targets = list.filter((s) => s.configured && !s.initialised)
+  if (!targets.length) return
+  const ok = await confirmDialog({
+    title: 'Initialise all submodules',
+    message: `Initialise:\n${targets.map((s) => s.path).join('\n')}`,
+    confirmLabel: 'Initialise',
+  })
+  if (ok) await run('Initialising…', () => api.initAllSubmodules(parentId))
+}
+
+export async function updateAllSubmodules(parentId: string, list: Submodule[]) {
+  const targets = list.filter((s) => s.initialised && s.moved)
+  if (!targets.length) return
+  const ok = await confirmDialog({
+    title: 'Update all submodules',
+    message: `Update to their recorded commit:\n${targets.map((s) => s.path).join('\n')}`,
+    confirmLabel: 'Update',
+  })
+  if (ok) await run('Updating…', () => api.updateAllSubmodules(parentId))
+}
+
+// Warns after a successful write to a repository that git left submodules
+// pointing behind their recorded commit — git only moves them along with
+// the parent when submodule.recurse is set, which git-ui does not set (see
+// docs/spec/01-repositories-and-sidebar.md's Submodules section). Only a
+// repo item that reported having submodules triggers the lookup, so a
+// submodule's own writes don't retrigger this.
+export async function warnMovedSubmodules(id: string) {
+  const repo = get(repos).find((r) => r.id === id)
+  if (!repo?.submoduleCount) return
+  let list: Submodule[]
+  try {
+    list = await api.getSubmodules(id)
+  } catch {
+    return
+  }
+  const n = list.filter((s) => s.moved).length
+  if (n > 0) toast(movedMessage(n), 'info', { label: 'Update all', run: () => updateAllSubmodules(id, list) })
 }

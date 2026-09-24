@@ -1,6 +1,9 @@
 <script lang="ts">
+  import Icon from './Icon.svelte'
+  import SubmoduleDiffView from './SubmoduleDiff.svelte'
   import { api } from '../lib/api'
-  import { jumpTo } from '../lib/stores'
+  import { jumpTo, repos, selectRepo } from '../lib/stores'
+  import { parseSubmoduleDiff, submoduleRepoId } from '../lib/submodules'
   import type { Details, FileChange } from '../lib/types'
   import { copyText, errorMessage } from '../lib/ui'
 
@@ -19,6 +22,8 @@
 
   $: load(repoId, hash)
   $: lines = diff.split('\n')
+  $: sub = file?.submodule ? parseSubmoduleDiff(diff) : null
+  $: subRepoId = file?.submodule ? submoduleRepoId($repos, repoId, file.path) : undefined
 
   async function load(id: string, h: string) {
     const current = ++request
@@ -85,6 +90,7 @@
             title={f.oldPath ? `${f.oldPath} → ${f.path}` : f.path}
             on:click={() => openFile(f)}
           >
+            {#if f.submodule}<span class="sub-mark"><Icon name="package" size={12} /></span>{/if}
             <span class="status s-{f.status}">{f.status}</span>
             <span class="ellipsis">{f.path}</span>
           </button>
@@ -94,11 +100,15 @@
       </div>
     </div>
     <div class="diff mono">
-      {#each lines.slice(0, MAX_LINES) as line}
-        <div class="line {lineClass(line)}">{line || ' '}</div>
-      {/each}
-      {#if lines.length > MAX_LINES}
-        <div class="line meta">… diff truncated after {MAX_LINES} lines</div>
+      {#if sub}
+        <SubmoduleDiffView diff={sub} onOpen={subRepoId ? () => selectRepo(subRepoId) : null} />
+      {:else}
+        {#each lines.slice(0, MAX_LINES) as line}
+          <div class="line {lineClass(line)}">{line || ' '}</div>
+        {/each}
+        {#if lines.length > MAX_LINES}
+          <div class="line meta">… diff truncated after {MAX_LINES} lines</div>
+        {/if}
       {/if}
     </div>
   {/if}
@@ -115,6 +125,7 @@
   .link:hover { text-decoration: underline; }
   .file { height: 24px; font-size: 12px; }
   .status { width: 14px; flex: none; font-family: var(--mono); font-weight: 600; color: var(--muted); }
+  .sub-mark { width: 12px; flex: none; display: inline-grid; place-items: center; color: var(--muted); }
   .s-A { color: #4f9d4f; }
   .s-D { color: var(--danger); }
   .s-R, .s-C { color: #3f7fbf; }

@@ -18,7 +18,7 @@ func CommitContext(ctx context.Context, dir string, budget int) (string, error) 
 	if err != nil {
 		return "", err
 	}
-	diff, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "diff", "--cached")
+	diff, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "diff", "--cached", "--submodule=log")
 	if err != nil {
 		return "", err
 	}

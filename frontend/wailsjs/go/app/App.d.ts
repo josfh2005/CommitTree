@@ -11,6 +11,7 @@ import {merge} from '../models';
 import {refs} from '../models';
 import {ops} from '../models';
 import {stash} from '../models';
+import {submodules} from '../models';
 import {prompts} from '../models';
 
 export function AIStatus():Promise<app.AIStatus>;
@@ -93,9 +94,15 @@ export function GetStashFileDiff(arg1:string,arg2:number,arg3:string):Promise<st
 
 export function GetStashFiles(arg1:string,arg2:number):Promise<Array<stash.File>>;
 
+export function GetSubmodules(arg1:string):Promise<Array<submodules.Submodule>>;
+
 export function GetWorktreeDiff(arg1:string,arg2:string,arg3:boolean):Promise<string>;
 
 export function GetWorktreeState(arg1:string):Promise<worktree.State>;
+
+export function InitAllSubmodules(arg1:string):Promise<void>;
+
+export function InitSubmodule(arg1:string,arg2:string):Promise<void>;
 
 export function IsShallow(arg1:string):Promise<boolean>;
 
@@ -157,6 +164,8 @@ export function StashPush(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
 export function StopChat(arg1:string):Promise<void>;
 
+export function SyncSubmodule(arg1:string,arg2:string):Promise<void>;
+
 export function TakeMergeSide(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function TerminalClose(arg1:string):Promise<void>;
@@ -172,3 +181,7 @@ export function TerminalWrite(arg1:string,arg2:string):Promise<void>;
 export function UnstageFile(arg1:string,arg2:string):Promise<void>;
 
 export function UnstageMergeFile(arg1:string,arg2:string):Promise<void>;
+
+export function UpdateAllSubmodules(arg1:string):Promise<void>;
+
+export function UpdateSubmodule(arg1:string,arg2:string):Promise<void>;

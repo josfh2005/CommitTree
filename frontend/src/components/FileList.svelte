@@ -18,6 +18,7 @@
     path: string
     status: string
     oldPath?: string
+    submodule?: boolean
   }
 
   interface FileAction {
@@ -45,6 +46,7 @@
       {@const key = rowKey(section.title, f.path)}
       <div class="row" class:active={selected === key}>
         <button class="row-item file" class:active={selected === key} on:click={() => onSelect(key)} on:contextmenu|preventDefault={(e) => onMenu(e, f)}>
+          {#if f.submodule}<span class="sub-mark"><Icon name="package" size={12} /></span>{/if}
           <span class="status s-{f.status}">
             {#if f.status === 'staged'}<Icon name="check" size={12} />{:else}{glyph(f.status)}{/if}
           </span>
@@ -78,6 +80,7 @@
   .act:hover:not(:disabled) { background: var(--hover); }
   .act.danger { color: var(--danger); border-color: var(--danger); }
   .status { width: 14px; flex: none; font-family: var(--mono); font-weight: 600; color: var(--muted); }
+  .sub-mark { width: 12px; flex: none; display: inline-grid; place-items: center; color: var(--muted); }
   .s-staged { color: var(--ok); }
   .s-manual { color: var(--danger); }
   .none { padding: 4px 10px; color: var(--faint); font-size: 12px; }

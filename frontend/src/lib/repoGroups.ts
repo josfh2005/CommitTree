@@ -30,9 +30,12 @@ export function compareRepos(a: Repo, b: Repo): number {
  * shape groupBranches gives branches, and hangs each worktree (an item with
  * a `parentId`) under its parent — wherever the parent is; a worktree's own
  * `group` is ignored. A `parentId` that names no listed repo leaves the item
- * at the top level. Everything is sorted with compareRepos.
+ * at the top level. Submodules (`repo.submodule`) are dropped entirely —
+ * they are shown in their own Submodules section, not the sidebar tree.
+ * Everything is sorted with compareRepos.
  */
 export function groupRepos(repos: Repo[]): GroupedRepos {
+  repos = repos.filter((r) => !r.submodule)
   const ids = new Set(repos.map((r) => r.id))
   const children = new Map<string, Repo[]>()
   const tops: Repo[] = []

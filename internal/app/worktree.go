@@ -132,7 +132,7 @@ func (a *App) GetWorktreeDiff(id, path string, staged bool) (string, error) {
 		}
 		return out, err
 	}
-	args := []string{"--literal-pathspecs", "diff"}
+	args := []string{"--literal-pathspecs", "diff", "--submodule=log"}
 	if staged {
 		args = append(args, "--cached")
 	}

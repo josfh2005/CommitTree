@@ -290,6 +290,9 @@ export namespace app {
 	    branch: string;
 	    parentId?: string;
 	    worktree?: boolean;
+	    submodule?: boolean;
+	    subPath?: string;
+	    submoduleCount?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new RepoItem(source);
@@ -305,6 +308,9 @@ export namespace app {
 	        this.branch = source["branch"];
 	        this.parentId = source["parentId"];
 	        this.worktree = source["worktree"];
+	        this.submodule = source["submodule"];
+	        this.subPath = source["subPath"];
+	        this.submoduleCount = source["submoduleCount"];
 	    }
 	}
 
@@ -316,6 +322,7 @@ export namespace gitlog {
 	    status: string;
 	    path: string;
 	    oldPath?: string;
+	    submodule?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new FileChange(source);
@@ -326,6 +333,7 @@ export namespace gitlog {
 	        this.status = source["status"];
 	        this.path = source["path"];
 	        this.oldPath = source["oldPath"];
+	        this.submodule = source["submodule"];
 	    }
 	}
 	export class Ref {
@@ -815,6 +823,45 @@ export namespace stash {
 
 }
 
+export namespace submodules {
+	
+	export class Submodule {
+	    name: string;
+	    path: string;
+	    url: string;
+	    recorded: string;
+	    checkedOut: string;
+	    branch: string;
+	    initialised: boolean;
+	    configured: boolean;
+	    moved: boolean;
+	    modified: boolean;
+	    untracked: boolean;
+	    conflict: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Submodule(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.url = source["url"];
+	        this.recorded = source["recorded"];
+	        this.checkedOut = source["checkedOut"];
+	        this.branch = source["branch"];
+	        this.initialised = source["initialised"];
+	        this.configured = source["configured"];
+	        this.moved = source["moved"];
+	        this.modified = source["modified"];
+	        this.untracked = source["untracked"];
+	        this.conflict = source["conflict"];
+	    }
+	}
+
+}
+
 export namespace worktree {
 	
 	export class CommitInfo {
@@ -841,6 +888,10 @@ export namespace worktree {
 	    path: string;
 	    oldPath?: string;
 	    status: string;
+	    submodule?: boolean;
+	    subCommit?: boolean;
+	    subModified?: boolean;
+	    subUntracked?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new FileStatus(source);
@@ -851,6 +902,10 @@ export namespace worktree {
 	        this.path = source["path"];
 	        this.oldPath = source["oldPath"];
 	        this.status = source["status"];
+	        this.submodule = source["submodule"];
+	        this.subCommit = source["subCommit"];
+	        this.subModified = source["subModified"];
+	        this.subUntracked = source["subUntracked"];
 	    }
 	}
 	export class State {

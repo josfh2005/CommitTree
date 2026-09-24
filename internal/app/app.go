@@ -17,6 +17,7 @@ import (
 	"git-ui/internal/ops"
 	"git-ui/internal/refs"
 	"git-ui/internal/repos"
+	"git-ui/internal/submodules"
 	"git-ui/internal/terminal"
 	"git-ui/internal/worktrees"
 )
@@ -35,6 +36,15 @@ type RepoItem struct {
 	// Worktree marks a detected worktree: not a list entry, so it cannot be
 	// removed, grouped or relocated.
 	Worktree bool `json:"worktree,omitempty"`
+	// Submodule marks a detected, initialised submodule: like Worktree, not
+	// a list entry, nested under ParentID, which holds it at SubPath.
+	Submodule bool `json:"submodule,omitempty"`
+	// SubPath is Submodule's path relative to ParentID's repository,
+	// slash-separated.
+	SubPath string `json:"subPath,omitempty"`
+	// SubmoduleCount is the number of submodules (initialised or not) this
+	// item's own repository has, set on the item itself, not its children.
+	SubmoduleCount int `json:"submoduleCount,omitempty"`
 }
 
 type LogRow struct {
@@ -75,6 +85,12 @@ type App struct {
 	// is replaced wholesale on every list read.
 	wtMu      sync.Mutex
 	worktrees map[string]repos.Repo
+	// submodules are the initialised submodules the last ListRepos
+	// detected, by id. Like worktrees, they are not list entries: nothing
+	// about them is stored, and the map is replaced wholesale on every list
+	// read.
+	smMu       sync.Mutex
+	submodules map[string]repos.Repo
 }
 
 func New(store *repos.Store) *App {
@@ -99,15 +115,22 @@ func (a *App) dir(id string) (string, error) {
 }
 
 // repo resolves an id: a stored repository first, then a worktree the last
-// ListRepos detected. Every per-repository operation goes through here, so
-// a worktree works everywhere a repository does.
+// ListRepos detected, then a submodule it detected. Every per-repository
+// operation goes through here, so a worktree or a submodule works
+// everywhere a repository does.
 func (a *App) repo(id string) (repos.Repo, bool) {
 	if r, ok := a.store.Get(id); ok {
 		return r, true
 	}
 	a.wtMu.Lock()
-	defer a.wtMu.Unlock()
 	r, ok := a.worktrees[id]
+	a.wtMu.Unlock()
+	if ok {
+		return r, true
+	}
+	a.smMu.Lock()
+	defer a.smMu.Unlock()
+	r, ok = a.submodules[id]
 	return r, ok
 }
 
@@ -170,6 +193,61 @@ func (a *App) ListRepos() []RepoItem {
 	// A worktree that disappeared takes its shells and log paging with it,
 	// the same as removing a repository from the list.
 	for _, id := range gone {
+		if _, stored := a.store.Get(id); !stored {
+			a.term.CloseRepo(id)
+			a.forgetLog(id)
+		}
+	}
+
+	// Every item found so far (stored or a detected worktree), but not
+	// itself a submodule, gets its own submodules detected: a count on the
+	// item, plus a child item for each initialised one. Submodules are
+	// recursive (submodules.List already flattens nested ones), so this
+	// only scans the items present before this pass, never one it appends.
+	n := len(items)
+	foundSub := map[string]repos.Repo{}
+	for i := 0; i < n; i++ {
+		item := items[i]
+		if item.Missing || item.Submodule || !submodules.HasAny(item.Path) {
+			continue
+		}
+		list, err := submodules.List(a.ctx, item.Path)
+		if err != nil {
+			continue
+		}
+		items[i].SubmoduleCount = len(list)
+		for _, s := range list {
+			if !s.Initialised || !s.Configured {
+				continue
+			}
+			abs := filepath.Join(item.Path, filepath.FromSlash(s.Path))
+			if _, ok := byPath[canonical(abs)]; ok {
+				// Already a stored repository of its own: no duplicate item.
+				continue
+			}
+			repo := repos.Repo{ID: repos.IDFor(abs), Name: filepath.Base(abs), Path: abs}
+			items = append(items, RepoItem{
+				Repo:      repo,
+				Branch:    refs.CurrentLabel(a.ctx, abs),
+				ParentID:  item.ID,
+				Submodule: true,
+				SubPath:   s.Path,
+			})
+			foundSub[repo.ID] = repo
+		}
+	}
+	a.smMu.Lock()
+	goneSub := []string{}
+	for id := range a.submodules {
+		if _, ok := foundSub[id]; !ok {
+			goneSub = append(goneSub, id)
+		}
+	}
+	a.submodules = foundSub
+	a.smMu.Unlock()
+	// A submodule that disappeared (deinitialised, or its parent gone) takes
+	// its shells and log paging with it, the same as a vanished worktree.
+	for _, id := range goneSub {
 		if _, stored := a.store.Get(id); !stored {
 			a.term.CloseRepo(id)
 			a.forgetLog(id)
@@ -383,6 +461,29 @@ func (a *App) write(id string, fn func(ctx context.Context, dir string) error) e
 	}
 	defer mu.Unlock()
 	return fn(a.ctx, dir)
+}
+
+// writeAll runs fn under every id's write lock at once (TryLock on each, in
+// order), for an operation such as a submodule write that must hold both the
+// parent repository's lock and the lock of each submodule it touches. Any id
+// already busy fails the whole call with ErrBusy and releases whatever locks
+// it had already acquired, so a failed call never leaves a lock held.
+func (a *App) writeAll(ids []string, fn func(ctx context.Context) error) error {
+	var held []*sync.Mutex
+	defer func() {
+		for _, mu := range held {
+			mu.Unlock()
+		}
+	}()
+	for _, id := range ids {
+		m, _ := a.writes.LoadOrStore(id, &sync.Mutex{})
+		mu := m.(*sync.Mutex)
+		if !mu.TryLock() {
+			return ErrBusy
+		}
+		held = append(held, mu)
+	}
+	return fn(a.ctx)
 }
 
 func (a *App) Checkout(id, branch string) error {

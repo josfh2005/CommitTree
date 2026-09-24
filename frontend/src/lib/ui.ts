@@ -5,15 +5,19 @@ export interface Toast {
   id: number
   message: string
   kind: 'error' | 'info'
+  action?: { label: string; run: () => void }
 }
 
 export const toasts = writable<Toast[]>([])
 let nextToast = 1
 
-export function toast(message: string, kind: Toast['kind'] = 'info') {
+// A toast with an action is not auto-dismissed: it stays until the user acts
+// on it or dismisses it themselves, since the action is easy to miss if it
+// disappears on its own timer.
+export function toast(message: string, kind: Toast['kind'] = 'info', action?: Toast['action']) {
   const id = nextToast++
-  toasts.update((list) => [...list, { id, message, kind }])
-  if (kind === 'info') setTimeout(() => dismissToast(id), 3000)
+  toasts.update((list) => [...list, { id, message, kind, action }])
+  if (kind === 'info' && !action) setTimeout(() => dismissToast(id), 3000)
 }
 
 export function dismissToast(id: number) {

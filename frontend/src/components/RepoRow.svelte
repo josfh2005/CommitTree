@@ -1,10 +1,11 @@
 <script lang="ts">
   import Icon from './Icon.svelte'
   import RepoRefs from './RepoRefs.svelte'
+  import SubmoduleSection from './SubmoduleSection.svelte'
   import { fetchRemote, moveRepoToGroup, openRepoFolder, pull, push, relocateRepo, removeRepo } from '../lib/actions'
   import { REPO_DRAG_MIME } from '../lib/repoDrop'
   import { revealLabel } from '../lib/platform'
-  import { busy, expandedRepos, mergeState, platform, selectRepo, selectedRepoId, toggleRepoExpanded } from '../lib/stores'
+  import { busy, expandedRepos, mergeState, platform, selectRepo, selectedRepo, selectedRepoId, toggleRepoExpanded } from '../lib/stores'
   import type { Repo } from '../lib/types'
   import { openMenu } from '../lib/ui'
 
@@ -31,6 +32,10 @@
 
   $: active = repo.id === $selectedRepoId
   $: expanded = $expandedRepos.includes(repo.id) && !repo.missing
+  // The submodule currently open under this repository, if any — its own
+  // sections (Changes/Branches/…) show in place of this repo's, under the
+  // same row, per decision 4: a submodule has no row of its own.
+  $: openSub = $selectedRepo?.submodule && $selectedRepo.parentId === repo.id ? $selectedRepo : null
 
   function repoMenu(event: MouseEvent) {
     // A detected worktree is not a list entry: it follows its main
@@ -87,7 +92,10 @@
   </button>
 </div>
 {#if expanded}
-  <RepoRefs repoId={repo.id} />
+  <RepoRefs repoId={openSub?.id ?? repo.id} submodulePath={openSub?.subPath ?? ''} />
+  {#if !repo.submodule && repo.submoduleCount}
+    <SubmoduleSection parentId={repo.id} count={repo.submoduleCount} />
+  {/if}
 {/if}
 
 <style>

@@ -1,5 +1,5 @@
 import * as Go from '../../wailsjs/go/app/App'
-import type { AIMessage, AISettings, AIStatus, AheadBehind, ChatConfirmEvent, CommitInfo, ConflictFile, Details, Filters, GitSettings, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, WorktreeState } from './types'
+import type { AIMessage, AISettings, AIStatus, AheadBehind, ChatConfirmEvent, CommitInfo, ConflictFile, Details, Filters, GitSettings, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeState } from './types'
 
 // The generated bindings use Wails model classes; the JSON is identical to our
 // interfaces, so cast at this single boundary.
@@ -97,4 +97,11 @@ export const api = {
   listPrompts: () => call<PromptInfo[]>(Go.ListPrompts()),
   openPromptsFolder: () => call<void>(Go.OpenPromptsFolder()),
   resetPrompt: (name: string) => call<void>(Go.ResetPrompt(name)),
+
+  getSubmodules: (id: string) => call<Submodule[]>(Go.GetSubmodules(id)),
+  initSubmodule: (id: string, path: string) => call<void>(Go.InitSubmodule(id, path)),
+  updateSubmodule: (id: string, path: string) => call<void>(Go.UpdateSubmodule(id, path)),
+  syncSubmodule: (id: string, path: string) => call<void>(Go.SyncSubmodule(id, path)),
+  initAllSubmodules: (id: string) => call<void>(Go.InitAllSubmodules(id)),
+  updateAllSubmodules: (id: string) => call<void>(Go.UpdateAllSubmodules(id)),
 }
