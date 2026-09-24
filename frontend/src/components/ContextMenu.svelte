@@ -18,7 +18,13 @@
     on:contextmenu|preventDefault
   >
     {#each $menu.items as item}
-      <button class="item" class:danger={item.danger} disabled={item.disabled} on:click|stopPropagation={() => choose(item)}>
+      <button
+        class="item"
+        class:danger={item.danger}
+        disabled={item.disabled}
+        title={item.disabled ? item.title : undefined}
+        on:click|stopPropagation={() => choose(item)}
+      >
         {item.label}
       </button>
     {/each}

@@ -49,6 +49,22 @@ export function takeMessage(path: string, branch: string): string {
   return `Replace ${path} with ${branch}'s version, or delete it if ${branch} deleted it? Edits you made to it are lost; Unstage won't bring them back.`
 }
 
+/** sideLabel is a conflict side's name for a menu: the backend's label, or the fallback, kept short. */
+export function sideLabel(label: string | undefined, fallback: string): string {
+  const s = label || fallback
+  return s.length > 40 ? s.slice(0, 39) + '…' : s
+}
+
+export function skipWarning(state: MergeState): { title: string; message: string; confirmLabel: string } {
+  const what = state.theirsLabel || 'This commit'
+  return { title: 'Skip this commit', message: `${what} will not be applied. Its changes are dropped from the result.`, confirmLabel: 'Skip commit' }
+}
+
+/** isEmptyStepError recognises git refusing to continue a step whose resolution left nothing to commit. */
+export function isEmptyStepError(message: string): boolean {
+  return /No changes - did you forget|is now empty|nothing to commit/i.test(message)
+}
+
 export interface ConflictHeader {
   lead: string
   from: string
@@ -86,6 +102,7 @@ export interface ConflictActions {
   confirm: string | null
   ai: boolean
   done: boolean
+  skip: boolean
 }
 
 // "Resolve with AI" is offered for a merge, a rebase and a cherry-pick:
@@ -95,12 +112,12 @@ export interface ConflictActions {
 // Pop still owes one, Drop stash, which MergeView adds itself from
 // OwedStashDrop rather than from this table).
 const ACTIONS: Record<Exclude<ConflictKind, ''>, ConflictActions> = {
-  merge: { abort: 'Abort merge', confirm: 'Commit merge', ai: true, done: false },
-  rebase: { abort: 'Abort rebase', confirm: 'Continue rebase', ai: true, done: false },
-  'cherry-pick': { abort: 'Abort cherry-pick', confirm: 'Continue cherry-pick', ai: true, done: false },
-  revert: { abort: 'Abort revert', confirm: 'Continue revert', ai: false, done: false },
-  am: { abort: 'Abort patch', confirm: 'Continue applying', ai: false, done: false },
-  stash: { abort: null, confirm: null, ai: false, done: true },
+  merge: { abort: 'Abort merge', confirm: 'Commit merge', ai: true, done: false, skip: false },
+  rebase: { abort: 'Abort rebase', confirm: 'Continue rebase', ai: true, done: false, skip: true },
+  'cherry-pick': { abort: 'Abort cherry-pick', confirm: 'Continue cherry-pick', ai: true, done: false, skip: true },
+  revert: { abort: 'Abort revert', confirm: 'Continue revert', ai: false, done: false, skip: false },
+  am: { abort: 'Abort patch', confirm: 'Continue applying', ai: false, done: false, skip: false },
+  stash: { abort: null, confirm: null, ai: false, done: true, skip: false },
 }
 
 export function conflictActions(state: MergeState): ConflictActions {

@@ -93,7 +93,7 @@
     gap: 12px;
   }
   h3 { margin: 0; font-size: 14px; font-weight: 600; }
-  p { margin: 0; color: var(--muted); line-height: 1.5; }
+  p { margin: 0; color: var(--muted); line-height: 1.5; white-space: pre-line; }
   label { display: flex; flex-direction: column; gap: 5px; color: var(--muted); font-size: 12px; }
   label input:not([type='checkbox']), label select { font-size: 13px; }
   .check { flex-direction: row; align-items: center; gap: 6px; color: var(--text); font-size: 13px; }
