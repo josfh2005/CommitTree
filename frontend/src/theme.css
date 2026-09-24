@@ -137,7 +137,17 @@ pre { margin: 0; font: inherit; white-space: pre-wrap; }
   color: var(--muted);
 }
 .icon-btn:hover:not(:disabled) { background: var(--hover); color: var(--text); }
-.btn { height: 28px; padding: 0 12px; border-radius: 7px; border: 1px solid var(--border); background: var(--surface); }
+.btn {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
 .btn:hover:not(:disabled) { background: var(--hover); }
 .btn:disabled { opacity: 0.45; cursor: default; }
 .btn.primary { background: var(--text); color: var(--bg); border-color: var(--text); }

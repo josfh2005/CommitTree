@@ -132,7 +132,7 @@
     <span class="spacer"></span>
     {#if acts.ai}
       <button class="btn" disabled={!!$busy || pending === 0} on:click={() => resolveConflicts(repoId)}>
-        <Icon name="sparkle" size={14} /> Resolve with AI
+        <Icon name="sparkle" size={14} /><span>Resolve with AI</span>
       </button>
     {/if}
     {#if acts.abort}

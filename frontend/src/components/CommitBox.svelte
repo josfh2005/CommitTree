@@ -204,9 +204,9 @@
     </label>
     <span class="spacer"></span>
     {#if runID}
-      <button class="btn" on:click={stopGenerating}><Icon name="stop" /> Stop</button>
+      <button class="btn" on:click={stopGenerating}><Icon name="stop" /><span>Stop</span></button>
     {:else}
-      <button class="btn" disabled={!repoId} on:click={generate}><Icon name="sparkle" /> Write with AI</button>
+      <button class="btn" disabled={!repoId} on:click={generate}><Icon name="sparkle" /><span>Write with AI</span></button>
     {/if}
     <button class="btn" disabled={!repoId || !!$busy || !hasChanges} on:click={() => stashChanges(repoId)}>Stash…</button>
     <button class="btn primary" disabled={!canCommit(info, message, amend) || !!$busy} on:click={commit}>

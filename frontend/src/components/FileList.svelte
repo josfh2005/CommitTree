@@ -79,7 +79,7 @@
   .row:hover .act, .row.active .act, .act:focus-visible { visibility: visible; }
   .act:hover:not(:disabled) { background: var(--hover); }
   .act.danger { color: var(--danger); border-color: var(--danger); }
-  .status { width: 14px; flex: none; font-family: var(--mono); font-weight: 600; color: var(--muted); }
+  .status { width: 14px; flex: none; display: inline-grid; place-items: center; font-family: var(--mono); font-weight: 600; color: var(--muted); }
   .sub-mark { width: 12px; flex: none; display: inline-grid; place-items: center; color: var(--muted); }
   .s-staged { color: var(--ok); }
   .s-manual { color: var(--danger); }

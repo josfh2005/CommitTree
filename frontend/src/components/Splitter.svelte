@@ -24,7 +24,12 @@
   }
 </script>
 
-<div class="splitter {direction}" on:pointerdown={down}></div>
+<div
+  class="splitter {direction}"
+  role="separator"
+  aria-orientation={direction === 'vertical' ? 'vertical' : 'horizontal'}
+  on:pointerdown={down}
+></div>
 
 <style>
   .splitter { flex: none; position: relative; z-index: 3; background: var(--border); }

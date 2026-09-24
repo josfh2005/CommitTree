@@ -325,7 +325,8 @@ says the stash is shared with the main repository and its other worktrees —
 git keeps one stash per repository. Like Tags, it starts
 collapsed, and whether it has been expanded is remembered per repository.
 When expanded it shows one row per stash entry,
-newest first, labelled with the stash's message. "No stashed changes" is
+newest first, labelled with the stash's message alone (no icon — the row's
+position under the Stash header is enough context). "No stashed changes" is
 shown in place of an empty list. Clicking an entry previews it (opens the
 stash preview in the main view); double-clicking applies it immediately
 without confirmation. Its context menu offers Apply, Pop and Drop, each
