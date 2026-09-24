@@ -192,6 +192,18 @@ func (a *App) executeWrite(repoID, tool string, p writetools.Proposal) (string, 
 			return fmt.Sprintf("merge stopped with conflicts in %d file(s); the conflict view is open — resolve them there", len(result.Conflicts)), nil
 		}
 		return p.Title, nil
+	case "cherry_pick":
+		result, err := a.CherryPick(repoID, p.Commit)
+		if err != nil {
+			return "", err
+		}
+		switch result.Outcome {
+		case merge.Conflicted:
+			return fmt.Sprintf("cherry-pick stopped with conflicts in %d file(s); the conflict view is open — resolve them there", len(result.Conflicts)), nil
+		case merge.NothingToApply:
+			return "nothing to apply: those changes are already on the branch", nil
+		}
+		return p.Title, nil
 	default:
 		return "", fmt.Errorf("unknown tool %q", tool)
 	}

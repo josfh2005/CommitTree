@@ -26,7 +26,7 @@ func TestSpecsListTheTenTools(t *testing.T) {
 			t.Errorf("%s: incomplete spec", s.Name)
 		}
 	}
-	want := "stage_files,unstage_files,commit,create_branch,checkout_branch,stash_push,fetch,push,pull,merge_branch"
+	want := "stage_files,unstage_files,commit,create_branch,checkout_branch,stash_push,fetch,push,pull,merge_branch,cherry_pick"
 	if strings.Join(names, ",") != want {
 		t.Fatalf("names = %v", names)
 	}
@@ -480,5 +480,56 @@ func TestMergeBranchProposals(t *testing.T) {
 	r.Git("merge", "-q", "--no-ff", "-m", "merge topic", "topic")
 	if _, err := prep(r.Dir, "merge_branch", map[string]any{"branch": "topic"}); err == nil || !strings.Contains(err.Error(), "is already merged into main") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestCherryPickProposal(t *testing.T) {
+	r := testrepo.New(t)
+	r.Commit("base")
+	r.Git("switch", "-q", "-c", "feature")
+	picked := r.Commit("fix login")
+	r.Git("switch", "-q", "main")
+	short := r.Git("rev-parse", "--short", picked)
+
+	p, err := prep(r.Dir, "cherry_pick", map[string]any{"commit": short})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Title != "Cherry-pick "+short+" fix login onto main" || p.Commit != picked {
+		t.Fatalf("proposal = %+v", p)
+	}
+}
+
+func TestCherryPickRefusals(t *testing.T) {
+	r := testrepo.New(t)
+	base := r.Commit("base")
+	r.Git("switch", "-q", "-c", "side")
+	r.Commit("on side")
+	r.Git("switch", "-q", "main")
+	r.Commit("on main")
+	r.Git("merge", "-q", "--no-ff", "--no-edit", "side")
+	mergeCommit := r.Git("rev-parse", "HEAD")
+	r.Git("switch", "-q", "-c", "other", base)
+	picked := r.Commit("pick me")
+	r.Git("switch", "-q", "main")
+
+	for _, c := range []struct{ commit, want string }{
+		{"-x", "invalid commit"},
+		{"nope", `no commit "nope"`},
+		{base, "already on main"},
+		{mergeCommit, "merge commit"},
+	} {
+		if _, err := prep(r.Dir, "cherry_pick", map[string]any{"commit": c.commit}); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("cherry_pick(%s): err = %v, want %q", c.commit, err, c.want)
+		}
+	}
+	r.WriteFile("file-1.txt", "dirty\n")
+	if _, err := prep(r.Dir, "cherry_pick", map[string]any{"commit": picked}); err == nil || !strings.Contains(err.Error(), "commit or stash") {
+		t.Errorf("dirty: err = %v", err)
+	}
+	r.Git("checkout", "--", "file-1.txt")
+	r.Git("switch", "-q", "--detach")
+	if _, err := prep(r.Dir, "cherry_pick", map[string]any{"commit": picked}); err == nil || !strings.Contains(err.Error(), "detached") {
+		t.Errorf("detached: err = %v", err)
 	}
 }
