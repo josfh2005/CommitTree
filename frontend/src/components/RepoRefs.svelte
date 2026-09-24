@@ -260,11 +260,13 @@
     {/if}
 
     <div class="section">
-      <button
-        class="section-title"
-        title={isWorktree ? 'Shared with the main repository and its other worktrees' : undefined}
-        on:click={() => toggleStashExpanded(repoId)}>Stash</button>
-      <span class="count">{$stashEntries.length}</span>
+      <span class="section-heading">
+        <button
+          class="section-title"
+          title={isWorktree ? 'Shared with the main repository and its other worktrees' : undefined}
+          on:click={() => toggleStashExpanded(repoId)}>Stash</button>
+        <span class="count">{$stashEntries.length}</span>
+      </span>
     </div>
     {#if $expandedStashSections.includes(repoId)}
       {#each $stashEntries as entry (entry.index)}
@@ -286,7 +288,11 @@
 {/if}
 
 <style>
-  .refs { padding: 0 0 12px 12px; }
+  /* Bottom spacing before whatever follows (the next repo row, or this
+     repository's Submodules section — see RepoRow, which wraps both in a
+     shared padding-bottom so it isn't doubled when both render) lives on
+     the wrapper, not here. */
+  .refs { padding: 0 0 0 12px; }
   /* Section headings (and "Changes", their peer) sit at the base indent;
      their rows sit one step in - see the --row-* custom properties in
      theme.css. */

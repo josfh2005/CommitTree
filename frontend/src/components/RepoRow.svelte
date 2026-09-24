@@ -94,13 +94,19 @@
   </button>
 </div>
 {#if expanded}
-  <RepoRefs repoId={openSub?.id ?? repo.id} submodulePath={openSub?.subPath ?? ''} />
-  {#if !repo.submodule && repo.submoduleCount}
-    <SubmoduleSection parentId={repo.id} count={repo.submoduleCount} />
-  {/if}
+  <div class="body">
+    <RepoRefs repoId={openSub?.id ?? repo.id} submodulePath={openSub?.subPath ?? ''} />
+    {#if !repo.submodule && repo.submoduleCount}
+      <SubmoduleSection parentId={repo.id} count={repo.submoduleCount} />
+    {/if}
+  </div>
 {/if}
 
 <style>
+  /* Bottom spacing before the next repo row, shared by RepoRefs and
+     SubmoduleSection so it isn't doubled when both render (see their own
+     .refs, which carry no bottom padding of their own). */
+  .body { padding-bottom: 12px; }
   .repo { padding: 0 4px 0 4px; gap: 4px; }
   .repo.dragging { opacity: 0.5; }
   .fold { width: 20px; height: 20px; flex: none; }
