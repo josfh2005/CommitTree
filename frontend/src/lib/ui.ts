@@ -1,5 +1,6 @@
 import { writable } from 'svelte/store'
 import { ClipboardSetText } from '../../wailsjs/runtime/runtime'
+import type { PickItem } from './pick'
 
 export interface Toast {
   id: number
@@ -73,10 +74,14 @@ export interface ChoiceOptions<T extends string = string> {
   danger?: (value: T) => boolean
 }
 
+/** A searchable list; resolves to the chosen item's key, or null. */
+export interface PickOptions { title: string; placeholder: string; empty: string; submitLabel: string; items: PickItem[] }
+
 export type Dialog =
   | (ConfirmOptions & { kind: 'confirm'; resolve: (result: ConfirmResult) => void })
   | (PromptOptions & { kind: 'prompt'; resolve: (result: PromptResult | null) => void })
   | (ChoiceOptions & { kind: 'choice'; resolve: (value: string | null) => void })
+  | (PickOptions & { kind: 'pick'; resolve: (key: string | null) => void })
 
 export const dialog = writable<Dialog | null>(null)
 
@@ -96,6 +101,9 @@ export const choiceDialog = <T extends string>(options: ChoiceOptions<T>) =>
   new Promise<T | null>((resolve) =>
     dialog.set({ ...(options as unknown as ChoiceOptions), kind: 'choice', resolve: resolve as (value: string | null) => void }),
   )
+
+export const pickDialog = (options: PickOptions) =>
+  new Promise<string | null>((resolve) => dialog.set({ ...options, kind: 'pick', resolve }))
 
 export interface MenuItem {
   label: string

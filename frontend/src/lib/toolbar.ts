@@ -1,6 +1,7 @@
 import { revealLabel } from './platform'
 import { terminalShortcutLabel } from './terminal'
-import type { AheadBehind, MergeState, Refs, WorktreeState } from './types'
+import type { PickItem } from './pick'
+import type { AheadBehind, Branch, MergeState, Refs, WorktreeState } from './types'
 import { uncommittedCount } from './uncommitted'
 
 export type ToolbarId = 'commit' | 'stash' | 'fetch' | 'pull' | 'push' | 'branch' | 'merge' | 'terminal' | 'folder' | 'chat'
@@ -45,4 +46,18 @@ export function toolbarItems(i: ToolbarInput): ToolbarItem[] {
     item('folder', i.platform === 'darwin' ? 'Finder' : 'Folder', 'folder', 'tools', '', revealLabel(i.platform)),
     item('chat', 'Chat', 'chat', 'tools', '', i.chatOpen ? 'Hide chat' : 'Show chat', { active: i.chatOpen }),
   ]
+}
+
+export interface MergeCandidate extends PickItem { group: 'Local' | 'Remote'; branch: Branch }
+
+/** mergeCandidates is what the Merge picker offers: local branches, then
+ *  remote-tracking ones as remote/name, leaving out the current branch and
+ *  a remote's HEAD symref. */
+export function mergeCandidates(refs: Refs | null): MergeCandidate[] {
+  if (!refs) return []
+  const local = refs.local.filter((b) => !b.current).map((b): MergeCandidate => ({ key: b.name, label: b.name, group: 'Local', branch: b }))
+  const remote = refs.remotes.flatMap((r) =>
+    r.branches.filter((b) => b.name !== 'HEAD').map((b): MergeCandidate => ({ key: `${r.name}/${b.name}`, label: `${r.name}/${b.name}`, group: 'Remote', branch: b })),
+  )
+  return [...local, ...remote]
 }

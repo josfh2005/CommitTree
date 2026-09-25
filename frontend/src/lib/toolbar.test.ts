@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { toolbarItems, type ToolbarInput } from './toolbar'
+import { mergeCandidates, toolbarItems, type ToolbarInput } from './toolbar'
 import type { MergeState, Refs, WorktreeState } from './types'
 
 const refs = (over: Partial<Refs> = {}): Refs => ({ head: 'main', headHash: 'abc123', detached: false, local: [], remotes: [], tags: [], ...over })
@@ -66,5 +66,22 @@ describe('toolbarItems', () => {
   it('names the folder button after the platform', () => {
     expect(item({ platform: 'darwin' }, 'folder')).toMatchObject({ label: 'Finder', title: 'Show in Finder' })
     expect(item({ platform: 'linux' }, 'folder').label).toBe('Folder')
+  })
+})
+
+describe('mergeCandidates', () => {
+  const b = (name: string, remote = '', current = false) => ({ name, remote, hash: 'h', current, upstream: '' })
+  it('offers local branches then remote ones, never the current branch or a remote HEAD', () => {
+    const r = refs({
+      local: [b('main', '', true), b('feature/login'), b('fix/typo')],
+      remotes: [{ name: 'origin', branches: [b('HEAD', 'origin'), b('main', 'origin'), b('develop', 'origin')] }],
+    })
+    expect(mergeCandidates(r).map((c) => `${c.group}:${c.label}`)).toEqual([
+      'Local:feature/login', 'Local:fix/typo', 'Remote:origin/main', 'Remote:origin/develop',
+    ])
+    expect(mergeCandidates(r)[2].branch).toMatchObject({ name: 'main', remote: 'origin' })
+  })
+  it('is empty without refs', () => {
+    expect(mergeCandidates(null)).toEqual([])
   })
 })
