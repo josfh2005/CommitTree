@@ -5,13 +5,20 @@
   import { api } from '../lib/api'
   import { formatBytes, percent } from '../lib/format'
   import { modelForProvider, modelHint, needsKey, processingNotice, PROVIDERS, settingsHaveModels, usesOllama } from '../lib/providers'
-  import { highContrast, loadAISettings, loadGitSettings, settingsOpen } from '../lib/stores'
+  import { SETTINGS_TABS, isSettingsTab, tabUsesAI } from '../lib/settingsTabs'
+  import { highContrast, loadAISettings, loadGitSettings, persisted, settingsOpen } from '../lib/stores'
   import type { AISettings, AIStatus, GitSettings, ModelDone, ModelProgress, ProviderName, PromptInfo } from '../lib/types'
   import { errorMessage, toast } from '../lib/ui'
 
   const RECOMMENDED = 'qwen2.5:7b'
 
+  // The tab the dialog opens on: the last one used.
+  const tab = persisted('settingsTab', 'general', isSettingsTab)
+
   let settings: AISettings | null = null
+  // Why the AI settings could not be loaded; the AI tabs show it, General
+  // still works.
+  let aiError = ''
   let git: GitSettings = { pullStrategy: 'auto' }
   let status: AIStatus | null = null
   let prompts: PromptInfo[] = []
@@ -45,13 +52,20 @@
   $: chatHint = (settings && status ? modelHint(settings.chatProvider, status) : '') || (settings ? modelErrors[settings.chatProvider] : '') || ''
   $: taskHint = (settings && status ? modelHint(settings.taskProvider, status) : '') || (settings ? modelErrors[settings.taskProvider] : '') || ''
 
+  // Git and AI settings load separately, so a failure on the AI side (AI
+  // disabled, an unreadable settings file) leaves the General tab usable.
   async function load() {
     try {
-      settings = await api.getAISettings()
-      prompts = await api.listPrompts()
       git = await api.getGitSettings()
     } catch (e) {
       toast(errorMessage(e), 'error')
+    }
+    try {
+      settings = await api.getAISettings()
+      prompts = await api.listPrompts()
+      aiError = ''
+    } catch (e) {
+      aiError = errorMessage(e)
     }
     await refresh()
     await syncModels()
@@ -201,194 +215,227 @@
 
 <svelte:window on:keydown={(e) => $settingsOpen && e.key === 'Escape' && close()} on:focus={() => $settingsOpen && refresh()} />
 
-{#if $settingsOpen && settings}
+{#if $settingsOpen}
   <div class="backdrop" on:click|self={close} role="presentation">
     <div class="dialog" role="dialog" aria-label="Settings">
-      <header>
+      <nav class="tabs" aria-label="Settings sections">
         <h3>Settings</h3>
-        <button class="icon-btn" title="Close" on:click={close}><Icon name="x" /></button>
-      </header>
+        {#each SETTINGS_TABS as t}
+          <button class="tab" class:active={$tab === t.id} aria-current={$tab === t.id ? 'page' : undefined} on:click={() => tab.set(t.id)}>{t.label}</button>
+        {/each}
+      </nav>
 
-      <section>
-        <h4>Appearance</h4>
-        <label class="row check">
-          <input type="checkbox" bind:checked={$highContrast} />
-          <span>High contrast</span>
-        </label>
-      </section>
+      <div class="pane">
+        <header>
+          <h3>{SETTINGS_TABS.find((t) => t.id === $tab)?.label}</h3>
+          <button class="icon-btn" title="Close" on:click={close}><Icon name="x" /></button>
+        </header>
 
-      <section>
-        <h4>Ollama</h4>
-        <div class="status">
-          {#if status?.ollama.running}
-            <span class="dot ok"></span> Running · {models.length} {models.length === 1 ? 'model' : 'models'}
-          {:else}
-            <span class="dot bad"></span> Not responding — open Ollama or install it from ollama.com
+        <div class="content">
+          {#if $tab === 'general'}
+            <section>
+              <h4>Appearance</h4>
+              <label class="row check">
+                <input type="checkbox" bind:checked={$highContrast} />
+                <span>High contrast</span>
+              </label>
+            </section>
+
+            <section>
+              <h4>Git</h4>
+              <label>
+                <span>Pull strategy</span>
+                <select bind:value={git.pullStrategy} on:change={saveGit}>
+                  <option value="auto">Auto — follow this repository's git config</option>
+                  <option value="merge">Always merge</option>
+                  <option value="rebase">Always rebase</option>
+                </select>
+              </label>
+            </section>
+          {:else if tabUsesAI($tab) && !settings}
+            <p class={aiError ? 'warn' : 'hint'}>{aiError || 'Loading…'}</p>
+          {:else if settings && $tab === 'models'}
+            <section>
+              <h4>Ollama</h4>
+              <div class="status">
+                {#if status?.ollama.running}
+                  <span class="dot ok"></span> Running · {models.length} {models.length === 1 ? 'model' : 'models'}
+                {:else}
+                  <span class="dot bad"></span> Not responding — open Ollama or install it from ollama.com
+                {/if}
+              </div>
+              <label>
+                <span>URL</span>
+                <div class="row">
+                  <input bind:value={settings.ollamaURL} />
+                  <button class="btn" disabled={saving} on:click={save}>Test</button>
+                </div>
+              </label>
+              {#if remote}<p class="warn">Diffs will be sent over the network to this host.</p>{/if}
+              {#if ollamaSelected}
+                <label>
+                  <span>Chat model</span>
+                  <select bind:value={settings.chatModel} on:change={save}>
+                    {#each models as m}
+                      <option value={m.name}>{m.name} · {formatBytes(m.size)}</option>
+                    {/each}
+                    {#if !models.some((m) => m.name === settings?.chatModel)}
+                      <option value={settings.chatModel}>{settings.chatModel} (not installed)</option>
+                    {/if}
+                  </select>
+                </label>
+                {#if pull}
+                  <div class="pull">
+                    <div class="bar"><div style="width: {percent(pull.completed, pull.total)}%"></div></div>
+                    <span class="hint">
+                      {pull.name}: {pull.status}{#if pull.total} · {formatBytes(pull.completed)} / {formatBytes(pull.total)}{/if}
+                    </span>
+                    <button class="btn" on:click={() => api.cancelPull()}>Cancel</button>
+                  </div>
+                {:else if status?.ollama.running}
+                  {#if !status.ollama.chatModelInstalled}
+                    <button class="btn primary" on:click={() => startPull(settings?.chatModel ?? RECOMMENDED)}>
+                      Download {settings.chatModel}{settings.chatModel === RECOMMENDED ? ' (~4.7 GB)' : ''}
+                    </button>
+                  {/if}
+                  <div class="row">
+                    <input placeholder="Other model, e.g. llama3.1:8b" bind:value={otherModel} />
+                    <button class="btn" disabled={!otherModel.trim()} on:click={() => startPull(otherModel)}>Download</button>
+                  </div>
+                {/if}
+              {/if}
+            </section>
+
+            <section>
+              <h4>Chat &amp; agent</h4>
+              <label>
+                <span>Provider</span>
+                <select bind:value={settings.chatProvider} on:change={onProviderChange}>
+                  {#each PROVIDERS as p}
+                    <option value={p.value}>{p.label}</option>
+                  {/each}
+                </select>
+              </label>
+              <label>
+                <span>Model</span>
+                {#if chatHint}
+                  <span class="hint">{chatHint}</span>
+                {:else}
+                  <select bind:value={settings.chatModel} on:change={save}>
+                    {#each chatModels as m}
+                      <option value={m}>{m}</option>
+                    {/each}
+                    {#if !chatModels.includes(settings.chatModel)}
+                      <option value={settings.chatModel}>{settings.chatModel}</option>
+                    {/if}
+                  </select>
+                {/if}
+              </label>
+            </section>
+
+            <section>
+              <h4>Explain commit</h4>
+              <label>
+                <span>Provider</span>
+                <select bind:value={settings.taskProvider} on:change={onProviderChange}>
+                  {#each PROVIDERS as p}
+                    <option value={p.value}>{p.label}</option>
+                  {/each}
+                </select>
+              </label>
+              <label>
+                <span>Model</span>
+                {#if taskHint}
+                  <span class="hint">{taskHint}</span>
+                {:else}
+                  <select bind:value={settings.taskModel} on:change={save}>
+                    {#each taskModels as m}
+                      <option value={m}>{m}</option>
+                    {/each}
+                    {#if !taskModels.includes(settings.taskModel)}
+                      <option value={settings.taskModel}>{settings.taskModel}</option>
+                    {/if}
+                  </select>
+                {/if}
+              </label>
+              <label>
+                <span>Commit message</span>
+                <select bind:value={settings.commitMessage} on:change={save}>
+                  <option value="auto-local">Automatic for local models (default)</option>
+                  <option value="auto">Always automatic</option>
+                  <option value="manual">Only when I ask</option>
+                </select>
+              </label>
+            </section>
+
+            <p class="notice">{processingNotice(settings.chatProvider, settings.taskProvider, remote)}</p>
+          {:else if settings && $tab === 'keys'}
+            <section>
+              {#each PROVIDERS.filter((p) => needsKey(p.value)) as p}
+                {@const st = status?.providers.find((s) => s.provider === p.value)}
+                <label class="row">
+                  <span class="key-label">{p.label} API key</span>
+                  {#if st?.hasKey}
+                    <span class="hint">{st.keyHint}</span>
+                    <button class="btn" on:click={() => removeKey(p.value)}>Remove</button>
+                  {:else}
+                    <input type="password" placeholder="sk-…" bind:value={keyInput[p.value]} />
+                    <button class="btn primary" disabled={!keyInput[p.value]} on:click={() => saveKey(p.value)}>Save</button>
+                  {/if}
+                </label>
+              {/each}
+              {#if status?.keyStore}<p class="warn">{status.keyStore}</p>{/if}
+            </section>
+
+            <p class="notice">{processingNotice(settings.chatProvider, settings.taskProvider, remote)}</p>
+          {:else if settings && $tab === 'prompts'}
+            <section>
+              {#each prompts as p}
+                <div class="prompt">
+                  <span class="mono">{p.name}.md</span>
+                  {#if p.customized}
+                    <span class="badge">customized</span>
+                    <button class="btn" on:click={() => reset(p.name)}>Restore default</button>
+                  {/if}
+                </div>
+              {/each}
+              <div><button class="btn" on:click={openFolder}>Open prompts folder</button></div>
+            </section>
           {/if}
         </div>
-        <label>
-          <span>URL</span>
-          <div class="row">
-            <input bind:value={settings.ollamaURL} />
-            <button class="btn" disabled={saving} on:click={save}>Test</button>
-          </div>
-        </label>
-        {#if remote}<p class="warn">Diffs will be sent over the network to this host.</p>{/if}
-        {#if ollamaSelected}
-          <label>
-            <span>Chat model</span>
-            <select bind:value={settings.chatModel} on:change={save}>
-              {#each models as m}
-                <option value={m.name}>{m.name} · {formatBytes(m.size)}</option>
-              {/each}
-              {#if !models.some((m) => m.name === settings?.chatModel)}
-                <option value={settings.chatModel}>{settings.chatModel} (not installed)</option>
-              {/if}
-            </select>
-          </label>
-          {#if pull}
-            <div class="pull">
-              <div class="bar"><div style="width: {percent(pull.completed, pull.total)}%"></div></div>
-              <span class="hint">
-                {pull.name}: {pull.status}{#if pull.total} · {formatBytes(pull.completed)} / {formatBytes(pull.total)}{/if}
-              </span>
-              <button class="btn" on:click={() => api.cancelPull()}>Cancel</button>
-            </div>
-          {:else if status?.ollama.running}
-            {#if !status.ollama.chatModelInstalled}
-              <button class="btn primary" on:click={() => startPull(settings?.chatModel ?? RECOMMENDED)}>
-                Download {settings.chatModel}{settings.chatModel === RECOMMENDED ? ' (~4.7 GB)' : ''}
-              </button>
-            {/if}
-            <div class="row">
-              <input placeholder="Other model, e.g. llama3.1:8b" bind:value={otherModel} />
-              <button class="btn" disabled={!otherModel.trim()} on:click={() => startPull(otherModel)}>Download</button>
-            </div>
-          {/if}
-        {/if}
-      </section>
-
-      <section>
-        <h4>Chat &amp; agent</h4>
-        <label>
-          <span>Provider</span>
-          <select bind:value={settings.chatProvider} on:change={onProviderChange}>
-            {#each PROVIDERS as p}
-              <option value={p.value}>{p.label}</option>
-            {/each}
-          </select>
-        </label>
-        <label>
-          <span>Model</span>
-          {#if chatHint}
-            <span class="hint">{chatHint}</span>
-          {:else}
-            <select bind:value={settings.chatModel} on:change={save}>
-              {#each chatModels as m}
-                <option value={m}>{m}</option>
-              {/each}
-              {#if !chatModels.includes(settings.chatModel)}
-                <option value={settings.chatModel}>{settings.chatModel}</option>
-              {/if}
-            </select>
-          {/if}
-        </label>
-      </section>
-
-      <section>
-        <h4>Explain commit</h4>
-        <label>
-          <span>Provider</span>
-          <select bind:value={settings.taskProvider} on:change={onProviderChange}>
-            {#each PROVIDERS as p}
-              <option value={p.value}>{p.label}</option>
-            {/each}
-          </select>
-        </label>
-        <label>
-          <span>Model</span>
-          {#if taskHint}
-            <span class="hint">{taskHint}</span>
-          {:else}
-            <select bind:value={settings.taskModel} on:change={save}>
-              {#each taskModels as m}
-                <option value={m}>{m}</option>
-              {/each}
-              {#if !taskModels.includes(settings.taskModel)}
-                <option value={settings.taskModel}>{settings.taskModel}</option>
-              {/if}
-            </select>
-          {/if}
-        </label>
-        <label>
-          <span>Commit message</span>
-          <select bind:value={settings.commitMessage} on:change={save}>
-            <option value="auto-local">Automatic for local models (default)</option>
-            <option value="auto">Always automatic</option>
-            <option value="manual">Only when I ask</option>
-          </select>
-        </label>
-      </section>
-
-      <section>
-        <h4>API keys</h4>
-        {#each PROVIDERS.filter((p) => needsKey(p.value)) as p}
-          {@const st = status?.providers.find((s) => s.provider === p.value)}
-          <label class="row">
-            <span>{p.label} API key</span>
-            {#if st?.hasKey}
-              <span class="hint">{st.keyHint}</span>
-              <button class="btn" on:click={() => removeKey(p.value)}>Remove</button>
-            {:else}
-              <input type="password" placeholder="sk-…" bind:value={keyInput[p.value]} />
-              <button class="btn primary" disabled={!keyInput[p.value]} on:click={() => saveKey(p.value)}>Save</button>
-            {/if}
-          </label>
-        {/each}
-        {#if status?.keyStore}<p class="warn">{status.keyStore}</p>{/if}
-      </section>
-
-      <section>
-        <h4>Prompts</h4>
-        {#each prompts as p}
-          <div class="prompt">
-            <span class="mono">{p.name}.md</span>
-            {#if p.customized}
-              <span class="badge">customized</span>
-              <button class="btn" on:click={() => reset(p.name)}>Restore default</button>
-            {/if}
-          </div>
-        {/each}
-        <button class="btn" on:click={openFolder}>Open prompts folder</button>
-      </section>
-
-      <section>
-        <h3>Git</h3>
-        <label>
-          Pull strategy
-          <select bind:value={git.pullStrategy} on:change={saveGit}>
-            <option value="auto">Auto — follow this repository's git config</option>
-            <option value="merge">Always merge</option>
-            <option value="rebase">Always rebase</option>
-          </select>
-        </label>
-      </section>
-
-      <footer>{processingNotice(settings.chatProvider, settings.taskProvider, remote)}</footer>
+      </div>
     </div>
   </div>
 {/if}
 
 <style>
   .backdrop { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; background: rgba(0, 0, 0, 0.25); }
-  .dialog { width: 520px; max-height: 86vh; overflow-y: auto; padding: 16px 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
-  header { display: flex; align-items: center; justify-content: space-between; }
+  .dialog {
+    display: flex;
+    width: min(720px, 92vw);
+    height: min(520px, 86vh);
+    overflow: hidden;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+  }
+  .tabs { flex: none; width: 168px; display: flex; flex-direction: column; gap: 2px; padding: 16px 10px; background: var(--sidebar); border-right: 1px solid var(--border); }
+  .tabs h3 { padding: 0 8px 10px; }
+  .tab { height: 28px; padding: 0 10px; border-radius: 7px; text-align: left; }
+  .tab:hover { background: var(--hover); }
+  .tab.active { background: var(--active); font-weight: 500; }
+  .pane { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  header { flex: none; display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 6px 20px; }
+  .content { flex: 1; min-height: 0; overflow-y: auto; padding: 0 20px 16px; }
   h3 { margin: 0; font-size: 15px; font-weight: 600; }
   h4 { margin: 0 0 8px; font-size: 12px; font-weight: 500; color: var(--muted); }
   section { display: flex; flex-direction: column; gap: 8px; padding: 14px 0; border-bottom: 1px solid var(--border); }
+  section:last-of-type { border-bottom: 0; }
   label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
   label.row { flex-direction: row; align-items: center; }
   label.check { gap: 6px; color: var(--text); font-size: 13px; }
+  .key-label { flex: none; width: 130px; }
   .row { display: flex; gap: 6px; }
   .row input { flex: 1; }
   .status { display: flex; align-items: center; gap: 6px; }
@@ -397,10 +444,11 @@
   .dot.bad { background: var(--danger); }
   .warn { margin: 0; font-size: 12px; color: var(--danger); }
   .hint { font-size: 12px; color: var(--muted); }
+  p.hint, p.warn { padding: 14px 0; }
   .pull { display: flex; align-items: center; gap: 8px; }
   .bar { flex: 1; height: 6px; border-radius: 3px; background: var(--hover); overflow: hidden; }
   .bar div { height: 100%; background: var(--accent); }
   .prompt { display: flex; align-items: center; gap: 8px; }
   .badge { font-size: 11px; padding: 0 6px; border-radius: 4px; background: var(--hover); color: var(--muted); }
-  footer { padding-top: 12px; font-size: 12px; color: var(--faint); }
+  .notice { margin: 0; padding-top: 12px; font-size: 12px; color: var(--faint); }
 </style>

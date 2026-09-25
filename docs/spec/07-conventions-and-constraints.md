@@ -171,6 +171,19 @@ the standard Edit and Window menus. The system's usual Hide Others and Show
 All entries are not offered. On Linux there is no menu bar, and Ctrl+, opens
 Settings.
 
+The Settings dialog has a fixed size, with tabs in a column on the left:
+
+- **General**: Appearance and the Git pull strategy.
+- **AI models**: Ollama, the chat and explain-commit providers and models,
+  and the commit message mode.
+- **API keys**
+- **Prompts**
+
+It opens on the tab last used. Only the tab's own content scrolls. The note
+on where AI requests are processed shows on the AI models and API keys tabs.
+If the AI settings cannot be loaded, the General tab still works and the AI
+tabs show the error.
+
 ### Appearance
 
 The application follows the system's light or dark appearance. Settings has
