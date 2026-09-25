@@ -19,6 +19,7 @@ const (
 	ExplainLines     = "explain-lines"
 	ResolveConflicts = "resolve-conflicts"
 	CommitMessage    = "commit-message"
+	SuggestReplies   = "suggest-replies"
 )
 
 var ErrUnknownPrompt = errors.New("unknown prompt")
