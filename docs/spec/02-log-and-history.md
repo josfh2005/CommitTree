@@ -50,7 +50,8 @@ relative date ("just now", "3m ago", "5h ago", "2d ago", or a calendar date
 once older than a week, with the year added once it differs from the
 current one), and the short hash. A merge commit's subject is styled
 distinctly from an ordinary commit's. The user's own commits have their
-subject and author in semibold. A commit is the user's when its author email
+subject and author in semibold, with the author in the main text colour
+rather than grey. A commit is the user's when its author email
 matches the repository's `user.email`, ignoring case, or, when no email is
 configured, its author name matches `user.name`. The identity is re-read
 when the repository is selected and when the window regains focus. The commit currently checked out as

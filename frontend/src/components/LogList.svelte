@@ -410,9 +410,11 @@
   }
   .row.selected { background: var(--selection); }
   .merge .subject { color: var(--merge-text); }
-  /* The user's own commits: subject and author in semibold; the ref badges
-     inside the subject keep their own weight. */
+  /* The user's own commits: subject and author in semibold, the author also
+     in the main text colour (grey semibold barely shows at 12px); the ref
+     badges inside the subject keep their own weight. */
   .mine .subject, .mine .author { font-weight: 600; }
+  .mine .author { color: var(--text); }
   .mine .badge:not(.current) { font-weight: 400; }
   .uncommitted .subject { font-style: italic; color: var(--muted); }
   .author, .date, .hash { color: var(--muted); font-size: 12px; }
