@@ -22,8 +22,9 @@
   // The worktreeState value last seen, so a reactive statement that reads
   // both target and worktreeState (to reload a working-tree blame on an
   // edit) does not also refire on every target or ignore-whitespace change
-  // it happens to reference — see the two `$:` blocks below.
-  let lastWorktreeState: unknown
+  // it happens to reference — see the two `$:` blocks below. It starts at
+  // the current value so opening the view does not count as a change.
+  let lastWorktreeState: unknown = $worktreeState
 
   $: target = $blameTarget
   $: if (target) {
