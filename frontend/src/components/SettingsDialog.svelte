@@ -5,7 +5,7 @@
   import { api } from '../lib/api'
   import { formatBytes, percent } from '../lib/format'
   import { modelForProvider, modelHint, needsKey, processingNotice, PROVIDERS, settingsHaveModels, usesOllama } from '../lib/providers'
-  import { loadAISettings, loadGitSettings, settingsOpen } from '../lib/stores'
+  import { highContrast, loadAISettings, loadGitSettings, settingsOpen } from '../lib/stores'
   import type { AISettings, AIStatus, GitSettings, ModelDone, ModelProgress, ProviderName, PromptInfo } from '../lib/types'
   import { errorMessage, toast } from '../lib/ui'
 
@@ -210,6 +210,14 @@
       </header>
 
       <section>
+        <h4>Appearance</h4>
+        <label class="row check">
+          <input type="checkbox" bind:checked={$highContrast} />
+          <span>High contrast</span>
+        </label>
+      </section>
+
+      <section>
         <h4>Ollama</h4>
         <div class="status">
           {#if status?.ollama.running}
@@ -380,6 +388,7 @@
   section { display: flex; flex-direction: column; gap: 8px; padding: 14px 0; border-bottom: 1px solid var(--border); }
   label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
   label.row { flex-direction: row; align-items: center; }
+  label.check { gap: 6px; color: var(--text); font-size: 13px; }
   .row { display: flex; gap: 6px; }
   .row input { flex: 1; }
   .status { display: flex; align-items: center; gap: 6px; }

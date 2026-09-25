@@ -39,6 +39,8 @@ export const sidebarWidth = persisted('sidebarWidth', 280)
 export const chatWidth = persisted('chatWidth', 340)
 export const detailsHeight = persisted('detailsHeight', 280)
 export const chatOpen = persisted('chatOpen', true)
+/** Settings → Appearance → High contrast; main.ts applies it to the page. */
+export const highContrast = persisted('highContrast', false, (v): v is boolean => typeof v === 'boolean')
 
 /** Repositories whose chat is taken by an explanation still being prepared
  *  (blame and diffs being read) before its question appears in the chat. */

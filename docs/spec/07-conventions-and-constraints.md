@@ -162,6 +162,17 @@ idle. Instead, when the window regains focus:
 No other event triggers a refresh: switching to the application from
 another window is the only moment external changes are checked for.
 
+### Appearance
+
+The application follows the system's light or dark appearance. Settings has
+an Appearance section with a High contrast checkbox that works in both: it
+makes text black (or white in dark mode), secondary text such as dates,
+authors and hashes darker (or lighter), borders more visible, and hover and
+selection easier to tell apart, while the accent, graph lane, ref badge and
+diff colours stay as they are. Every kind of text keeps a contrast of at
+least 4.5:1 against the backgrounds it appears on. The choice applies at once
+and is remembered on this computer.
+
 ## Architectural constraints that shape behaviour
 
 ### The old name stays on disk
