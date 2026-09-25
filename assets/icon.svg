@@ -5,15 +5,15 @@
        background colour. -->
   <rect x="100" y="100" width="824" height="824" rx="185" fill="#e3e2dd"/>
   <g fill="none" stroke-width="48" stroke-linecap="round" stroke-linejoin="round" stroke="#6d1b6e">
-    <path d="M340 230 V784"/>
-    <path d="M340 320 L540 560 V784"/>
-    <path d="M540 560 L340 700"/>
+    <path d="M340 332 V692"/>
+    <path d="M340 390 L540 546 V692"/>
+    <path d="M540 546 L340 637"/>
   </g>
-  <path d="M690 230 V784" fill="none" stroke="#217373" stroke-width="48" stroke-linecap="round"/>
+  <path d="M690 332 V692" fill="none" stroke="#217373" stroke-width="48" stroke-linecap="round"/>
   <g stroke="#e3e2dd" stroke-width="10">
-    <circle cx="340" cy="320" r="36" fill="#6d1b6e"/>
-    <circle cx="540" cy="560" r="34" fill="#6d1b6e"/>
-    <circle cx="340" cy="700" r="34" fill="#6d1b6e"/>
-    <circle cx="690" cy="470" r="36" fill="#217373"/>
+    <circle cx="340" cy="390" r="36" fill="#6d1b6e"/>
+    <circle cx="540" cy="546" r="34" fill="#6d1b6e"/>
+    <circle cx="340" cy="637" r="34" fill="#6d1b6e"/>
+    <circle cx="690" cy="488" r="36" fill="#217373"/>
   </g>
 </svg>
