@@ -52,7 +52,7 @@
   .tool { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 50px; padding: 4px 6px; border-radius: 8px; color: var(--muted); font-size: 11px; }
   .tool:hover:not(:disabled) { background: var(--hover); color: var(--text); }
   .tool:disabled { opacity: 0.4; }
-  .tool.active { color: var(--accent); }
+  .tool.active { background: var(--active); color: var(--text); }
   .icon { position: relative; display: inline-flex; }
   .badge { position: absolute; top: -4px; right: -8px; font-size: 9px; line-height: 1; padding: 1px 3px; border-radius: 6px; background: var(--accent); color: white; }
   .sep { width: 1px; height: 28px; margin: 0 6px; background: var(--border); }

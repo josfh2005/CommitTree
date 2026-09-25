@@ -48,9 +48,9 @@ why it is disabled; an enabled one's says what it does.
 | Push | Push, below; the ahead count as a badge | same as Pull |
 | Branch | The "New branch" dialog, from HEAD (a detached HEAD's commit included) | busy |
 | Merge | The branch picker below, then the usual merge confirmation | busy; a conflict is in progress; detached HEAD ("Check out a branch first") |
-| Terminal | Shows or hides the terminal panel; highlighted while open | never |
+| Terminal | Shows or hides the terminal panel; a soft background marks it while open | never |
 | Finder / Folder | Opens the repository folder | never |
-| Chat | Shows or hides the chat panel; highlighted while open | never |
+| Chat | Shows or hides the chat panel; a soft background marks it while open | never |
 
 The busy reason comes first, then the conflict, then the button's own rule.
 "Uncommitted" counts staged, unstaged and untracked files, as the log's
