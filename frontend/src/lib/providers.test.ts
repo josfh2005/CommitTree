@@ -70,6 +70,7 @@ describe('settingsHaveModels', () => {
     taskProvider: 'anthropic',
     taskModel: 'claude-opus-5',
     commitMessage: 'auto-local',
+    suggestReplies: 'auto-local',
     ...over,
   })
 

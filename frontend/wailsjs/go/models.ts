@@ -906,6 +906,7 @@ export namespace settings {
 	    taskProvider: string;
 	    taskModel: string;
 	    commitMessage: string;
+	    suggestReplies: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -919,6 +920,7 @@ export namespace settings {
 	        this.taskProvider = source["taskProvider"];
 	        this.taskModel = source["taskModel"];
 	        this.commitMessage = source["commitMessage"];
+	        this.suggestReplies = source["suggestReplies"];
 	    }
 	}
 

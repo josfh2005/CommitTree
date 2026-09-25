@@ -193,6 +193,7 @@ export interface ProviderStatus {
 }
 
 export type CommitMessageMode = 'auto-local' | 'auto' | 'manual'
+export type SuggestRepliesMode = 'auto-local' | 'auto' | 'off'
 
 export interface AISettings {
   ollamaURL: string
@@ -201,6 +202,7 @@ export interface AISettings {
   taskProvider: ProviderName
   taskModel: string
   commitMessage: CommitMessageMode
+  suggestReplies: SuggestRepliesMode
 }
 
 export interface OllamaModel {

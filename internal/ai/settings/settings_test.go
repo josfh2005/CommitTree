@@ -24,7 +24,7 @@ func TestLoadMissingFileUsesDefaults(t *testing.T) {
 
 func TestSaveAndLoadRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "sub", "ai.json")
-	s := settings.Settings{OllamaURL: "http://10.0.0.5:11434", ChatProvider: "ollama", ChatModel: "llama3.1:8b", TaskProvider: "ollama", TaskModel: "qwen2.5:3b", CommitMessage: settings.CommitAutoLocal}
+	s := settings.Settings{OllamaURL: "http://10.0.0.5:11434", ChatProvider: "ollama", ChatModel: "llama3.1:8b", TaskProvider: "ollama", TaskModel: "qwen2.5:3b", CommitMessage: settings.CommitAutoLocal, SuggestReplies: settings.SuggestAutoLocal}
 
 	if err := settings.Save(path, s); err != nil {
 		t.Fatal(err)
@@ -147,5 +147,34 @@ func TestSaveWritesNoKeys(t *testing.T) {
 	}
 	if strings.Contains(string(data), "key") || strings.Contains(string(data), "sk-") {
 		t.Errorf("the settings file mentions a key: %s", data)
+	}
+}
+
+func TestSuggestRepliesModeDefaultsAndValidates(t *testing.T) {
+	if got := settings.Defaults().SuggestReplies; got != settings.SuggestAutoLocal {
+		t.Errorf("default = %q, want auto-local", got)
+	}
+	path := filepath.Join(t.TempDir(), "ai.json")
+	s := settings.Defaults()
+	s.SuggestReplies = "sometimes"
+	if err := settings.Save(path, s); !errors.Is(err, settings.ErrInvalid) {
+		t.Errorf("err = %v, want ErrInvalid for an unknown mode", err)
+	}
+	for _, mode := range []string{settings.SuggestAutoLocal, settings.SuggestAuto, settings.SuggestOff} {
+		s.SuggestReplies = mode
+		if err := settings.Save(path, s); err != nil {
+			t.Errorf("mode %q: %v", mode, err)
+		}
+	}
+	// A file written before this setting existed must still load.
+	if err := os.WriteFile(path, []byte(`{"ollamaURL":"http://localhost:11434","chatProvider":"ollama","chatModel":"m","taskProvider":"ollama","taskModel":"m","commitMessage":"auto"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := settings.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.SuggestReplies != settings.SuggestAutoLocal {
+		t.Errorf("loaded = %q, want the default filled in", loaded.SuggestReplies)
 	}
 }
