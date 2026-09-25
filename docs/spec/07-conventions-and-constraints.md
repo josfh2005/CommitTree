@@ -162,6 +162,15 @@ idle. Instead, when the window regains focus:
 No other event triggers a refresh: switching to the application from
 another window is the only moment external changes are checked for.
 
+### Application menu and opening Settings
+
+Settings opens from the sidebar's Settings row and, following each system's
+convention, from the keyboard. On macOS the menu bar's CommitTree menu has
+Settings… (⌘,), Hide CommitTree (⌘H) and Quit CommitTree (⌘Q), followed by
+the standard Edit and Window menus. The system's usual Hide Others and Show
+All entries are not offered. On Linux there is no menu bar, and Ctrl+, opens
+Settings.
+
 ### Appearance
 
 The application follows the system's light or dark appearance. Settings has

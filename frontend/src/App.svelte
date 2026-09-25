@@ -13,9 +13,10 @@
   import TerminalPanel from './components/TerminalPanel.svelte'
   import Toasts from './components/Toasts.svelte'
   import { startFocusRefresh } from './lib/actions'
+  import { isSettingsShortcut } from './lib/shortcuts'
   import { isTerminalToggle } from './lib/terminal'
   import { conflictOwnsScreen } from './lib/remote'
-  import { blameTarget, chatOpen, chatWidth, closeBlame, loadAISettings, loadRefs, loadRepos, loadWorktreeState, mainView, mergeState, platform, refreshRepo, selectedHash, selectedRepo, selectedStash, sidebarWidth, stashConflictDismissed, stashEntries, terminalHeight, terminalOpen, uncommittedSelected } from './lib/stores'
+  import { blameTarget, chatOpen, chatWidth, closeBlame, loadAISettings, loadRefs, loadRepos, loadWorktreeState, mainView, mergeState, platform, refreshRepo, selectedHash, selectedRepo, selectedStash, settingsOpen, sidebarWidth, stashConflictDismissed, stashEntries, terminalHeight, terminalOpen, uncommittedSelected } from './lib/stores'
   import type { RepoChangedEvent, WorktreeChangedEvent } from './lib/types'
   import { Environment, EventsOn } from '../wailsjs/runtime/runtime'
 
@@ -78,15 +79,26 @@
     const offRepoChanged = EventsOn('repo:changed', (payload: RepoChangedEvent) => {
       if (payload?.repoID === $selectedRepo?.id) refreshRepo()
     })
+    // macOS: the native menu's Settings… item (⌘,), see internal/app/menu.go.
+    const offSettings = EventsOn('menu:settings', () => settingsOpen.set(true))
     return () => {
       stopFocus()
       offWorktree()
       offRepoChanged()
+      offSettings()
     }
   })
+
+  function onKeydown(e: KeyboardEvent) {
+    toggleTerminal(e)
+    if (isSettingsShortcut(e, $platform)) {
+      e.preventDefault()
+      settingsOpen.set(true)
+    }
+  }
 </script>
 
-<svelte:window on:keydown={toggleTerminal} />
+<svelte:window on:keydown={onKeydown} />
 
 <div class="app">
   <aside style="width: {$sidebarWidth}px"><Sidebar /></aside>

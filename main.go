@@ -3,8 +3,10 @@ package main
 import (
 	"embed"
 	"log"
+	goruntime "runtime"
 
 	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/menu"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
@@ -50,7 +52,16 @@ func main() {
 		Prompts:      prompts.New(promptsDir),
 	})
 
+	// macOS gets a native menu bar with Settings… (⌘,). Linux gets none: a
+	// Wails menu there is a GTK bar inside the window, and the frontend
+	// handles Ctrl+, itself.
+	var appMenu *menu.Menu
+	if goruntime.GOOS == "darwin" {
+		appMenu = api.Menu()
+	}
+
 	err = wails.Run(&options.App{
+		Menu:             appMenu,
 		Title:            "CommitTree",
 		Width:            1440,
 		Height:           900,
