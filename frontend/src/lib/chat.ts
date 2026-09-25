@@ -1,5 +1,5 @@
 import { providerShortLabel } from './providers'
-import type { AIMessage, ChatConfirmEvent, ChatDeltaEvent, ChatDoneEvent, ChatErrorEvent, ChatNoticeEvent, ChatStartEvent, ChatToolEvent, ChatToolResultEvent } from './types'
+import type { AIMessage, ChatConfirmEvent, ChatDeltaEvent, ChatDoneEvent, ChatErrorEvent, ChatNoticeEvent, ChatStartEvent, ChatSuggestionsEvent, ChatToolEvent, ChatToolResultEvent } from './types'
 
 export interface ChatToolUse {
   name: string
@@ -33,6 +33,9 @@ export interface ChatState {
   repoID: string
   runID: string | null
   items: ChatItem[]
+  // The run whose answer finished last, and the replies suggested for it.
+  lastRunID?: string | null
+  suggestions?: string[]
 }
 
 export const emptyChat = (repoID: string): ChatState => ({ repoID, runID: null, items: [] })
@@ -83,6 +86,7 @@ export function startRun(state: ChatState, text: string, runID: string): ChatSta
   return {
     ...state,
     runID,
+    suggestions: undefined,
     items: [...state.items, { role: 'user', text, tools: [] }, { role: 'assistant', text: '', tools: [] }],
   }
 }
@@ -90,9 +94,9 @@ export function startRun(state: ChatState, text: string, runID: string): ChatSta
 // CHAT_EVENTS are every event applyEvent understands. The panel subscribes
 // to this list, so a new event added to the reducer reaches the UI instead of
 // being silently dropped.
-export const CHAT_EVENTS = ['chat:start', 'chat:delta', 'chat:tool', 'chat:tool_result', 'chat:confirm', 'chat:notice', 'chat:done', 'chat:error'] as const
+export const CHAT_EVENTS = ['chat:start', 'chat:delta', 'chat:tool', 'chat:tool_result', 'chat:confirm', 'chat:notice', 'chat:done', 'chat:error', 'chat:suggestions'] as const
 
-type Payload = ChatStartEvent | ChatDeltaEvent | ChatToolEvent | ChatToolResultEvent | ChatConfirmEvent | ChatNoticeEvent | ChatErrorEvent | ChatDoneEvent
+type Payload = ChatStartEvent | ChatDeltaEvent | ChatToolEvent | ChatToolResultEvent | ChatConfirmEvent | ChatNoticeEvent | ChatErrorEvent | ChatDoneEvent | ChatSuggestionsEvent
 
 export function confirmState(summary: string): 'done' | 'rejected' | 'failed' {
   if (summary.startsWith('done')) return 'done'
@@ -185,6 +189,13 @@ export function applyEvent(state: ChatState, name: string, payload: Payload): Ch
   // null), and withPendingConfirm itself checks repoID and adopts ev.runID
   // — dropping it here would strand the run with no card and no Stop.
   if (name === 'chat:confirm') return withPendingConfirm(state, payload as ChatConfirmEvent)
+  // Suggestions arrive seconds after chat:done; they only belong to the
+  // answer that finished last, and only while nothing else is running.
+  if (name === 'chat:suggestions') {
+    const p = payload as ChatSuggestionsEvent
+    if (state.runID !== null || p.runID !== state.lastRunID) return state
+    return { ...state, suggestions: p.replies }
+  }
   if (payload.runID !== state.runID || state.runID === null) return state
   const items = state.items.slice()
   const last = { ...items[items.length - 1], tools: items[items.length - 1].tools.slice() }
@@ -215,7 +226,7 @@ export function applyEvent(state: ChatState, name: string, payload: Payload): Ch
     case 'chat:done': {
       const at = (payload as ChatDoneEvent).at
       if (at) last.at = at
-      return { ...state, runID: null, items }
+      return { ...state, runID: null, lastRunID: state.runID, items }
     }
     case 'chat:error': {
       const p = payload as ChatErrorEvent

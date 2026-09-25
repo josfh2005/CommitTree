@@ -276,3 +276,28 @@ describe('write confirmations', () => {
     expect(confirmResultText(failedTool)).toBe('Failed: the repository changed')
   })
 })
+
+describe('suggested replies', () => {
+  const answered = () => applyEvent(startRun(emptyChat('r1'), 'hola', 'run1'), 'chat:done', { repoID: 'r1', runID: 'run1' })
+  const offer = (s: ChatState, runID = 'run1', repoID = 'r1') => applyEvent(s, 'chat:suggestions', { repoID, runID, replies: ['ok dale', 'sí'] })
+
+  it('keeps them for the answer that just finished', () => {
+    expect(offer(answered()).suggestions).toEqual(['ok dale', 'sí'])
+  })
+
+  it('drops them for another run, another repo or while an answer runs', () => {
+    expect(offer(answered(), 'old').suggestions ?? []).toEqual([])
+    expect(offer(answered(), 'run1', 'r2').suggestions ?? []).toEqual([])
+    expect(offer(startRun(emptyChat('r1'), 'hola', 'run1')).suggestions ?? []).toEqual([])
+  })
+
+  it('clears them when an answer starts, here or from the log', () => {
+    const s = offer(answered())
+    expect(startRun(s, 'ok dale', 'run2').suggestions ?? []).toEqual([])
+    expect(applyEvent(s, 'chat:start', { repoID: 'r1', runID: 'exp', text: 'Explain', provider: 'ollama', model: 'm' }).suggestions ?? []).toEqual([])
+  })
+
+  it('is an event the panel listens to', () => {
+    expect(CHAT_EVENTS).toContain('chat:suggestions')
+  })
+})
