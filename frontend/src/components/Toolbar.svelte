@@ -44,7 +44,11 @@
 </div>
 
 <style>
-  .toolbar { display: flex; align-items: center; gap: 2px; flex: none; }
+  /* Shrinks after the title has ellipsized away; at the window's minimum
+     width with the side column open even icon-only buttons may not fit, so
+     the toolbar scrolls rather than spilling under the side column. */
+  .toolbar { display: flex; align-items: center; gap: 2px; flex: 0 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .tool, .toolbar > :global(.btn) { flex: none; }
   .tool { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 50px; padding: 4px 6px; border-radius: 8px; color: var(--muted); font-size: 11px; }
   .tool:hover:not(:disabled) { background: var(--hover); color: var(--text); }
   .tool:disabled { opacity: 0.4; }
@@ -57,5 +61,9 @@
   @container repo-header (max-width: 860px) {
     .label { display: none; }
     .tool { min-width: 32px; }
+  }
+  @container repo-header (max-width: 480px) {
+    .tool { min-width: 26px; padding: 3px; }
+    .sep { margin: 0 2px; }
   }
 </style>

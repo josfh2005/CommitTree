@@ -76,7 +76,7 @@
         <div class="pick-list" role="listbox">
           {#each shown as item, i (item.key)}
             {#if item.group && item.group !== shown[i - 1]?.group}<div class="pick-group">{item.group}</div>{/if}
-            <button type="button" class="pick-item" class:selected={i === index} role="option" aria-selected={i === index} on:click={() => (index = i)} on:dblclick={() => finish(true)}>{item.label}</button>
+            <button type="button" class="pick-item" class:selected={i === index} role="option" aria-selected={i === index} tabindex="-1" on:mousedown|preventDefault on:click={() => (index = i)} on:dblclick={() => finish(true)}>{item.label}</button>
           {:else}
             <p class="pick-empty">{$dialog.empty}</p>
           {/each}

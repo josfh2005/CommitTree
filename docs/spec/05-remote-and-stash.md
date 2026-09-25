@@ -61,7 +61,9 @@ count is zero.
 
 In a narrow window the title and path ellipsize first; once the header is
 narrower than 860 px the labels hide and the buttons become icon-only,
-keeping their name in the tooltip.
+keeping their name in the tooltip. Below 480 px they tighten further, and if
+even that does not fit (the window's minimum width with the side column
+open) the toolbar scrolls sideways instead of spilling under the side column.
 
 Fetch has no conflict-related restriction because it only updates the
 repository's knowledge of the remote's refs; it never changes a branch, the
