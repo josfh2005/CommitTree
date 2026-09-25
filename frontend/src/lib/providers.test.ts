@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { chatBlocker, modelForProvider, modelHint, needsKey, processingNotice, PROVIDERS, settingsHaveModels, usesOllama } from './providers'
+import { chatBlocker, chatModelOptions, modelForProvider, modelHint, needsKey, processingNotice, PROVIDERS, settingsHaveModels, usesOllama } from './providers'
 import type { AISettings, AIStatus } from './types'
 
 const status = (over: Partial<AIStatus> = {}): AIStatus => ({
@@ -117,5 +117,22 @@ describe('chatBlocker', () => {
     expect(chatBlocker('openai', status())).toEqual({ kind: 'no_key', message: 'Add an API key for OpenAI in Settings.' })
     const broken = status({ providers: [{ provider: 'openai', hasKey: false, keyHint: '', error: 'keychain locked' }] })
     expect(chatBlocker('openai', broken)).toEqual({ kind: 'no_key', message: 'keychain locked' })
+  })
+})
+
+describe('chatModelOptions', () => {
+  const installed = [{ name: 'qwen2.5:7b', size: 1 }, { name: 'llama3.1:8b', size: 1 }] as AIStatus['ollama']['models']
+
+  it('lists running Ollama and hosted providers with a key, in PROVIDERS order', () => {
+    const st = status({ ollama: { running: true, url: '', chatModel: '', models: installed, chatModelInstalled: true } })
+    expect(chatModelOptions(st, { anthropic: ['claude-opus-5', 'claude-sonnet-5'] })).toEqual([
+      { provider: 'ollama', label: 'Ollama', models: ['qwen2.5:7b', 'llama3.1:8b'] },
+      { provider: 'anthropic', label: 'Anthropic', models: ['claude-opus-5', 'claude-sonnet-5'] },
+    ])
+  })
+
+  it('leaves out Ollama when it is not running, keyless providers and empty lists', () => {
+    const st = status({ ollama: { running: false, url: '', chatModel: '', models: installed, chatModelInstalled: false } })
+    expect(chatModelOptions(st, { openai: ['gpt-5'], anthropic: [] })).toEqual([])
   })
 })

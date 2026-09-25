@@ -383,7 +383,8 @@ func (a *App) SendChat(repoID, text, runID string) error {
 			Emit: a.emit,
 		}
 		updated, runErr := agent.Execute(ctx, run, history)
-		stampAnswer(updated[len(history):], cfg.ChatProvider, cfg.ChatModel)
+		at := answerTime()
+		stampAnswer(updated[len(history):], cfg.ChatProvider, cfg.ChatModel, at)
 		saveErr := a.ai.deps.Chats.Save(repoID, updated)
 		// Release the repo before announcing the end so a new message can
 		// be sent as soon as the frontend sees done/error.
@@ -394,21 +395,24 @@ func (a *App) SendChat(repoID, text, runID string) error {
 		case saveErr != nil:
 			a.emit(agent.EventError, agent.ErrorEvent{RepoID: repoID, RunID: runID, Message: saveErr.Error(), Code: "other"})
 		default:
-			a.emit(agent.EventDone, agent.DoneEvent{RepoID: repoID, RunID: runID})
+			a.emit(agent.EventDone, agent.DoneEvent{RepoID: repoID, RunID: runID, At: at})
 		}
 	}()
 	return nil
 }
 
 // stampAnswer records on the assistant messages of an answer which provider
-// and model produced them.
-func stampAnswer(answer []ai.Message, provider, model string) {
+// and model produced them, and when it finished.
+func stampAnswer(answer []ai.Message, provider, model, at string) {
 	for i := range answer {
 		if answer[i].Role == ai.RoleAssistant {
-			answer[i].Provider, answer[i].Model = provider, model
+			answer[i].Provider, answer[i].Model, answer[i].At = provider, model, at
 		}
 	}
 }
+
+// answerTime is the time stored on an answer that just finished.
+func answerTime() string { return time.Now().UTC().Format(time.RFC3339) }
 
 func chatErrorCode(err error) string {
 	switch {
@@ -575,11 +579,12 @@ func (a *App) explainTask(repoID, provider, runID, promptName string, build func
 
 	go func() {
 		answer, runErr := streamIntoString(ctx, a, repoID, runID, responder, instructions, prompt)
+		at := answerTime()
 		var saveErr error
 		if answer != "" || runErr == nil {
 			saveErr = a.ai.deps.Chats.Save(repoID, append(history, ai.Message{
 				Role: ai.RoleAssistant, Content: answer, Stopped: runErr != nil && errors.Is(runErr, context.Canceled),
-				Provider: provider, Model: cfg.TaskModel,
+				Provider: provider, Model: cfg.TaskModel, At: at,
 			}))
 		}
 		finish()
@@ -589,7 +594,7 @@ func (a *App) explainTask(repoID, provider, runID, promptName string, build func
 		case saveErr != nil:
 			a.emit(agent.EventError, agent.ErrorEvent{RepoID: repoID, RunID: runID, Message: saveErr.Error(), Code: "other"})
 		default:
-			a.emit(agent.EventDone, agent.DoneEvent{RepoID: repoID, RunID: runID})
+			a.emit(agent.EventDone, agent.DoneEvent{RepoID: repoID, RunID: runID, At: at})
 		}
 	}()
 	return nil

@@ -180,6 +180,7 @@ export interface AIMessage {
   stopped?: boolean
   provider?: string
   model?: string
+  at?: string
 }
 
 export type ProviderName = 'ollama' | 'openai' | 'anthropic'
@@ -244,7 +245,7 @@ export interface ChatDeltaEvent { repoID: string; runID: string; text: string }
 export interface ChatToolEvent { repoID: string; runID: string; name: string; args: Record<string, unknown> | null }
 export interface ChatToolResultEvent { repoID: string; runID: string; name: string; summary: string }
 export interface ChatNoticeEvent { repoID: string; runID: string; text: string }
-export interface ChatDoneEvent { repoID: string; runID: string }
+export interface ChatDoneEvent { repoID: string; runID: string; at?: string }
 export interface ChatErrorEvent { repoID: string; runID: string; message: string; code: string }
 export interface ChatConfirmEvent { repoID: string; runID: string; confirmID: string; tool: string; title: string; details: string[] }
 export interface RepoChangedEvent { repoID: string }

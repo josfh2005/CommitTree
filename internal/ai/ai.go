@@ -29,6 +29,8 @@ type Message struct {
 	// they were recorded.
 	Provider string `json:"provider,omitempty"`
 	Model    string `json:"model,omitempty"`
+	// At is when an assistant answer finished, RFC 3339.
+	At string `json:"at,omitempty"`
 }
 
 // ToolSpec describes a callable tool; Parameters is a JSON Schema object.

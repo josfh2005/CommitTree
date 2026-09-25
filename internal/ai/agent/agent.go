@@ -66,6 +66,8 @@ type ToolResultEvent struct {
 type DoneEvent struct {
 	RepoID string `json:"repoID"`
 	RunID  string `json:"runID"`
+	// At is when the answer finished, as stored on it (RFC 3339).
+	At string `json:"at,omitempty"`
 }
 
 type ErrorEvent struct {

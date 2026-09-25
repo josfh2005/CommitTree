@@ -326,7 +326,7 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 		return err
 	}
 
-	a.emit(agent.EventStart, agent.StartEvent{RepoID: repoID, RunID: runID, Text: text})
+	a.emit(agent.EventStart, agent.StartEvent{RepoID: repoID, RunID: runID, Text: text, Provider: cfg.ChatProvider, Model: cfg.ChatModel})
 
 	go func() {
 		run := agent.Run{
@@ -343,6 +343,8 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 			Emit: a.emit,
 		}
 		updated, runErr := agent.Execute(ctx, run, history)
+		at := answerTime()
+		stampAnswer(updated[len(history):], cfg.ChatProvider, cfg.ChatModel, at)
 		saveErr := a.ai.deps.Chats.Save(repoID, updated)
 		// Release the repo before announcing the end so a new message can be
 		// sent, or the merge acted on, as soon as the frontend sees done/error.
@@ -362,7 +364,7 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 		case saveErr != nil:
 			a.emit(agent.EventError, agent.ErrorEvent{RepoID: repoID, RunID: runID, Message: saveErr.Error(), Code: "other"})
 		default:
-			a.emit(agent.EventDone, agent.DoneEvent{RepoID: repoID, RunID: runID})
+			a.emit(agent.EventDone, agent.DoneEvent{RepoID: repoID, RunID: runID, At: at})
 		}
 	}()
 	return nil

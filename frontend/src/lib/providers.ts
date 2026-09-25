@@ -92,3 +92,29 @@ export function chatBlocker(chatProvider: ProviderName, status: AIStatus): ChatB
   if (found?.hasKey) return null
   return { kind: 'no_key', message: found?.error || `Add an API key for ${providerShortLabel(chatProvider)} in Settings.` }
 }
+
+export interface ChatModelOption {
+  provider: ProviderName
+  label: string
+  models: string[]
+}
+
+/**
+ * chatModelOptions is what the chat's model picker offers: Ollama's
+ * installed models when it is running, and each hosted provider that has a
+ * key with the models listed for it (hostedModels, fetched by the caller).
+ * A provider with nothing to pick is left out.
+ */
+export function chatModelOptions(status: AIStatus, hostedModels: Partial<Record<ProviderName, string[]>>): ChatModelOption[] {
+  const out: ChatModelOption[] = []
+  for (const { value } of PROVIDERS) {
+    let models: string[] = []
+    if (!needsKey(value)) {
+      if (status.ollama.running) models = status.ollama.models.map((m) => m.name)
+    } else if (status.providers.find((p) => p.provider === value)?.hasKey) {
+      models = hostedModels[value] ?? []
+    }
+    if (models.length > 0) out.push({ provider: value, label: providerShortLabel(value), models })
+  }
+  return out
+}

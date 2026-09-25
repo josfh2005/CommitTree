@@ -182,7 +182,11 @@ func TestResolveConflictsStreamsIntoTheConversation(t *testing.T) {
 	if err := a.ResolveConflicts(id, "run1"); err != nil {
 		t.Fatal(err)
 	}
-	ev.wait(t, agent.EventDone)
+	start := ev.wait(t, agent.EventStart).data.(agent.StartEvent)
+	if start.Provider != "ollama" || start.Model != "qwen2.5:7b" {
+		t.Fatalf("start = %#v", start)
+	}
+	done := ev.wait(t, agent.EventDone).data.(agent.DoneEvent)
 
 	messages, err := a.GetChat(id)
 	if err != nil {
@@ -190,6 +194,10 @@ func TestResolveConflictsStreamsIntoTheConversation(t *testing.T) {
 	}
 	if len(messages) < 2 || messages[0].Role != ai.RoleUser {
 		t.Fatalf("messages = %+v", messages)
+	}
+	last := messages[len(messages)-1]
+	if last.Role != ai.RoleAssistant || last.Provider != "ollama" || last.Model != "qwen2.5:7b" || last.At == "" || last.At != done.At {
+		t.Fatalf("answer = %+v, done = %+v", last, done)
 	}
 	if !strings.Contains(messages[0].Content, "feature") || !strings.Contains(messages[0].Content, "main") {
 		t.Errorf("the question should name both branches: %q", messages[0].Content)

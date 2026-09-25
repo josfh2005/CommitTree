@@ -182,9 +182,12 @@ func TestSendChatRunsToolsStreamsAndSaves(t *testing.T) {
 	if err := a.SendChat(id, "¿qué ramas hay?", "run-1"); err != nil {
 		t.Fatal(err)
 	}
-	done := ev.wait(t, agent.EventDone)
-	if done.data != (agent.DoneEvent{RepoID: id, RunID: "run-1"}) {
-		t.Fatalf("done = %#v", done.data)
+	done := ev.wait(t, agent.EventDone).data.(agent.DoneEvent)
+	if done.RepoID != id || done.RunID != "run-1" {
+		t.Fatalf("done = %#v", done)
+	}
+	if _, err := time.Parse(time.RFC3339, done.At); err != nil {
+		t.Fatalf("done.At = %q: %v", done.At, err)
 	}
 	names := strings.Join(ev.names(), ",")
 	if names != "chat:start,chat:tool,chat:tool_result,chat:delta,chat:delta,chat:done" {
@@ -206,10 +209,10 @@ func TestSendChatRunsToolsStreamsAndSaves(t *testing.T) {
 	// question and the tool result don't.
 	for i, m := range history {
 		want := m.Role == ai.RoleAssistant
-		if got := m.Provider == "ollama" && m.Model == "qwen2.5:7b"; got != want {
+		if got := m.Provider == "ollama" && m.Model == "qwen2.5:7b" && m.At == done.At; got != want {
 			t.Fatalf("history[%d] provider/model = %q/%q", i, m.Provider, m.Model)
 		}
-		if !want && (m.Provider != "" || m.Model != "") {
+		if !want && (m.Provider != "" || m.Model != "" || m.At != "") {
 			t.Fatalf("history[%d] provider/model = %q/%q, want none", i, m.Provider, m.Model)
 		}
 	}
@@ -293,7 +296,10 @@ func TestExplainInChatWritesTheAnswerToTheConversation(t *testing.T) {
 		start.Provider != "ollama" || start.Model != "qwen2.5:7b" {
 		t.Fatalf("start = %#v", start)
 	}
-	ev.wait(t, agent.EventDone)
+	done := ev.wait(t, agent.EventDone).data.(agent.DoneEvent)
+	if _, err := time.Parse(time.RFC3339, done.At); err != nil {
+		t.Fatalf("done.At = %q: %v", done.At, err)
+	}
 
 	names := strings.Join(ev.names(), ",")
 	if !strings.Contains(names, agent.EventDelta) || strings.Contains(names, "explain:") {
@@ -311,7 +317,7 @@ func TestExplainInChatWritesTheAnswerToTheConversation(t *testing.T) {
 		t.Fatalf("history = %#v", history)
 	}
 	if history[1].Role != ai.RoleAssistant || history[1].Content != "Hay ramas." ||
-		history[1].Provider != "ollama" || history[1].Model != "qwen2.5:7b" || history[0].Provider != "" {
+		history[1].Provider != "ollama" || history[1].Model != "qwen2.5:7b" || history[1].At != done.At || history[0].Provider != "" {
 		t.Fatalf("answer = %#v", history[1])
 	}
 }

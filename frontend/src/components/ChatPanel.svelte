@@ -2,13 +2,15 @@
   import { onDestroy, tick } from 'svelte'
   import { EventsOn } from '../../wailsjs/runtime/runtime'
   import Icon from './Icon.svelte'
+  import ModelPicker from './ModelPicker.svelte'
   import { api } from '../lib/api'
   import { answeredBy, applyEvent, CHAT_EVENTS, confirmResultText, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from '../lib/chat'
+  import { relativeDate } from '../lib/format'
   import { renderMarkdown } from '../lib/markdown'
   import { chatBlocker } from '../lib/providers'
   import { aiSettings, chatOpen, chatPreparing, jumpTo, selectedRepo, settingsOpen } from '../lib/stores'
   import type { AIStatus } from '../lib/types'
-  import { errorMessage, toast } from '../lib/ui'
+  import { copyText, errorMessage, toast } from '../lib/ui'
 
   let state: ChatState = emptyChat('')
   let status: AIStatus | null = null
@@ -26,6 +28,11 @@
     }),
   )
   onDestroy(() => offs.forEach((off) => off()))
+
+  // Ticks the answers' "2m ago" along.
+  let now = new Date()
+  const clock = setInterval(() => (now = new Date()), 60_000)
+  onDestroy(() => clearInterval(clock))
 
   $: load($selectedRepo?.id ?? '')
   // An explanation takes the chat while its context is still being read,
@@ -219,7 +226,13 @@
           {#each item.notices ?? [] as notice}<div class="notice">{notice}</div>{/each}
           {#if item.stopped}<div class="note">Stopped</div>{/if}
           {#if item.error}<div class="error">{errorText(item.error)}</div>{/if}
-          {#if answeredBy(item)}<div class="by">{answeredBy(item)}</div>{/if}
+          {#if item.text && !(running && i === state.items.length - 1)}
+            <div class="answer-actions">
+              <button class="icon-btn" title="Copy" on:click={() => copyText(item.text)}><Icon name="copy" size={13} /></button>
+              {#if item.at}<span title={new Date(item.at).toLocaleString()}>{relativeDate(item.at, now)}</span>{/if}
+              {#if answeredBy(item)}<span class="ellipsis">{answeredBy(item)}</span>{/if}
+            </div>
+          {/if}
         </div>
       {/if}
     {/each}
@@ -234,11 +247,15 @@
       on:keydown={onKey}
       disabled={!$selectedRepo || !ready}
     ></textarea>
-    {#if running}
-      <button class="icon-btn" title="Stop" on:click={stop}><Icon name="stop" /></button>
-    {:else}
-      <button class="icon-btn" title="Send" disabled={!input.trim() || !ready} on:click={send}><Icon name="send" /></button>
-    {/if}
+    <div class="composer-bar">
+      <ModelPicker {status} disabled={running} onChange={refreshStatus} />
+      <span class="spacer"></span>
+      {#if running}
+        <button class="icon-btn" title="Stop" on:click={stop}><Icon name="stop" /></button>
+      {:else}
+        <button class="icon-btn" title="Send" disabled={!input.trim() || !ready} on:click={send}><Icon name="send" /></button>
+      {/if}
+    </div>
   </div>
 </div>
 
@@ -274,7 +291,9 @@
   /* The app's own word, not the model's: after the text, and marked apart. */
   .notice { margin-top: 6px; padding: 4px 8px; border-left: 2px solid var(--accent); font-size: 12px; color: var(--muted); }
   .error { font-size: 12px; color: var(--danger); }
-  .by { margin-top: 4px; font-size: 11px; color: var(--faint); }
-  .composer { display: flex; align-items: flex-end; gap: 6px; margin: 12px; padding: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
-  textarea { flex: 1; resize: none; border: 0; padding: 2px 4px; background: transparent; }
+  .answer-actions { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 2px; font-size: 11px; color: var(--faint); }
+  .answer-actions .icon-btn { width: 22px; height: 22px; margin-left: -4px; }
+  .composer { display: flex; flex-direction: column; gap: 4px; margin: 12px; padding: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+  .composer-bar { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  textarea { resize: none; border: 0; padding: 2px 4px; background: transparent; }
 </style>

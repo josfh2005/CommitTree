@@ -1,5 +1,5 @@
 import { providerShortLabel } from './providers'
-import type { AIMessage, ChatConfirmEvent, ChatDeltaEvent, ChatErrorEvent, ChatNoticeEvent, ChatStartEvent, ChatToolEvent, ChatToolResultEvent } from './types'
+import type { AIMessage, ChatConfirmEvent, ChatDeltaEvent, ChatDoneEvent, ChatErrorEvent, ChatNoticeEvent, ChatStartEvent, ChatToolEvent, ChatToolResultEvent } from './types'
 
 export interface ChatToolUse {
   name: string
@@ -24,6 +24,9 @@ export interface ChatItem {
   // was recorded.
   provider?: string
   model?: string
+  // When the answer finished (RFC 3339); absent while it runs and on
+  // answers stored before it was recorded.
+  at?: string
 }
 
 export interface ChatState {
@@ -69,6 +72,7 @@ export function fromMessages(repoID: string, messages: AIMessage[]): ChatState {
       last.provider = m.provider
       last.model = m.model
     }
+    if (m.at) last.at = m.at
     for (const call of m.toolCalls ?? []) last.tools.push({ name: call.name, args: call.args })
     if (m.stopped) last.stopped = true
   }
@@ -88,7 +92,7 @@ export function startRun(state: ChatState, text: string, runID: string): ChatSta
 // being silently dropped.
 export const CHAT_EVENTS = ['chat:start', 'chat:delta', 'chat:tool', 'chat:tool_result', 'chat:confirm', 'chat:notice', 'chat:done', 'chat:error'] as const
 
-type Payload = ChatStartEvent | ChatDeltaEvent | ChatToolEvent | ChatToolResultEvent | ChatConfirmEvent | ChatNoticeEvent | ChatErrorEvent | { repoID: string; runID: string }
+type Payload = ChatStartEvent | ChatDeltaEvent | ChatToolEvent | ChatToolResultEvent | ChatConfirmEvent | ChatNoticeEvent | ChatErrorEvent | ChatDoneEvent
 
 export function confirmState(summary: string): 'done' | 'rejected' | 'failed' {
   if (summary.startsWith('done')) return 'done'
@@ -208,8 +212,11 @@ export function applyEvent(state: ChatState, name: string, payload: Payload): Ch
       last.notices = [...(last.notices ?? []), p.text]
       return { ...state, items }
     }
-    case 'chat:done':
+    case 'chat:done': {
+      const at = (payload as ChatDoneEvent).at
+      if (at) last.at = at
       return { ...state, runID: null, items }
+    }
     case 'chat:error': {
       const p = payload as ChatErrorEvent
       last.error = { message: p.message, code: p.code }

@@ -24,6 +24,7 @@ export namespace ai {
 	    stopped?: boolean;
 	    provider?: string;
 	    model?: string;
+	    at?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Message(source);
@@ -38,6 +39,7 @@ export namespace ai {
 	        this.stopped = source["stopped"];
 	        this.provider = source["provider"];
 	        this.model = source["model"];
+	        this.at = source["at"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

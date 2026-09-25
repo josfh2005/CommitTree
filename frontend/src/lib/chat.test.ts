@@ -37,6 +37,17 @@ describe('fromMessages', () => {
     expect(items[1]).toEqual({ role: 'assistant', text: 'stored before it was recorded', tools: [] })
     expect(items[3]).toMatchObject({ provider: 'anthropic', model: 'claude-opus-5', text: 'On main.' })
   })
+
+  it('keeps when each answer finished', () => {
+    const items = fromMessages('r1', [
+      { role: 'user', content: 'q' },
+      { role: 'assistant', content: 'old answer' },
+      { role: 'user', content: 'q2' },
+      { role: 'assistant', content: 'new answer', at: '2026-09-25T10:00:00Z' },
+    ]).items
+    expect(items[1].at).toBeUndefined()
+    expect(items[3].at).toBe('2026-09-25T10:00:00Z')
+  })
 })
 
 describe('applyEvent', () => {
@@ -66,6 +77,11 @@ describe('applyEvent', () => {
       text: 'Found one.',
       tools: [{ name: 'search_log', args: { text: 'NEXO-1' }, summary: 'a1b2c3d fix' }],
     })
+  })
+
+  it('stamps the answer with the time chat:done carries', () => {
+    const s = applyEvent(running(), 'chat:done', { repoID: 'r1', runID: 'run1', at: '2026-09-25T10:00:00Z' })
+    expect(s.items[1].at).toBe('2026-09-25T10:00:00Z')
   })
 
   it('starts a run from a chat:start event (explain from the log)', () => {
