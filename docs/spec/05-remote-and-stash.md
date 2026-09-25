@@ -30,14 +30,38 @@ the current working tree.
 
 ## Fetch, pull and push
 
-The toolbar offers three remote actions, each disabled under different
-conditions:
+The log view's header carries the repository toolbar: a ~60 px header with
+the repository name and, under it, its path on the left, and on the right
+labelled buttons (a 20 px outline icon with its name under it) in groups —
+Commit, Stash · Fetch, Pull, Push · Branch, Merge · Terminal, Finder
+("Folder" off macOS), Chat. Tag, rebase and cherry-pick are not on it: they
+act on a selected commit and stay in context menus. A missing (moved or
+deleted) repository shows no toolbar. Every disabled button's tooltip says
+why it is disabled; an enabled one's says what it does.
 
-| Action | Disabled when | Touches the working tree or index? |
+| Button | Action | Disabled when (tooltip) |
 |---|---|---|
-| Fetch | another write operation is already running | No |
-| Pull | another write operation is running, or the repository has an unresolved conflict of any kind | Yes |
-| Push | same as Pull | No (moves refs only) |
+| Commit | Selects the "Uncommitted changes" row, which opens the Changes view, and puts the cursor in the commit message box | another operation is running (the busy label, e.g. "Pushing…"); a merge, rebase or stash conflict is in progress ("Resolve the conflict first"); nothing is uncommitted ("Nothing to commit") |
+| Stash | The "Stash changes" dialog | busy; a conflict is in progress; nothing is uncommitted ("Nothing to stash") |
+| Fetch | Fetch, below | busy |
+| Pull | Pull, below; the behind count as a badge | busy; a conflict is in progress |
+| Push | Push, below; the ahead count as a badge | same as Pull |
+| Branch | The "New branch" dialog, from HEAD (a detached HEAD's commit included) | busy |
+| Merge | The branch picker below, then the usual merge confirmation | busy; a conflict is in progress; detached HEAD ("Check out a branch first") |
+| Terminal | Shows or hides the terminal panel; highlighted while open | never |
+| Finder / Folder | Opens the repository folder | never |
+| Chat | Shows or hides the chat panel; highlighted while open | never |
+
+The busy reason comes first, then the conflict, then the button's own rule.
+"Uncommitted" counts staged, unstaged and untracked files, as the log's
+uncommitted row does. A stash conflict dismissed with "Done" still counts as
+a conflict here, and a "Resolve conflicts" button left of the toolbar is the
+way back into it (see "Stash conflicts" below). Badges are hidden when their
+count is zero.
+
+In a narrow window the title and path ellipsize first; once the header is
+narrower than 860 px the labels hide and the buttons become icon-only,
+keeping their name in the tooltip.
 
 Fetch has no conflict-related restriction because it only updates the
 repository's knowledge of the remote's refs; it never changes a branch, the
@@ -49,8 +73,20 @@ can safely act on. Both also refuse while any other write operation for the
 repository is in progress — the application allows only one write at a time
 per repository.
 
-The toolbar shows the ahead count as a badge on Push and the behind count as
-a badge on Pull, each hidden when the count is zero.
+### Merge branch picker
+
+The toolbar's Merge opens a dialog titled "Merge into <current branch>": a
+search field ("Search branches…", focused), a list and Cancel / Merge. The
+list holds the local branches under "Local", then the remote-tracking ones
+as `remote/name` under "Remote"; the current branch and a remote's `HEAD`
+are left out. Typing filters the list by any part of the name, ignoring case
+(`log` finds `feature/login`); with no match it reads "No branches match"
+and Merge is disabled. The first item is selected when the dialog opens and
+after every change to the search; ↑/↓ move the selection, Enter or a double
+click confirms, Escape or a click outside cancels. Confirming runs the same
+merge as the branch menu's "Merge `<branch>` into `<head>`": its
+confirmation, its "already up to date" message, its conflicts and submodule
+warnings are unchanged.
 
 ### Fetch
 

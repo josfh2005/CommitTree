@@ -1,41 +1,61 @@
 <script lang="ts">
   import Icon from './Icon.svelte'
-  import { fetchRemote, pull, push } from '../lib/actions'
-  import { canSync } from '../lib/remote'
-  import { busy, mergeState, remoteInfo, stashConflictDismissed } from '../lib/stores'
+  import { fetchRemote, newBranch, openRepoFolder, pickAndMerge, pull, push, startCommit, stashChanges } from '../lib/actions'
+  import { toolbarItems, type ToolbarGroup, type ToolbarId } from '../lib/toolbar'
+  import { busy, chatOpen, mergeState, platform, refs, remoteInfo, stashConflictDismissed, terminalOpen, worktreeState } from '../lib/stores'
 
   export let repoId: string
 
-  $: syncable = canSync($mergeState, $busy)
+  $: items = toolbarItems({ refs: $refs, worktree: $worktreeState, merge: $mergeState, busy: $busy, remote: $remoteInfo, terminalOpen: $terminalOpen, chatOpen: $chatOpen, platform: $platform })
+  const GROUPS: ToolbarGroup[] = ['work', 'sync', 'refs', 'tools']
+
+  function act(id: ToolbarId) {
+    switch (id) {
+      case 'commit': return startCommit()
+      case 'stash': return stashChanges(repoId)
+      case 'fetch': return fetchRemote(repoId)
+      case 'pull': return pull(repoId)
+      case 'push': return push(repoId)
+      case 'branch': return newBranch(repoId, $refs?.headHash ?? 'HEAD', $refs?.head ?? 'HEAD')
+      case 'merge': return pickAndMerge(repoId)
+      case 'terminal': return terminalOpen.update((open) => !open)
+      case 'folder': return openRepoFolder(repoId)
+      case 'chat': return chatOpen.update((open) => !open)
+    }
+  }
 </script>
 
 <div class="toolbar">
-  <button class="icon-btn" title="Fetch" disabled={!!$busy} on:click={() => fetchRemote(repoId)}>
-    <Icon name="refresh" size={14} />
-  </button>
-  <button class="icon-btn" title="Pull" disabled={!syncable} on:click={() => pull(repoId)}>
-    <Icon name="download" size={14} />
-    {#if $remoteInfo?.behind}<span class="badge">{$remoteInfo.behind}</span>{/if}
-  </button>
-  <button class="icon-btn" title="Push" disabled={!syncable} on:click={() => push(repoId)}>
-    <Icon name="upload" size={14} />
-    {#if $remoteInfo?.ahead}<span class="badge">{$remoteInfo.ahead}</span>{/if}
-  </button>
   <!-- The only way back into a stash conflict the user dismissed with
        "Done": without it the conflict view would be unreachable until the
        files happen to resolve. -->
   {#if $mergeState?.kind === 'stash' && $stashConflictDismissed}
     <button class="btn" on:click={() => stashConflictDismissed.set(false)}>Resolve conflicts</button>
   {/if}
+  {#each GROUPS as group, g}
+    {#if g > 0}<span class="sep"></span>{/if}
+    {#each items.filter((i) => i.group === group) as item (item.id)}
+      <button class="tool" class:active={item.active} title={item.title} aria-label={item.label} disabled={!item.enabled} on:click={() => act(item.id)}>
+        <span class="icon"><Icon name={item.icon} size={20} />{#if item.badge}<span class="badge">{item.badge}</span>{/if}</span>
+        <span class="label">{item.label}</span>
+      </button>
+    {/each}
+  {/each}
 </div>
 
 <style>
   .toolbar { display: flex; align-items: center; gap: 2px; flex: none; }
-  /* .icon-btn itself is global (theme.css:88) — only the badge anchor is
-     local, so the shared hover/disabled styling keeps applying. */
-  .toolbar :global(.icon-btn) { position: relative; }
-  .badge {
-    position: absolute; top: -3px; right: -3px; font-size: 9px; line-height: 1;
-    padding: 1px 3px; border-radius: 6px; background: var(--accent); color: white;
+  .tool { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 50px; padding: 4px 6px; border-radius: 8px; color: var(--muted); font-size: 11px; }
+  .tool:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+  .tool:disabled { opacity: 0.4; }
+  .tool.active { color: var(--accent); }
+  .icon { position: relative; display: inline-flex; }
+  .badge { position: absolute; top: -4px; right: -8px; font-size: 9px; line-height: 1; padding: 1px 3px; border-radius: 6px; background: var(--accent); color: white; }
+  .sep { width: 1px; height: 28px; margin: 0 6px; background: var(--border); }
+  /* The header is the container (LogView). Too narrow for labelled buttons:
+     icons only, the name stays in the tooltip. */
+  @container repo-header (max-width: 860px) {
+    .label { display: none; }
+    .tool { min-width: 32px; }
   }
 </style>

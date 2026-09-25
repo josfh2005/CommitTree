@@ -2,15 +2,13 @@
   import ChangesView from './ChangesView.svelte'
   import CommitDetails from './CommitDetails.svelte'
   import FilterBar from './FilterBar.svelte'
-  import Icon from './Icon.svelte'
   import LogList from './LogList.svelte'
   import MergeView from './MergeView.svelte'
   import Splitter from './Splitter.svelte'
   import Toolbar from './Toolbar.svelte'
   import { conflictOwnsScreen } from '../lib/remote'
-  import { terminalShortcutLabel } from '../lib/terminal'
   import { uncommittedCount } from '../lib/uncommitted'
-  import { chatOpen, detailsHeight, mergeState, platform, repos, selectRepo, selectedHash, selectedRepo, stashConflictDismissed, terminalOpen, uncommittedSelected, worktreeState } from '../lib/stores'
+  import { detailsHeight, mergeState, repos, selectRepo, selectedHash, selectedRepo, stashConflictDismissed, uncommittedSelected, worktreeState } from '../lib/stores'
 
   // The row can be selected a moment before the tree turns out clean (LogList
   // then moves the selection to HEAD); never open an empty Changes pane.
@@ -26,22 +24,19 @@
   <header class="drag">
     <div class="title">
       {#if $selectedRepo && parent}
-        <button class="crumb" on:click={() => selectRepo(parent.id)}>{parent.name}</button>
-        <span class="sep">›</span>
-        <span class="path ellipsis">{$selectedRepo.subPath}</span>
+        <div class="crumbs">
+          <button class="crumb" on:click={() => selectRepo(parent.id)}>{parent.name}</button>
+          <span class="sep">›</span>
+          <span class="ellipsis">{$selectedRepo.subPath}</span>
+        </div>
+        <span class="path ellipsis">{$selectedRepo.path}</span>
       {:else if $selectedRepo}
-        <span>{$selectedRepo.name}</span>
+        <span class="name ellipsis">{$selectedRepo.name}</span>
         <span class="path ellipsis">{$selectedRepo.path}</span>
       {/if}
     </div>
     {#if $selectedRepo && !$selectedRepo.missing}
       <Toolbar repoId={$selectedRepo.id} />
-    {/if}
-    {#if !$terminalOpen}
-      <button class="btn terminal-btn" title={'Show terminal (' + terminalShortcutLabel($platform) + ' or Ctrl+`)'} disabled={!$selectedRepo || $selectedRepo.missing} on:click={() => terminalOpen.set(true)}><Icon name="terminal" /><span>Terminal</span></button>
-    {/if}
-    {#if !$chatOpen}
-      <button class="icon-btn" title="Show chat" on:click={() => chatOpen.set(true)}><Icon name="panel-right" /></button>
     {/if}
   </header>
 
@@ -71,9 +66,11 @@
 
 <style>
   .log-view { display: flex; flex-direction: column; height: 100%; }
-  header { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 10px 0 14px; flex: none; }
-  .title { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; font-weight: 500; }
-  .terminal-btn { display: inline-flex; align-items: center; gap: 6px; }
+  /* The toolbar's container queries measure this header (Toolbar.svelte). */
+  header { display: flex; align-items: center; gap: 8px; height: 60px; padding: 0 10px 0 14px; flex: none; container-type: inline-size; container-name: repo-header; }
+  .title { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 0; font-weight: 500; }
+  .title > * { max-width: 100%; }
+  .crumbs { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
   .path { font-weight: 400; font-size: 12px; color: var(--faint); }
   .crumb { background: none; border: none; padding: 0; font: inherit; font-weight: 500; color: var(--text); cursor: pointer; }
   .crumb:hover { text-decoration: underline; }

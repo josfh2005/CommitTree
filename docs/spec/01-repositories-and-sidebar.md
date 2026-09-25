@@ -330,6 +330,10 @@ held, or if it is already the current branch); its context menu offers:
 | New tag here… | Never. |
 | Delete… (local) / Delete on remote… (remote-tracking) | It is the current branch. |
 
+The toolbar's Merge button offers the same merge for any local or
+remote-tracking branch through a searchable picker (see
+`05-remote-and-stash.md`, "Merge branch picker").
+
 A disabled entry that has a reason shows it as a tooltip.
 
 ### Remotes

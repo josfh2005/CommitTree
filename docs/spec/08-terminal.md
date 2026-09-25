@@ -49,10 +49,10 @@ hides it or opens a new tab.
 The terminal lives in the same column as the chat panel, below it, separated
 by a draggable divider; its height is remembered between sessions. The chat
 and the terminal open and close independently of each other — closing one
-leaves the other filling the whole column. Two toggles open the terminal: a
-button labelled "Terminal" (icon and text, so it is found without hunting)
-in the log view's header, disabled when no repository is selected or the
-selected one is missing, whose tooltip names the shortcuts; and the same
+leaves the other filling the whole column. Two toggles open the terminal: the
+repository toolbar's "Terminal" button (see `05-remote-and-stash.md`),
+highlighted while the terminal is open, whose tooltip names the shortcuts
+and which is not shown while the selected repository is missing; and the
 button in the terminal panel's own header to hide it again. Two shortcuts
 toggle it from anywhere in the window, both matched on the physical key
 rather than the character it produces:
