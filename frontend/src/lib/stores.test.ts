@@ -226,3 +226,14 @@ describe('blame navigation', () => {
     expect(get(blameStack)).toEqual([])
   })
 })
+
+describe('focusCommitBox', () => {
+  it('is dropped when the uncommitted row loses the selection', async () => {
+    const { focusCommitBox } = await import('./stores')
+    selectUncommitted()
+    focusCommitBox.set(true)
+    selectedHash.set('abc')
+    expect(get(focusCommitBox)).toBe(false)
+    selectedHash.set('')
+  })
+})

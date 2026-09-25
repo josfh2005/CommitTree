@@ -174,6 +174,11 @@ export const focusCommitBox = writable(false)
 selectedHash.subscribe((hash) => {
   if (hash) uncommittedSelected.set(false)
 })
+// A focus request whose Changes view never came up (the row lost the
+// selection first) must not fire later on an unrelated commit box.
+uncommittedSelected.subscribe((selected) => {
+  if (!selected) focusCommitBox.set(false)
+})
 
 export function selectUncommitted() {
   selectedHash.set('')

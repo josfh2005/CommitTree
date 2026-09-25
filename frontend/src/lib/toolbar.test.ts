@@ -85,3 +85,19 @@ describe('mergeCandidates', () => {
     expect(mergeCandidates(null)).toEqual([])
   })
 })
+
+describe('toolbarItems, follow-ups', () => {
+  const b = (name: string, current = false) => ({ name, remote: '', hash: 'h', current, upstream: '' })
+  it('disables Merge when there is no other branch to merge', () => {
+    expect(item({ refs: refs({ local: [b('main', true)] }) }, 'merge')).toMatchObject({ enabled: false, title: 'No other branches' })
+    expect(item({ refs: refs({ local: [b('main', true), b('dev')] }) }, 'merge').enabled).toBe(true)
+  })
+
+  it('asks to finish the operation once its conflicts are all resolved', () => {
+    const done = (kind: MergeState['kind']): MergeState => ({ ...conflict(kind), conflicts: [] })
+    expect(item({ worktree: dirty, merge: done('merge') }, 'commit').title).toBe('Finish the merge first')
+    expect(item({ merge: done('rebase') }, 'push').title).toBe('Finish the rebase first')
+    expect(item({ merge: done('am') }, 'pull').title).toBe('Finish the patch first')
+    expect(item({ worktree: dirty, merge: done('stash') }, 'stash').title).toBe('Resolve the conflict first')
+  })
+})

@@ -35,7 +35,7 @@
   {#each GROUPS as group, g}
     {#if g > 0}<span class="sep"></span>{/if}
     {#each items.filter((i) => i.group === group) as item (item.id)}
-      <button class="tool" class:active={item.active} title={item.title} aria-label={item.label} disabled={!item.enabled} on:click={() => act(item.id)}>
+      <button class="tool" class:toggle={item.group === 'tools' && item.id !== 'folder'} class:active={item.active} aria-pressed={item.group === 'tools' && item.id !== 'folder' ? item.active : undefined} title={item.title} aria-label={item.label} disabled={!item.enabled} on:click={() => act(item.id)}>
         <span class="icon"><Icon name={item.icon} size={20} />{#if item.badge}<span class="badge">{item.badge}</span>{/if}</span>
         <span class="label">{item.label}</span>
       </button>
@@ -51,8 +51,11 @@
   .tool, .toolbar > :global(.btn) { flex: none; }
   .tool { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 50px; padding: 4px 6px; border-radius: 8px; color: var(--muted); font-size: 11px; }
   .tool:hover:not(:disabled) { background: var(--hover); color: var(--text); }
-  .tool:disabled { opacity: 0.4; }
-  .tool.active { background: var(--active); color: var(--text); }
+  /* Same grey as every other disabled button; no extra dimming on top. */
+  .tool:disabled { color: var(--faint); cursor: default; }
+  /* Terminal and Chat are toggles: pressed while their panel is open. */
+  .tool.toggle { border: 1px solid transparent; }
+  .tool.toggle.active { background: var(--active); border-color: var(--border); color: var(--text); }
   .icon { position: relative; display: inline-flex; }
   .badge { position: absolute; top: -4px; right: -8px; font-size: 9px; line-height: 1; padding: 1px 3px; border-radius: 6px; background: var(--accent); color: white; }
   .sep { width: 1px; height: 28px; margin: 0 6px; background: var(--border); }

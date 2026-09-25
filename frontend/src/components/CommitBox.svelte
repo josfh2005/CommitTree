@@ -189,7 +189,9 @@
   }
 
   let box: HTMLTextAreaElement
-  $: if ($focusCommitBox && box) {
+  // Wait while the box is disabled (a message is being generated): focus
+  // would be a no-op and the request lost.
+  $: if ($focusCommitBox && box && !box.disabled) {
     box.focus()
     focusCommitBox.set(false)
   }

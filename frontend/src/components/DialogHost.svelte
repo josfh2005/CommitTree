@@ -33,10 +33,12 @@
   function finish(ok: boolean) {
     const current = $dialog
     if (!current) return
+    // Read the pick before closing: `shown` is recomputed from $dialog.
+    const picked = ok ? (shown[index]?.key ?? null) : null
     dialog.set(null)
     if (current.kind === 'confirm') current.resolve({ ok, checked })
     else if (current.kind === 'choice') current.resolve(ok ? choice : null)
-    else if (current.kind === 'pick') current.resolve(ok && shown[index] ? shown[index].key : null)
+    else if (current.kind === 'pick') current.resolve(picked)
     else current.resolve(ok ? { value, second, checked } : null)
   }
 

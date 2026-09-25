@@ -40,7 +40,7 @@ stash, new branch and merge live in the Changes view or in context menus.
 
 | Button | Action | Disabled when (tooltip reason) |
 |---|---|---|
-| Commit | Selects the "Uncommitted changes" row, which opens the Changes view, and focuses the commit message box | no uncommitted changes ("Nothing to commit"); a merge, rebase or stash conflict is in progress ("Resolve the conflict first"); another operation is running ("Busy: <label>") |
+| Commit | Selects the "Uncommitted changes" row, which opens the Changes view, and focuses the commit message box | no uncommitted changes ("Nothing to commit"); a merge, rebase or stash conflict is in progress ("Resolve the conflict first"); another operation is running (the busy label itself, e.g. "Pushing…") |
 | Stash | The existing "Stash changes" dialog (message, include untracked) | no uncommitted changes ("Nothing to stash"); a conflict is in progress; busy |
 | Fetch | Unchanged | busy |
 | Pull | Unchanged; behind count badge | busy; a conflict is in progress (today's `canSync`) |

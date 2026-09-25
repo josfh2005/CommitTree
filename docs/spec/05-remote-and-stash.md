@@ -47,12 +47,16 @@ why it is disabled; an enabled one's says what it does.
 | Pull | Pull, below; the behind count as a badge | busy; a conflict is in progress |
 | Push | Push, below; the ahead count as a badge | same as Pull |
 | Branch | The "New branch" dialog, from HEAD (a detached HEAD's commit included) | busy |
-| Merge | The branch picker below, then the usual merge confirmation | busy; a conflict is in progress; detached HEAD ("Check out a branch first") |
-| Terminal | Shows or hides the terminal panel; a soft background marks it while open | never |
+| Merge | The branch picker below, then the usual merge confirmation | busy; a conflict is in progress; detached HEAD ("Check out a branch first"); no branch other than the current one, local or remote ("No other branches") |
+| Terminal | A toggle: shows or hides the terminal panel, and looks pressed (soft background and border, no colour) while it is open | never |
 | Finder / Folder | Opens the repository folder | never |
-| Chat | Shows or hides the chat panel; a soft background marks it while open | never |
+| Chat | A toggle, like Terminal, for the chat panel | never |
 
 The busy reason comes first, then the conflict, then the button's own rule.
+Once every conflict of a merge, rebase, cherry-pick, revert or patch is
+resolved but the operation is not yet finished, the conflict reason reads
+"Finish the merge first" (rebase, cherry-pick, revert, patch) instead. All
+buttons share one colour; a disabled one is drawn in the faint text colour.
 "Uncommitted" counts staged, unstaged and untracked files, as the log's
 uncommitted row does. A stash conflict dismissed with "Done" still counts as
 a conflict here, and a "Resolve conflicts" button left of the toolbar is the

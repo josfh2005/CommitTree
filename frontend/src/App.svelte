@@ -55,9 +55,9 @@
     const inTerminal = e.target instanceof Element && !!e.target.closest('.xterm')
     if (isTerminalToggle(e, $platform, inTerminal)) {
       e.preventDefault()
-      // Opening needs a selected, present repository — same condition the
-      // header button is disabled under — so the shortcut can't open an
-      // empty panel. Closing is always allowed.
+      // Opening needs a selected, present repository — the toolbar and its
+      // Terminal toggle are not shown otherwise — so the shortcut can't open
+      // an empty panel. Closing is always allowed.
       terminalOpen.update((v) => (v ? false : !!$selectedRepo && !$selectedRepo.missing))
     }
   }

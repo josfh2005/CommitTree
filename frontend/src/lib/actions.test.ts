@@ -12,6 +12,7 @@ vi.mock('./api', () => ({
     skipStep: vi.fn().mockResolvedValue(undefined),
     getWorktreeRemovalInfo: vi.fn(),
     removeWorktree: vi.fn().mockResolvedValue(undefined),
+    mergeBranch: vi.fn().mockResolvedValue({ outcome: 0 }),
   },
 }))
 
@@ -21,6 +22,7 @@ vi.mock('./ui', async (importOriginal) => {
     ...actual,
     confirmDialog: vi.fn().mockResolvedValue(true),
     confirmDialogWithCheckbox: vi.fn().mockResolvedValue({ ok: true, checked: false }),
+    pickDialog: vi.fn().mockResolvedValue(null),
   }
 })
 
@@ -273,5 +275,49 @@ describe('startCommit', () => {
     expect(get(uncommittedSelected)).toBe(true)
     expect(get(selectedHash)).toBe('')
     expect(get(focusCommitBox)).toBe(true)
+    focusCommitBox.set(false)
+    uncommittedSelected.set(false)
+  })
+})
+
+describe('pickAndMerge', () => {
+  const b = (name: string, remote = '', current = false) => ({ name, remote, hash: 'h', current, upstream: '' })
+  const withRefs = async (detached = false) => {
+    const { refs } = await import('./stores')
+    refs.set({ head: 'main', headHash: 'abc', detached, local: [b('main', '', true), b('dev')], remotes: [{ name: 'origin', branches: [b('HEAD', 'origin'), b('feature', 'origin')] }], tags: [] })
+  }
+  beforeEach(async () => {
+    const { api } = await import('./api')
+    const ui = await import('./ui')
+    vi.mocked(api.mergeBranch).mockClear()
+    vi.mocked(ui.pickDialog).mockReset().mockResolvedValue(null)
+  })
+
+  it('merges the chosen remote branch into the current one', async () => {
+    const { pickAndMerge } = await import('./actions')
+    const { api } = await import('./api')
+    const ui = await import('./ui')
+    await withRefs()
+    vi.mocked(ui.pickDialog).mockResolvedValue('origin/feature')
+    await pickAndMerge('r1')
+    expect(vi.mocked(ui.pickDialog).mock.calls[0][0]).toMatchObject({ title: 'Merge into main', submitLabel: 'Merge' })
+    expect(vi.mocked(ui.pickDialog).mock.calls[0][0].items.map((i) => i.key)).toEqual(['dev', 'origin/feature'])
+    expect(api.mergeBranch).toHaveBeenCalledWith('r1', 'origin/feature')
+  })
+
+  it('does nothing when the picker is cancelled', async () => {
+    const { pickAndMerge } = await import('./actions')
+    const { api } = await import('./api')
+    await withRefs()
+    await pickAndMerge('r1')
+    expect(api.mergeBranch).not.toHaveBeenCalled()
+  })
+
+  it('never opens the picker on a detached HEAD', async () => {
+    const { pickAndMerge } = await import('./actions')
+    const ui = await import('./ui')
+    await withRefs(true)
+    await pickAndMerge('r1')
+    expect(ui.pickDialog).not.toHaveBeenCalled()
   })
 })
