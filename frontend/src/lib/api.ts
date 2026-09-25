@@ -1,5 +1,5 @@
 import * as Go from '../../wailsjs/go/app/App'
-import type { AIMessage, AISettings, AIStatus, AheadBehind, ChatConfirmEvent, CommitInfo, ConflictFile, Details, Filters, GitSettings, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
+import type { AIMessage, AISettings, AIStatus, AheadBehind, Blame, ChatConfirmEvent, CommitInfo, ConflictFile, Details, Filters, GitSettings, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
 
 // The generated bindings use Wails model classes; the JSON is identical to our
 // interfaces, so cast at this single boundary.
@@ -21,6 +21,7 @@ export const api = {
     call<LogPage>(Go.GetLog(id, filters as any, order, offset, limit)),
   getDetails: (id: string, hash: string) => call<Details>(Go.GetDetails(id, hash)),
   getDiff: (id: string, parent: string, hash: string, paths: string[]) => call<string>(Go.GetDiff(id, parent, hash, paths)),
+  getBlame: (id: string, rev: string, path: string, ignoreWhitespace: boolean) => call<Blame>(Go.GetBlame(id, rev, path, ignoreWhitespace)),
   getAuthors: (id: string) => call<string[]>(Go.GetAuthors(id)),
   resolveCommit: (id: string, text: string) => call<string>(Go.ResolveCommit(id, text)),
   isShallow: (id: string) => call<boolean>(Go.IsShallow(id)),
@@ -101,6 +102,8 @@ export const api = {
   clearChat: (repoID: string) => call<void>(Go.ClearChat(repoID)),
   explainInChat: (repoID: string, hash: string, provider: '' | ProviderName, runID: string) =>
     call<void>(Go.ExplainInChat(repoID, hash, provider, runID)),
+  explainLinesInChat: (repoID: string, rev: string, path: string, start: number, end: number, provider: '' | ProviderName, runID: string) =>
+    call<void>(Go.ExplainLinesInChat(repoID, rev, path, start, end, provider, runID)),
   listPrompts: () => call<PromptInfo[]>(Go.ListPrompts()),
   openPromptsFolder: () => call<void>(Go.OpenPromptsFolder()),
   resetPrompt: (name: string) => call<void>(Go.ResetPrompt(name)),

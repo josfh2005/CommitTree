@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import BlameView from './components/BlameView.svelte'
   import ChangesView from './components/ChangesView.svelte'
   import ChatPanel from './components/ChatPanel.svelte'
   import ContextMenu from './components/ContextMenu.svelte'
@@ -14,7 +15,7 @@
   import { startFocusRefresh } from './lib/actions'
   import { isTerminalToggle } from './lib/terminal'
   import { conflictOwnsScreen } from './lib/remote'
-  import { chatOpen, chatWidth, loadAISettings, loadRefs, loadRepos, loadWorktreeState, mainView, mergeState, platform, refreshRepo, selectedHash, selectedRepo, selectedStash, sidebarWidth, stashConflictDismissed, stashEntries, terminalHeight, terminalOpen, uncommittedSelected } from './lib/stores'
+  import { blameTarget, chatOpen, chatWidth, closeBlame, loadAISettings, loadRefs, loadRepos, loadWorktreeState, mainView, mergeState, platform, refreshRepo, selectedHash, selectedRepo, selectedStash, sidebarWidth, stashConflictDismissed, stashEntries, terminalHeight, terminalOpen, uncommittedSelected } from './lib/stores'
   import type { RepoChangedEvent, WorktreeChangedEvent } from './lib/types'
   import { Environment, EventsOn } from '../wailsjs/runtime/runtime'
 
@@ -35,9 +36,15 @@
   // a different stash once entries below it shift.
   $: selectedStashEntry = $stashEntries.find((e) => e.hash === $selectedStash?.hash) ?? null
   $: showStash = $mainView === 'stash' && !conflictWins && !!$selectedRepo && !$selectedRepo.missing && !!selectedStashEntry
+  $: showBlame = $mainView === 'blame' && !conflictWins && !!$selectedRepo && !$selectedRepo.missing && !!$blameTarget
   // Selecting a commit — or the log's uncommitted row — means the user
   // wants the log pane, so switch the main pane back.
   $: if ($selectedHash || $uncommittedSelected) mainView.set('log')
+  // A repository going missing while its Blame view is open falls back to
+  // the log (showBlame above turns false) but leaves blameTarget/blameStack
+  // set, so they would reappear if the repository comes back — clear them
+  // the same way selectRepo does for a repository switch.
+  $: if ($mainView === 'blame' && $selectedRepo?.missing) closeBlame()
 
   const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v))
 
@@ -89,6 +96,8 @@
       <ChangesView repoId={$selectedRepo.id} />
     {:else if showStash && $selectedRepo && selectedStashEntry}
       <StashView repoId={$selectedRepo.id} entry={selectedStashEntry} />
+    {:else if showBlame && $selectedRepo}
+      <BlameView repoId={$selectedRepo.id} />
     {:else}
       <LogView />
     {/if}

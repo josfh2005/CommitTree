@@ -4,12 +4,13 @@
   import SubmoduleDiffView from './SubmoduleDiff.svelte'
   import { api } from '../lib/api'
   import { discardFile, stageFile, unstageFile, updateSubmodule } from '../lib/actions'
+  import { blameBlocker } from '../lib/blame'
   import { lineClass } from '../lib/diff'
   import { hasStagedChanges, nextSelection, worktreeSections, type SelectionKey } from '../lib/worktree'
   import { parseSubmoduleDiff, submoduleRepoId, type SubmoduleDiff } from '../lib/submodules'
   import type { FileStatus } from '../lib/types'
-  import { busy, repos, selectRepo, worktreeState } from '../lib/stores'
-  import { errorMessage, toast } from '../lib/ui'
+  import { busy, openBlame, repos, selectRepo, worktreeState } from '../lib/stores'
+  import { errorMessage, openMenu, toast } from '../lib/ui'
 
   export let repoId: string
 
@@ -142,6 +143,11 @@
     return id ? [{ label: 'Open submodule', run: () => selectRepo(id), disabled: !!$busy, title: 'Open this submodule as a repository' }] : []
   }
 
+  function fileMenu(event: MouseEvent, file: FileStatus) {
+    const why = blameBlocker(file)
+    openMenu(event, [{ label: 'Blame', action: () => openBlame(file.path, ''), disabled: why !== null, title: why ?? undefined }])
+  }
+
   async function updateSubmoduleAction(path: string) {
     try {
       const list = await api.getSubmodules(repoId)
@@ -160,6 +166,7 @@
       {selected}
       onSelect={(key) => { const f = files.find((ff) => keyOf(ff) === key); if (f) open(f) }}
       actions={actionsFor}
+      onMenu={fileMenu}
       {glyph}
       emptyMessage="No changes."
     />

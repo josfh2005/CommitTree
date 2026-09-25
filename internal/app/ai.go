@@ -444,8 +444,61 @@ func (a *App) ExplainInChat(repoID, hash, provider, runID string) error {
 	if a.ai == nil {
 		return ErrAIDisabled
 	}
-	if runID == "" || hash == "" {
+	if hash == "" {
 		return errors.New("commit and run id are required")
+	}
+	return a.explainTask(repoID, provider, runID, prompts.ExplainCommit, func(ctx context.Context, dir string) (string, string, error) {
+		question, err := explainQuestion(ctx, dir, hash)
+		if err != nil {
+			return "", "", err
+		}
+		prompt, err := tasks.ExplainContext(ctx, dir, hash, tasks.OllamaDiffBudget)
+		return question, prompt, err
+	})
+}
+
+// ExplainLinesInChat explains lines start..end of path at rev ("" = the
+// working tree) into the repository's chat, the way ExplainInChat does for
+// a commit.
+func (a *App) ExplainLinesInChat(repoID, rev, path string, start, end int, provider, runID string) error {
+	if a.ai == nil {
+		return ErrAIDisabled
+	}
+	if path == "" || start < 1 || end < start {
+		return errors.New("a file and a line range are required")
+	}
+	return a.explainTask(repoID, provider, runID, prompts.ExplainLines, func(ctx context.Context, dir string) (string, string, error) {
+		prompt, err := tasks.ExplainLinesContext(ctx, dir, rev, path, start, end, tasks.OllamaDiffBudget)
+		return explainLinesQuestion(rev, path, start, end), prompt, err
+	})
+}
+
+// explainLinesQuestion is the user message stored for a lines explanation.
+func explainLinesQuestion(rev, path string, start, end int) string {
+	lines := fmt.Sprintf("lines %d\u2013%d", start, end)
+	if start == end {
+		lines = fmt.Sprintf("line %d", start)
+	}
+	at := "(working tree)"
+	if rev != "" {
+		at = "(at " + rev[:min(7, len(rev))] + ")"
+	}
+	return fmt.Sprintf("Explain %s of %s %s", lines, path, at)
+}
+
+// explainTask runs a one-shot explanation into the repository's chat: it
+// takes the chat slot, builds the question and the prompt, stores the
+// question, streams the answer as chat events and stores it too. build runs
+// once the slot is taken, with the run's context, and returns the question
+// to store and the prompt to send; an error from build (including a git
+// error while blaming or diffing) is returned directly, before anything is
+// written to the chat, and releases the slot.
+func (a *App) explainTask(repoID, provider, runID, promptName string, build func(ctx context.Context, dir string) (question, prompt string, err error)) error {
+	if a.ai == nil {
+		return ErrAIDisabled
+	}
+	if runID == "" {
+		return errors.New("run id is required")
 	}
 	repo, ok := a.repo(repoID)
 	if !ok {
@@ -462,8 +515,7 @@ func (a *App) ExplainInChat(repoID, hash, provider, runID string) error {
 	if err != nil {
 		return err
 	}
-	budget := tasks.OllamaDiffBudget
-	instructions, err := a.ai.deps.Prompts.Get(prompts.ExplainCommit, prompts.Vars{
+	instructions, err := a.ai.deps.Prompts.Get(promptName, prompts.Vars{
 		Repo: repo.Name, Path: repo.Path, Branch: refs.CurrentLabel(a.ctx, repo.Path), Date: time.Now().Format("2006-01-02"),
 	})
 	if err != nil {
@@ -486,11 +538,12 @@ func (a *App) ExplainInChat(repoID, hash, provider, runID string) error {
 		cancel()
 	}
 
-	question, err := explainQuestion(ctx, repo.Path, hash)
-	history, loadErr := a.ai.deps.Chats.Load(repoID)
-	if err == nil {
-		err = loadErr
+	question, prompt, err := build(ctx, repo.Path)
+	if err != nil {
+		finish()
+		return err
 	}
+	history, err := a.ai.deps.Chats.Load(repoID)
 	if err == nil {
 		history = append(history, ai.Message{Role: ai.RoleUser, Content: question})
 		err = a.ai.deps.Chats.Save(repoID, history)
@@ -502,7 +555,7 @@ func (a *App) ExplainInChat(repoID, hash, provider, runID string) error {
 	a.emit(agent.EventStart, agent.StartEvent{RepoID: repoID, RunID: runID, Text: question})
 
 	go func() {
-		answer, runErr := streamIntoString(ctx, a, repoID, runID, responder, instructions, repo.Path, hash, budget)
+		answer, runErr := streamIntoString(ctx, a, repoID, runID, responder, instructions, prompt)
 		var saveErr error
 		if answer != "" || runErr == nil {
 			saveErr = a.ai.deps.Chats.Save(repoID, append(history, ai.Message{
@@ -536,8 +589,8 @@ func explainQuestion(ctx context.Context, dir, hash string) (string, error) {
 
 // streamIntoString forwards an explanation to the chat as it arrives and
 // returns the full text.
-func streamIntoString(ctx context.Context, a *App, repoID, runID string, r ai.Responder, instructions, dir, hash string, budget int) (string, error) {
-	stream, err := tasks.Explain(ctx, r, instructions, dir, hash, budget)
+func streamIntoString(ctx context.Context, a *App, repoID, runID string, r ai.Responder, instructions, prompt string) (string, error) {
+	stream, err := r.Respond(ctx, instructions, prompt)
 	if err != nil {
 		return "", err
 	}

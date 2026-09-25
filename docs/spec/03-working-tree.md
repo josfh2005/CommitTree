@@ -49,6 +49,13 @@ once, the section the user actually opened is what is remembered, so
 re-selecting after a change still resolves to the intended one of the two
 rather than always the Staged copy.
 
+Right-clicking a row offers Blame of the file as it stands in the working
+tree, uncommitted lines shown as "Not committed yet"; it is disabled, with
+a reason as its tooltip, for a deleted file, an untracked file (neither has
+history to blame) and a submodule (submodules have no blame). The blame
+view it opens follows the working tree while open, refreshing as files
+change — see Blame in the log and history docs.
+
 ## The diff
 
 The content pane shows the diff for whichever occurrence of the file was

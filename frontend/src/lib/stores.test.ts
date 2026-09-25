@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('./api', () => ({ api: {} }))
 
 import { isLogOrder } from './logOrder'
-import { expandedStashSections, expandedTagSections, mainView, persisted, selectedHash, selectUncommitted, toggleCommit, toggleStashExpanded, toggleTagsExpanded, toggleUncommitted, uncommittedSelected } from './stores'
+import { blameBack, blamePrevious, blameStack, blameTarget, closeBlame, expandedStashSections, expandedTagSections, mainView, openBlame, persisted, selectedHash, selectRepo, selectUncommitted, showCommitInLog, toggleCommit, toggleStashExpanded, toggleTagsExpanded, toggleUncommitted, uncommittedSelected } from './stores'
 
 /** A minimal in-memory Storage, since these tests don't run in a DOM
  *  environment and so have no real localStorage to read from. */
@@ -155,5 +155,58 @@ describe('loadRepos when a repository disappears', () => {
     await loadRepos()
     expect(get(selectedRepoId)).toBe('')
     expect(get(terminalState).tabs).toEqual([])
+  })
+})
+
+describe('blame navigation', () => {
+  it('opens from the current view, walks back through previous revisions, then returns', () => {
+    mainView.set('changes')
+    openBlame('a.txt', '')
+    expect(get(mainView)).toBe('blame')
+    expect(get(blameTarget)).toEqual({ path: 'a.txt', rev: '', from: 'changes' })
+    blamePrevious('old.txt', 'abc')
+    expect(get(blameTarget)).toEqual({ path: 'old.txt', rev: 'abc', from: 'changes' })
+    blameBack()
+    expect(get(blameTarget)).toEqual({ path: 'a.txt', rev: '', from: 'changes' })
+    blameBack()
+    expect(get(blameTarget)).toBeNull()
+    expect(get(mainView)).toBe('changes')
+  })
+
+  it('opening from the log returns to the log', () => {
+    mainView.set('log')
+    openBlame('a.txt', 'abc')
+    blameBack()
+    expect(get(mainView)).toBe('log')
+  })
+
+  it('showCommitInLog switches to the log even when the commit is already selected', () => {
+    selectedHash.set('abc')
+    openBlame('a.txt', 'abc')
+    showCommitInLog('abc')
+    expect(get(mainView)).toBe('log')
+    expect(get(selectedHash)).toBe('abc')
+  })
+
+  it('selectRepo clears blame', () => {
+    openBlame('a.txt', 'abc')
+    selectRepo('some-other-repo-id')
+    expect(get(blameTarget)).toBeNull()
+    expect(get(blameStack)).toEqual([])
+    expect(get(mainView)).toBe('log')
+  })
+
+  // Exercises the helper App.svelte calls when the selected repository goes
+  // missing while blame is open, so a stale target does not reappear if the
+  // repository comes back (see the `showBlame`/`closeBlame` reactive
+  // statement in App.svelte).
+  it('closeBlame leaves the log showing with no target or stack', () => {
+    mainView.set('changes')
+    openBlame('a.txt', '')
+    blamePrevious('old.txt', 'abc')
+    closeBlame()
+    expect(get(mainView)).toBe('log')
+    expect(get(blameTarget)).toBeNull()
+    expect(get(blameStack)).toEqual([])
   })
 })

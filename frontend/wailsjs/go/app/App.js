@@ -82,6 +82,10 @@ export function ExplainInChat(arg1, arg2, arg3, arg4) {
   return window['go']['app']['App']['ExplainInChat'](arg1, arg2, arg3, arg4);
 }
 
+export function ExplainLinesInChat(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
+  return window['go']['app']['App']['ExplainLinesInChat'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
+}
+
 export function Fetch(arg1) {
   return window['go']['app']['App']['Fetch'](arg1);
 }
@@ -100,6 +104,10 @@ export function GetAISettings() {
 
 export function GetAuthors(arg1) {
   return window['go']['app']['App']['GetAuthors'](arg1);
+}
+
+export function GetBlame(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['App']['GetBlame'](arg1, arg2, arg3, arg4);
 }
 
 export function GetChat(arg1) {
