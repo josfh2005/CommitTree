@@ -5,7 +5,8 @@
   import { api } from '../lib/api'
   import { answeredBy, applyEvent, CHAT_EVENTS, confirmResultText, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from '../lib/chat'
   import { renderMarkdown } from '../lib/markdown'
-  import { chatOpen, chatPreparing, jumpTo, selectedRepo, settingsOpen } from '../lib/stores'
+  import { chatBlocker } from '../lib/providers'
+  import { aiSettings, chatOpen, chatPreparing, jumpTo, selectedRepo, settingsOpen } from '../lib/stores'
   import type { AIStatus } from '../lib/types'
   import { errorMessage, toast } from '../lib/ui'
 
@@ -32,7 +33,12 @@
   // a message typed meanwhile is not refused as busy.
   $: preparing = state.runID === null && !!state.repoID && $chatPreparing.includes(state.repoID)
   $: running = state.runID !== null || preparing
-  $: ready = !!status?.ollama.running && !!status?.ollama.chatModelInstalled
+  // Settings may have changed the chat provider, a key or the installed
+  // models; read the status again once it closes.
+  $: if (!$settingsOpen) refreshStatus()
+  // Before the settings load, assume the default provider, Ollama.
+  $: blocker = status ? chatBlocker($aiSettings?.chatProvider ?? 'ollama', status) : null
+  $: ready = !!status && !blocker
 
   async function load(repoID: string) {
     refreshStatus()
@@ -140,7 +146,7 @@
   <div class="messages" bind:this={list} on:click={onClick} role="presentation">
     {#if !$selectedRepo}
       <div class="empty"><Icon name="sparkle" size={22} /><p>Select a repository to chat about it.</p></div>
-    {:else if status && !status.ollama.running}
+    {:else if blocker?.kind === 'ollama_down'}
       <div class="notice">
         <strong>Ollama is not running</strong>
         <p>Open Ollama or install it from ollama.com.</p>
@@ -149,10 +155,16 @@
           <button class="btn" on:click={() => settingsOpen.set(true)}>Settings</button>
         </div>
       </div>
-    {:else if status && !status.ollama.chatModelInstalled}
+    {:else if blocker?.kind === 'model_missing'}
       <div class="notice">
-        <strong>Model {status.ollama.chatModel} is not installed</strong>
+        <strong>Model {blocker.model} is not installed</strong>
         <p>Download it from Settings to start chatting.</p>
+        <div class="actions"><button class="btn primary" on:click={() => settingsOpen.set(true)}>Open Settings</button></div>
+      </div>
+    {:else if blocker?.kind === 'no_key'}
+      <div class="notice">
+        <strong>The chat provider has no API key</strong>
+        <p>{blocker.message}</p>
         <div class="actions"><button class="btn primary" on:click={() => settingsOpen.set(true)}>Open Settings</button></div>
       </div>
     {:else if loadError}
@@ -217,7 +229,7 @@
   <div class="composer">
     <textarea
       rows="2"
-      placeholder={ready ? 'Ask about this repo…' : 'Set up Ollama to chat'}
+      placeholder={ready ? 'Ask about this repo…' : 'Set up the AI provider to chat'}
       bind:value={input}
       on:keydown={onKey}
       disabled={!$selectedRepo || !ready}

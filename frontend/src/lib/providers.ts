@@ -73,3 +73,22 @@ export function processingNotice(chatProvider: ProviderName, taskProvider: Provi
   }
   return 'The selected providers receive the repository content being asked about.'
 }
+
+export type ChatBlocker = { kind: 'ollama_down' } | { kind: 'model_missing'; model: string } | { kind: 'no_key'; message: string }
+
+/**
+ * chatBlocker is why the chat panel can't take a message with chatProvider
+ * as it stands, or null when it can. Ollama needs to be running with the
+ * chat model installed; a hosted provider only needs its key — Ollama's
+ * state doesn't matter to it.
+ */
+export function chatBlocker(chatProvider: ProviderName, status: AIStatus): ChatBlocker | null {
+  if (!needsKey(chatProvider)) {
+    if (!status.ollama.running) return { kind: 'ollama_down' }
+    if (!status.ollama.chatModelInstalled) return { kind: 'model_missing', model: status.ollama.chatModel }
+    return null
+  }
+  const found = status.providers.find((s) => s.provider === chatProvider)
+  if (found?.hasKey) return null
+  return { kind: 'no_key', message: found?.error || `Add an API key for ${providerShortLabel(chatProvider)} in Settings.` }
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { modelForProvider, modelHint, needsKey, processingNotice, PROVIDERS, settingsHaveModels, usesOllama } from './providers'
+import { chatBlocker, modelForProvider, modelHint, needsKey, processingNotice, PROVIDERS, settingsHaveModels, usesOllama } from './providers'
 import type { AISettings, AIStatus } from './types'
 
 const status = (over: Partial<AIStatus> = {}): AIStatus => ({
@@ -95,5 +95,27 @@ describe('processingNotice', () => {
 
   it('warns when ollama itself is remote', () => {
     expect(processingNotice('ollama', 'ollama', true)).toBe('The selected providers receive the repository content being asked about.')
+  })
+})
+
+describe('chatBlocker', () => {
+  const down = status({ ollama: { running: false, url: '', chatModel: 'qwen2.5:7b', models: [], chatModelInstalled: false } })
+  const noModel = status({ ollama: { running: true, url: '', chatModel: 'qwen2.5:7b', models: [], chatModelInstalled: false } })
+
+  it('gates Ollama on it running with the chat model installed', () => {
+    expect(chatBlocker('ollama', status())).toBeNull()
+    expect(chatBlocker('ollama', down)).toEqual({ kind: 'ollama_down' })
+    expect(chatBlocker('ollama', noModel)).toEqual({ kind: 'model_missing', model: 'qwen2.5:7b' })
+  })
+
+  it('ignores Ollama when a hosted provider is chatting', () => {
+    expect(chatBlocker('anthropic', down)).toBeNull()
+    expect(chatBlocker('anthropic', noModel)).toBeNull()
+  })
+
+  it('asks for the key of a hosted provider that has none', () => {
+    expect(chatBlocker('openai', status())).toEqual({ kind: 'no_key', message: 'Add an API key for OpenAI in Settings.' })
+    const broken = status({ providers: [{ provider: 'openai', hasKey: false, keyHint: '', error: 'keychain locked' }] })
+    expect(chatBlocker('openai', broken)).toEqual({ kind: 'no_key', message: 'keychain locked' })
   })
 })
