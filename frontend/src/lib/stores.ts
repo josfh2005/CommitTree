@@ -166,6 +166,11 @@ export function showCommitInLog(hash: string) {
  *  below clears this whenever anything selects a commit — graph clicks,
  *  jump arrows, context menus — without each of them knowing about it. */
 export const uncommittedSelected = writable(false)
+
+/** Set by the toolbar's Commit; the commit box focuses its message once it
+ *  is on screen and clears the flag, so the request survives the Changes
+ *  view mounting and fires once. */
+export const focusCommitBox = writable(false)
 selectedHash.subscribe((hash) => {
   if (hash) uncommittedSelected.set(false)
 })

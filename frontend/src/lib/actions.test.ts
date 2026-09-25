@@ -263,3 +263,15 @@ describe('removeWorktree', () => {
     expect(api.deleteBranch).not.toHaveBeenCalled()
   })
 })
+
+describe('startCommit', () => {
+  it('selects the uncommitted row and asks the commit box for focus', async () => {
+    const { startCommit } = await import('./actions')
+    const { focusCommitBox, selectedHash, uncommittedSelected } = await import('./stores')
+    selectedHash.set('abc')
+    startCommit()
+    expect(get(uncommittedSelected)).toBe(true)
+    expect(get(selectedHash)).toBe('')
+    expect(get(focusCommitBox)).toBe(true)
+  })
+})

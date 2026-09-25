@@ -6,7 +6,7 @@
   import { commitChanges, stashChanges } from '../lib/actions'
   import { amendWarning, canCommit, shouldAutoGenerate } from '../lib/worktree'
   import type { CommitDeltaEvent, CommitDoneEvent, CommitInfo, WorktreeChangedEvent } from '../lib/types'
-  import { aiSettings, busy, worktreeState } from '../lib/stores'
+  import { aiSettings, busy, focusCommitBox, worktreeState } from '../lib/stores'
   import { confirmDialog, errorMessage, toast } from '../lib/ui'
 
   export let repoId: string
@@ -187,10 +187,17 @@
     }
     await refresh()
   }
+
+  let box: HTMLTextAreaElement
+  $: if ($focusCommitBox && box) {
+    box.focus()
+    focusCommitBox.set(false)
+  }
 </script>
 
 <div class="commit-box">
   <textarea
+    bind:this={box}
     rows="3"
     placeholder="Commit message"
     bind:value={message}

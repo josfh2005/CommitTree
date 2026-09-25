@@ -1,6 +1,6 @@
 import { get } from 'svelte/store'
 import { api } from './api'
-import { busy, chatOpen, collapsedRepoGroups, expandedRepos, filters, loadIdentity, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, repos, selectRepo, selectedRepoId, stashConflictDismissed } from './stores'
+import { busy, chatOpen, collapsedRepoGroups, expandedRepos, filters, focusCommitBox, loadIdentity, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, refs, repos, selectRepo, selectUncommitted, selectedRepoId, stashConflictDismissed } from './stores'
 import type { Branch, FileStatus, MergeState, RebasePreview, Repo, ResetInfo, ResetMode, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
 import { PULL_UP_TO_DATE, UP_TO_DATE } from './types'
 import { abortWarning, commitWarning, isEmptyStepError, skipWarning, takeMessage } from './merge'
@@ -8,7 +8,8 @@ import { doneMessage, rebaseMessage } from './rebase'
 import { resetMessage } from './reset'
 import { discardMessage, neverCommitted } from './worktree'
 import { stashApplyAction } from './stash'
-import { choiceDialog, confirmDialog, confirmDialogWithCheckbox, errorMessage, promptDialog, toast } from './ui'
+import { choiceDialog, confirmDialog, confirmDialogWithCheckbox, errorMessage, pickDialog, promptDialog, toast } from './ui'
+import { mergeCandidates } from './toolbar'
 import { resolveRepoDrop } from './repoDrop'
 import { classifyGroupRename, renameCollapsedGroup } from './repoGroupRename'
 import { movedMessage, updateMessage } from './submodules'
@@ -446,6 +447,29 @@ export async function mergeBranch(id: string, branch: Branch, into: string) {
     busy.set('')
     await refreshRepo()
   }
+}
+
+/** The toolbar's Commit: open the Changes view on the uncommitted row and
+ *  put the cursor in the commit message. */
+export function startCommit() {
+  selectUncommitted()
+  focusCommitBox.set(true)
+}
+
+/** The toolbar's Merge: pick a branch, then the usual merge confirmation. */
+export async function pickAndMerge(id: string) {
+  const current = get(refs)
+  if (!current || current.detached) return
+  const candidates = mergeCandidates(current)
+  const key = await pickDialog({
+    title: `Merge into ${current.head}`,
+    placeholder: 'Search branches…',
+    empty: 'No branches match',
+    submitLabel: 'Merge',
+    items: candidates,
+  })
+  const chosen = candidates.find((c) => c.key === key)
+  if (chosen) await mergeBranch(id, chosen.branch, current.head)
 }
 
 export async function abortMerge(id: string) {
