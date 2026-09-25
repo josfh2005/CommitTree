@@ -92,18 +92,23 @@
     }
   }
 
-  async function send() {
+  function send() {
     const text = input.trim()
-    if (!text || running || !state.repoID || !ready) return
+    if (text && sendText(text)) input = ''
+  }
+
+  // sendText starts an answer to text — typed or a suggested reply; false
+  // when the chat can't take it.
+  function sendText(text: string): boolean {
+    if (!text || running || !state.repoID || !ready) return false
     const runID = crypto.randomUUID()
-    input = ''
+    const repoID = state.repoID
     state = startRun(state, text, runID)
     scrollDown()
-    try {
-      await api.sendChat(state.repoID, text, runID)
-    } catch (e) {
-      state = applyEvent(state, 'chat:error', { repoID: state.repoID, runID, message: errorMessage(e), code: 'other' })
-    }
+    api.sendChat(repoID, text, runID).catch((e) => {
+      state = applyEvent(state, 'chat:error', { repoID, runID, message: errorMessage(e), code: 'other' })
+    })
+    return true
   }
 
   function stop() {
@@ -240,6 +245,13 @@
   </div>
 
   <div class="composer">
+    {#if !running && state.suggestions?.length}
+      <div class="suggestions">
+        {#each state.suggestions as reply}
+          <button class="suggestion" title="Send “{reply}”" disabled={!ready} on:click={() => sendText(reply)}>{reply}</button>
+        {/each}
+      </div>
+    {/if}
     <textarea
       rows="2"
       placeholder={ready ? 'Ask about this repo…' : 'Set up the AI provider to chat'}
@@ -294,6 +306,9 @@
   .answer-actions { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 2px; font-size: 11px; color: var(--faint); }
   .answer-actions .icon-btn { width: 22px; height: 22px; margin-left: -4px; }
   .composer { display: flex; flex-direction: column; gap: 4px; margin: 12px; padding: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+  .suggestions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 0 4px; }
+  .suggestion { max-width: 100%; padding: 3px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .suggestion:hover:not(:disabled) { background: var(--hover); }
   .composer-bar { display: flex; align-items: center; gap: 6px; min-width: 0; }
   textarea { resize: none; border: 0; padding: 2px 4px; background: transparent; }
 </style>

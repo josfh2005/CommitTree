@@ -366,6 +366,14 @@
                   <option value="manual">Only when I ask</option>
                 </select>
               </label>
+              <label>
+                <span>Suggested replies</span>
+                <select bind:value={settings.suggestReplies} on:change={save}>
+                  <option value="auto-local">Automatic for local models (default)</option>
+                  <option value="auto">Always</option>
+                  <option value="off">Off</option>
+                </select>
+              </label>
             </section>
 
             <p class="notice">{processingNotice(settings.chatProvider, settings.taskProvider, remote)}</p>
