@@ -1,3 +1,4 @@
+import { providerShortLabel } from './providers'
 import type { AIMessage, ChatConfirmEvent, ChatDeltaEvent, ChatErrorEvent, ChatNoticeEvent, ChatStartEvent, ChatToolEvent, ChatToolResultEvent } from './types'
 
 export interface ChatToolUse {
@@ -19,6 +20,10 @@ export interface ChatItem {
   stopped?: boolean
   error?: { message: string; code: string }
   notices?: string[]
+  // What produced an assistant answer; absent on answers stored before it
+  // was recorded.
+  provider?: string
+  model?: string
 }
 
 export interface ChatState {
@@ -60,6 +65,10 @@ export function fromMessages(repoID: string, messages: AIMessage[]): ChatState {
       items.push(last)
     }
     last.text += m.content
+    if (!last.provider && m.provider) {
+      last.provider = m.provider
+      last.model = m.model
+    }
     for (const call of m.toolCalls ?? []) last.tools.push({ name: call.name, args: call.args })
     if (m.stopped) last.stopped = true
   }
@@ -158,10 +167,14 @@ export function confirmResultText(tool: ChatToolUse): string {
 export function applyEvent(state: ChatState, name: string, payload: Payload): ChatState {
   if (payload.repoID !== state.repoID) return state
   // A run can also start from the log ("Explain"); the panel's own send has
-  // already added the pair, so its start event changes nothing.
+  // already added the pair, so its start event only names what answers,
+  // which only the backend knows.
   if (name === 'chat:start') {
-    if (state.runID === payload.runID) return state
-    return startRun(state, (payload as ChatStartEvent).text, payload.runID)
+    const p = payload as ChatStartEvent
+    const next = state.runID === p.runID ? state : startRun(state, p.text, p.runID)
+    const last = next.items[next.items.length - 1]
+    if (last.provider === p.provider && last.model === p.model) return next
+    return { ...next, items: [...next.items.slice(0, -1), { ...last, provider: p.provider, model: p.model }] }
   }
   // chat:confirm is handled before the runID guard: it can arrive after the
   // panel re-mounted and reloaded history with no in-flight run (runID
@@ -209,6 +222,13 @@ export function applyEvent(state: ChatState, name: string, payload: Payload): Ch
 export function toolLabel(tool: { name: string; args: Record<string, unknown> | null }): string {
   const value = Object.values(tool.args ?? {}).find((v) => v !== '' && v !== null && v !== undefined)
   return value === undefined ? tool.name : `${tool.name}: ${String(value)}`
+}
+
+/** answeredBy is the line under an answer naming what produced it,
+ *  "Anthropic · claude-opus-5", or "" when that is not known. */
+export function answeredBy(item: { provider?: string; model?: string }): string {
+  if (!item.provider || !item.model) return ''
+  return `${providerShortLabel(item.provider)} · ${item.model}`
 }
 
 export function errorText(error: { message: string; code: string }): string {

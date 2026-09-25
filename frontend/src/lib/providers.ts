@@ -6,6 +6,12 @@ export const PROVIDERS: { value: ProviderName; label: string }[] = [
   { value: 'anthropic', label: 'Anthropic' },
 ]
 
+/** providerShortLabel is the provider's name without qualifiers, for tight
+ *  spots like the line under a chat answer; unknown values pass through. */
+export function providerShortLabel(p: string): string {
+  return p === 'ollama' ? 'Ollama' : (PROVIDERS.find((x) => x.value === p)?.label ?? p)
+}
+
 /** Hosted providers need an API key; Ollama runs on the user's machine. */
 export function needsKey(p: ProviderName): boolean {
   return p === 'openai' || p === 'anthropic'

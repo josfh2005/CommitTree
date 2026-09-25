@@ -353,7 +353,7 @@ func (a *App) SendChat(repoID, text, runID string) error {
 		return err
 	}
 
-	a.emit(agent.EventStart, agent.StartEvent{RepoID: repoID, RunID: runID, Text: text})
+	a.emit(agent.EventStart, agent.StartEvent{RepoID: repoID, RunID: runID, Text: text, Provider: cfg.ChatProvider, Model: cfg.ChatModel})
 
 	go func() {
 		// skipStep is the step of a write call whose result did not start
@@ -383,6 +383,7 @@ func (a *App) SendChat(repoID, text, runID string) error {
 			Emit: a.emit,
 		}
 		updated, runErr := agent.Execute(ctx, run, history)
+		stampAnswer(updated[len(history):], cfg.ChatProvider, cfg.ChatModel)
 		saveErr := a.ai.deps.Chats.Save(repoID, updated)
 		// Release the repo before announcing the end so a new message can
 		// be sent as soon as the frontend sees done/error.
@@ -397,6 +398,16 @@ func (a *App) SendChat(repoID, text, runID string) error {
 		}
 	}()
 	return nil
+}
+
+// stampAnswer records on the assistant messages of an answer which provider
+// and model produced them.
+func stampAnswer(answer []ai.Message, provider, model string) {
+	for i := range answer {
+		if answer[i].Role == ai.RoleAssistant {
+			answer[i].Provider, answer[i].Model = provider, model
+		}
+	}
 }
 
 func chatErrorCode(err error) string {
@@ -560,7 +571,7 @@ func (a *App) explainTask(repoID, provider, runID, promptName string, build func
 		finish()
 		return err
 	}
-	a.emit(agent.EventStart, agent.StartEvent{RepoID: repoID, RunID: runID, Text: question})
+	a.emit(agent.EventStart, agent.StartEvent{RepoID: repoID, RunID: runID, Text: question, Provider: provider, Model: cfg.TaskModel})
 
 	go func() {
 		answer, runErr := streamIntoString(ctx, a, repoID, runID, responder, instructions, prompt)
@@ -568,6 +579,7 @@ func (a *App) explainTask(repoID, provider, runID, promptName string, build func
 		if answer != "" || runErr == nil {
 			saveErr = a.ai.deps.Chats.Save(repoID, append(history, ai.Message{
 				Role: ai.RoleAssistant, Content: answer, Stopped: runErr != nil && errors.Is(runErr, context.Canceled),
+				Provider: provider, Model: cfg.TaskModel,
 			}))
 		}
 		finish()

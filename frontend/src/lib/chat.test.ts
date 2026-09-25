@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyEvent, CHAT_EVENTS, confirmResultText, confirmState, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from './chat'
+import { answeredBy, applyEvent, CHAT_EVENTS, confirmResultText, confirmState, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from './chat'
 import type { AIMessage, ChatConfirmEvent } from './types'
 
 describe('fromMessages', () => {
@@ -22,6 +22,20 @@ describe('fromMessages', () => {
         { role: 'assistant', text: 'Wai', tools: [], stopped: true },
       ],
     })
+  })
+
+  it('keeps which provider and model produced each answer', () => {
+    const messages: AIMessage[] = [
+      { role: 'user', content: 'old' },
+      { role: 'assistant', content: 'stored before it was recorded' },
+      { role: 'user', content: 'branches?' },
+      { role: 'assistant', content: '', toolCalls: [{ id: 'c1', name: 'list_refs', args: {} }], provider: 'anthropic', model: 'claude-opus-5' },
+      { role: 'tool', toolName: 'list_refs', content: 'main' },
+      { role: 'assistant', content: 'On main.', provider: 'anthropic', model: 'claude-opus-5' },
+    ]
+    const items = fromMessages('r1', messages).items
+    expect(items[1]).toEqual({ role: 'assistant', text: 'stored before it was recorded', tools: [] })
+    expect(items[3]).toMatchObject({ provider: 'anthropic', model: 'claude-opus-5', text: 'On main.' })
   })
 })
 
@@ -56,18 +70,23 @@ describe('applyEvent', () => {
 
   it('starts a run from a chat:start event (explain from the log)', () => {
     const idle = emptyChat('r1')
-    const started = applyEvent(idle, 'chat:start', { repoID: 'r1', runID: 'run9', text: 'Explain commit a1b2c3d' })
+    const started = applyEvent(idle, 'chat:start', { repoID: 'r1', runID: 'run9', text: 'Explain commit a1b2c3d', provider: 'ollama', model: 'qwen2.5:7b' })
 
     expect(started.runID).toBe('run9')
     expect(started.items).toEqual([
       { role: 'user', text: 'Explain commit a1b2c3d', tools: [] },
-      { role: 'assistant', text: '', tools: [] },
+      { role: 'assistant', text: '', tools: [], provider: 'ollama', model: 'qwen2.5:7b' },
     ])
-    // The panel already echoed its own message, so its start event is a no-op.
-    const running_ = running()
-    expect(applyEvent(running_, 'chat:start', { repoID: 'r1', runID: 'run1', text: 'hola' })).toBe(running_)
+    // The panel already echoed its own message, so its start event only
+    // says what is answering.
+    const withModel = applyEvent(running(), 'chat:start', { repoID: 'r1', runID: 'run1', text: 'hola', provider: 'openai', model: 'gpt-5' })
+    expect(withModel.items).toEqual([
+      { role: 'user', text: 'hola', tools: [] },
+      { role: 'assistant', text: '', tools: [], provider: 'openai', model: 'gpt-5' },
+    ])
+    expect(applyEvent(withModel, 'chat:start', { repoID: 'r1', runID: 'run1', text: 'hola', provider: 'openai', model: 'gpt-5' })).toBe(withModel)
     // A start for another repo is ignored.
-    expect(applyEvent(idle, 'chat:start', { repoID: 'r2', runID: 'run9', text: 'x' })).toBe(idle)
+    expect(applyEvent(idle, 'chat:start', { repoID: 'r2', runID: 'run9', text: 'x', provider: 'ollama', model: 'm' })).toBe(idle)
   })
 
   it('records errors and ends the run', () => {
@@ -118,6 +137,13 @@ describe('shouldReloadChat', () => {
 })
 
 describe('labels', () => {
+  it('names what answered, with a short provider name', () => {
+    expect(answeredBy({ provider: 'ollama', model: 'qwen2.5:7b' })).toBe('Ollama · qwen2.5:7b')
+    expect(answeredBy({ provider: 'anthropic', model: 'claude-opus-5' })).toBe('Anthropic · claude-opus-5')
+    expect(answeredBy({ provider: 'openai', model: 'gpt-5' })).toBe('OpenAI · gpt-5')
+    expect(answeredBy({})).toBe('')
+  })
+
   it('shows the first non-empty argument', () => {
     expect(toolLabel({ name: 'search_log', args: { text: '', author: 'Ana' } })).toBe('search_log: Ana')
     expect(toolLabel({ name: 'list_refs', args: null })).toBe('list_refs')
@@ -138,13 +164,13 @@ describe('CHAT_EVENTS', () => {
       (CHAT_EVENTS as readonly string[]).includes(name) ? applyEvent(state, name, payload) : state
 
     let state = emptyChat('r1')
-    state = deliver(state, 'chat:start', { repoID: 'r1', runID: 'exp1', text: 'Explain commit abc1234: Fix login' })
+    state = deliver(state, 'chat:start', { repoID: 'r1', runID: 'exp1', text: 'Explain commit abc1234: Fix login', provider: 'ollama', model: 'm' })
     state = deliver(state, 'chat:delta', { repoID: 'r1', runID: 'exp1', text: 'It repairs the session cookie.' })
     state = deliver(state, 'chat:done', { repoID: 'r1', runID: 'exp1' })
 
     expect(state.items).toEqual([
       { role: 'user', text: 'Explain commit abc1234: Fix login', tools: [] },
-      { role: 'assistant', text: 'It repairs the session cookie.', tools: [] },
+      { role: 'assistant', text: 'It repairs the session cookie.', tools: [], provider: 'ollama', model: 'm' },
     ])
     expect(state.runID).toBeNull()
   })

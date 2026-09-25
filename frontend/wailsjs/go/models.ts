@@ -22,6 +22,8 @@ export namespace ai {
 	    toolCalls?: ToolCall[];
 	    toolName?: string;
 	    stopped?: boolean;
+	    provider?: string;
+	    model?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Message(source);
@@ -34,6 +36,8 @@ export namespace ai {
 	        this.toolCalls = this.convertValues(source["toolCalls"], ToolCall);
 	        this.toolName = source["toolName"];
 	        this.stopped = source["stopped"];
+	        this.provider = source["provider"];
+	        this.model = source["model"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

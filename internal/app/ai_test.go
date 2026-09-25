@@ -202,6 +202,17 @@ func TestSendChatRunsToolsStreamsAndSaves(t *testing.T) {
 		!strings.Contains(history[2].Content, "Current branch: main") || history[3].Content != "Hay ramas." {
 		t.Fatalf("history = %#v", history)
 	}
+	// Every assistant message of the answer records what produced it; the
+	// question and the tool result don't.
+	for i, m := range history {
+		want := m.Role == ai.RoleAssistant
+		if got := m.Provider == "ollama" && m.Model == "qwen2.5:7b"; got != want {
+			t.Fatalf("history[%d] provider/model = %q/%q", i, m.Provider, m.Model)
+		}
+		if !want && (m.Provider != "" || m.Model != "") {
+			t.Fatalf("history[%d] provider/model = %q/%q, want none", i, m.Provider, m.Model)
+		}
+	}
 
 	if err := a.ClearChat(id); err != nil {
 		t.Fatal(err)
@@ -278,7 +289,8 @@ func TestExplainInChatWritesTheAnswerToTheConversation(t *testing.T) {
 		t.Fatal(err)
 	}
 	start := ev.wait(t, agent.EventStart).data.(agent.StartEvent)
-	if start.RepoID != id || start.RunID != "exp-1" || !strings.Contains(start.Text, hash[:7]) {
+	if start.RepoID != id || start.RunID != "exp-1" || !strings.Contains(start.Text, hash[:7]) ||
+		start.Provider != "ollama" || start.Model != "qwen2.5:7b" {
 		t.Fatalf("start = %#v", start)
 	}
 	ev.wait(t, agent.EventDone)
@@ -298,7 +310,8 @@ func TestExplainInChatWritesTheAnswerToTheConversation(t *testing.T) {
 	if len(history) != 2 || history[0].Role != ai.RoleUser || !strings.Contains(history[0].Content, hash[:7]) {
 		t.Fatalf("history = %#v", history)
 	}
-	if history[1].Role != ai.RoleAssistant || history[1].Content != "Hay ramas." {
+	if history[1].Role != ai.RoleAssistant || history[1].Content != "Hay ramas." ||
+		history[1].Provider != "ollama" || history[1].Model != "qwen2.5:7b" || history[0].Provider != "" {
 		t.Fatalf("answer = %#v", history[1])
 	}
 }
@@ -477,7 +490,7 @@ func TestSendChatEmitsStart(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := ev.wait(t, agent.EventStart).data.(agent.StartEvent)
-	if got != (agent.StartEvent{RepoID: id, RunID: "run-1", Text: "hola"}) {
+	if got != (agent.StartEvent{RepoID: id, RunID: "run-1", Text: "hola", Provider: "ollama", Model: "qwen2.5:7b"}) {
 		t.Fatalf("start = %#v", got)
 	}
 	ev.wait(t, agent.EventDone)

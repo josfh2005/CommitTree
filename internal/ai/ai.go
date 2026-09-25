@@ -24,6 +24,11 @@ type Message struct {
 	ToolCalls []ToolCall `json:"toolCalls,omitempty"`
 	ToolName  string     `json:"toolName,omitempty"`
 	Stopped   bool       `json:"stopped,omitempty"`
+	// Provider and Model name what produced an assistant message, so the
+	// chat can show it; empty on other roles and on messages stored before
+	// they were recorded.
+	Provider string `json:"provider,omitempty"`
+	Model    string `json:"model,omitempty"`
 }
 
 // ToolSpec describes a callable tool; Parameters is a JSON Schema object.

@@ -38,6 +38,9 @@ type StartEvent struct {
 	RepoID string `json:"repoID"`
 	RunID  string `json:"runID"`
 	Text   string `json:"text"`
+	// Provider and Model are what will produce the answer.
+	Provider string `json:"provider"`
+	Model    string `json:"model"`
 }
 
 type DeltaEvent struct {
