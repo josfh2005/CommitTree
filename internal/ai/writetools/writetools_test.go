@@ -184,6 +184,11 @@ func TestStageFilesProposals(t *testing.T) {
 	if _, err := prep(r.Dir, "stage_files", map[string]any{"paths": []any{"missing.txt"}}); err == nil || !strings.Contains(err.Error(), `"missing.txt" has no unstaged change`) {
 		t.Fatalf("err = %v", err)
 	}
+	// "." is not a listed path; the error must send the model to the list
+	// rather than read as "nothing changed".
+	if _, err := prep(r.Dir, "stage_files", map[string]any{"paths": []any{"."}}); err == nil || !strings.Contains(err.Error(), "use the exact paths listed by working_tree_status") {
+		t.Fatalf("err = %v", err)
+	}
 	p, err := prep(r.Dir, "stage_files", map[string]any{"paths": []any{"a.txt"}})
 	if err != nil {
 		t.Fatal(err)
@@ -198,7 +203,7 @@ func TestUnstageFilesProposals(t *testing.T) {
 	r.Commit("base")
 	r.WriteFile("a.txt", "a\n")
 	r.Git("add", "a.txt")
-	if _, err := prep(r.Dir, "unstage_files", map[string]any{"paths": []any{"b.txt"}}); err == nil || !strings.Contains(err.Error(), `"b.txt" is not staged`) {
+	if _, err := prep(r.Dir, "unstage_files", map[string]any{"paths": []any{"b.txt"}}); err == nil || !strings.Contains(err.Error(), `"b.txt" is not staged; use the exact paths listed by working_tree_status`) {
 		t.Fatalf("err = %v", err)
 	}
 	p, err := prep(r.Dir, "unstage_files", map[string]any{"paths": []any{"a.txt"}})

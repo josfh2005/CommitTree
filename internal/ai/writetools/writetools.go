@@ -265,6 +265,10 @@ func pathsArg(args map[string]any, key string) ([]string, error) {
 
 // --- stage_files / unstage_files ---
 
+// exactPathsHint follows a rejected path, so a model that sent "." or a
+// pattern reads it as a wrong path, not as "nothing changed".
+const exactPathsHint = `use the exact paths listed by working_tree_status (no "." or patterns)`
+
 func prepareStageFiles(ctx context.Context, dir string, args map[string]any) (Proposal, error) {
 	paths, err := pathsArg(args, "paths")
 	if err != nil {
@@ -286,7 +290,7 @@ func prepareStageFiles(ctx context.Context, dir string, args map[string]any) (Pr
 	}
 	for _, p := range paths {
 		if !avail[p] {
-			return Proposal{}, fmt.Errorf("%q has no unstaged change", p)
+			return Proposal{}, fmt.Errorf("%q has no unstaged change; %s", p, exactPathsHint)
 		}
 	}
 	return Proposal{
@@ -314,7 +318,7 @@ func prepareUnstageFiles(ctx context.Context, dir string, args map[string]any) (
 	}
 	for _, p := range paths {
 		if !staged[p] {
-			return Proposal{}, fmt.Errorf("%q is not staged", p)
+			return Proposal{}, fmt.Errorf("%q is not staged; %s", p, exactPathsHint)
 		}
 	}
 	return Proposal{

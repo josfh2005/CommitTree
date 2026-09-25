@@ -10,6 +10,7 @@ import (
 	"git-ui/internal/ai"
 	"git-ui/internal/gitlog"
 	"git-ui/internal/refs"
+	"git-ui/internal/worktree"
 )
 
 const (
@@ -72,6 +73,19 @@ func Specs() []ai.ToolSpec {
 				"end_line":   num("Last line, optional"),
 			}, "path"),
 		},
+		{
+			Name:        "working_tree_status",
+			Description: "List the uncommitted changes: the current branch, then the staged, unstaged and untracked files with git's status letter (M modified, A added, D deleted, R renamed, ? untracked). Use these exact paths with diff_working_file, stage_files and unstage_files.",
+			Parameters:  obj(map[string]any{}),
+		},
+		{
+			Name:        "diff_working_file",
+			Description: "Show the diff of one uncommitted file: its unstaged changes against the index, or with staged=true its staged changes against HEAD. An untracked file shows as fully added. The path must be one working_tree_status lists.",
+			Parameters: obj(map[string]any{
+				"path":   str("File path, exactly as working_tree_status lists it"),
+				"staged": map[string]any{"type": "boolean", "description": "Show the staged diff instead of the unstaged one"},
+			}, "path"),
+		},
 	}
 }
 
@@ -93,6 +107,10 @@ func Run(ctx context.Context, dir string, call ai.ToolCall) string {
 		out, err = fileHistory(ctx, dir, call.Args)
 	case "blame_file":
 		out, err = blameFile(ctx, dir, call.Args)
+	case "working_tree_status":
+		out, err = workingTreeStatus(ctx, dir)
+	case "diff_working_file":
+		out, err = diffWorkingFile(ctx, dir, call.Args)
 	default:
 		err = fmt.Errorf("unknown tool %q", call.Name)
 	}
@@ -350,6 +368,17 @@ func listRefs(ctx context.Context, dir string) (string, error) {
 	return b.String(), nil
 }
 
+// argBool reads a boolean argument; small models sometimes send "true".
+func argBool(args map[string]any, key string) bool {
+	switch v := args[key].(type) {
+	case bool:
+		return v
+	case string:
+		return strings.EqualFold(strings.TrimSpace(v), "true")
+	}
+	return false
+}
+
 func argString(args map[string]any, key string) string {
 	if v, ok := args[key]; ok {
 		if s, ok := v.(string); ok {
@@ -374,4 +403,55 @@ func argInt(args map[string]any, key string, def, max int) int {
 		n = def
 	}
 	return min(n, max)
+}
+
+// workingTreeStatus lists the uncommitted changes, one path per line with
+// its status letter, grouped the way the Changes view groups them.
+func workingTreeStatus(ctx context.Context, dir string) (string, error) {
+	st, err := worktree.Status(ctx, dir)
+	if err != nil {
+		return "", err
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "Branch: %s\n", refs.CurrentLabel(ctx, dir))
+	if st.Merging {
+		b.WriteString("Merging: yes\n")
+	}
+	if len(st.Staged)+len(st.Unstaged)+len(st.Untracked) == 0 {
+		b.WriteString("Working tree clean.")
+		return b.String(), nil
+	}
+	for _, group := range []struct {
+		title string
+		files []worktree.FileStatus
+	}{{"Staged", st.Staged}, {"Unstaged", st.Unstaged}, {"Untracked", st.Untracked}} {
+		if len(group.files) == 0 {
+			continue
+		}
+		fmt.Fprintf(&b, "%s (%d):\n", group.title, len(group.files))
+		for _, f := range group.files {
+			line := fmt.Sprintf("  %s  %s", f.Status, f.Path)
+			if f.OldPath != "" {
+				line += fmt.Sprintf(" (from %s)", f.OldPath)
+			}
+			b.WriteString(line + "\n")
+		}
+	}
+	return strings.TrimRight(b.String(), "\n"), nil
+}
+
+func diffWorkingFile(ctx context.Context, dir string, args map[string]any) (string, error) {
+	path := argString(args, "path")
+	if path == "" {
+		return "", fmt.Errorf("path is required")
+	}
+	patch, err := worktree.FileDiff(ctx, dir, path, argBool(args, "staged"))
+	if err != nil {
+		return "", err
+	}
+	lines := strings.Split(strings.TrimRight(patch, "\n"), "\n")
+	if len(lines) > MaxDiffLines {
+		lines = append(lines[:MaxDiffLines], fmt.Sprintf("[diff truncated at %d lines]", MaxDiffLines))
+	}
+	return strings.Join(lines, "\n"), nil
 }

@@ -3,16 +3,11 @@ package app
 import (
 	"context"
 	"errors"
-	"fmt"
-	"os"
-	"path/filepath"
-	"slices"
 	"time"
 
 	"git-ui/internal/ai/prompts"
 	"git-ui/internal/ai/tasks"
 	"git-ui/internal/ai/tools"
-	"git-ui/internal/gitcmd"
 	"git-ui/internal/refs"
 	"git-ui/internal/worktree"
 )
@@ -91,53 +86,14 @@ func (a *App) GetCommitPreview(id string) (worktree.CommitInfo, error) {
 }
 
 // GetWorktreeDiff returns what one changed file shows in the pane: the staged
-// diff against HEAD, or the unstaged diff against the index. Only a path the
-// status just listed can be read, so a path from the renderer cannot be used
-// to read the disk.
+// diff against HEAD, or the unstaged diff against the index, capped. Only a
+// path the status just listed can be read (see worktree.FileDiff).
 func (a *App) GetWorktreeDiff(id, path string, staged bool) (string, error) {
 	dir, err := a.dir(id)
 	if err != nil {
 		return "", err
 	}
-	st, err := worktree.Status(a.ctx, dir)
-	if err != nil {
-		return "", err
-	}
-	known := []string{}
-	for _, list := range [][]worktree.FileStatus{st.Staged, st.Unstaged, st.Untracked} {
-		for _, f := range list {
-			known = append(known, f.Path)
-		}
-	}
-	if !slices.Contains(known, path) {
-		return "", fmt.Errorf("%q is not a changed file of this repository", path)
-	}
-	// An untracked file has no HEAD or index side to diff against; --no-index
-	// against /dev/null is what shows its whole content as an addition. That
-	// mode behaves like the plain diff(1) command it emulates: it exits 1
-	// merely because the two sides differ, not because anything went wrong -
-	// but git overloads that same exit code for "could not access the path",
-	// which is exactly what a stale path from the renderer produces if the
-	// file vanished between the Status read above and this call. Exit 1 can't
-	// tell the two apart on its own, so the path is checked on disk first;
-	// only once it's confirmed to exist is exit 1 read as "they differ".
-	if !staged && slices.ContainsFunc(st.Untracked, func(f worktree.FileStatus) bool { return f.Path == path }) {
-		if _, statErr := os.Lstat(filepath.Join(dir, path)); statErr != nil {
-			return "", statErr
-		}
-		out, err := gitcmd.Run(a.ctx, dir, gitcmd.ReadTimeout, "--literal-pathspecs", "diff", "--no-index", "--", "/dev/null", path)
-		var gerr *gitcmd.Error
-		if errors.As(err, &gerr) && gerr.ExitCode == 1 {
-			return tools.Truncate(out, worktreeDiffCap), nil
-		}
-		return out, err
-	}
-	args := []string{"--literal-pathspecs", "diff", "--submodule=log"}
-	if staged {
-		args = append(args, "--cached")
-	}
-	args = append(args, "--", path)
-	out, err := gitcmd.Run(a.ctx, dir, gitcmd.ReadTimeout, args...)
+	out, err := worktree.FileDiff(a.ctx, dir, path, staged)
 	if err != nil {
 		return out, err
 	}

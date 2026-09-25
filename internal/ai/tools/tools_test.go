@@ -26,7 +26,7 @@ func TestSpecsListAllTools(t *testing.T) {
 			t.Errorf("%s: incomplete spec %+v", s.Name, s)
 		}
 	}
-	if strings.Join(names, ",") != "search_log,show_commit,diff_commit_file,list_refs,file_history,blame_file" {
+	if strings.Join(names, ",") != "search_log,show_commit,diff_commit_file,list_refs,file_history,blame_file,working_tree_status,diff_working_file" {
 		t.Fatalf("names = %v", names)
 	}
 }
@@ -221,5 +221,54 @@ func TestLimitsAndTruncate(t *testing.T) {
 	}
 	if tools.Truncate("short", 10) != "short" {
 		t.Fatal("short text changed")
+	}
+}
+
+func TestWorkingTreeStatus(t *testing.T) {
+	r := testrepo.New(t)
+	r.Commit("base")
+	if got := run(r.Dir, "working_tree_status", nil); !strings.Contains(got, "Branch: main") || !strings.Contains(got, "Working tree clean.") {
+		t.Fatalf("clean = %q", got)
+	}
+
+	r.WriteFile("file-1.txt", "changed\n")
+	r.WriteFile("staged.txt", "s\n")
+	r.Git("add", "staged.txt")
+	r.Git("mv", "file-1.txt", "moved.txt")
+	r.WriteFile("moved.txt", "changed again\n")
+	r.WriteFile("dir/new file.txt", "n\n")
+	got := run(r.Dir, "working_tree_status", nil)
+	for _, want := range []string{
+		"Staged (2):\n  R  moved.txt (from file-1.txt)\n  A  staged.txt",
+		"Unstaged (1):\n  M  moved.txt",
+		"Untracked (1):\n  ?  dir/new file.txt",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("status missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "Merging") || strings.Contains(got, "clean") {
+		t.Errorf("status = %q", got)
+	}
+}
+
+func TestDiffWorkingFile(t *testing.T) {
+	r := testrepo.New(t)
+	r.Commit("base")
+	r.WriteFile("file-1.txt", "base\nmore\n")
+	r.WriteFile("staged.txt", "s\n")
+	r.Git("add", "staged.txt")
+
+	if got := run(r.Dir, "diff_working_file", map[string]any{"path": "file-1.txt"}); !strings.Contains(got, "+more") {
+		t.Fatalf("unstaged = %q", got)
+	}
+	if got := run(r.Dir, "diff_working_file", map[string]any{"path": "staged.txt", "staged": true}); !strings.Contains(got, "+s") {
+		t.Fatalf("staged = %q", got)
+	}
+	if got := run(r.Dir, "diff_working_file", map[string]any{"path": "nope.txt"}); !strings.HasPrefix(got, "error: ") || !strings.Contains(got, "not a changed file") {
+		t.Fatalf("unknown = %q", got)
+	}
+	if got := run(r.Dir, "diff_working_file", nil); got != "error: path is required" {
+		t.Fatalf("no path = %q", got)
 	}
 }
