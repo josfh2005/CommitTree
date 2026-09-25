@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -431,6 +432,39 @@ func TestExplainLinesInChatWithBadPathReturnsErrorAndDoesNotBusyTheChat(t *testi
 	}
 	if err := a.SendChat(id, "hola", "run-1"); err != nil {
 		t.Fatalf("chat still busy after a failed explain: %v", err)
+	}
+	ev.wait(t, agent.EventDone)
+}
+
+func TestStopWhilePreparingAnExplanationIsNotAnError(t *testing.T) {
+	srv := fakeOllama(t, nil)
+	a, id, ev := newAIApp(t, srv.URL)
+
+	building := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		done <- a.explainTask(id, "ollama", "x", prompts.ExplainLines, func(ctx context.Context, dir string) (string, string, error) {
+			close(building)
+			<-ctx.Done()
+			return "", "", ctx.Err()
+		})
+	}()
+	<-building
+	if err := a.StopChat(id); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("stopping while the context is built: %v, want nil", err)
+	}
+	history, err := a.GetChat(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(history) != 0 {
+		t.Fatalf("history = %#v, want nothing stored", history)
+	}
+	if err := a.SendChat(id, "hola", "run-1"); err != nil {
+		t.Fatalf("chat still busy after a stopped explain: %v", err)
 	}
 	ev.wait(t, agent.EventDone)
 }

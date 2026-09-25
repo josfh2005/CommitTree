@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('./api', () => ({ api: {} }))
 
 import { isLogOrder } from './logOrder'
-import { blameBack, blamePrevious, blameStack, blameTarget, closeBlame, expandedStashSections, expandedTagSections, mainView, openBlame, persisted, selectedHash, selectRepo, selectUncommitted, showCommitInLog, toggleCommit, toggleStashExpanded, toggleTagsExpanded, toggleUncommitted, uncommittedSelected } from './stores'
+import { blameBack, blamePrevious, blameStack, blameTarget, chatPreparing, closeBlame, expandedStashSections, explainIntoChat, expandedTagSections, mainView, openBlame, persisted, selectedHash, selectRepo, selectUncommitted, showCommitInLog, toggleCommit, toggleStashExpanded, toggleTagsExpanded, toggleUncommitted, uncommittedSelected } from './stores'
 
 /** A minimal in-memory Storage, since these tests don't run in a DOM
  *  environment and so have no real localStorage to read from. */
@@ -155,6 +155,22 @@ describe('loadRepos when a repository disappears', () => {
     await loadRepos()
     expect(get(selectedRepoId)).toBe('')
     expect(get(terminalState).tabs).toEqual([])
+  })
+})
+
+describe('explainIntoChat', () => {
+  it('marks the repo as preparing until the call settles, then clears it', async () => {
+    let finish!: () => void
+    const call = explainIntoChat('r1', () => new Promise<void>((resolve) => (finish = resolve)))
+    expect(get(chatPreparing)).toEqual(['r1'])
+    finish()
+    await call
+    expect(get(chatPreparing)).toEqual([])
+  })
+
+  it('clears the mark when the call fails, and passes the error on', async () => {
+    await expect(explainIntoChat('r1', () => Promise.reject(new Error('boom')))).rejects.toThrow('boom')
+    expect(get(chatPreparing)).toEqual([])
   })
 })
 

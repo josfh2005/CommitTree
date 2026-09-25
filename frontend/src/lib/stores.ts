@@ -39,6 +39,24 @@ export const sidebarWidth = persisted('sidebarWidth', 280)
 export const chatWidth = persisted('chatWidth', 340)
 export const detailsHeight = persisted('detailsHeight', 280)
 export const chatOpen = persisted('chatOpen', true)
+
+/** Repositories whose chat is taken by an explanation still being prepared
+ *  (blame and diffs being read) before its question appears in the chat. */
+export const chatPreparing = writable<string[]>([])
+
+/** Runs an Explain … in chat call, marking the repository's chat as
+ *  preparing until the call returns, so the chat shows Stop meanwhile. */
+export async function explainIntoChat(repoID: string, call: () => Promise<void>): Promise<void> {
+  chatPreparing.update((ids) => [...ids, repoID])
+  try {
+    await call()
+  } finally {
+    chatPreparing.update((ids) => {
+      const i = ids.indexOf(repoID)
+      return i < 0 ? ids : [...ids.slice(0, i), ...ids.slice(i + 1)]
+    })
+  }
+}
 export const terminalOpen = persisted('terminalOpen', false)
 /** Height of the terminal under the chat, in pixels. */
 export const terminalHeight = persisted('terminalHeight', 260)

@@ -8,7 +8,7 @@
   } from '../lib/geometry'
   import { isCurrentBranchRef } from '../lib/refBadge'
   import { cherryPickBlocker, rebaseBlocker } from '../lib/rebase'
-  import { busy, chatOpen, filters, jumpTo, logOrder, logVersion, mergeState, refs, selectedHash, toggleCommit, toggleUncommitted, uncommittedSelected, worktreeState } from '../lib/stores'
+  import { busy, chatOpen, explainIntoChat, filters, jumpTo, logOrder, logVersion, mergeState, refs, selectedHash, toggleCommit, toggleUncommitted, uncommittedSelected, worktreeState } from '../lib/stores'
   import type { LogRow } from '../lib/types'
   import { copyText, errorMessage, openMenuAsync, toast } from '../lib/ui'
   import { cleanTreeSelection, followHead, uncommittedCount, uncommittedMarker } from '../lib/uncommitted'
@@ -265,7 +265,7 @@
   async function explain(row: LogRow) {
     chatOpen.set(true)
     try {
-      await api.explainInChat(repoId, row.hash, '', crypto.randomUUID())
+      await explainIntoChat(repoId, () => api.explainInChat(repoId, row.hash, '', crypto.randomUUID()))
     } catch (e) {
       toast(errorMessage(e), 'error')
     }

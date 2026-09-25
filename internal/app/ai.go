@@ -492,7 +492,8 @@ func explainLinesQuestion(rev, path string, start, end int) string {
 // once the slot is taken, with the run's context, and returns the question
 // to store and the prompt to send; an error from build (including a git
 // error while blaming or diffing) is returned directly, before anything is
-// written to the chat, and releases the slot.
+// written to the chat, and releases the slot. StopChat during build cancels
+// it and returns nil. The frontend shows the chat as preparing meanwhile.
 func (a *App) explainTask(repoID, provider, runID, promptName string, build func(ctx context.Context, dir string) (question, prompt string, err error)) error {
 	if a.ai == nil {
 		return ErrAIDisabled
@@ -540,7 +541,14 @@ func (a *App) explainTask(repoID, provider, runID, promptName string, build func
 
 	question, prompt, err := build(ctx, repo.Path)
 	if err != nil {
+		// Stop pressed while the context was being built: nothing was
+		// written to the chat yet, so there is nothing to report. Checked
+		// before finish, which cancels ctx itself.
+		stopped := errors.Is(ctx.Err(), context.Canceled)
 		finish()
+		if stopped {
+			return nil
+		}
 		return err
 	}
 	history, err := a.ai.deps.Chats.Load(repoID)

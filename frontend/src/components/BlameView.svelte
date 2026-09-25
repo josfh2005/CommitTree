@@ -2,7 +2,7 @@
   import { api } from '../lib/api'
   import { blocksIn, lineBlocks, previousBlocker, rangeAt, revLabel, selectLine, singleCommit, type LineRange } from '../lib/blame'
   import { relativeDate } from '../lib/format'
-  import { blameBack, blameIgnoreWhitespace, blamePrevious, blameTarget, chatOpen, showCommitInLog, worktreeState } from '../lib/stores'
+  import { blameBack, blameIgnoreWhitespace, blamePrevious, blameTarget, chatOpen, explainIntoChat, showCommitInLog, worktreeState } from '../lib/stores'
   import type { Blame, BlameBlock } from '../lib/types'
   import { copyText, errorMessage, openMenu, toast } from '../lib/ui'
 
@@ -87,7 +87,8 @@
     if (!blame) return
     chatOpen.set(true)
     try {
-      await api.explainLinesInChat(repoId, blame.rev, blame.path, range.start, range.end, '', crypto.randomUUID())
+      const { rev, path } = blame
+      await explainIntoChat(repoId, () => api.explainLinesInChat(repoId, rev, path, range.start, range.end, '', crypto.randomUUID()))
     } catch (e) {
       toast(errorMessage(e), 'error')
     }

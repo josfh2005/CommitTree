@@ -5,7 +5,7 @@
   import { api } from '../lib/api'
   import { applyEvent, CHAT_EVENTS, confirmResultText, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from '../lib/chat'
   import { renderMarkdown } from '../lib/markdown'
-  import { chatOpen, jumpTo, selectedRepo, settingsOpen } from '../lib/stores'
+  import { chatOpen, chatPreparing, jumpTo, selectedRepo, settingsOpen } from '../lib/stores'
   import type { AIStatus } from '../lib/types'
   import { errorMessage, toast } from '../lib/ui'
 
@@ -27,7 +27,11 @@
   onDestroy(() => offs.forEach((off) => off()))
 
   $: load($selectedRepo?.id ?? '')
-  $: running = state.runID !== null
+  // An explanation takes the chat while its context is still being read,
+  // before its chat:start; show it as running then too, so Stop works and
+  // a message typed meanwhile is not refused as busy.
+  $: preparing = state.runID === null && !!state.repoID && $chatPreparing.includes(state.repoID)
+  $: running = state.runID !== null || preparing
   $: ready = !!status?.ollama.running && !!status?.ollama.chatModelInstalled
 
   async function load(repoID: string) {
@@ -206,6 +210,7 @@
         </div>
       {/if}
     {/each}
+    {#if preparing}<div class="typing">Preparing the explanation…</div>{/if}
   </div>
 
   <div class="composer">
