@@ -78,8 +78,11 @@ stash conflict) stays where it is, left of the toolbar. A missing
     is `{ refs, worktree, merge, busy, remote, terminalOpen, chatOpen,
     platform }` (the existing stores' values) and `ToolbarItem` is
     `{ id, label, icon, group, enabled, reason, active, badge }`.
-  - `mergeCandidates(refs: Refs | null, query: string): Branch[]` — the
-    picker's filtered list.
+  - `mergeCandidates(refs: Refs | null): MergeCandidate[]` — the picker's
+    items (local, then remote; current branch left out), each keeping its
+    `Branch`.
+- `frontend/src/lib/pick.ts` (new, pure): `filterPick(items, query)`, the
+  case-insensitive substring filter the picker applies as you type.
 - `frontend/src/lib/ui.ts`: a `pick` dialog kind and `pickDialog(options)`
   returning the chosen item or null.
 - `frontend/src/components/DialogHost.svelte`: renders `pick` (search field,
@@ -102,8 +105,9 @@ No backend change: every action already exists.
 - `toolbarItems`: clean repo; with changes; merge/rebase/stash conflict;
   detached HEAD; busy; ahead/behind badges; Terminal/Chat active; Finder vs
   Folder by platform; the reason text of each disabled button.
-- `mergeCandidates`: excludes the current branch; local before remote;
-  case-insensitive substring match; empty result.
+- `mergeCandidates`: excludes the current branch and a remote `HEAD`; local
+  before remote. `filterPick`: case-insensitive substring match; empty query
+  keeps all; no match gives an empty list.
 - Manual, in the app: the picker's keyboard flow; narrow window; light, dark
   and high-contrast themes.
 
