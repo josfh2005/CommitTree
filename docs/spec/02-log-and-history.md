@@ -312,7 +312,8 @@ stack is empty, returns to wherever the view was opened from — the details
 pane or the Changes view.
 
 Blame caps a file at the first 20 000 lines, with a notice when a file was
-truncated. A binary file or a path that no longer exists at the requested
+truncated. Lines of a file with Windows line endings (CRLF) are shown
+without the carriage return. A binary file or a path that no longer exists at the requested
 revision is shown as an error with a Retry button rather than any lines.
 Changing the selected repository closes the blame view, and a merge in
 progress takes the main pane as it always does, ahead of blame the same as

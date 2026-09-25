@@ -110,7 +110,9 @@ func parsePorcelain(out string, limit int) (Blame, error) {
 			if cur == nil {
 				return Blame{}, errors.New("gitlog: blame line before its header")
 			}
-			text := line[1:]
+			// A CRLF file's lines keep their carriage return; drop it so it
+			// is not shown or sent to the model as part of the line.
+			text := strings.TrimSuffix(line[1:], "\r")
 			if strings.IndexByte(text, 0) >= 0 {
 				return Blame{}, ErrBinaryBlame
 			}

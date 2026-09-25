@@ -77,6 +77,20 @@ func TestParsePorcelainUnquotesNonASCIIPaths(t *testing.T) {
 	}
 }
 
+func TestGetBlameStripsCRLF(t *testing.T) {
+	r := testrepo.New(t)
+	r.WriteFile("win.txt", "one\r\ntwo\r\n")
+	r.Git("add", "win.txt")
+	r.Git("commit", "-q", "-m", "crlf")
+	b, err := GetBlame(context.Background(), r.Dir, "HEAD", "win.txt", BlameOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(b.Lines, ",") != "one,two" {
+		t.Fatalf("lines = %q", b.Lines)
+	}
+}
+
 func TestParsePorcelainGroupsConsecutiveLines(t *testing.T) {
 	out := h1 + " 1 1 2\nauthor A\nauthor-mail <a@x>\nauthor-time 1\nauthor-tz +0000\nsummary s\nboundary\nfilename f\n\ta\n" +
 		h1 + " 2 2\nfilename f\n\tb\n"
