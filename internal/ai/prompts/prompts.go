@@ -3,7 +3,10 @@
 package prompts
 
 import (
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -71,14 +74,61 @@ func defaultText(name string) (string, error) {
 
 func (s *Store) userFile(name string) string { return filepath.Join(s.dir, name+".md") }
 
-// Get returns the rendered prompt, preferring the user's file.
+// registryFile records, per prompt, the hash of the default text the app
+// last wrote to the user's folder, so an untouched copy is told apart from
+// an edit once the embedded default changes.
+const registryFile = ".defaults.json"
+
+func textHash(text string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(text)))
+	return hex.EncodeToString(sum[:])
+}
+
+// written reads the registry; a missing or unreadable one is empty, which
+// only loses the detection of copies written since it existed.
+func (s *Store) written() map[string]string {
+	m := map[string]string{}
+	if data, err := os.ReadFile(filepath.Join(s.dir, registryFile)); err == nil {
+		_ = json.Unmarshal(data, &m)
+	}
+	return m
+}
+
+// writeDefault writes name's default to the user's folder and records it.
+func (s *Store) writeDefault(name, def string, written map[string]string) error {
+	if err := os.WriteFile(s.userFile(name), []byte(def), 0o644); err != nil {
+		return err
+	}
+	written[name] = textHash(def)
+	data, err := json.MarshalIndent(written, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(s.dir, registryFile), data, 0o644)
+}
+
+// userText is the user's own version of name, or "" when there is none: no
+// file, a blank one, or an untouched copy of a default the app wrote (now or
+// in an earlier version) — which must not shadow the current default.
+func (s *Store) userText(name string, written map[string]string) string {
+	data, err := os.ReadFile(s.userFile(name))
+	if err != nil || strings.TrimSpace(string(data)) == "" {
+		return ""
+	}
+	if h := textHash(string(data)); h == written[name] || pastDefaults[h] {
+		return ""
+	}
+	return string(data)
+}
+
+// Get returns the rendered prompt, preferring the user's own version.
 func (s *Store) Get(name string, v Vars) (string, error) {
 	text, err := defaultText(name)
 	if err != nil {
 		return "", err
 	}
-	if data, err := os.ReadFile(s.userFile(name)); err == nil && strings.TrimSpace(string(data)) != "" {
-		text = string(data)
+	if mine := s.userText(name, s.written()); mine != "" {
+		text = mine
 	}
 	r := strings.NewReplacer("{{repo}}", v.Repo, "{{path}}", v.Path, "{{branch}}", v.Branch, "{{date}}", v.Date)
 	return strings.TrimSpace(r.Replace(text)), nil
@@ -86,27 +136,37 @@ func (s *Store) Get(name string, v Vars) (string, error) {
 
 func (s *Store) List() []Info {
 	infos := []Info{}
+	written := s.written()
 	for _, name := range Names() {
 		def, _ := defaultText(name)
-		data, err := os.ReadFile(s.userFile(name))
-		infos = append(infos, Info{Name: name, Customized: err == nil && strings.TrimSpace(string(data)) != strings.TrimSpace(def)})
+		mine := s.userText(name, written)
+		infos = append(infos, Info{Name: name, Customized: mine != "" && strings.TrimSpace(mine) != strings.TrimSpace(def)})
 	}
 	return infos
 }
 
-// EnsureFiles creates the prompts folder and writes a copy of each default
-// that has no user file yet, so the user has something to edit.
+// EnsureFiles creates the prompts folder and writes the current default for
+// each prompt that has no file yet or only an untouched copy of an older
+// default, so the folder shows what the app uses. Edited files are left
+// alone.
 func (s *Store) EnsureFiles() error {
 	if err := os.MkdirAll(s.dir, 0o755); err != nil {
 		return err
 	}
+	written := s.written()
 	for _, name := range Names() {
-		path := s.userFile(name)
-		if _, err := os.Stat(path); err == nil {
-			continue
+		data, err := os.ReadFile(s.userFile(name))
+		if err == nil && s.userText(name, written) != "" {
+			continue // the user's own version
 		}
 		def, _ := defaultText(name)
-		if err := os.WriteFile(path, []byte(def), 0o644); err != nil {
+		if err == nil && string(data) == def {
+			continue
+		}
+		if err == nil && strings.TrimSpace(string(data)) == "" {
+			continue // blank already falls back to the default; leave it
+		}
+		if err := s.writeDefault(name, def, written); err != nil {
 			return err
 		}
 	}
@@ -122,5 +182,5 @@ func (s *Store) Reset(name string) error {
 	if err := os.MkdirAll(s.dir, 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(s.userFile(name), []byte(def), 0o644)
+	return s.writeDefault(name, def, s.written())
 }
