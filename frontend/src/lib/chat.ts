@@ -86,6 +86,9 @@ export function startRun(state: ChatState, text: string, runID: string): ChatSta
   return {
     ...state,
     runID,
+    // A new message makes any suggestion for the previous answer stale,
+    // even one that arrives after this run failed to start.
+    lastRunID: null,
     suggestions: undefined,
     items: [...state.items, { role: 'user', text, tools: [] }, { role: 'assistant', text: '', tools: [] }],
   }

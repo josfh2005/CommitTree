@@ -57,6 +57,7 @@ describe('applyEvent', () => {
     expect(running()).toEqual({
       repoID: 'r1',
       runID: 'run1',
+      lastRunID: null,
       items: [
         { role: 'user', text: 'hola', tools: [] },
         { role: 'assistant', text: '', tools: [] },
@@ -295,6 +296,12 @@ describe('suggested replies', () => {
     const s = offer(answered())
     expect(startRun(s, 'ok dale', 'run2').suggestions ?? []).toEqual([])
     expect(applyEvent(s, 'chat:start', { repoID: 'r1', runID: 'exp', text: 'Explain', provider: 'ollama', model: 'm' }).suggestions ?? []).toEqual([])
+  })
+
+  it('drops late ones for the previous answer after a message the backend refused', () => {
+    let s = startRun(answered(), 'otra', 'run2')
+    s = applyEvent(s, 'chat:error', { repoID: 'r1', runID: 'run2', message: 'add an API key', code: 'other' })
+    expect(offer(s).suggestions ?? []).toEqual([])
   })
 
   it('is an event the panel listens to', () => {
