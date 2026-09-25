@@ -138,6 +138,10 @@ export function GetGitSettings() {
   return window['go']['app']['App']['GetGitSettings']();
 }
 
+export function GetIdentity(arg1) {
+  return window['go']['app']['App']['GetIdentity'](arg1);
+}
+
 export function GetLog(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['app']['App']['GetLog'](arg1, arg2, arg3, arg4, arg5);
 }

@@ -8,7 +8,8 @@
   } from '../lib/geometry'
   import { isCurrentBranchRef } from '../lib/refBadge'
   import { cherryPickBlocker, rebaseBlocker } from '../lib/rebase'
-  import { busy, chatOpen, explainIntoChat, filters, jumpTo, logOrder, logVersion, mergeState, refs, selectedHash, toggleCommit, toggleUncommitted, uncommittedSelected, worktreeState } from '../lib/stores'
+  import { isMine } from '../lib/identity'
+  import { busy, chatOpen, explainIntoChat, filters, identity, jumpTo, logOrder, logVersion, mergeState, refs, selectedHash, toggleCommit, toggleUncommitted, uncommittedSelected, worktreeState } from '../lib/stores'
   import type { LogRow } from '../lib/types'
   import { copyText, errorMessage, openMenuAsync, toast } from '../lib/ui'
   import { cleanTreeSelection, followHead, uncommittedCount, uncommittedMarker } from '../lib/uncommitted'
@@ -357,6 +358,7 @@
           class="row"
           class:selected={row.hash === $selectedHash}
           class:merge={row.isMerge}
+          class:mine={isMine(row, $identity)}
           style="top: {(range.start + i) * ROW_HEIGHT + lead}px; padding-left: {width}px"
           on:click={() => toggleCommit(row.hash)}
           on:contextmenu={(e) => commitMenu(e, row)}
@@ -408,6 +410,10 @@
   }
   .row.selected { background: var(--selection); }
   .merge .subject { color: var(--merge-text); }
+  /* The user's own commits: subject and author in semibold; the ref badges
+     inside the subject keep their own weight. */
+  .mine .subject, .mine .author { font-weight: 600; }
+  .mine .badge:not(.current) { font-weight: 400; }
   .uncommitted .subject { font-style: italic; color: var(--muted); }
   .author, .date, .hash { color: var(--muted); font-size: 12px; }
   .badge { display: inline-block; margin-right: 6px; padding: 1px 6px; border-radius: 6px; font-size: 11px; line-height: 15px; }

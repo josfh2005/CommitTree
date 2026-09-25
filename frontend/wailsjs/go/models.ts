@@ -189,6 +189,20 @@ export namespace app {
 	        this.text = source["text"];
 	    }
 	}
+	export class Identity {
+	    name: string;
+	    email: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Identity(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.email = source["email"];
+	    }
+	}
 	export class LogRow {
 	    hash: string;
 	    short: string;

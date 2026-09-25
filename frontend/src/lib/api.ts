@@ -1,5 +1,5 @@
 import * as Go from '../../wailsjs/go/app/App'
-import type { AIMessage, AISettings, AIStatus, AheadBehind, Blame, ChatConfirmEvent, CommitInfo, ConflictFile, Details, Filters, GitSettings, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
+import type { AIMessage, AISettings, AIStatus, AheadBehind, Blame, ChatConfirmEvent, CommitInfo, ConflictFile, Details, Filters, GitSettings, Identity, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
 
 // The generated bindings use Wails model classes; the JSON is identical to our
 // interfaces, so cast at this single boundary.
@@ -23,6 +23,7 @@ export const api = {
   getDiff: (id: string, parent: string, hash: string, paths: string[]) => call<string>(Go.GetDiff(id, parent, hash, paths)),
   getBlame: (id: string, rev: string, path: string, ignoreWhitespace: boolean) => call<Blame>(Go.GetBlame(id, rev, path, ignoreWhitespace)),
   getAuthors: (id: string) => call<string[]>(Go.GetAuthors(id)),
+  getIdentity: (id: string) => call<Identity>(Go.GetIdentity(id)),
   resolveCommit: (id: string, text: string) => call<string>(Go.ResolveCommit(id, text)),
   isShallow: (id: string) => call<boolean>(Go.IsShallow(id)),
   fingerprint: (id: string) => call<string>(Go.Fingerprint(id)),

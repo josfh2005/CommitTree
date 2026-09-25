@@ -3,7 +3,7 @@ import { api } from './api'
 import type { BlameTarget } from './blame'
 import { validSelectedStash, type SelectedStash } from './stash'
 import { nextSelection } from './submodules'
-import { emptyFilters, type AISettings, type AheadBehind, type Filters, type GitSettings, type LogOrder, type MergeState, type Refs, type Repo, type StashEntry, type WorktreeState } from './types'
+import { emptyFilters, type AISettings, type AheadBehind, type Filters, type GitSettings, type Identity, type LogOrder, type MergeState, type Refs, type Repo, type StashEntry, type WorktreeState } from './types'
 import { isLogOrder } from './logOrder'
 import { removeRepoTabs, terminalState } from './terminal'
 
@@ -299,6 +299,23 @@ export async function loadWorktreeState() {
   }
 }
 
+/** The selected repository's git user, whose commits the log highlights. */
+export const identity = writable<Identity | null>(null)
+
+export async function loadIdentity() {
+  const repo = get(selectedRepo)
+  if (!repo || repo.missing) {
+    identity.set(null)
+    return
+  }
+  try {
+    const me = await api.getIdentity(repo.id)
+    if (get(selectedRepoId) === repo.id) identity.set(me)
+  } catch {
+    if (get(selectedRepoId) === repo.id) identity.set(null)
+  }
+}
+
 export async function loadRemoteInfo() {
   const repo = get(selectedRepo)
   if (!repo || repo.missing) {
@@ -393,6 +410,7 @@ export function selectRepo(id: string) {
     stashConflictDismissed.set(false)
     selectedStash.set(null)
     worktreeState.set(null)
+    identity.set(null)
   }
   selectedRepoId.set(id)
   // Selecting a folded repo unfolds it; folding it later keeps it selected.
@@ -400,6 +418,7 @@ export function selectRepo(id: string) {
   loadRefs()
   loadMergeState()
   loadWorktreeState()
+  loadIdentity()
   loadRemoteInfo()
   loadStashEntries()
   loadOwedStashDrop()

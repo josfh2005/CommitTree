@@ -1,6 +1,6 @@
 import { get } from 'svelte/store'
 import { api } from './api'
-import { busy, chatOpen, collapsedRepoGroups, expandedRepos, filters, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, repos, selectRepo, selectedRepoId, stashConflictDismissed } from './stores'
+import { busy, chatOpen, collapsedRepoGroups, expandedRepos, filters, loadIdentity, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, repos, selectRepo, selectedRepoId, stashConflictDismissed } from './stores'
 import type { Branch, FileStatus, MergeState, RebasePreview, Repo, ResetInfo, ResetMode, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
 import { PULL_UP_TO_DATE, UP_TO_DATE } from './types'
 import { abortWarning, commitWarning, isEmptyStepError, skipWarning, takeMessage } from './merge'
@@ -404,6 +404,8 @@ export async function checkExternalChanges() {
   if (!id) return
   loadMergeState()
   loadWorktreeState()
+  // user.name/user.email can be changed in a terminal at any time.
+  loadIdentity()
   try {
     const current = await api.fingerprint(id)
     if (id === knownFingerprintId && knownFingerprint && current !== knownFingerprint) await refreshRepo()

@@ -120,6 +120,12 @@ export interface Refs {
   tags: Tag[]
 }
 
+/** The repository's git user.name and user.email ('' when not set). */
+export interface Identity {
+  name: string
+  email: string
+}
+
 export interface FileChange {
   status: string
   path: string
