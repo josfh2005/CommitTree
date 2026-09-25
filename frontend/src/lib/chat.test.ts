@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { answeredBy, applyEvent, CHAT_EVENTS, confirmResultText, confirmState, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from './chat'
+import { answeredBy, applyEvent, isWriteTool, CHAT_EVENTS, confirmResultText, confirmState, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from './chat'
 import type { AIMessage, ChatConfirmEvent } from './types'
 
 describe('fromMessages', () => {
@@ -306,5 +306,16 @@ describe('suggested replies', () => {
 
   it('is an event the panel listens to', () => {
     expect(CHAT_EVENTS).toContain('chat:suggestions')
+  })
+})
+
+describe('isWriteTool', () => {
+  it('knows the chat write tools, mirroring writetools.Specs in Go', () => {
+    for (const name of ['stage_files', 'unstage_files', 'commit', 'create_branch', 'checkout_branch', 'stash_push', 'fetch', 'push', 'pull', 'merge_branch', 'cherry_pick']) {
+      expect(isWriteTool(name), name).toBe(true)
+    }
+    for (const name of ['search_log', 'working_tree_status', 'diff_working_file', 'blame_file']) {
+      expect(isWriteTool(name), name).toBe(false)
+    }
   })
 })

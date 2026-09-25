@@ -4,7 +4,7 @@
   import Icon from './Icon.svelte'
   import ModelPicker from './ModelPicker.svelte'
   import { api } from '../lib/api'
-  import { answeredBy, applyEvent, CHAT_EVENTS, confirmResultText, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from '../lib/chat'
+  import { answeredBy, applyEvent, CHAT_EVENTS, isWriteTool, confirmResultText, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from '../lib/chat'
   import { relativeDate } from '../lib/format'
   import { renderMarkdown } from '../lib/markdown'
   import { chatBlocker } from '../lib/providers'
@@ -217,7 +217,7 @@
               </div>
             {:else}
               <div class="tool" title={JSON.stringify(tool.args ?? {})}>
-                <Icon name="search" size={12} />
+                <Icon name={isWriteTool(tool.name) ? 'pencil' : 'search'} size={12} />
                 <span class="ellipsis">{toolLabel(tool)}</span>
                 {#if tool.summary}<span class="summary ellipsis">· {tool.summary}</span>{/if}
               </div>

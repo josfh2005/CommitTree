@@ -240,6 +240,13 @@ export function applyEvent(state: ChatState, name: string, payload: Payload): Ch
   return state
 }
 
+// WRITE_TOOLS mirrors writetools.Specs in internal/ai/writetools: the chat
+// tools that change the repository, shown with a pencil instead of the
+// magnifier the read tools get.
+const WRITE_TOOLS = new Set(['stage_files', 'unstage_files', 'commit', 'create_branch', 'checkout_branch', 'stash_push', 'fetch', 'push', 'pull', 'merge_branch', 'cherry_pick'])
+
+export const isWriteTool = (name: string): boolean => WRITE_TOOLS.has(name)
+
 export function toolLabel(tool: { name: string; args: Record<string, unknown> | null }): string {
   const value = Object.values(tool.args ?? {}).find((v) => v !== '' && v !== null && v !== undefined)
   return value === undefined ? tool.name : `${tool.name}: ${String(value)}`
