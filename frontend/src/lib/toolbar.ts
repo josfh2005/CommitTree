@@ -1,0 +1,48 @@
+import { revealLabel } from './platform'
+import { terminalShortcutLabel } from './terminal'
+import type { AheadBehind, MergeState, Refs, WorktreeState } from './types'
+import { uncommittedCount } from './uncommitted'
+
+export type ToolbarId = 'commit' | 'stash' | 'fetch' | 'pull' | 'push' | 'branch' | 'merge' | 'terminal' | 'folder' | 'chat'
+export type ToolbarGroup = 'work' | 'sync' | 'refs' | 'tools'
+
+export interface ToolbarInput {
+  refs: Refs | null
+  worktree: WorktreeState | null
+  merge: MergeState | null
+  busy: string
+  remote: AheadBehind | null
+  terminalOpen: boolean
+  chatOpen: boolean
+  platform: string
+}
+
+// title is the tooltip: why the button is disabled, or what it does.
+export interface ToolbarItem { id: ToolbarId; label: string; icon: string; group: ToolbarGroup; enabled: boolean; title: string; active: boolean; badge: number }
+
+const CONFLICT = 'Resolve the conflict first'
+
+/** toolbarItems is the repository toolbar: every button with whether it can
+ *  run now and, when not, why. A conflict of any kind blocks what writes to
+ *  the working tree or moves the branch; Fetch and Branch stay available. */
+export function toolbarItems(i: ToolbarInput): ToolbarItem[] {
+  const conflict = !!i.merge?.merging
+  const changes = uncommittedCount(i.worktree) > 0
+  // first returns the first reason that applies, or '' when none does.
+  const first = (...rules: [boolean, string][]) => rules.find(([when]) => when)?.[1] ?? ''
+  const item = (id: ToolbarId, label: string, icon: string, group: ToolbarGroup, reason: string, title: string, extra: Partial<ToolbarItem> = {}): ToolbarItem =>
+    ({ id, label, icon, group, enabled: reason === '', title: reason || title, active: false, badge: 0, ...extra })
+  const shortcut = `${terminalShortcutLabel(i.platform)} or Ctrl+\``
+  return [
+    item('commit', 'Commit', 'commit', 'work', first([!!i.busy, i.busy], [conflict, CONFLICT], [!changes, 'Nothing to commit']), 'Commit the changes'),
+    item('stash', 'Stash', 'stash', 'work', first([!!i.busy, i.busy], [conflict, CONFLICT], [!changes, 'Nothing to stash']), 'Stash the changes'),
+    item('fetch', 'Fetch', 'refresh', 'sync', first([!!i.busy, i.busy]), 'Fetch from all remotes'),
+    item('pull', 'Pull', 'download', 'sync', first([!!i.busy, i.busy], [conflict, CONFLICT]), 'Pull', { badge: i.remote?.behind ?? 0 }),
+    item('push', 'Push', 'upload', 'sync', first([!!i.busy, i.busy], [conflict, CONFLICT]), 'Push', { badge: i.remote?.ahead ?? 0 }),
+    item('branch', 'Branch', 'branch', 'refs', first([!!i.busy, i.busy]), 'New branch from HEAD'),
+    item('merge', 'Merge', 'merge', 'refs', first([!!i.busy, i.busy], [conflict, CONFLICT], [!!i.refs?.detached, 'Check out a branch first']), 'Merge a branch into the current one'),
+    item('terminal', 'Terminal', 'terminal', 'tools', '', `${i.terminalOpen ? 'Hide' : 'Show'} terminal (${shortcut})`, { active: i.terminalOpen }),
+    item('folder', i.platform === 'darwin' ? 'Finder' : 'Folder', 'folder', 'tools', '', revealLabel(i.platform)),
+    item('chat', 'Chat', 'chat', 'tools', '', i.chatOpen ? 'Hide chat' : 'Show chat', { active: i.chatOpen }),
+  ]
+}
