@@ -3,6 +3,8 @@ package gitlog
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -11,6 +13,33 @@ import (
 
 const h1 = "1111111111111111111111111111111111111111"
 const h2 = "2222222222222222222222222222222222222222"
+
+func TestGetBlameSHA256Repository(t *testing.T) {
+	r := testrepo.New(t)
+	if err := os.RemoveAll(filepath.Join(r.Dir, ".git")); err != nil {
+		t.Fatal(err)
+	}
+	r.Git("init", "-q", "--object-format=sha256", "-b", "main")
+	r.Git("config", "user.name", "Test User")
+	r.Git("config", "user.email", "test@example.com")
+	r.Git("config", "commit.gpgsign", "false")
+	r.WriteFile("a.txt", "one\n")
+	r.Git("add", "a.txt")
+	r.Git("commit", "-q", "-m", "add")
+	head := r.Git("rev-parse", "HEAD")
+	r.WriteFile("a.txt", "one\ntwo\n")
+
+	b, err := GetBlame(context.Background(), r.Dir, "", "a.txt", BlameOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(head) != 64 || len(b.Blocks) != 2 || b.Blocks[0].Hash != head || b.Blocks[0].Short != head[:7] {
+		t.Fatalf("head %q, blocks = %+v", head, b.Blocks)
+	}
+	if !b.Blocks[1].Uncommitted || b.Blocks[1].Author != "" {
+		t.Fatalf("uncommitted block = %+v", b.Blocks[1])
+	}
+}
 
 func TestParsePorcelainRepeatsMetadata(t *testing.T) {
 	out := strings.Join([]string{

@@ -20,7 +20,19 @@ var (
 // can lower it.
 var maxBlameLines = 20000
 
-const zeroHash = "0000000000000000000000000000000000000000"
+// isObjectHash reports whether s is a full commit hash: 40 hex digits in a
+// SHA-1 repository, 64 in a SHA-256 one.
+func isObjectHash(s string) bool {
+	if len(s) != 40 && len(s) != 64 {
+		return false
+	}
+	for _, c := range s {
+		if !strings.ContainsRune("0123456789abcdef", c) {
+			return false
+		}
+	}
+	return true
+}
 
 type BlameOptions struct {
 	IgnoreWhitespace bool
@@ -133,7 +145,7 @@ func parsePorcelain(out string, limit int) (Blame, error) {
 		case line == "":
 		case cur == nil:
 			f := strings.Fields(line)
-			if len(f) < 3 || len(f[0]) != 40 {
+			if len(f) < 3 || !isObjectHash(f[0]) {
 				return Blame{}, fmt.Errorf("gitlog: unexpected blame header %q", line)
 			}
 			n, err := strconv.Atoi(f[2])
@@ -178,7 +190,8 @@ func (m *blameMeta) block(hash string, start int) BlameBlock {
 		Filename: m.filename, Date: time.Unix(m.time, 0).In(tzOffset(m.tz)),
 		Start: start, Count: 1, Previous: m.previous, PrevPath: m.prevPath, Boundary: m.boundary,
 	}
-	if hash == zeroHash {
+	// Uncommitted lines carry an all-zero hash of the repository's hash length.
+	if strings.Trim(hash, "0") == "" {
 		// Git labels these "Not Committed Yet" and may add a previous line
 		// pointing at HEAD; neither means anything for lines no commit has.
 		blk.Uncommitted = true
