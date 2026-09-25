@@ -73,8 +73,8 @@ answer), and nothing else.
   `User:` / `Assistant:` lines; tool messages and tool calls are left out;
   each message is cut to 1500 characters.
 - Calls `r.Respond` and collects the text.
-- Parsing (`parseReplies`, pure): takes the first `[` … matching `]` in the
-  text (so code fences and surrounding prose are tolerated), unmarshals it as
+- Parsing (`ParseReplies`, pure): takes the text from the first `[` to the last
+  `]` (so code fences and surrounding prose are tolerated), unmarshals it as
   `[]any`, keeps strings only, trims them, drops empty ones, duplicates
   (case-insensitive) and those over 60 characters, and returns at most three.
   No array, or an empty result, is an error.
@@ -123,7 +123,7 @@ Event: `chat:suggestions` → `SuggestionsEvent{RepoID, RunID string; Replies
 
 ## Testing
 
-- `tasks`: `parseReplies` on a clean array, a fenced array, prose around it,
+- `tasks`: `ParseReplies` on a clean array, a fenced array, prose around it,
   more than three, too long, non-strings, duplicates, not JSON, empty.
   `SuggestReplies` with a fake responder: context leaves out tool messages
   and keeps the last 6.
