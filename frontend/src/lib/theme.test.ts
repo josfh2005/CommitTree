@@ -35,8 +35,20 @@ function block(css: string, selector: string, from = 0): Record<string, string> 
 describe('high contrast palettes in theme.css', () => {
   const css = readFileSync(new URL('../theme.css', import.meta.url), 'utf8')
   const selector = ":root[data-contrast='high']"
-  const light = block(css, selector)
-  const dark = block(css, selector, css.indexOf('@media (prefers-color-scheme: dark)', css.indexOf(selector)))
+  const darkMedia = '@media (prefers-color-scheme: dark)'
+  const lightHigh = block(css, selector)
+  const darkHigh = block(css, selector, css.indexOf(darkMedia, css.indexOf(selector)))
+  // High contrast sits on top of the normal palette of the same mode.
+  const lightBase = block(css, ':root')
+  const darkBase = block(css, ':root', css.indexOf(darkMedia))
+  const light = { ...lightBase, ...lightHigh }
+  const dark = { ...lightBase, ...darkBase, ...darkHigh }
+  const textTokens = ['--text', '--muted', '--faint', '--merge-text']
+
+  it('changes only text colours, never backgrounds or borders', () => {
+    expect(Object.keys(lightHigh).sort()).toEqual([...textTokens].sort())
+    expect(Object.keys(darkHigh).sort()).toEqual([...textTokens].sort())
+  })
 
   for (const [name, palette] of [['light', light], ['dark', dark]] as const) {
     it(`${name}: text stays at least 4.5:1 on every background`, () => {
@@ -48,12 +60,6 @@ describe('high contrast palettes in theme.css', () => {
       }
       for (const bg of ['--bg', '--surface', '--sidebar']) {
         expect(contrastRatio(palette['--faint'], palette[bg]), `--faint on ${bg}`).toBeGreaterThanOrEqual(4.5)
-      }
-    })
-
-    it(`${name}: borders stand out from the surfaces they separate`, () => {
-      for (const bg of ['--bg', '--surface', '--sidebar']) {
-        expect(contrastRatio(palette['--border'], palette[bg]), `--border on ${bg}`).toBeGreaterThanOrEqual(1.9)
       }
     })
   }

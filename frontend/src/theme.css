@@ -87,37 +87,23 @@
 }
 
 /* High contrast (Settings → Appearance), for light and dark alike. Only the
-   neutral tokens change - text, backgrounds, borders, hover and selection -
-   so accent, graph, badge and diff colours stay recognisable. Every text
-   token stays at least 4.5:1 on the backgrounds it sits on (theme.test.ts
-   checks it). The light block outranks the plain dark :root by specificity,
-   so the dark block below must redefine every token the light one sets. */
+   text colours change; backgrounds, borders, hover, selection, accent,
+   graph, badge and diff colours stay as they are. Every text token stays at
+   least 4.5:1 on the backgrounds it sits on (theme.test.ts checks both).
+   The light block outranks the plain dark :root by specificity, so the dark
+   block below must redefine every token the light one sets. */
 :root[data-contrast='high'] {
-  --bg: #ffffff;
-  --surface: #ffffff;
-  --sidebar: #f2f2f0;
-  --hover: #e4e3df;
-  --active: #d6d4cf;
-  --border: #a9a7a2;
   --text: #000000;
   --muted: #45443f;
   --faint: #6a6863;
-  --selection: #cddcfb;
   --merge-text: #4d4b46;
 }
 
 @media (prefers-color-scheme: dark) {
   :root[data-contrast='high'] {
-    --bg: #121211;
-    --surface: #1a1a19;
-    --sidebar: #0c0c0b;
-    --hover: #2c2b29;
-    --active: #3b3a37;
-    --border: #6a6863;
     --text: #ffffff;
     --muted: #cfcdc8;
     --faint: #a3a19c;
-    --selection: #34466b;
     --merge-text: #bdbbb6;
   }
 }
