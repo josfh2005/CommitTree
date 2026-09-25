@@ -16,6 +16,7 @@ import (
 	"git-ui/internal/ai/agent"
 	"git-ui/internal/ai/chatstore"
 	"git-ui/internal/ai/prompts"
+	"git-ui/internal/ai/settings"
 	"git-ui/internal/merge"
 	"git-ui/internal/repos"
 	"git-ui/internal/testrepo"
@@ -166,6 +167,8 @@ func newAIMergeApp(t *testing.T, ollamaURL string) (*App, *testrepo.Repo, string
 		t.Fatal(err)
 	}
 	s.OllamaURL = ollamaURL
+	// Suggested replies would schedule background calls after every answer.
+	s.SuggestReplies = settings.SuggestOff
 	if err := a.SaveAISettings(s); err != nil {
 		t.Fatal(err)
 	}

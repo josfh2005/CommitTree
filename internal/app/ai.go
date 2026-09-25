@@ -38,6 +38,9 @@ type AIDeps struct {
 	Prompts      *prompts.Store
 	// Emit sends an event to the frontend; nil uses the Wails runtime.
 	Emit func(name string, data any)
+	// SuggestDelay is how long after an answer suggested replies wait
+	// before being generated; 0 uses DefaultSuggestDelay.
+	SuggestDelay time.Duration
 }
 
 type aiState struct {
@@ -46,6 +49,9 @@ type aiState struct {
 	runs       map[string]context.CancelFunc // repo ID → running chat
 	pullCancel context.CancelFunc
 	confirms   map[string]*pendingConfirm // confirm ID → pending write proposal
+	// suggestions holds, per repo ID, the suggested replies waiting or
+	// being generated.
+	suggestions map[string]*pendingSuggestion
 }
 
 type OllamaStatus struct {
@@ -88,7 +94,7 @@ type ModelDone struct {
 // once during wiring in main.go, not exposed as a Wails binding, so the
 // renderer cannot invoke it with empty or arbitrary deps.
 func WithAI(a *App, d AIDeps) {
-	a.ai = &aiState{deps: d, runs: map[string]context.CancelFunc{}, confirms: map[string]*pendingConfirm{}}
+	a.ai = &aiState{deps: d, runs: map[string]context.CancelFunc{}, confirms: map[string]*pendingConfirm{}, suggestions: map[string]*pendingSuggestion{}}
 }
 
 func (a *App) emit(name string, data any) {
@@ -330,6 +336,7 @@ func (a *App) SendChat(repoID, text, runID string) error {
 	ctx, cancel := context.WithCancel(a.ctx)
 	a.ai.runs[repoID] = cancel
 	a.ai.mu.Unlock()
+	a.cancelSuggestions(repoID)
 	finish := func() {
 		a.ai.mu.Lock()
 		delete(a.ai.runs, repoID)
@@ -396,6 +403,10 @@ func (a *App) SendChat(repoID, text, runID string) error {
 			a.emit(agent.EventError, agent.ErrorEvent{RepoID: repoID, RunID: runID, Message: saveErr.Error(), Code: "other"})
 		default:
 			a.emit(agent.EventDone, agent.DoneEvent{RepoID: repoID, RunID: runID, At: at})
+			// A stopped answer also ends here, with context.Canceled.
+			if runErr == nil {
+				a.suggestReplies(repoID, runID, cfg)
+			}
 		}
 	}()
 	return nil
@@ -448,6 +459,7 @@ func (a *App) ClearChat(repoID string) error {
 	if busy {
 		return ErrChatBusy
 	}
+	a.cancelSuggestions(repoID)
 	return a.ai.deps.Chats.Clear(repoID)
 }
 
@@ -547,6 +559,7 @@ func (a *App) explainTask(repoID, provider, runID, promptName string, build func
 	ctx, cancel := context.WithTimeout(a.ctx, 3*time.Minute)
 	a.ai.runs[repoID] = cancel
 	a.ai.mu.Unlock()
+	a.cancelSuggestions(repoID)
 	finish := func() {
 		a.ai.mu.Lock()
 		delete(a.ai.runs, repoID)
@@ -595,6 +608,10 @@ func (a *App) explainTask(repoID, provider, runID, promptName string, build func
 			a.emit(agent.EventError, agent.ErrorEvent{RepoID: repoID, RunID: runID, Message: saveErr.Error(), Code: "other"})
 		default:
 			a.emit(agent.EventDone, agent.DoneEvent{RepoID: repoID, RunID: runID, At: at})
+			// A stopped answer also ends here, with context.Canceled.
+			if runErr == nil {
+				a.suggestReplies(repoID, runID, cfg)
+			}
 		}
 	}()
 	return nil

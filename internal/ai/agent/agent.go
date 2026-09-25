@@ -19,13 +19,14 @@ const (
 	OmittedToolResult = "[earlier tool result omitted]"
 	StepLimitNote     = "Step limit reached."
 
-	EventStart      = "chat:start"
-	EventDelta      = "chat:delta"
-	EventTool       = "chat:tool"
-	EventToolResult = "chat:tool_result"
-	EventDone       = "chat:done"
-	EventError      = "chat:error"
-	EventNotice     = "chat:notice"
+	EventStart       = "chat:start"
+	EventDelta       = "chat:delta"
+	EventTool        = "chat:tool"
+	EventToolResult  = "chat:tool_result"
+	EventDone        = "chat:done"
+	EventError       = "chat:error"
+	EventNotice      = "chat:notice"
+	EventSuggestions = "chat:suggestions"
 
 	noticeRecovered   = "The model wrote a tool call as text; CommitTree ran it."
 	noticeUnrecovered = "The model wrote a tool call as text that CommitTree could not run. Try a model with reliable tool calling."
@@ -75,6 +76,14 @@ type ErrorEvent struct {
 	RunID   string `json:"runID"`
 	Message string `json:"message"`
 	Code    string `json:"code"`
+}
+
+// SuggestionsEvent offers replies the user may send next after the answer
+// of RunID. It arrives some seconds after chat:done, or never.
+type SuggestionsEvent struct {
+	RepoID  string   `json:"repoID"`
+	RunID   string   `json:"runID"`
+	Replies []string `json:"replies"`
 }
 
 // NoticeEvent is a transient, informational aside about the run - e.g. that

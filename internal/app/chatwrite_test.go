@@ -17,6 +17,7 @@ import (
 	"git-ui/internal/ai/agent"
 	"git-ui/internal/ai/chatstore"
 	"git-ui/internal/ai/prompts"
+	"git-ui/internal/ai/settings"
 	"git-ui/internal/ai/writetools"
 	"git-ui/internal/gitsettings"
 	"git-ui/internal/repos"
@@ -523,6 +524,8 @@ func newAIAppFromRepo(t *testing.T, r *testrepo.Repo, ollamaURL string) (*App, s
 		t.Fatal(err)
 	}
 	s.OllamaURL = ollamaURL
+	// Suggested replies would schedule background calls after every answer.
+	s.SuggestReplies = settings.SuggestOff
 	if err := a.SaveAISettings(s); err != nil {
 		t.Fatal(err)
 	}

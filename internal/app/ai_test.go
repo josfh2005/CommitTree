@@ -119,6 +119,8 @@ func newAIApp(t *testing.T, ollamaURL string) (*App, string, *events) {
 		t.Fatal(err)
 	}
 	s.OllamaURL = ollamaURL
+	// Suggested replies would schedule background calls after every answer.
+	s.SuggestReplies = settings.SuggestOff
 	if err := a.SaveAISettings(s); err != nil {
 		t.Fatal(err)
 	}

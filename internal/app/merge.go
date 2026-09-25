@@ -299,6 +299,7 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 	ctx, cancel := context.WithCancel(a.ctx)
 	a.ai.runs[repoID] = cancel
 	a.ai.mu.Unlock()
+	a.cancelSuggestions(repoID)
 	finish := func() {
 		a.ai.mu.Lock()
 		delete(a.ai.runs, repoID)
@@ -365,6 +366,10 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 			a.emit(agent.EventError, agent.ErrorEvent{RepoID: repoID, RunID: runID, Message: saveErr.Error(), Code: "other"})
 		default:
 			a.emit(agent.EventDone, agent.DoneEvent{RepoID: repoID, RunID: runID, At: at})
+			// A stopped answer also ends here, with context.Canceled.
+			if runErr == nil {
+				a.suggestReplies(repoID, runID, cfg)
+			}
 		}
 	}()
 	return nil
