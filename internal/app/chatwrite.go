@@ -99,7 +99,9 @@ func (a *App) runWriteTool(ctx context.Context, repoID, runID, dir string, call 
 	if err := writetools.Recheck(ctx, dir, p, call.Name); err != nil {
 		return "error: " + err.Error()
 	}
+	unmark := a.markAIWrite(repoID)
 	done, err := a.executeWrite(repoID, call.Name, p)
+	unmark()
 	if errors.Is(err, ErrBusy) {
 		return "error: another operation is running in this repository; try again when it finishes"
 	}

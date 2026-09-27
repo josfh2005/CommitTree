@@ -38,6 +38,18 @@ export function ClearChat(arg1) {
   return window['go']['app']['App']['ClearChat'](arg1);
 }
 
+export function ClearCommandLog(arg1) {
+  return window['go']['app']['App']['ClearCommandLog'](arg1);
+}
+
+export function CommandLog(arg1) {
+  return window['go']['app']['App']['CommandLog'](arg1);
+}
+
+export function CommandLogOutput(arg1, arg2) {
+  return window['go']['app']['App']['CommandLogOutput'](arg1, arg2);
+}
+
 export function CommitChanges(arg1, arg2, arg3) {
   return window['go']['app']['App']['CommitChanges'](arg1, arg2, arg3);
 }

@@ -9,9 +9,12 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"git-ui/internal/cmdlog"
+	"git-ui/internal/gitcmd"
 	"git-ui/internal/gitlog"
 	"git-ui/internal/graph"
 	"git-ui/internal/ops"
@@ -75,6 +78,14 @@ type App struct {
 	logs   map[string]*logState
 	writes sync.Map // repo ID → *sync.Mutex
 	ai     *aiState
+	// cmds is the log behind the Commands panel; aiWrites marks
+	// repositories (by cmdlog.RepoKey) running an approved AI write.
+	cmds     *cmdlog.Log
+	aiWrites sync.Map
+	// started is set by Startup; cmdEmit sends a logged command to the
+	// frontend and is nil until then.
+	started atomic.Bool
+	cmdEmit func(cmdlog.Entry)
 	// gitSettingsPath overrides gitsettings.DefaultPath() when set — empty
 	// in production, a temp path in tests.
 	gitSettingsPath string
@@ -105,11 +116,19 @@ func New(store *repos.Store) *App {
 		OnSettled: func(tab, repo string) { a.emit("terminal:settled", TerminalSettled{tab, repo}) },
 		OnExit:    func(tab string, code int) { a.emit("terminal:exit", TerminalExit{tab, code}) },
 	})
+	a.cmds = cmdlog.New()
+	// One recorder per process: the most recently created App owns it —
+	// there is one App in the real application.
+	gitcmd.SetRecorder(a.recordGit)
 	return a
 }
 
 // Startup receives the Wails runtime context.
-func (a *App) Startup(ctx context.Context) { a.ctx = ctx }
+func (a *App) Startup(ctx context.Context) {
+	a.ctx = ctx
+	a.cmdEmit = wailsCommandEmitter(ctx)
+	a.started.Store(true)
+}
 
 func (a *App) dir(id string) (string, error) {
 	r, ok := a.repo(id)

@@ -3,6 +3,7 @@
 import {app} from '../models';
 import {repos} from '../models';
 import {merge} from '../models';
+import {cmdlog} from '../models';
 import {settings} from '../models';
 import {gitlog} from '../models';
 import {ai} from '../models';
@@ -32,6 +33,12 @@ export function CheckoutRemote(arg1:string,arg2:string,arg3:string):Promise<void
 export function CherryPick(arg1:string,arg2:string):Promise<merge.Result>;
 
 export function ClearChat(arg1:string):Promise<void>;
+
+export function ClearCommandLog(arg1:string):Promise<void>;
+
+export function CommandLog(arg1:string):Promise<Array<cmdlog.Entry>>;
+
+export function CommandLogOutput(arg1:string,arg2:number):Promise<cmdlog.Output>;
 
 export function CommitChanges(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 

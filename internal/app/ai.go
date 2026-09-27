@@ -375,6 +375,7 @@ func (a *App) SendChat(repoID, text, runID string) error {
 			Provider: provider, Model: cfg.ChatModel, System: system,
 			Tools: append(tools.Specs(), writetools.Specs()...),
 			RunTool: func(ctx context.Context, call ai.ToolCall, step int) string {
+				ctx = aiToolContext(ctx)
 				if !writetools.IsWrite(call.Name) {
 					return tools.Run(ctx, repo.Path, call)
 				}

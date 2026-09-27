@@ -336,6 +336,76 @@ export namespace app {
 
 }
 
+export namespace cmdlog {
+	
+	export class Entry {
+	    id: number;
+	    repo: string;
+	    args: string[];
+	    origin: string;
+	    kind: string;
+	    // Go type: time
+	    start: any;
+	    durationMs: number;
+	    exitCode: number;
+	    outcome: string;
+	    outputTruncated: boolean;
+	    outputDropped: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Entry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.repo = source["repo"];
+	        this.args = source["args"];
+	        this.origin = source["origin"];
+	        this.kind = source["kind"];
+	        this.start = this.convertValues(source["start"], null);
+	        this.durationMs = source["durationMs"];
+	        this.exitCode = source["exitCode"];
+	        this.outcome = source["outcome"];
+	        this.outputTruncated = source["outputTruncated"];
+	        this.outputDropped = source["outputDropped"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Output {
+	    stdout: string;
+	    stderr: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Output(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.stdout = source["stdout"];
+	        this.stderr = source["stderr"];
+	    }
+	}
+
+}
+
 export namespace gitlog {
 	
 	export class BlameBlock {
