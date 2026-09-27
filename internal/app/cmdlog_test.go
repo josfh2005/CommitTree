@@ -162,3 +162,66 @@ func TestAIToolRunIsLoggedAsAI(t *testing.T) {
 		}
 	}
 }
+
+func TestCancelCommandUnknownErrors(t *testing.T) {
+	a, id := newTestApp(t)
+	if err := a.CancelCommand(id, 123456); !errors.Is(err, cmdlog.ErrNotRunning) {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestRunningEntryEmittedBeforeFinished(t *testing.T) {
+	a, id := newTestApp(t)
+	var mu sync.Mutex
+	var got []cmdlog.Entry
+	a.cmdEmit = func(e cmdlog.Entry) {
+		mu.Lock()
+		got = append(got, e)
+		mu.Unlock()
+	}
+	a.started.Store(true)
+	if err := a.CreateBranch(id, "running", "HEAD", false); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	var branch []cmdlog.Entry
+	for _, e := range got {
+		if len(e.Args) > 0 && e.Args[0] == "branch" {
+			branch = append(branch, e)
+		}
+	}
+	if len(branch) != 2 || branch[0].Outcome != cmdlog.OutcomeRunning || branch[1].Outcome != cmdlog.OutcomeOK || branch[0].ID != branch[1].ID {
+		t.Fatalf("branch events: %+v", branch)
+	}
+	for _, e := range got {
+		if e.Kind == cmdlog.KindRead && e.Outcome == cmdlog.OutcomeRunning {
+			t.Fatalf("a running read was emitted: %+v", e)
+		}
+	}
+}
+
+func TestAIWriteMarkAppliesWhileRunning(t *testing.T) {
+	a, id := newTestApp(t)
+	var mu sync.Mutex
+	var running []cmdlog.Entry
+	a.cmdEmit = func(e cmdlog.Entry) {
+		mu.Lock()
+		if e.Outcome == cmdlog.OutcomeRunning {
+			running = append(running, e)
+		}
+		mu.Unlock()
+	}
+	a.started.Store(true)
+	done := a.markAIWrite(id)
+	err := a.CreateBranch(id, "by-ai-running", "HEAD", false)
+	done()
+	if err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(running) == 0 || running[len(running)-1].Origin != cmdlog.OriginAI {
+		t.Fatalf("running entries: %+v", running)
+	}
+}

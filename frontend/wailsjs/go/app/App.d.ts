@@ -22,6 +22,8 @@ export function AbortMerge(arg1:string):Promise<void>;
 
 export function AddRepo():Promise<repos.Repo>;
 
+export function CancelCommand(arg1:string,arg2:number):Promise<void>;
+
 export function CancelPull():Promise<void>;
 
 export function Checkout(arg1:string,arg2:string):Promise<void>;

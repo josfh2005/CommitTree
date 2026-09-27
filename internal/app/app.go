@@ -119,7 +119,7 @@ func New(store *repos.Store) *App {
 	a.cmds = cmdlog.New()
 	// One recorder per process: the most recently created App owns it —
 	// there is one App in the real application.
-	gitcmd.SetRecorder(&gitcmd.Recorder{End: a.recordGit})
+	gitcmd.SetRecorder(&gitcmd.Recorder{Begin: a.beginGit, End: a.recordGit})
 	return a
 }
 

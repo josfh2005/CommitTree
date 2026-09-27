@@ -9,21 +9,47 @@ import (
 	"git-ui/internal/gitcmd"
 )
 
-// EventCommand carries each finished git command to the Commands panel.
+// EventCommand carries git commands to the Commands panel: a write when it
+// starts (outcome "running") and every command when it ends, the end with
+// the same ID as its start.
 const EventCommand = "cmdlog:entry"
 
-// recordGit is the gitcmd recorder: every command the app runs lands in
-// the log, and once the window is up, in the panel.
-func (a *App) recordGit(r gitcmd.Record) {
-	if o, ok := cmdlog.OriginFrom(r.Ctx); !ok || o != cmdlog.OriginAI {
-		if a.aiWriting(cmdlog.RepoKey(r.Dir)) && cmdlog.Classify(r.Args) == cmdlog.KindWrite {
-			r.Ctx = cmdlog.WithOrigin(r.Ctx, cmdlog.OriginAI)
-		}
+// beginGit is the recorder's start hook: a write appears in the panel as
+// running as soon as git starts.
+func (a *App) beginGit(s gitcmd.Start) int64 {
+	s.Ctx = a.originContext(s.Ctx, s.Dir, s.Args)
+	e, shown := a.cmds.Begin(s)
+	if shown {
+		a.emitCommand(e)
 	}
-	e := a.cmds.Add(r)
-	// Not through a.emit: the AI deps' Emit is what tests watch for chat
-	// events, and every git command would flood it. Before Startup (and in
-	// tests) there is no Wails runtime to emit to.
+	return e.ID
+}
+
+// recordGit is the recorder's end hook: every command the app runs lands
+// in the log, and once the window is up, in the panel.
+func (a *App) recordGit(r gitcmd.Record) {
+	r.Ctx = a.originContext(r.Ctx, r.Dir, r.Args)
+	a.emitCommand(a.cmds.Add(r))
+}
+
+// originContext marks ctx as AI for a write run in a repository where an
+// approved AI write is running: that write runs through the same App
+// methods as the UI, whose ctx does not carry the AI origin (see
+// markAIWrite).
+func (a *App) originContext(ctx context.Context, dir string, args []string) context.Context {
+	if o, ok := cmdlog.OriginFrom(ctx); ok && o == cmdlog.OriginAI {
+		return ctx
+	}
+	if a.aiWriting(cmdlog.RepoKey(dir)) && cmdlog.Classify(args) == cmdlog.KindWrite {
+		return cmdlog.WithOrigin(ctx, cmdlog.OriginAI)
+	}
+	return ctx
+}
+
+// emitCommand sends e to the panel. Not through a.emit: the AI deps' Emit
+// is what tests watch for chat events, and every git command would flood
+// it. Before Startup (and in tests) there is no Wails runtime to emit to.
+func (a *App) emitCommand(e cmdlog.Entry) {
 	if a.started.Load() && a.cmdEmit != nil {
 		a.cmdEmit(e)
 	}
@@ -88,6 +114,16 @@ func (a *App) ClearCommandLog(id string) error {
 	}
 	a.cmds.Clear(dir)
 	return nil
+}
+
+// CancelCommand stops command entryID of repository id as Ctrl+C would;
+// cmdlog.ErrNotRunning when it is no longer running.
+func (a *App) CancelCommand(id string, entryID int64) error {
+	dir, err := a.dir(id)
+	if err != nil {
+		return err
+	}
+	return a.cmds.Cancel(dir, entryID)
 }
 
 func wailsCommandEmitter(ctx context.Context) func(cmdlog.Entry) {

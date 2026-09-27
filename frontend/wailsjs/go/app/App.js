@@ -14,6 +14,10 @@ export function AddRepo() {
   return window['go']['app']['App']['AddRepo']();
 }
 
+export function CancelCommand(arg1, arg2) {
+  return window['go']['app']['App']['CancelCommand'](arg1, arg2);
+}
+
 export function CancelPull() {
   return window['go']['app']['App']['CancelPull']();
 }
