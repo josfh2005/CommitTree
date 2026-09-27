@@ -163,3 +163,91 @@ func TestClear(t *testing.T) {
 		t.Fatal("not cleared")
 	}
 }
+
+func start(dir string, cancel func(), args ...string) gitcmd.Start {
+	return gitcmd.Start{Ctx: context.Background(), Dir: dir, Args: args, Start: time.Unix(100, 0), Cancel: cancel}
+}
+
+func TestBeginWriteIsRunningThenReplacedInPlace(t *testing.T) {
+	l := New()
+	before := l.Add(rec("/r", "commit", "-m", "a"))
+	b, shown := l.Begin(start("/r/", func() {}, "push"))
+	if !shown || b.Outcome != OutcomeRunning || b.Origin != OriginYou || b.Kind != KindWrite || b.Repo != "/r" || b.ID <= before.ID {
+		t.Fatalf("running entry wrong: %+v %v", b, shown)
+	}
+	if got := l.List("/r"); len(got) != 2 || got[0].ID != b.ID || got[0].Outcome != OutcomeRunning {
+		t.Fatalf("list: %+v", got)
+	}
+	r := rec("/r", "push")
+	r.ID = b.ID
+	r.Stdout = "done"
+	e := l.Add(r)
+	got := l.List("/r")
+	if e.ID != b.ID || len(got) != 2 || got[0].ID != b.ID || got[0].Outcome != OutcomeOK {
+		t.Fatalf("not replaced in place: %+v", got)
+	}
+	if out, err := l.Output("/r", b.ID); err != nil || out.Stdout != "done" {
+		t.Fatalf("output: %+v %v", out, err)
+	}
+}
+
+func TestBeginReadStoresNothing(t *testing.T) {
+	l := New()
+	b, shown := l.Begin(start("/r", func() {}, "status"))
+	if shown || b.ID == 0 || len(l.List("/r")) != 0 {
+		t.Fatalf("a running read must not be listed: %+v %v", b, shown)
+	}
+	if err := l.Cancel("/r", b.ID); !errors.Is(err, ErrNotRunning) {
+		t.Fatalf("a read cannot be cancelled: %v", err)
+	}
+	r := rec("/r", "status")
+	r.ID = b.ID
+	if e := l.Add(r); e.ID != b.ID || len(l.List("/r")) != 1 {
+		t.Fatalf("read end: %+v", e)
+	}
+}
+
+func TestBeginKeepsOriginAndRedacts(t *testing.T) {
+	l := New()
+	s := start("/r", func() {}, "push", "https://bob:hunter22@h/r.git")
+	s.Ctx = WithOrigin(context.Background(), OriginAI)
+	b, _ := l.Begin(s)
+	if b.Origin != OriginAI || strings.Contains(strings.Join(b.Args, " "), "hunter22") {
+		t.Fatalf("got %+v", b)
+	}
+}
+
+func TestCancel(t *testing.T) {
+	l := New()
+	called := 0
+	b, _ := l.Begin(start("/r", func() { called++ }, "push"))
+	if err := l.Cancel("/other", b.ID); !errors.Is(err, ErrNotRunning) || called != 0 {
+		t.Fatalf("another repository's cancel: %v, called %d", err, called)
+	}
+	if err := l.Cancel("/r/", b.ID); err != nil || called != 1 {
+		t.Fatalf("cancel: %v, called %d", err, called)
+	}
+	r := rec("/r", "push")
+	r.ID = b.ID
+	r.ExitCode = -1
+	r.Err = &gitcmd.Error{ExitCode: -1, Err: gitcmd.ErrCancelled}
+	if e := l.Add(r); e.Outcome != OutcomeCancelled {
+		t.Fatalf("got %s", e.Outcome)
+	}
+	if err := l.Cancel("/r", b.ID); !errors.Is(err, ErrNotRunning) {
+		t.Fatalf("finished command: %v", err)
+	}
+	if err := l.Cancel("/r", 999); !errors.Is(err, ErrNotRunning) {
+		t.Fatalf("unknown id: %v", err)
+	}
+}
+
+func TestClearKeepsRunning(t *testing.T) {
+	l := New()
+	l.Add(rec("/r", "commit", "-m", "x"))
+	b, _ := l.Begin(start("/r", func() {}, "push"))
+	l.Clear("/r")
+	if got := l.List("/r"); len(got) != 1 || got[0].ID != b.ID {
+		t.Fatalf("got %+v", got)
+	}
+}
