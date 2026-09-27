@@ -105,6 +105,33 @@ func TestOutputTruncatedOnRuneBoundary(t *testing.T) {
 	}
 }
 
+func TestLargeOutputMaskedNearStartAndTruncated(t *testing.T) {
+	l := New()
+	url := "https://bob:hunter22@h/r.git"
+	r := rec("/r", "clone", url)
+	// The secret sits well before MaxStream; the bulk of the output goes
+	// past MaxStream+4096, so a naive cut before masking would either miss
+	// the secret (impossible here, it's near the start) or, if masking ran
+	// on the whole multi-megabyte buffer, would be slow. This checks
+	// correctness: near-start secrets stay masked even though most of the
+	// output is discarded before masking runs.
+	r.Stdout = "cloning " + url + "\n" + strings.Repeat("x", MaxStream+8192)
+	e := l.Add(r)
+	if !e.OutputTruncated {
+		t.Fatal("want OutputTruncated for output past MaxStream")
+	}
+	out, err := l.Output("/r", e.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.Stdout, "hunter22") {
+		t.Fatalf("secret near the start not masked: %q", out.Stdout[:min(80, len(out.Stdout))])
+	}
+	if len(out.Stdout) > MaxStream {
+		t.Fatalf("not capped to MaxStream: %d", len(out.Stdout))
+	}
+}
+
 func TestOutputBudgetDropsOldestOutputs(t *testing.T) {
 	l := New()
 	big := strings.Repeat("x", MaxStream)

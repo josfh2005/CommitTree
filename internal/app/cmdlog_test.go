@@ -3,9 +3,12 @@ package app
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 
+	"git-ui/internal/ai"
+	"git-ui/internal/ai/tools"
 	"git-ui/internal/cmdlog"
 	"git-ui/internal/gitlog"
 )
@@ -126,5 +129,36 @@ func TestAIToolContextCarriesOrigin(t *testing.T) {
 	ctx := aiToolContext(context.Background())
 	if o, ok := cmdlog.OriginFrom(ctx); !ok || o != cmdlog.OriginAI {
 		t.Fatalf("got %q %v", o, ok)
+	}
+}
+
+// TestAIToolRunIsLoggedAsAI runs a read tool through the same path the chat
+// agent uses (aiToolContext + tools.Run — see the RunTool closure in
+// internal/app/ai.go) and checks the git commands it issues land in the
+// command log tagged AI, not You or Auto.
+func TestAIToolRunIsLoggedAsAI(t *testing.T) {
+	a, id := newTestApp(t)
+	dir, err := a.dir(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.ClearCommandLog(id); err != nil {
+		t.Fatal(err)
+	}
+	out := tools.Run(aiToolContext(context.Background()), dir, ai.ToolCall{Name: "list_refs"})
+	if strings.HasPrefix(out, "error:") {
+		t.Fatalf("tool call failed: %s", out)
+	}
+	view, err := a.CommandLog(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(view.Entries) == 0 {
+		t.Fatal("list_refs ran no git commands")
+	}
+	for _, e := range view.Entries {
+		if e.Origin != cmdlog.OriginAI {
+			t.Fatalf("entry not logged as AI: %+v", e)
+		}
 	}
 }

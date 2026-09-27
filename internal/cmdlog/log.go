@@ -94,12 +94,12 @@ func (l *Log) Add(r gitcmd.Record) Entry {
 			outcome = OutcomeTimeout
 		}
 	}
-	stdout, cut1 := capStream(MaskOutput(r.Stdout, secrets))
-	stderr, cut2 := capStream(MaskOutput(r.Stderr, secrets))
+	stdout, truncOut := maskAndCap(r.Stdout, secrets)
+	stderr, truncErr := maskAndCap(r.Stderr, secrets)
 	e := Entry{
 		Repo: RepoKey(r.Dir), Args: args, Origin: origin, Kind: kind,
 		Start: r.Start, DurationMs: r.Duration.Milliseconds(), ExitCode: r.ExitCode,
-		Outcome: outcome, OutputTruncated: cut1 || cut2,
+		Outcome: outcome, OutputTruncated: truncOut || truncErr,
 	}
 
 	l.mu.Lock()
@@ -172,4 +172,26 @@ func capStream(s string) (string, bool) {
 		return s, false
 	}
 	return strings.ToValidUTF8(s[:MaxStream], ""), true
+}
+
+// maskMargin is how far past MaxStream maskAndCap still scans for a secret,
+// so one straddling the eventual cut point is still masked: the margin only
+// needs to be at least as long as the longest secret RedactArgs can produce
+// (a URL token or password), which is always far under 4 KB.
+const maskMargin = 4 << 10
+
+// maskAndCap masks every secret in s and caps it to MaxStream. Masking runs
+// on at most MaxStream+maskMargin bytes, not all of s: for a large output
+// (RunEnv's caller may hand back megabytes) that avoids scanning what
+// capStream would throw away anyway. The returned bool is whether s itself
+// (before masking or capping) exceeded MaxStream — masking can shrink a
+// string, so that must be decided before it runs.
+func maskAndCap(s string, secrets []string) (string, bool) {
+	truncated := len(s) > MaxStream
+	scan := s
+	if len(scan) > MaxStream+maskMargin {
+		scan = scan[:MaxStream+maskMargin]
+	}
+	out, _ := capStream(MaskOutput(scan, secrets))
+	return out, truncated
 }

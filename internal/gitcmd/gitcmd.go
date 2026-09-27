@@ -113,9 +113,10 @@ func RunEnv(ctx context.Context, dir string, timeout time.Duration, env []string
 
 	start := time.Now()
 	runErr := cmd.Run()
-	rec := Record{Ctx: caller, Dir: dir, Args: args, Start: start, Duration: time.Since(start), Stdout: stdout.String(), Stderr: stderr.String()}
+	out, errOut := stdout.String(), stderr.String()
+	rec := Record{Ctx: caller, Dir: dir, Args: args, Start: start, Duration: time.Since(start), Stdout: out, Stderr: errOut}
 	if runErr != nil {
-		gerr := &Error{Args: args, Stderr: stderr.String(), ExitCode: -1, Err: runErr}
+		gerr := &Error{Args: args, Stderr: errOut, ExitCode: -1, Err: runErr}
 		var exitErr *exec.ExitError
 		if errors.As(runErr, &exitErr) {
 			gerr.ExitCode = exitErr.ExitCode()
@@ -125,8 +126,8 @@ func RunEnv(ctx context.Context, dir string, timeout time.Duration, env []string
 		}
 		rec.ExitCode, rec.Err = gerr.ExitCode, gerr
 		record(rec)
-		return stdout.String(), gerr
+		return out, gerr
 	}
 	record(rec)
-	return stdout.String(), nil
+	return out, nil
 }
