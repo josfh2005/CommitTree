@@ -6,9 +6,10 @@
   import { fetchRemote, moveRepoToGroup, openRepoFolder, pull, push, relocateRepo, removeRepo, removeWorktree } from '../lib/actions'
   import { REPO_DRAG_MIME } from '../lib/repoDrop'
   import { revealLabel } from '../lib/platform'
-  import { busy, expandedRepos, mergeState, platform, selectRepo, selectedRepo, selectedRepoId, toggleRepoExpanded } from '../lib/stores'
+  import { busy, expandedRepos, mergeState, platform, selectRepo, selectedRepo, selectedRepoId, toggleRepoExpanded, worktreeState } from '../lib/stores'
   import type { Repo } from '../lib/types'
   import { openMenu, openMenuAsync, type MenuItem } from '../lib/ui'
+  import { changedCount } from '../lib/worktree'
 
   export let repo: Repo
   /** Indentation level — 0 for a loose repo, 1 for one inside a group. */
@@ -33,8 +34,11 @@
 
   $: active = repo.id === $selectedRepoId
   $: expanded = $expandedRepos.includes(repo.id) && !repo.missing
+  // The selected repository's uncommitted changes, as a count after its
+  // branch — the working tree is only read for the selected repository.
+  $: changes = active ? changedCount($worktreeState) : 0
   // The submodule currently open under this repository, if any — its own
-  // sections (Changes/Branches/…) show in place of this repo's, under the
+  // sections (Branches/Remotes/…) show in place of this repo's, under the
   // same row, per decision 4: a submodule has no row of its own.
   $: openSub = $selectedRepo?.submodule && $selectedRepo.parentId === repo.id ? $selectedRepo : null
 
@@ -115,11 +119,12 @@
     {:else}
       {#if active && $mergeState?.merging}<span class="badge">merging</span>{/if}
       <span class="branch ellipsis">{repo.branch}</span>
+      {#if changes}<span class="changes" title="{changes} changed {changes === 1 ? 'file' : 'files'}">{changes}</span>{/if}
     {/if}
   </button>
 </div>
 {#if expanded}
-  <div class="body">
+  <div class="body" style="--row-base-indent: calc(var(--row-root-indent) + {depth} * var(--row-indent-step))">
     <RepoRefs repoId={openSub?.id ?? repo.id} submodulePath={openSub?.subPath ?? ''} />
     {#if !repo.submodule && repo.submoduleCount}
       <SubmoduleSection parentId={repo.id} count={repo.submoduleCount} />
@@ -142,5 +147,6 @@
   .name.selected { font-weight: 600; }
   .branch { margin-left: auto; font-size: 12px; color: var(--muted); }
   .missing .name { color: var(--faint); }
+  .changes { flex: none; font-size: 11px; padding: 0 6px; border-radius: 4px; background: var(--hover); color: var(--muted); }
   .badge { margin-left: auto; font-size: 11px; padding: 0 6px; border-radius: 4px; background: var(--hover); color: var(--muted); }
 </style>

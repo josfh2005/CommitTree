@@ -237,12 +237,9 @@ moment the tree becomes clean. It carries no author, date or hash, and no
 context menu.
 
 Selecting the row (or landing on it, since it participates in the log's
-selection the same way a commit row does) opens the same working-tree view
-the sidebar's Changes view shows, in the details pane below the log: the
-file list with stage, unstage and discard, the diff, and the commit box. It
-is a second way into the same working-tree state, not a separate one —
-staging a file from the row and staging it from the Changes view show the
-same result, immediately, in both places. Selecting the row and selecting a
+selection the same way a commit row does) opens the working-tree view (the
+Changes view) in the details pane below the log: the file list with stage,
+unstage and discard, the diff, and the commit box. Selecting the row and selecting a
 commit are mutually exclusive: choosing one clears the other. While a
 conflict owns the screen, the conflict view is shown instead, regardless of
 which of the row or a commit was last selected.

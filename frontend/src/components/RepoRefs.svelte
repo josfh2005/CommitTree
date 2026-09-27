@@ -5,9 +5,8 @@
   import { checkoutBranch, deleteBranch, deleteTag, mergeBranch, newBranch, newTag, rebaseOnto, stashApply, stashDrop, stashPop } from '../lib/actions'
   import { groupBranches, leafName, type BranchGroup } from '../lib/branches'
   import { rebaseBlocker } from '../lib/rebase'
-  import { busy, expandedStashSections, repos, expandedTagSections, filters, mainView, mergeState, refs, selectRepo, selectStash, selectedRepoId, selectedStash, stashEntries, toggleStashExpanded, toggleTagsExpanded, worktreeState } from '../lib/stores'
+  import { busy, expandedStashSections, repos, expandedTagSections, filters, mainView, mergeState, refs, selectRepo, selectStash, selectedRepoId, selectedStash, stashEntries, toggleStashExpanded, toggleTagsExpanded } from '../lib/stores'
   import type { Branch, StashEntry, Tag } from '../lib/types'
-  import { changedCount } from '../lib/worktree'
   import { openMenu, openMenuAsync } from '../lib/ui'
 
   export let repoId: string
@@ -91,26 +90,6 @@
     })
   }
 
-  // Clicking Changes under an expanded-but-not-selected repository must act
-  // on THAT repository, not silently read/route the currently selected
-  // one's state — selectRepo() first, same as clicking the repo row itself
-  // would. Once this repo is selected, the row is a toggle: clicking it
-  // again while the Changes view is already showing returns to the log
-  // (which is the only way back once the log pane is unmounted). A merge in
-  // progress always wins — the log pane is where the merge view lives.
-  function openChanges() {
-    if (repoId !== $selectedRepoId) {
-      selectRepo(repoId)
-      mainView.set('changes')
-      return
-    }
-    if ($mergeState?.merging) {
-      mainView.set('log')
-      return
-    }
-    mainView.set($mainView === 'changes' ? 'log' : 'changes')
-  }
-
   function tagMenu(event: MouseEvent, t: Tag) {
     openMenu(event, [
       { label: 'New branch from here…', action: () => newBranch(repoId, `refs/tags/${t.name}`, t.name) },
@@ -127,8 +106,7 @@
   }
 
   // A single click previews the stash; a row for a repository other than the
-  // one on screen selects it first, the same cross-repo handling openChanges
-  // above uses. Double click applies it — Apply keeps the entry, so this
+  // one on screen selects it first. Double click applies it — Apply keeps the entry, so this
   // needs no confirmation, matching the context menu's own Apply.
   function openStash(entry: StashEntry) {
     if (repoId !== $selectedRepoId) selectRepo(repoId)
@@ -143,15 +121,6 @@
         <span class="ellipsis">↳ {submodulePath}</span>
       </button>
     {/if}
-    <button
-      class="row-item ref changes"
-      class:active={$mainView === 'changes' && !$mergeState?.merging}
-      on:click={openChanges}
-    >
-      <span class="ellipsis">Changes</span>
-      {#if changedCount($worktreeState)}<span class="count">{changedCount($worktreeState)}</span>{/if}
-    </button>
-
     <div class="section">
       <span class="section-title">Branches</span>
       <button class="icon-btn" title="New branch from HEAD" on:click={() => newBranch(repoId, 'HEAD', 'HEAD')}>
@@ -309,8 +278,7 @@
      repository's Submodules section — see RepoRow, which wraps both in a
      shared padding-bottom so it isn't doubled when both render) lives on
      the wrapper, not here. */
-  .refs { padding: 0 0 0 12px; }
-  /* Section headings (and "Changes", their peer) sit at the base indent;
+  /* Section headings sit at the base indent (under the repository name);
      their rows sit one step in - see the --row-* custom properties in
      theme.css. */
   .section { display: flex; align-items: center; justify-content: space-between; height: 30px; padding: 6px 4px 0 var(--row-base-indent); }
@@ -320,7 +288,6 @@
      consumers elsewhere in the app that share the base class but not this
      block's anchor (BranchRow overrides this inline for depth > 0). */
   .ref { height: 26px; padding-left: var(--row-base-indent); }
-  .changes .count { margin-left: auto; font-size: 11px; padding: 0 6px; border-radius: 4px; background: var(--hover); color: var(--muted); }
   .section .count { font-size: 11px; color: var(--faint); }
   .mark { width: 12px; flex: none; display: inline-grid; place-items: center; color: var(--muted); }
   .current { font-weight: 500; }

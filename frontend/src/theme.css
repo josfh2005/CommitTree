@@ -33,8 +33,7 @@
      (RepoRow.svelte) so the two can't drift apart. --row-base-indent is
      the x of a repository's NAME - not of that row's own fold-chevron
      gutter - and every section heading ("Branches", "Remotes", "Tags",
-     "Stash", and the "Changes" row, which reads as a peer of the headings)
-     sits on that same line. Every row under a heading sits one
+     "Stash", "Submodules") sits on that same line. Every row under a heading sits one
      --row-indent-step further in than the heading above it, and each
      nesting level - a branch inside a folder, a remote's branches, a
      folder inside a remote - adds one more step. A row with a marker
@@ -53,8 +52,12 @@
      shared by unrelated rows elsewhere (the sidebar's "Add repo" and
      "Settings" rows, repo group headers, file rows) that must not move
      when this block's anchor changes; RepoRefs.svelte's `.ref` rule opts
-     its own rows in explicitly instead. */
-  --row-base-indent: 28px;
+     its own rows in explicitly instead. A repository inside a group sits
+     one step further in (RepoRow's depth), so RepoRow re-declares
+     --row-base-indent on its body as --row-root-indent plus that depth:
+     the headings follow the name wherever the repository is. */
+  --row-root-indent: 28px;
+  --row-base-indent: var(--row-root-indent);
   --row-indent-step: 20px; /* also the refs marker gutter: 12px marker + 8px .ref gap */
   --repo-row-inset: 24px; /* RepoRow's fold icon-button (20px) + its own 4px gap */
   color-scheme: light;

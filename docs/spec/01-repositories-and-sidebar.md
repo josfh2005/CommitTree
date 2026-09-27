@@ -272,9 +272,11 @@ clicked), then performs the row's own action.
 ## Per-repository sections
 
 Once expanded, a repository's row is followed by its own sections, in this
-fixed order: **Changes**, **Branches**, **Remotes**, **Tags**, **Stash**, and,
-last and only when the repository has at least one submodule,
-**Submodules**. Changes/Branches/Remotes/Tags/Stash render only once refs
+fixed order: **Branches**, **Remotes**, **Tags**, **Stash**, and, last and
+only when the repository has at least one submodule, **Submodules**. Each
+section heading starts exactly under the repository's name, whether the
+repository is loose or inside a group; its rows sit one step further in.
+Branches/Remotes/Tags/Stash render only once refs
 have loaded for the repository; if they fail to load (for instance because
 the repository just went missing) they are hidden entirely. Submodules does
 not depend on refs: its header and count show as soon as the repository is
@@ -286,12 +288,13 @@ An opened submodule (see Submodules below) shows this same set of sections
 except Submodules itself — its own submodules, if any, are already part of
 the top repository's flat list.
 
-**Changes** is a single row that opens the Changes view for this repository;
-it shows a count badge when the working tree has changes and no badge
-otherwise. Clicking it while the log for this repository is already showing
-opens Changes; clicking it again returns to the log. While a merge is in
-progress, the row instead always returns to the log, because the merge view
-takes over that space.
+The selected repository's row shows, after its branch, a small count of
+its uncommitted changes (distinct changed paths) when the working tree has
+any, and nothing otherwise; other repositories' rows show no count, since
+only the selected repository's working tree is read. The changes themselves
+are reached from the log's "Uncommitted changes" row or the toolbar's
+**Commit** (see `02-log-and-history.md` and `05-remote-and-stash.md`); there
+is no separate Changes row in the sidebar.
 
 ### Branches
 
