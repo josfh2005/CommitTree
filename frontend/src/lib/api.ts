@@ -1,5 +1,5 @@
 import * as Go from '../../wailsjs/go/app/App'
-import type { AIMessage, AISettings, AIStatus, AheadBehind, Blame, ChatConfirmEvent, CommitInfo, ConflictFile, Details, Filters, GitSettings, Identity, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
+import type { AIMessage, AISettings, AIStatus, AheadBehind, Blame, ChatConfirmEvent, CommandEntry, CommandOutput, CommitInfo, ConflictFile, Details, Filters, GitSettings, Identity, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
 
 // The generated bindings use Wails model classes; the JSON is identical to our
 // interfaces, so cast at this single boundary.
@@ -33,6 +33,10 @@ export const api = {
   terminalResize: (tab: string, cols: number, rows: number) => call<void>(Go.TerminalResize(tab, cols, rows)),
   terminalClose: (tab: string) => call<void>(Go.TerminalClose(tab)),
   terminalShell: () => call<string>(Go.TerminalShell()),
+
+  commandLog: (id: string) => call<CommandEntry[]>(Go.CommandLog(id)),
+  commandLogOutput: (id: string, entryId: number) => call<CommandOutput>(Go.CommandLogOutput(id, entryId)),
+  clearCommandLog: (id: string) => call<void>(Go.ClearCommandLog(id)),
 
   checkout: (id: string, branch: string) => call<void>(Go.Checkout(id, branch)),
   checkoutRemote: (id: string, remote: string, name: string) => call<void>(Go.CheckoutRemote(id, remote, name)),

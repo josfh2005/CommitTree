@@ -77,6 +77,9 @@ export async function explainIntoChat(repoID: string, call: () => Promise<void>)
 export const terminalOpen = persisted('terminalOpen', false)
 /** Height of the terminal under the chat, in pixels. */
 export const terminalHeight = persisted('terminalHeight', 260)
+export const commandsOpen = persisted('commandsOpen', false)
+/** Whether the Commands panel lists reads too (off: only writes). */
+export const commandsShowReads = persisted('commandsShowReads', false)
 export const selectedRepoId = persisted('selectedRepoId', '')
 /** Ids of the repos whose refs are unfolded in the sidebar. */
 export const expandedRepos = persisted<string[]>('expandedRepos', [])

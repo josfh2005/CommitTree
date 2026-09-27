@@ -358,3 +358,22 @@ export interface CommitInfo { stagedCount: number; canAmend: boolean; lastMessag
 export interface WorktreeChangedEvent { repoID: string }
 export interface CommitDeltaEvent { repoID: string; runID: string; text: string }
 export interface CommitDoneEvent { repoID: string; runID: string; error?: string }
+
+export type CommandOrigin = 'you' | 'ai' | 'auto'
+/** One git command the app ran, as the Commands panel lists it. */
+export interface CommandEntry {
+  id: number
+  /** The repository's path, cleaned — compared with Repo.path. */
+  repo: string
+  args: string[]
+  origin: CommandOrigin
+  kind: 'read' | 'write'
+  /** ISO timestamp. */
+  start: string
+  durationMs: number
+  exitCode: number
+  outcome: 'ok' | 'failed' | 'timeout'
+  outputTruncated: boolean
+  outputDropped: boolean
+}
+export interface CommandOutput { stdout: string; stderr: string }
