@@ -106,6 +106,13 @@ func Continue(ctx context.Context, dir string) error {
 	if err == nil {
 		return nil
 	}
+	// A cancel can land just as the sequencer has advanced onto the next
+	// commit's conflicts — the fingerprint check below would then read that
+	// as success. It is not: report the cancel as the ordinary error it is
+	// and leave the sequencer exactly where git left it.
+	if errors.Is(err, gitcmd.ErrCancelled) {
+		return err
+	}
 	// git exits non-zero both when --continue itself fails outright — the
 	// conflict it was asked to continue past is still unresolved, or a real
 	// hook failure — and when it succeeds in moving past the resolved

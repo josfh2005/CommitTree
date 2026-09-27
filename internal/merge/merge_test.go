@@ -8,7 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"git-ui/internal/gitcmd"
 	"git-ui/internal/testrepo"
 )
 
@@ -233,6 +235,67 @@ func TestContinueFailsWithAnUnresolvedConflict(t *testing.T) {
 	}
 	if st := status(t, r.Dir); !st.Merging || st.Step != 1 {
 		t.Fatalf("state = %+v, want still stopped on step 1", st)
+	}
+}
+
+// TestContinueCancelledAfterAdvancingReportsCancelNotSuccess covers I2b: a
+// cancel landing after --continue has committed the resolved step but while
+// it is still working on the next one changes the fingerprint exactly the
+// way a real "moved on to the next conflict" success would — the case the
+// fingerprint check exists for — so it must be told apart before that check
+// runs. A post-commit hook that sleeps only for the second commit's file
+// guarantees the interrupt lands there, with the sequencer genuinely still
+// in progress (not yet stopped on a real conflict).
+func TestContinueCancelledAfterAdvancingReportsCancelNotSuccess(t *testing.T) {
+	r := testrepo.New(t)
+	r.WriteFile("f.txt", "base\n")
+	r.Git("add", "f.txt")
+	r.Git("commit", "-q", "-m", "base")
+	r.Git("switch", "-q", "-c", "feature")
+	r.WriteFile("f.txt", "feature1\n")
+	r.Git("commit", "-q", "-am", "feature1")
+	r.WriteFile("b.txt", "local2\n")
+	r.Git("add", "b.txt")
+	r.Git("commit", "-q", "-m", "local2")
+	r.Git("switch", "-q", "main")
+	r.WriteFile("f.txt", "mainchange\n")
+	r.Git("commit", "-q", "-am", "mainchange")
+	r.Git("switch", "-q", "feature")
+	r.GitFails("rebase", "main")
+
+	r.WriteFile("f.txt", "resolved\n")
+	r.Git("add", "f.txt")
+
+	hooks := t.TempDir()
+	script := "#!/bin/sh\n" +
+		"files=$(git diff-tree --no-commit-id --name-only -r HEAD)\n" +
+		"if echo \"$files\" | grep -q '^b.txt$'; then\n  sleep 30\nfi\n"
+	if err := os.WriteFile(filepath.Join(hooks, "post-commit"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	r.Git("config", "core.hooksPath", hooks)
+
+	gitcmd.SetRecorder(&gitcmd.Recorder{Begin: func(s gitcmd.Start) int64 {
+		if len(s.Args) > 0 && s.Args[len(s.Args)-1] == "--continue" {
+			time.AfterFunc(300*time.Millisecond, s.Cancel)
+		}
+		return 0
+	}})
+	t.Cleanup(func() { gitcmd.SetRecorder(nil) })
+
+	started := time.Now()
+	err := Continue(context.Background(), r.Dir)
+	if !errors.Is(err, gitcmd.ErrCancelled) {
+		t.Fatalf("got %v, want an error wrapping ErrCancelled", err)
+	}
+	if d := time.Since(started); d > 10*time.Second {
+		t.Fatalf("took %v: the hook was not interrupted", d)
+	}
+	// Whatever git's own sequencer bookkeeping now calls it, being cancelled
+	// mid-cleanup must leave something for the conflict banner to show —
+	// not the clean, fully-finished state a real success would leave.
+	if st := status(t, r.Dir); !st.Merging {
+		t.Fatalf("state = %+v, want the operation left in progress by the cancel", st)
 	}
 }
 

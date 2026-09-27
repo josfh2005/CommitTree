@@ -49,16 +49,43 @@ nil removes the recorder):
   children get it too, as with Ctrl+C in a terminal); git removes its lock
   files and exits. `WaitDelay` (5 s) then kills git if it is still alive.
   On Windows there is no SIGINT: the process is killed.
-- A cancelled command's `*Error` wraps `ErrCancelled` (a timeout still
-  wraps `ErrTimeout`). The caller sees an ordinary error: a UI action shows
-  it in its toast; an approved AI write returns it as the tool's error and
-  the chat skips the rest of that batch, as for any failed write.
-- An interrupted rebase, merge or cherry-pick stays in progress; the
-  existing conflict banner continues or aborts it.
+- A cancelled command's `*Error` wraps `ErrCancelled`, and its `Error()`
+  text is always `git <args>: git command cancelled` — never stderr (a
+  hook's own output, or a shell's "Killed by signal 2."), which says
+  nothing about why the command actually stopped (a timeout still wraps
+  `ErrTimeout` and keeps its own message). The caller sees an ordinary
+  error: a UI action shows it in its toast; an approved AI write returns it
+  as the tool's error and the chat skips the rest of that batch, as for any
+  failed write.
+- What a cancel leaves behind depends on the operation, and each checks for
+  `ErrCancelled` before drawing its own conclusions from the state git left
+  behind, rather than misreading a cancel as a conflict or a success:
+  - `ops.Pull` and a plain `merge.Merge`/`merge.Start`: left exactly as git
+    stopped it, mid-merge or mid-rebase, for the conflict banner. Without
+    this check, `Pull` mistook a cancelled pull that happened to land on a
+    real in-progress merge/rebase state for a conflict it caused, and
+    reported `Result{Conflicted}` with a nil error.
+  - `merge.Rebase` and `merge.CherryPick`: unchanged — they already run
+    their own `--abort` on any non-conflict stop, cancel included, so the
+    branch is restored the same as for a real failure. Only a genuine
+    conflict is left for the banner.
+  - `merge.Continue` (the banner's Continue): a cancel can land after the
+    resolved step has committed but while the sequencer is still moving
+    onto the next commit, which changes `Fingerprint` exactly the way a
+    real "moved on to the next conflict" success does. Without the
+    `ErrCancelled` check ahead of the fingerprint comparison, `Continue`
+    read that as success and returned nil.
+  - Stash apply/pop: not changed — a cancel that lands after git has
+    already written conflicting entries is indistinguishable from a real
+    stash conflict and is reported as one, same as today.
 - Note: in `make dev` started from a terminal, a git in its own process
   group that tries to read the terminal (an SSH passphrase prompt) is
   stopped by the shell instead of prompting; the packaged app has no
   terminal, so nothing changes there.
+- A helper a git command started without detaching (the credential cache
+  daemon, above all) shares the process group and is stopped by a cancel or
+  a timeout with everything else; it is not disabled, and starts again the
+  next time a command needs it.
 
 ### Log (`internal/cmdlog`)
 

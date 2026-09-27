@@ -3,11 +3,15 @@ package ops_test
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"git-ui/internal/gitcmd"
+	"git-ui/internal/merge"
 	"git-ui/internal/ops"
 	"git-ui/internal/testrepo"
 )
@@ -126,6 +130,58 @@ func TestPullRefusesWhileAConflictIsUnresolved(t *testing.T) {
 	// report the conflict it did not cause.
 	if _, err := ops.Pull(ctx, a.Dir, ops.StrategyMerge); !errors.Is(err, ops.ErrResolutionInProgress) {
 		t.Errorf("err = %v, want ErrResolutionInProgress", err)
+	}
+}
+
+// TestPullCancelledDuringRebaseReportsCancelNotConflict covers I2b: a cancel
+// that lands while Pull's rebase phase is mid-flight — after one commit has
+// already been replayed, so the sequencer is genuinely in progress — must
+// come back as the cancelled error, not as a false Conflicted success. The
+// second commit's post-commit hook sleeps (post-commit fires for every
+// replayed commit, unlike pre-commit which a clean automatic replay
+// bypasses) so the interrupt is guaranteed to land while the rebase is
+// still working on it, with the sequencer already past the first commit —
+// the same race the fix in ops.Pull guards.
+func TestPullCancelledDuringRebaseReportsCancelNotConflict(t *testing.T) {
+	a, b := clones(t)
+	b.WriteFile("remote.txt", "from b\n")
+	b.Git("add", "remote.txt")
+	b.Git("commit", "-q", "-m", "from b")
+	b.Git("push", "-q", "origin", "main")
+	a.WriteFile("a.txt", "local1\n")
+	a.Git("add", "a.txt")
+	a.Git("commit", "-q", "-m", "local1")
+	a.WriteFile("b.txt", "local2\n")
+	a.Git("add", "b.txt")
+	a.Git("commit", "-q", "-m", "local2")
+
+	hooks := t.TempDir()
+	script := "#!/bin/sh\n" +
+		"files=$(git diff-tree --no-commit-id --name-only -r HEAD)\n" +
+		"if echo \"$files\" | grep -q '^b.txt$'; then\n  sleep 30\nfi\n"
+	if err := os.WriteFile(filepath.Join(hooks, "post-commit"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	a.Git("config", "core.hooksPath", hooks)
+
+	gitcmd.SetRecorder(&gitcmd.Recorder{Begin: func(s gitcmd.Start) int64 {
+		if slices.Contains(s.Args, "pull") {
+			time.AfterFunc(300*time.Millisecond, s.Cancel)
+		}
+		return 0
+	}})
+	t.Cleanup(func() { gitcmd.SetRecorder(nil) })
+
+	started := time.Now()
+	_, err := ops.Pull(ctx, a.Dir, ops.StrategyRebase)
+	if !errors.Is(err, gitcmd.ErrCancelled) {
+		t.Fatalf("got %v, want an error wrapping ErrCancelled", err)
+	}
+	if d := time.Since(started); d > 10*time.Second {
+		t.Fatalf("took %v: the hook was not interrupted", d)
+	}
+	if st, statusErr := merge.Status(ctx, a.Dir); statusErr != nil || !st.Merging {
+		t.Fatalf("state = %+v (err %v), want the rebase left in progress by the cancel", st, statusErr)
 	}
 }
 

@@ -51,14 +51,46 @@ counting every second; when it ends the same row shows how it ended. Reads
 appear only when they end, whether or not **Show reads** is ticked. A
 running row cannot be expanded (there is no live output) and has a
 **Cancel** button: it stops the command as Ctrl+C would in a terminal — git
-and any hook or helper it started get an interrupt, and whatever is still
-alive five seconds later is killed (on Windows the command is killed at
-once). The operation that ran it reports an error ("git command cancelled")
-the way it reports any failure — a toast for an action from the interface,
-a failed change for the AI chat. An interrupted rebase, merge or
-cherry-pick stays in progress and is continued or aborted from its banner.
-A command that runs past its time limit is interrupted the same way and
-shows "Timed out". **Clear** leaves running commands in place.
+and any hook or helper it started get an interrupt. Five seconds later, git
+itself is killed if it is still alive (on Windows the command is killed at
+once); a hook or helper that ignores the interrupt can keep running past
+that point on its own. A command that runs past its time limit is
+interrupted the same way and shows "Timed out".
+
+The operation that ran the command reports an error, "git command
+cancelled" — never the hook output or exit-signal text a cancelled git can
+leave on stderr — the way it reports any failure: a toast for an action
+from the interface, a failed change for the AI chat. What a cancel leaves
+behind depends on the operation:
+
+- **Pull, plain Merge**: left exactly as git stopped it, mid-merge or
+  mid-rebase, for the conflict banner to continue or abort — the same
+  banner a real conflict would show. (A merge or rebase already in
+  progress before a Pull refuses it outright, and could not have been
+  caused by this Pull's own cancel.)
+- **Rebase, Cherry-pick**: on any stop that is not a real conflict —
+  including a cancel — these already run their own `rebase --abort` /
+  `cherry-pick --abort`, restoring the branch to where it was, the same as
+  any other real failure. Only a genuine conflict is left for the banner.
+- **Continuing a conflict resolution** (the banner's Continue, on a merge,
+  rebase, cherry-pick, revert or `am`): a cancel can land after the
+  resolved step has already committed but while git is still moving on to
+  the next commit, so it is reported as cancelled rather than as the
+  operation quietly moving on — the sequencer is left wherever git left
+  it, which may be mid-way onto the next commit's conflict rather than
+  cleanly stopped on it.
+- **Stash apply / pop**: the same as any other cancel — reported as
+  cancelled and the worktree left as git stopped it. If the cancel happens
+  to land after git had already written conflicting entries for the files
+  it was merging, that unmerged state looks exactly like a real stash
+  conflict, and the app reports it as one — a stash conflict is a normal
+  outcome, not a git error, so the cancel is masked in that narrow window.
+
+A helper daemon a git command started without detaching, such as the
+credential cache daemon, is stopped by a cancel or a timeout along with
+everything else in the process group; it is not gone for good and starts
+again the next time a command needs it. **Clear** leaves running commands
+in place.
 
 ## Retention and privacy
 

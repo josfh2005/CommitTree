@@ -160,6 +160,13 @@ func Pull(ctx context.Context, dir, strategy string) (Result, error) {
 			return Result{Outcome: Rebased}, nil
 		}
 	}
+	// A cancel stops git mid-merge or mid-rebase the same way a real
+	// conflict would, but it is not a conflict: report it as the ordinary
+	// error it is (the toast says "git command cancelled") and leave the
+	// repository exactly as git left it, for the conflict banner to show.
+	if errors.Is(err, gitcmd.ErrCancelled) {
+		return Result{}, err
+	}
 	// A conflict leaves the repository mid-merge or mid-rebase. Nothing was
 	// in progress before this call (the guard above), so a Merging state
 	// here is this pull's own doing. Anything else (network, auth, a dirty
