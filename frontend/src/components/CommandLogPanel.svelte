@@ -2,10 +2,10 @@
   import { onDestroy } from 'svelte'
   import Icon from './Icon.svelte'
   import { api } from '../lib/api'
-  import { commandLine, elapsedMs, emptyMessage, formatClock, formatDuration, formatElapsed, mergeEntries, ORIGIN_LABEL, outcomeText, visibleEntries } from '../lib/cmdlog'
+  import { commandLine, elapsedMs, emptyMessage, formatClock, formatDuration, formatElapsed, mergeEntries, mergeLoad, NOT_RUNNING_MESSAGE, ORIGIN_LABEL, outcomeText, visibleEntries } from '../lib/cmdlog'
   import { commandsOpen, commandsShowReads, selectedRepo } from '../lib/stores'
   import type { CommandEntry, CommandOutput } from '../lib/types'
-  import { copyText } from '../lib/ui'
+  import { copyText, errorMessage } from '../lib/ui'
   import { EventsOn } from '../../wailsjs/runtime/runtime'
 
   let entries: CommandEntry[] = []
@@ -15,6 +15,10 @@
   let outputErrors: Record<number, string> = {}
   let loadedId = ''
   let loadedRepoKey = ''
+  // Events that arrive while a load is in flight (loadedRepoKey not yet
+  // known, so mergeEntries can't filter by repo) are buffered here and
+  // applied on top of the snapshot once it resolves — see mergeLoad.
+  let pending: CommandEntry[] = []
   let list: HTMLElement
   let cancelling: Record<number, boolean> = {}
   // now ticks once a second while a command is running, for its elapsed time.
@@ -44,12 +48,14 @@
     expanded = null
     cancelling = {}
     error = ''
+    pending = []
     if (!id) return
     try {
       const view = await api.commandLog(id)
       if (loadedId === id) {
         loadedRepoKey = view.repo
-        entries = mergeEntries(entries, view.entries, loadedRepoKey)
+        entries = mergeLoad(view.entries, pending, loadedRepoKey)
+        pending = []
       }
     } catch (e) {
       if (loadedId === id) error = String(e)
@@ -57,7 +63,16 @@
   }
 
   const off = EventsOn('cmdlog:entry', (e: CommandEntry) => {
-    if (loadedId && loadedRepoKey) entries = mergeEntries(entries, [e], loadedRepoKey)
+    if (!loadedId) return
+    // The snapshot hasn't resolved yet: its repo key isn't known, so this
+    // can't be merged in (and dropping it could leave a running row stuck
+    // forever once the snapshot arrives). Buffer it and apply it on top of
+    // the snapshot in load() once loadedRepoKey is known.
+    if (!loadedRepoKey) {
+      pending = [...pending, e]
+      return
+    }
+    entries = mergeEntries(entries, [e], loadedRepoKey)
   })
   onDestroy(off)
 
@@ -96,8 +111,11 @@
     } catch (err) {
       if (loadedId !== id) return
       cancelling = Object.fromEntries(Object.entries(cancelling).filter(([k]) => Number(k) !== e.id))
-      // It ended on its own while the click was on its way: nothing to report.
-      if (entries.find((x) => x.id === e.id)?.outcome === 'running') error = String(err)
+      const message = errorMessage(err)
+      // It ended on its own while the click was on its way: the backend
+      // reports that as ErrNotRunning, not a real failure, so it never
+      // reaches the panel's error line.
+      if (message !== NOT_RUNNING_MESSAGE) error = message
     }
   }
 
@@ -140,7 +158,7 @@
             <span class="dur">{e.outcome === 'running' ? formatElapsed(elapsedMs(e, now)) : formatDuration(e.durationMs)}</span>
           </button>
           {#if e.outcome === 'running'}
-            <button class="btn cancel" disabled={cancelling[e.id]} on:click={() => cancel(e)}>Cancel</button>
+            <button class="btn cancel" disabled={cancelling[e.id]} aria-label={`Cancel ${commandLine(e.args)}`} on:click={() => cancel(e)}>Cancel</button>
           {/if}
           <button class="icon-btn" title="Copy command" on:click={() => copyText(commandLine(e.args))}><Icon name="copy" size={14} /></button>
         </div>

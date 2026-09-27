@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { commandLine, commandsShortcutLabel, elapsedMs, emptyMessage, formatClock, formatDuration, formatElapsed, isCommandsToggle, MAX_ENTRIES, mergeEntries, outcomeText, visibleEntries } from './cmdlog'
+import { commandLine, commandsShortcutLabel, elapsedMs, emptyMessage, formatClock, formatDuration, formatElapsed, isCommandsToggle, MAX_ENTRIES, mergeEntries, mergeLoad, outcomeText, visibleEntries } from './cmdlog'
 import type { CommandEntry } from './types'
 
 const entry = (id: number, over: Partial<CommandEntry> = {}): CommandEntry => ({
@@ -91,6 +91,24 @@ describe('running entries', () => {
   it('describes running and cancelled', () => {
     expect(outcomeText(running(1))).toBe('Running')
     expect(outcomeText(entry(1, { outcome: 'cancelled', exitCode: -1 }))).toBe('Cancelled')
+  })
+})
+
+describe('mergeLoad', () => {
+  const running = (id: number) => entry(id, { kind: 'write', origin: 'you', args: ['push'], outcome: 'running', durationMs: 0 })
+  it('applies a buffered end event on top of a snapshot that still shows running', () => {
+    const done = entry(5, { kind: 'write', args: ['push'], outcome: 'ok', durationMs: 900 })
+    const list = mergeLoad([running(5)], [done], '/r')
+    expect(list).toHaveLength(1)
+    expect(list[0].outcome).toBe('ok')
+  })
+  it('ignores buffered events for another repo', () => {
+    const list = mergeLoad([entry(1)], [entry(2, { repo: '/other' })], '/r')
+    expect(list.map((e) => e.id)).toEqual([1])
+  })
+  it('keeps a snapshot row running when nothing buffered ended it', () => {
+    const list = mergeLoad([running(5)], [], '/r')
+    expect(list[0].outcome).toBe('running')
   })
 })
 

@@ -6,6 +6,11 @@ export const MAX_ENTRIES = 500
 
 export const ORIGIN_LABEL: Record<CommandOrigin, string> = { you: 'You', ai: 'AI', auto: 'Auto' }
 
+/** cmdlog.ErrNotRunning's message (internal/cmdlog/log.go): Cancel racing
+ *  the command's own end, not a real failure — the panel must not show it
+ *  as an error. */
+export const NOT_RUNNING_MESSAGE = 'command is not running'
+
 /** mergeEntries adds more to list — only entries whose repo matches the key
  *  the backend returned from CommandLog (repoKey; see CommandLogView),
  *  never a frontend-computed Repo.path. An entry list already holds is
@@ -25,6 +30,17 @@ export function mergeEntries(list: CommandEntry[], more: CommandEntry[], repoKey
   }
   if (!changed) return list
   return [...byId.values()].sort((a, b) => b.id - a.id).slice(0, MAX_ENTRIES)
+}
+
+/** mergeLoad combines a just-loaded snapshot with events buffered while that
+ *  load was in flight (the snapshot's repo key isn't known until it
+ *  resolves, so a live cmdlog:entry arriving meanwhile cannot be merged in
+ *  directly and is buffered instead). Snapshot first, buffer second, so
+ *  mergeEntries' own rule — a finished entry beats a running one — lets a
+ *  buffered end event replace a running row the snapshot still shows as
+ *  running, rather than leaving it stuck. */
+export function mergeLoad(snapshot: CommandEntry[], buffered: CommandEntry[], repoKey: string): CommandEntry[] {
+  return mergeEntries(mergeEntries([], snapshot, repoKey), buffered, repoKey)
 }
 
 export function visibleEntries(list: CommandEntry[], showReads: boolean): CommandEntry[] {
