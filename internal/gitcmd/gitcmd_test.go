@@ -114,11 +114,11 @@ func TestRecorderSeesSuccessAndFailure(t *testing.T) {
 	r.Commit("first")
 	var mu sync.Mutex
 	var got []gitcmd.Record
-	gitcmd.SetRecorder(func(rec gitcmd.Record) {
+	gitcmd.SetRecorder(&gitcmd.Recorder{End: func(rec gitcmd.Record) {
 		mu.Lock()
 		got = append(got, rec)
 		mu.Unlock()
-	})
+	}})
 	t.Cleanup(func() { gitcmd.SetRecorder(nil) })
 	ctx := context.WithValue(context.Background(), ctxKey{}, "marker")
 
@@ -149,11 +149,68 @@ func TestRecorderSeesSuccessAndFailure(t *testing.T) {
 func TestPanickingRecorderDoesNotBreakRun(t *testing.T) {
 	r := testrepo.New(t)
 	hash := r.Commit("first")
-	gitcmd.SetRecorder(func(gitcmd.Record) { panic("boom") })
+	gitcmd.SetRecorder(&gitcmd.Recorder{End: func(gitcmd.Record) { panic("boom") }})
 	t.Cleanup(func() { gitcmd.SetRecorder(nil) })
 
 	out, err := gitcmd.Run(context.Background(), r.Dir, gitcmd.ReadTimeout, "rev-parse", "HEAD")
 	if err != nil || strings.TrimSpace(out) != hash {
 		t.Fatalf("got %q, %v", out, err)
+	}
+}
+
+func TestRecorderBeginAndEndShareID(t *testing.T) {
+	r := testrepo.New(t)
+	r.Commit("first")
+	var mu sync.Mutex
+	var begun []gitcmd.Start
+	var ended []gitcmd.Record
+	gitcmd.SetRecorder(&gitcmd.Recorder{
+		Begin: func(s gitcmd.Start) int64 {
+			mu.Lock()
+			defer mu.Unlock()
+			begun = append(begun, s)
+			return 42
+		},
+		End: func(rec gitcmd.Record) {
+			mu.Lock()
+			defer mu.Unlock()
+			ended = append(ended, rec)
+		},
+	})
+	t.Cleanup(func() { gitcmd.SetRecorder(nil) })
+
+	if _, err := gitcmd.Run(context.Background(), r.Dir, gitcmd.ReadTimeout, "rev-parse", "HEAD"); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(begun) != 1 || len(ended) != 1 {
+		t.Fatalf("begun %d, ended %d", len(begun), len(ended))
+	}
+	b := begun[0]
+	if b.Dir != r.Dir || strings.Join(b.Args, " ") != "rev-parse HEAD" || b.Cancel == nil || b.Start.IsZero() {
+		t.Fatalf("start wrong: %+v", b)
+	}
+	if ended[0].ID != 42 || !ended[0].Start.Equal(b.Start) {
+		t.Fatalf("end must carry Begin's ID and start: %+v", ended[0])
+	}
+}
+
+func TestPanickingBeginDoesNotBreakRun(t *testing.T) {
+	r := testrepo.New(t)
+	hash := r.Commit("first")
+	var gotID int64 = -1
+	gitcmd.SetRecorder(&gitcmd.Recorder{
+		Begin: func(gitcmd.Start) int64 { panic("boom") },
+		End:   func(rec gitcmd.Record) { gotID = rec.ID },
+	})
+	t.Cleanup(func() { gitcmd.SetRecorder(nil) })
+
+	out, err := gitcmd.Run(context.Background(), r.Dir, gitcmd.ReadTimeout, "rev-parse", "HEAD")
+	if err != nil || strings.TrimSpace(out) != strings.TrimSpace(hash) {
+		t.Fatalf("got %q, %v", out, err)
+	}
+	if gotID != 0 {
+		t.Fatalf("a panicking Begin must yield ID 0, got %d", gotID)
 	}
 }
