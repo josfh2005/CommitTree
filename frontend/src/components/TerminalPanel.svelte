@@ -5,7 +5,7 @@
   import TerminalView from './TerminalView.svelte'
   import { api } from '../lib/api'
   import { checkExternalChanges } from '../lib/actions'
-  import { busy, loadRepos, repos, selectedRepo, selectedRepoId, terminalOpen } from '../lib/stores'
+  import { loadRepos, repos, selectedRepo, selectedRepoId, terminalOpen } from '../lib/stores'
   import { addTab, markExited, removeTab, setActive, settledAction, tabTitle, tabsFor, terminalState } from '../lib/terminal'
   import { errorMessage, toast } from '../lib/ui'
   import { get } from 'svelte/store'
@@ -101,7 +101,6 @@
         <button class="icon-btn" title="New shell" on:click={() => open(repoId)}>+</button>
       {/if}
     </div>
-    {#if $busy}<span class="busy ellipsis">Operation running: {$busy}</span>{/if}
     <button class="icon-btn" title="Hide terminal" on:click={() => terminalOpen.set(false)}><Icon name="terminal" /></button>
   </header>
   <div class="body">
@@ -128,7 +127,6 @@
   .tab.exited .name { color: var(--muted); }
   .tab button { background: none; border: 0; padding: 3px 6px; color: inherit; font: inherit; cursor: pointer; }
   .tab .x { padding-left: 0; color: var(--muted); }
-  .busy { font-size: 11px; color: var(--muted); max-width: 40%; }
   .body { position: relative; flex: 1; min-height: 0; }
   .empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
 </style>

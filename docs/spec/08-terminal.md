@@ -108,12 +108,15 @@ selected repository:
 ## Busy notice
 
 While an application operation (a commit, a pull, a merge, and so on) is
-running, the terminal's tab bar shows "Operation running: `<label>`" using
-the same label the rest of the interface already shows for that operation —
-`busy` is a single, application-wide label (see Conventions and
-constraints), not one scoped to the selected repository, so the notice shows
-regardless of which repository the operation targets. This is informational
-only — see Safety below for why it does not stop the user from typing.
+running, the bottom dock (see Layout and visibility) shows a thin strip at
+its top, "Operation running: `<label>`", using the same label the rest of
+the interface already shows for that operation — `busy` is a single,
+application-wide label (see Conventions and constraints), not one scoped to
+the selected repository, so the notice shows regardless of which repository
+the operation targets. It shows whenever the dock is open, with the
+terminal, the Commands panel (see `09-command-log.md`) or both. This is
+informational only — see Safety below for why it does not stop the user
+from typing.
 
 ## Safety
 
