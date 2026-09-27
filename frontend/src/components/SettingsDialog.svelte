@@ -466,6 +466,7 @@
   .segmented button:hover:not(.on) { background: var(--hover); color: var(--text); }
   .segmented button.on { background: var(--surface); color: var(--text); box-shadow: 0 0 0 1px var(--border); }
   .row input { flex: 1; }
+  .row input[type='checkbox'] { flex: none; }
   .status { display: flex; align-items: center; gap: 6px; }
   .dot { width: 8px; height: 8px; border-radius: 50%; }
   .dot.ok { background: var(--ok); }
