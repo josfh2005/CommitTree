@@ -77,7 +77,9 @@ Classified by subcommand, not by timeout class. Reads: `log`, `show`,
 `describe`, `symbolic-ref` (without a new value), `worktree list`,
 `submodule status`, `stash list`, `config` with `--get`/`--get-all`/`--list`/
 `--get-regexp`, `branch`/`tag` when only listing (`--list`, `-l`, `--format`,
-no positional name), `check-ignore`, `check-attr`, `var`, `version`.
+no positional name), `check-ignore`, `check-attr`, `var`, `version`,
+`check-ref-format`, `remote` when listing or `remote get-url` (`-v` is an
+option, not a subcommand).
 Everything else is a write, `fetch` included (it is always shown).
 
 ### Store (`internal/cmdlog`)
@@ -112,7 +114,13 @@ Applied to args and output before storing:
 - Event `cmdlog:entry` with the `Entry` (no output), emitted when a command
   ends, straight through the Wails runtime once `Startup` has run — not
   through the AI deps' `Emit`, which tests use to assert on chat events. There is no "running" row: a long push appears when it finishes.
-- `CommandLog(repoID) ([]Entry, error)` — newest first, for the initial load.
+- `CommandLog(repoID) (CommandLogView, error)` —
+  `{repo, entries}`, entries newest first, for the initial load. `repo` is
+  `cmdlog.RepoKey(dir)` — the same key `Entry.Repo` and `cmdlog:entry` events
+  carry — not the frontend's own `Repo.path`, which a cleaned path need not
+  match byte-for-byte (e.g. `--show-toplevel` on Windows can give
+  `C:/x/repo` against `Clean`'s `C:\x\repo`). The frontend matches both the
+  initial load and live events against this key. `entries` is never null.
 - `CommandLogOutput(repoID string, id int64) (CommandOutput, error)` —
   `{stdout, stderr}` when a row is expanded; an error if the entry was
   dropped.
@@ -142,9 +150,11 @@ the chat in `.side`.
 
 ### Commands panel (`CommandLogPanel.svelte`, `lib/cmdlog.ts`)
 
-- On open (and on repository change) loads `CommandLog(repoID)` and listens
-  to `cmdlog:entry`, ignoring other repositories' entries. It keeps at most
-  500 entries, like the backend.
+- On open (and on repository change) loads `CommandLog(repoID)`, remembers
+  the `repo` key it returned, and listens to `cmdlog:entry`, keeping only
+  entries whose `repo` matches that key (not other repositories', and not
+  matched against `Repo.path`). It keeps at most 500 entries, like the
+  backend.
 - Header: title "Commands", **Show reads** checkbox (off by default,
   remembered), **Clear**, close button.
 - Rows newest first: ✓ or ✗ (error colour on failure, "timed out" for a

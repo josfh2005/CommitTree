@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"git-ui/internal/cmdlog"
+	"git-ui/internal/gitlog"
 )
 
 func TestCommandLogRecordsAppCommands(t *testing.T) {
@@ -14,10 +15,18 @@ func TestCommandLogRecordsAppCommands(t *testing.T) {
 	if err := a.CreateBranch(id, "logged", "HEAD", false); err != nil {
 		t.Fatal(err)
 	}
-	list, err := a.CommandLog(id)
+	view, err := a.CommandLog(id)
 	if err != nil {
 		t.Fatal(err)
 	}
+	dir, err := a.dir(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.Repo != cmdlog.RepoKey(dir) {
+		t.Fatalf("view.Repo = %q, want %q", view.Repo, cmdlog.RepoKey(dir))
+	}
+	list := view.Entries
 	var found *cmdlog.Entry
 	for i, e := range list {
 		if e.Kind == cmdlog.KindWrite && len(e.Args) > 0 && e.Args[0] == "branch" {
@@ -36,8 +45,8 @@ func TestCommandLogRecordsAppCommands(t *testing.T) {
 	if err := a.ClearCommandLog(id); err != nil {
 		t.Fatal(err)
 	}
-	if list, _ := a.CommandLog(id); len(list) != 0 {
-		t.Fatalf("not cleared: %d", len(list))
+	if view, _ := a.CommandLog(id); len(view.Entries) != 0 {
+		t.Fatalf("not cleared: %d", len(view.Entries))
 	}
 }
 
@@ -52,9 +61,9 @@ func TestWriteDuringAIExecutionIsAI(t *testing.T) {
 	if err := a.CreateBranch(id, "by-user", "HEAD", false); err != nil {
 		t.Fatal(err)
 	}
-	list, _ := a.CommandLog(id)
+	view, _ := a.CommandLog(id)
 	origins := map[string]cmdlog.Origin{}
-	for _, e := range list {
+	for _, e := range view.Entries {
 		if e.Kind == cmdlog.KindWrite && len(e.Args) > 1 && e.Args[0] == "branch" {
 			origins[e.Args[1]] = e.Origin // git branch <name> HEAD
 		}
@@ -82,6 +91,34 @@ func TestCommandEventOnlyAfterStartup(t *testing.T) {
 	defer mu.Unlock()
 	if before != 0 || n == 0 {
 		t.Fatalf("before=%d after=%d", before, n)
+	}
+}
+
+// TestRefreshPathsLogNoWrites guards against read-only refresh commands
+// (e.g. "git remote", "git check-ref-format") being misclassified as
+// writes, which would flood the default (reads-hidden) view with rows.
+func TestRefreshPathsLogNoWrites(t *testing.T) {
+	a, id := newTestApp(t)
+	if err := a.ClearCommandLog(id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.GetRefs(id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.GetLog(id, gitlog.Filters{}, gitlog.OrderTopo, 0, 100); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.GetWorktreeState(id); err != nil {
+		t.Fatal(err)
+	}
+	view, err := a.CommandLog(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range view.Entries {
+		if e.Kind == cmdlog.KindWrite {
+			t.Fatalf("refresh path logged a write: %+v", e)
+		}
 	}
 }
 

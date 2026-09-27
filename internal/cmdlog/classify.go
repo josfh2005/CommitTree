@@ -48,7 +48,7 @@ var alwaysRead = map[string]bool{
 	"blame": true, "ls-files": true, "ls-tree": true, "merge-base": true,
 	"name-rev": true, "describe": true, "diff-tree": true, "diff-index": true,
 	"diff-files": true, "check-ignore": true, "check-attr": true, "var": true,
-	"version": true, "shortlog": true, "grep": true,
+	"version": true, "shortlog": true, "grep": true, "check-ref-format": true,
 }
 
 // Classify says whether args (git's arguments after -C dir) only read.
@@ -72,6 +72,8 @@ func Classify(args []string) Kind {
 		read = len(pos) > 0 && (pos[0] == "list" || pos[0] == "show")
 	case sub == "reflog":
 		read = len(pos) == 0 || pos[0] == "show"
+	case sub == "remote":
+		read = len(pos) == 0 || pos[0] == "get-url"
 	case sub == "config":
 		read = has(rest, "--get", "--get-all", "--get-regexp", "--get-urlmatch", "--list", "-l") ||
 			(len(pos) > 0 && (pos[0] == "get" || pos[0] == "list"))

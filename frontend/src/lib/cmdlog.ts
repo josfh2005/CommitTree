@@ -6,11 +6,13 @@ export const MAX_ENTRIES = 500
 
 export const ORIGIN_LABEL: Record<CommandOrigin, string> = { you: 'You', ai: 'AI', auto: 'Auto' }
 
-/** mergeEntries adds more to list — only repoPath's, without duplicates
- *  (the initial load and live events overlap) — newest first, capped. */
-export function mergeEntries(list: CommandEntry[], more: CommandEntry[], repoPath: string): CommandEntry[] {
+/** mergeEntries adds more to list — only entries whose repo matches the key
+ *  the backend returned from CommandLog (repoKey; see CommandLogView),
+ *  never a frontend-computed Repo.path — without duplicates (the initial
+ *  load and live events overlap) — newest first, capped. */
+export function mergeEntries(list: CommandEntry[], more: CommandEntry[], repoKey: string): CommandEntry[] {
   const seen = new Set(list.map((e) => e.id))
-  const add = more.filter((e) => e.repo === repoPath && !seen.has(e.id) && seen.add(e.id))
+  const add = more.filter((e) => e.repo === repoKey && !seen.has(e.id) && seen.add(e.id))
   if (add.length === 0) return list
   return [...list, ...add].sort((a, b) => b.id - a.id).slice(0, MAX_ENTRIES)
 }

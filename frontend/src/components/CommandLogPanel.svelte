@@ -14,17 +14,17 @@
   let outputs: Record<number, CommandOutput> = {}
   let outputErrors: Record<number, string> = {}
   let loadedId = ''
-  let loadedPath = ''
+  let loadedRepoKey = ''
   let list: HTMLElement
 
   $: repoId = $selectedRepo && !$selectedRepo.missing ? $selectedRepo.id : ''
-  $: if (repoId !== loadedId) load(repoId, $selectedRepo?.path ?? '')
+  $: if (repoId !== loadedId) load(repoId)
   $: shown = visibleEntries(entries, $commandsShowReads)
   $: empty = emptyMessage(entries, $commandsShowReads)
 
-  async function load(id: string, path: string) {
+  async function load(id: string) {
     loadedId = id
-    loadedPath = path
+    loadedRepoKey = ''
     entries = []
     outputs = {}
     outputErrors = {}
@@ -32,15 +32,18 @@
     error = ''
     if (!id) return
     try {
-      const loaded = await api.commandLog(id)
-      if (loadedId === id) entries = mergeEntries(entries, loaded, path)
+      const view = await api.commandLog(id)
+      if (loadedId === id) {
+        loadedRepoKey = view.repo
+        entries = mergeEntries(entries, view.entries, loadedRepoKey)
+      }
     } catch (e) {
       if (loadedId === id) error = String(e)
     }
   }
 
   const off = EventsOn('cmdlog:entry', (e: CommandEntry) => {
-    if (loadedId) entries = mergeEntries(entries, [e], loadedPath)
+    if (loadedId && loadedRepoKey) entries = mergeEntries(entries, [e], loadedRepoKey)
   })
   onDestroy(off)
 
@@ -55,14 +58,17 @@
   }
 
   async function clear() {
+    const id = loadedId
     try {
-      await api.clearCommandLog(loadedId)
-      entries = []
-      outputs = {}
-      outputErrors = {}
-      expanded = null
+      await api.clearCommandLog(id)
+      if (loadedId === id) {
+        entries = []
+        outputs = {}
+        outputErrors = {}
+        expanded = null
+      }
     } catch (e) {
-      error = String(e)
+      if (loadedId === id) error = String(e)
     }
   }
 

@@ -36,7 +36,7 @@ export function ClearChat(arg1:string):Promise<void>;
 
 export function ClearCommandLog(arg1:string):Promise<void>;
 
-export function CommandLog(arg1:string):Promise<Array<cmdlog.Entry>>;
+export function CommandLog(arg1:string):Promise<app.CommandLogView>;
 
 export function CommandLogOutput(arg1:string,arg2:number):Promise<cmdlog.Output>;
 

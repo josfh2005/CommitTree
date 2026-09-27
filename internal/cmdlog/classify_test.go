@@ -20,6 +20,8 @@ func TestClassify(t *testing.T) {
 		"branch", "branch --list", "branch -a --format=%(refname)", "tag", "tag -l v*",
 		"-c core.quotepath=false status",
 		"reflog", "reflog show HEAD",
+		"remote", "remote -v", "remote get-url origin",
+		"check-ref-format --branch x",
 	}
 	writes := []string{
 		"commit -m x", "push", "fetch --all", "pull --rebase", "checkout main", "switch -c b",
@@ -28,6 +30,7 @@ func TestClassify(t *testing.T) {
 		"branch --set-upstream-to=origin/main", "tag v1", "tag -d v1", "symbolic-ref HEAD refs/heads/x",
 		"config user.name Bob", "config set user.name Bob", "worktree add ../x", "worktree remove x",
 		"submodule update --init", "reflog expire --all", "ls-remote origin", "clone url", "",
+		"remote add o url", "remote remove o", "remote set-url o url",
 	}
 	for _, c := range reads {
 		if got := Classify(strings.Fields(c)); got != KindRead {

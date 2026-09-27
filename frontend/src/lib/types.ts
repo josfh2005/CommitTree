@@ -363,7 +363,9 @@ export type CommandOrigin = 'you' | 'ai' | 'auto'
 /** One git command the app ran, as the Commands panel lists it. */
 export interface CommandEntry {
   id: number
-  /** The repository's path, cleaned — compared with Repo.path. */
+  /** The backend's key for this repository (cmdlog.RepoKey — a cleaned
+   *  path), not necessarily identical to Repo.path; match it against the
+   *  `repo` a CommandLog call returned, not against Repo.path directly. */
   repo: string
   args: string[]
   origin: CommandOrigin
@@ -377,3 +379,6 @@ export interface CommandEntry {
   outputDropped: boolean
 }
 export interface CommandOutput { stdout: string; stderr: string }
+/** CommandLog's result: the key the backend logs this repository's
+ *  commands under, and the commands themselves (never null). */
+export interface CommandLogView { repo: string; entries: CommandEntry[] }

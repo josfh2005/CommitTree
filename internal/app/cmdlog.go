@@ -51,13 +51,24 @@ func aiToolContext(ctx context.Context) context.Context {
 	return cmdlog.WithOrigin(ctx, cmdlog.OriginAI)
 }
 
-// CommandLog is repository id's git commands, newest first.
-func (a *App) CommandLog(id string) ([]cmdlog.Entry, error) {
+// CommandLogView is CommandLog's result: the key the backend logs this
+// repository's commands under (RepoKey applied — a cleaned path, which the
+// frontend cannot always reproduce byte-for-byte, e.g. on Windows) and the
+// commands themselves.
+type CommandLogView struct {
+	Repo    string         `json:"repo"`
+	Entries []cmdlog.Entry `json:"entries"`
+}
+
+// CommandLog is repository id's git commands, newest first, along with the
+// key they are logged under — the frontend matches live cmdlog:entry events
+// and its own cache against that key, not against its own repo path.
+func (a *App) CommandLog(id string) (CommandLogView, error) {
 	dir, err := a.dir(id)
 	if err != nil {
-		return nil, err
+		return CommandLogView{}, err
 	}
-	return a.cmds.List(dir), nil
+	return CommandLogView{Repo: cmdlog.RepoKey(dir), Entries: a.cmds.List(dir)}, nil
 }
 
 // CommandLogOutput is what command entryID printed.
