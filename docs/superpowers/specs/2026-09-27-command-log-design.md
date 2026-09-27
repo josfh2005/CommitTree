@@ -52,11 +52,22 @@ is recovered and never affects the git command.
 
 ### Origin
 
-Carried in the context: `cmdlog.WithOrigin(ctx, cmdlog.OriginAI)`. The AI
-tool runner (`RunTool` in `internal/app/ai.go`) sets it for every tool call.
-Commands without an origin in the context are **You** when they are writes and
-**Auto** when they are reads. The app cannot tell a read caused by a click
-from one caused by a refresh, so all such reads are Auto.
+Carried in the context: `cmdlog.WithOrigin(ctx, cmdlog.OriginAI)`.
+
+- The AI tool runner (`RunTool` in `internal/app/ai.go`) sets it on the ctx
+  of every tool call, so the AI's reads and its `Prepare`/`Recheck` checks
+  are AI.
+- An approved AI write runs through the same `App` methods the UI uses
+  (`executeWrite` → `StageFile`, `Push`, …), which take `a.ctx`, not the
+  tool's ctx. `runWriteTool` therefore marks the repository (by path) as
+  "AI writing" around `executeWrite`, and the recorder tags every *write*
+  run in that repository meanwhile as AI; reads in that window keep their
+  own origin. A user write in the same window would be tagged AI;
+  accepted.
+- Commands without an origin in the context are **You** when they are
+  writes and **Auto** when they are reads. The app cannot tell a read
+  caused by a click from one caused by a refresh, so all such reads are
+  Auto.
 
 ### Read or write
 
@@ -71,14 +82,18 @@ Everything else is a write, `fetch` included (it is always shown).
 
 ### Store (`internal/cmdlog`)
 
-- `Entry{ID, RepoRoot, Args, Origin, Kind, Start, DurationMs, ExitCode,
-  Outcome, OutputTruncated}`; stdout and stderr kept alongside, not in the
+- `Entry{ID, Repo, Args, Origin, Kind, Start, DurationMs, ExitCode,
+  Outcome, OutputTruncated, OutputDropped}`; stdout and stderr kept alongside, not in the
   entry, each truncated to 64 KB.
-- Keyed by repository root: the recorder resolves `dir` to the root of a
-  repository the app knows (so a submodule's or worktree's commands go to that
-  repository's own log). A `dir` the app does not know is dropped.
+- Keyed by the command's `dir`, cleaned (`filepath.Clean`). Every App method
+  runs git with its repository's path as `dir`, so a repository ID resolves
+  to its log through that path; a submodule or worktree has its own path and
+  so its own log. No lookup of known repositories is needed at record time.
 - A ring of 500 per repository; adding the 501st drops the oldest. Guarded by
   a mutex (git runs concurrently from several goroutines).
+- Output budget: at most 8 MB of stored output per repository. Past it, the
+  output of the oldest entries is dropped (the entry stays, marked
+  `OutputDropped`; its expanded row says "Output no longer kept").
 - IDs are a process-wide increasing counter.
 
 ### Redaction (`internal/cmdlog/redact.go`)
@@ -95,7 +110,8 @@ Applied to args and output before storing:
 ### Events and bindings
 
 - Event `cmdlog:entry` with the `Entry` (no output), emitted when a command
-  ends. There is no "running" row: a long push appears when it finishes.
+  ends, straight through the Wails runtime once `Startup` has run — not
+  through the AI deps' `Emit`, which tests use to assert on chat events. There is no "running" row: a long push appears when it finishes.
 - `CommandLog(repoID) ([]Entry, error)` — newest first, for the initial load.
 - `CommandLogOutput(repoID string, id int64) (CommandOutput, error)` —
   `{stdout, stderr}` when a row is expanded; an error if the entry was
