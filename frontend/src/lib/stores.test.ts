@@ -237,3 +237,15 @@ describe('focusCommitBox', () => {
     selectedHash.set('')
   })
 })
+
+describe('theme', () => {
+  it('is the chosen theme, or the system one on auto', async () => {
+    const { theme, themePref } = await import('./stores')
+    themePref.set('dark')
+    expect(get(theme)).toBe('dark')
+    themePref.set('light')
+    expect(get(theme)).toBe('light')
+    themePref.set('auto') // no matchMedia under vitest: the system reads as light
+    expect(get(theme)).toBe('light')
+  })
+})

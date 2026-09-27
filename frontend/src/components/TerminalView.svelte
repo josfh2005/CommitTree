@@ -4,6 +4,7 @@
   import { FitAddon } from '@xterm/addon-fit'
   import '@xterm/xterm/css/xterm.css'
   import { api } from '../lib/api'
+  import { highContrast, theme } from '../lib/stores'
 
   export let tab: string
   export let visible: boolean
@@ -16,6 +17,14 @@
   let observer: ResizeObserver
 
   const css = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+  const colours = () => ({ background: css('--surface'), foreground: css('--text'), cursor: css('--text'), selectionBackground: css('--selection') })
+
+  // xterm paints with fixed colours, so follow theme and contrast changes by
+  // re-reading the palette (main.ts has already updated the root by now).
+  $: if (term) {
+    void $theme, $highContrast
+    term.options.theme = colours()
+  }
 
   function refit() {
     if (!visible || !host?.offsetWidth) return
@@ -28,7 +37,7 @@
       scrollback: 5000,
       fontSize: 12,
       fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-      theme: { background: css('--surface'), foreground: css('--text'), cursor: css('--text'), selectionBackground: css('--selection') },
+      theme: colours(),
     })
     fit = new FitAddon()
     term.loadAddon(fit)

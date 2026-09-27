@@ -60,38 +60,39 @@
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #201f1d;
-    --surface: #262624;
-    --sidebar: #1b1a19;
-    --hover: #2f2e2b;
-    --active: #3a3935;
-    --border: #34332f;
-    --text: #ecebe8;
-    --muted: #9c9a95;
-    --faint: #6f6d69;
-    --danger: #c0392b;
-    --ok: #5cb85c;
-    --selection: #2d3444;
-    --merge-text: #8c8a85;
-    --add-bg: #1f3a28;
-    --del-bg: #45221f;
-    --branch-badge-bg: #1f3a28;
-    --branch-badge-text: #7cd47c;
-    --tag-badge-bg: #40301a;
-    --tag-badge-text: #e3a94f;
-    --shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
-    color-scheme: dark;
-  }
+/* Dark palette. main.ts sets data-theme on the root from Settings →
+   Appearance → Theme (Auto follows the system), so an explicit choice wins
+   over the system setting. */
+:root[data-theme='dark'] {
+  --bg: #201f1d;
+  --surface: #262624;
+  --sidebar: #1b1a19;
+  --hover: #2f2e2b;
+  --active: #3a3935;
+  --border: #34332f;
+  --text: #ecebe8;
+  --muted: #9c9a95;
+  --faint: #6f6d69;
+  --danger: #c0392b;
+  --ok: #5cb85c;
+  --selection: #2d3444;
+  --merge-text: #8c8a85;
+  --add-bg: #1f3a28;
+  --del-bg: #45221f;
+  --branch-badge-bg: #1f3a28;
+  --branch-badge-text: #7cd47c;
+  --tag-badge-bg: #40301a;
+  --tag-badge-text: #e3a94f;
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
 }
 
 /* High contrast (Settings → Appearance), for light and dark alike. Only the
    text colours change; backgrounds, borders, hover, selection, accent,
    graph, badge and diff colours stay as they are. Every text token stays at
    least 4.5:1 on the backgrounds it sits on (theme.test.ts checks both).
-   The light block outranks the plain dark :root by specificity, so the dark
-   block below must redefine every token the light one sets. */
+   The light block ties the dark palette on specificity and comes after it,
+   so the dark block below must redefine every token the light one sets. */
 :root[data-contrast='high'] {
   --text: #000000;
   --muted: #45443f;
@@ -99,13 +100,11 @@
   --merge-text: #4d4b46;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root[data-contrast='high'] {
-    --text: #ffffff;
-    --muted: #cfcdc8;
-    --faint: #a3a19c;
-    --merge-text: #bdbbb6;
-  }
+:root[data-theme='dark'][data-contrast='high'] {
+  --text: #ffffff;
+  --muted: #cfcdc8;
+  --faint: #a3a19c;
+  --merge-text: #bdbbb6;
 }
 
 * { box-sizing: border-box; }

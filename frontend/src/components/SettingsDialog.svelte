@@ -6,7 +6,14 @@
   import { formatBytes, percent } from '../lib/format'
   import { modelForProvider, modelHint, needsKey, processingNotice, PROVIDERS, settingsHaveModels, usesOllama } from '../lib/providers'
   import { SETTINGS_TABS, isSettingsTab, tabUsesAI } from '../lib/settingsTabs'
-  import { highContrast, loadAISettings, loadGitSettings, persisted, settingsOpen } from '../lib/stores'
+  import { highContrast, loadAISettings, loadGitSettings, persisted, settingsOpen, themePref } from '../lib/stores'
+  import type { ThemePref } from '../lib/theme'
+
+  const THEMES: { value: ThemePref; label: string }[] = [
+    { value: 'auto', label: 'Auto' },
+    { value: 'light', label: 'Light' },
+    { value: 'dark', label: 'Dark' },
+  ]
   import type { AISettings, AIStatus, GitSettings, ModelDone, ModelProgress, ProviderName, PromptInfo } from '../lib/types'
   import { errorMessage, toast } from '../lib/ui'
 
@@ -235,6 +242,14 @@
           {#if $tab === 'general'}
             <section>
               <h4>Appearance</h4>
+              <div class="row theme">
+                <span>Theme</span>
+                <div class="segmented" role="radiogroup" aria-label="Theme">
+                  {#each THEMES as t}
+                    <button type="button" role="radio" aria-checked={$themePref === t.value} class:on={$themePref === t.value} title={t.value === 'auto' ? 'Follow the system setting' : ''} on:click={() => themePref.set(t.value)}>{t.label}</button>
+                  {/each}
+                </div>
+              </div>
               <label class="row check">
                 <input type="checkbox" bind:checked={$highContrast} />
                 <span>High contrast</span>
@@ -445,6 +460,11 @@
   label.check { gap: 6px; color: var(--text); font-size: 13px; }
   .key-label { flex: none; width: 130px; }
   .row { display: flex; gap: 6px; }
+  .theme { align-items: center; justify-content: space-between; color: var(--text); font-size: 13px; }
+  .segmented { display: inline-flex; padding: 2px; gap: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+  .segmented button { padding: 3px 12px; border-radius: 6px; color: var(--muted); }
+  .segmented button:hover:not(.on) { background: var(--hover); color: var(--text); }
+  .segmented button.on { background: var(--surface); color: var(--text); box-shadow: 0 0 0 1px var(--border); }
   .row input { flex: 1; }
   .status { display: flex; align-items: center; gap: 6px; }
   .dot { width: 8px; height: 8px; border-radius: 50%; }

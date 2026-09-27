@@ -186,14 +186,21 @@ tabs show the error.
 
 ### Appearance
 
-The application follows the system's light or dark appearance. Settings has
-an Appearance section with a High contrast checkbox that works in both. It
+Settings has an Appearance section. Its Theme control offers Auto, Light and
+Dark: Auto (the default) follows the system's light or dark appearance and
+switches with it while the application is open; Light and Dark keep that
+palette whatever the system says. Native controls (selects, date fields,
+scrollbars) and the embedded terminal follow the chosen theme too. The
+window's own background, seen for an instant at launch before the page
+paints, stays light.
+
+Below it, a High contrast checkbox works with every theme. It
 changes only text colours: text becomes black (or white in dark mode), and
 secondary text such as dates, authors and hashes becomes darker (or
 lighter). Backgrounds, borders, hover, selection and the accent, graph lane,
 ref badge and diff colours stay as they are. Every kind of text keeps a contrast of at
-least 4.5:1 against the backgrounds it appears on. The choice applies at once
-and is remembered on this computer.
+least 4.5:1 against the backgrounds it appears on. Both choices apply at once
+and are remembered on this computer.
 
 ## Architectural constraints that shape behaviour
 

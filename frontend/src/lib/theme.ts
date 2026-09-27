@@ -18,3 +18,20 @@ export function contrastRatio(a: string, b: string): number {
   const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
   return (hi + 0.05) / (lo + 0.05)
 }
+
+/** Settings → Appearance → Theme. Auto follows the system. */
+export type ThemePref = 'auto' | 'light' | 'dark'
+
+export function isThemePref(v: unknown): v is ThemePref {
+  return v === 'auto' || v === 'light' || v === 'dark'
+}
+
+/** The palette to draw with: an explicit choice wins over the system. */
+export function resolveTheme(pref: ThemePref, systemDark: boolean): 'light' | 'dark' {
+  return pref === 'auto' ? (systemDark ? 'dark' : 'light') : pref
+}
+
+/** Marks the root element; theme.css keys the dark palette on data-theme. */
+export function applyTheme(root: Pick<Element, 'setAttribute'>, theme: 'light' | 'dark') {
+  root.setAttribute('data-theme', theme)
+}

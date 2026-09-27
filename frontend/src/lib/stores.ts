@@ -1,4 +1,4 @@
-import { derived, get, writable, type Writable } from 'svelte/store'
+import { derived, get, readable, writable, type Writable } from 'svelte/store'
 import { api } from './api'
 import type { BlameTarget } from './blame'
 import { validSelectedStash, type SelectedStash } from './stash'
@@ -6,6 +6,7 @@ import { nextSelection } from './submodules'
 import { emptyFilters, type AISettings, type AheadBehind, type Filters, type GitSettings, type Identity, type LogOrder, type MergeState, type Refs, type Repo, type StashEntry, type WorktreeState } from './types'
 import { isLogOrder } from './logOrder'
 import { removeRepoTabs, terminalState } from './terminal'
+import { isThemePref, resolveTheme, type ThemePref } from './theme'
 
 /** @param isValid For a value drawn from a constrained set (e.g. a union of
  *  string literals): a type guard checked against whatever JSON.parse
@@ -41,6 +42,20 @@ export const detailsHeight = persisted('detailsHeight', 280)
 export const chatOpen = persisted('chatOpen', true)
 /** Settings → Appearance → High contrast; main.ts applies it to the page. */
 export const highContrast = persisted('highContrast', false, (v): v is boolean => typeof v === 'boolean')
+/** Settings → Appearance → Theme. */
+export const themePref = persisted<ThemePref>('theme', 'auto', isThemePref)
+/** Whether the system is in dark mode, kept live (false where there is no
+ *  matchMedia, as under vitest). */
+export const systemDark = readable(false, (set) => {
+  if (typeof matchMedia !== 'function') return
+  const media = matchMedia('(prefers-color-scheme: dark)')
+  const update = () => set(media.matches)
+  update()
+  media.addEventListener('change', update)
+  return () => media.removeEventListener('change', update)
+})
+/** The palette on screen; main.ts applies it to the page. */
+export const theme = derived([themePref, systemDark], ([pref, dark]) => resolveTheme(pref, dark))
 
 /** Repositories whose chat is taken by an explanation still being prepared
  *  (blame and diffs being read) before its question appears in the chat. */

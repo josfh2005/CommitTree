@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { applyContrast, contrastRatio } from './theme'
+import { applyContrast, applyTheme, contrastRatio, isThemePref, resolveTheme } from './theme'
 
 describe('applyContrast', () => {
   it('sets and removes data-contrast on the root element', () => {
@@ -13,6 +13,35 @@ describe('applyContrast', () => {
     expect(attrs.get('data-contrast')).toBe('high')
     applyContrast(root, false)
     expect(attrs.has('data-contrast')).toBe(false)
+  })
+})
+
+describe('resolveTheme', () => {
+  it('follows the system on auto', () => {
+    expect(resolveTheme('auto', true)).toBe('dark')
+    expect(resolveTheme('auto', false)).toBe('light')
+  })
+  it('keeps an explicit choice whatever the system says', () => {
+    expect(resolveTheme('light', true)).toBe('light')
+    expect(resolveTheme('dark', false)).toBe('dark')
+  })
+})
+
+describe('applyTheme', () => {
+  it('marks the root with the resolved theme', () => {
+    const attrs = new Map<string, string>()
+    const root = { setAttribute: (k: string, v: string) => void attrs.set(k, v) }
+    applyTheme(root, 'dark')
+    expect(attrs.get('data-theme')).toBe('dark')
+    applyTheme(root, 'light')
+    expect(attrs.get('data-theme')).toBe('light')
+  })
+})
+
+describe('isThemePref', () => {
+  it('accepts only the three choices', () => {
+    for (const v of ['auto', 'light', 'dark']) expect(isThemePref(v)).toBe(true)
+    for (const v of ['system', '', null, 1]) expect(isThemePref(v)).toBe(false)
   })
 })
 
@@ -34,13 +63,17 @@ function block(css: string, selector: string, from = 0): Record<string, string> 
 
 describe('high contrast palettes in theme.css', () => {
   const css = readFileSync(new URL('../theme.css', import.meta.url), 'utf8')
-  const selector = ":root[data-contrast='high']"
-  const darkMedia = '@media (prefers-color-scheme: dark)'
-  const lightHigh = block(css, selector)
-  const darkHigh = block(css, selector, css.indexOf(darkMedia, css.indexOf(selector)))
+  const lightHigh = block(css, ":root[data-contrast='high']")
+  const darkHigh = block(css, ":root[data-theme='dark'][data-contrast='high']")
   // High contrast sits on top of the normal palette of the same mode.
   const lightBase = block(css, ':root')
-  const darkBase = block(css, ':root', css.indexOf(darkMedia))
+  const darkBase = block(css, ":root[data-theme='dark']")
+
+  it('is chosen by data-theme, not by the system media query', () => {
+    // The theme setting (auto/light/dark) resolves in main.ts; a media
+    // query here would override an explicit Light on a dark system.
+    expect(css).not.toContain('prefers-color-scheme')
+  })
   const light = { ...lightBase, ...lightHigh }
   const dark = { ...lightBase, ...darkBase, ...darkHigh }
   const textTokens = ['--text', '--muted', '--faint', '--merge-text']
