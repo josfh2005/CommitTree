@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import BlameView from './components/BlameView.svelte'
+  import BottomDock from './components/BottomDock.svelte'
   import ChangesView from './components/ChangesView.svelte'
   import ChatPanel from './components/ChatPanel.svelte'
   import ContextMenu from './components/ContextMenu.svelte'
@@ -10,13 +11,13 @@
   import Sidebar from './components/Sidebar.svelte'
   import Splitter from './components/Splitter.svelte'
   import StashView from './components/StashView.svelte'
-  import TerminalPanel from './components/TerminalPanel.svelte'
   import Toasts from './components/Toasts.svelte'
   import { startFocusRefresh } from './lib/actions'
+  import { isCommandsToggle } from './lib/cmdlog'
   import { isSettingsShortcut } from './lib/shortcuts'
   import { isTerminalToggle } from './lib/terminal'
   import { conflictOwnsScreen } from './lib/remote'
-  import { blameTarget, chatOpen, chatWidth, closeBlame, loadAISettings, loadRefs, loadRepos, loadWorktreeState, mainView, mergeState, platform, refreshRepo, selectedHash, selectedRepo, selectedStash, settingsOpen, sidebarWidth, stashConflictDismissed, stashEntries, terminalHeight, terminalOpen, uncommittedSelected } from './lib/stores'
+  import { blameTarget, chatOpen, chatWidth, closeBlame, commandsOpen, dockHeight, loadAISettings, loadRefs, loadRepos, loadWorktreeState, mainView, mergeState, platform, refreshRepo, selectedHash, selectedRepo, selectedStash, settingsOpen, sidebarWidth, stashConflictDismissed, stashEntries, terminalOpen, uncommittedSelected } from './lib/stores'
   import type { RepoChangedEvent, WorktreeChangedEvent } from './lib/types'
   import { Environment, EventsOn } from '../wailsjs/runtime/runtime'
 
@@ -49,7 +50,8 @@
 
   const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v))
 
-  let sideHeight = 0
+  let mainHeight = 0
+  $: dockOpen = $terminalOpen || $commandsOpen
 
   function toggleTerminal(e: KeyboardEvent) {
     const inTerminal = e.target instanceof Element && !!e.target.closest('.xterm')
@@ -59,6 +61,15 @@
       // Terminal toggle are not shown otherwise — so the shortcut can't open
       // an empty panel. Closing is always allowed.
       terminalOpen.update((v) => (v ? false : !!$selectedRepo && !$selectedRepo.missing))
+    }
+  }
+
+  function toggleCommands(e: KeyboardEvent) {
+    const inTerminal = e.target instanceof Element && !!e.target.closest('.xterm')
+    if (isCommandsToggle(e, $platform, inTerminal)) {
+      e.preventDefault()
+      // Same rule as the terminal: opening needs a selected, present repository.
+      commandsOpen.update((v) => (v ? false : !!$selectedRepo && !$selectedRepo.missing))
     }
   }
 
@@ -91,6 +102,7 @@
 
   function onKeydown(e: KeyboardEvent) {
     toggleTerminal(e)
+    toggleCommands(e)
     if (isSettingsShortcut(e, $platform)) {
       e.preventDefault()
       settingsOpen.set(true)
@@ -103,30 +115,29 @@
 <div class="app">
   <aside style="width: {$sidebarWidth}px"><Sidebar /></aside>
   <Splitter on:drag={(e) => sidebarWidth.set(clamp($sidebarWidth + e.detail, 200, 480))} />
-  <main>
-    {#if showChanges && $selectedRepo}
-      <ChangesView repoId={$selectedRepo.id} />
-    {:else if showStash && $selectedRepo && selectedStashEntry}
-      <StashView repoId={$selectedRepo.id} entry={selectedStashEntry} />
-    {:else if showBlame && $selectedRepo}
-      <BlameView repoId={$selectedRepo.id} />
-    {:else}
-      <LogView />
+  <main bind:clientHeight={mainHeight}>
+    <div class="view">
+      {#if showChanges && $selectedRepo}
+        <ChangesView repoId={$selectedRepo.id} />
+      {:else if showStash && $selectedRepo && selectedStashEntry}
+        <StashView repoId={$selectedRepo.id} entry={selectedStashEntry} />
+      {:else if showBlame && $selectedRepo}
+        <BlameView repoId={$selectedRepo.id} />
+      {:else}
+        <LogView />
+      {/if}
+    </div>
+    {#if dockOpen}
+      <Splitter direction="horizontal" on:drag={(e) => dockHeight.set(clamp($dockHeight - e.detail, 120, Math.max(120, mainHeight - 200)))} />
     {/if}
+    <!-- The dock stays mounted while closed so the terminal's shells and
+         scrollback survive; only its layout is toggled with CSS. -->
+    <div class="dock" class:hidden={!dockOpen} style="height: {clamp($dockHeight, 120, Math.max(120, mainHeight - 200))}px"><BottomDock /></div>
   </main>
-  {#if $chatOpen || $terminalOpen}
+  {#if $chatOpen}
     <Splitter on:drag={(e) => chatWidth.set(clamp($chatWidth - e.detail, 260, 560))} />
+    <section class="side" style="width: {$chatWidth}px"><ChatPanel /></section>
   {/if}
-  <!-- TerminalPanel stays mounted for the app's lifetime (see below) even
-       while this column is closed, so its xterm instances and scrollback
-       survive hiding it; only its layout is toggled with CSS. -->
-  <section class="side" class:hidden={!($chatOpen || $terminalOpen)} style="width: {$chatWidth}px" bind:clientHeight={sideHeight}>
-    {#if $chatOpen}<div class="chat"><ChatPanel /></div>{/if}
-    {#if $chatOpen && $terminalOpen}
-      <Splitter direction="horizontal" on:drag={(e) => terminalHeight.set(clamp($terminalHeight - e.detail, 120, Math.max(120, sideHeight - 120)))} />
-    {/if}
-    <div class="terminal" class:hidden={!$terminalOpen} style={$chatOpen ? `height: ${$terminalHeight}px` : 'flex: 1'}><TerminalPanel /></div>
-  </section>
 </div>
 
 <ContextMenu />
@@ -137,10 +148,9 @@
 <style>
   .app { display: flex; height: 100%; }
   aside { flex: none; min-width: 0; background: var(--sidebar); }
-  main { flex: 1; min-width: 0; background: var(--surface); }
+  main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); }
+  .view { flex: 1; min-height: 0; }
+  .dock { flex: none; min-height: 0; border-top: 1px solid var(--border); }
+  .dock.hidden { display: none; }
   .side { flex: none; min-width: 0; display: flex; flex-direction: column; background: var(--bg); }
-  .side.hidden { display: none; }
-  .chat { flex: 1; min-height: 0; }
-  .terminal { flex: none; min-height: 0; }
-  .terminal.hidden { display: none; }
 </style>

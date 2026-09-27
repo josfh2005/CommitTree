@@ -46,16 +46,19 @@ hides it or opens a new tab.
 
 ## Layout and visibility
 
-The terminal lives in the same column as the chat panel, below it, separated
-by a draggable divider; its height is remembered between sessions. The chat
-and the terminal open and close independently of each other — closing one
-leaves the other filling the whole column. Two toggles open the terminal: the
-repository toolbar's "Terminal" button (see `05-remote-and-stash.md`),
-highlighted while the terminal is open, whose tooltip names the shortcuts
-and which is not shown while the selected repository is missing; and the
-button in the terminal panel's own header to hide it again. Two shortcuts
-toggle it from anywhere in the window, both matched on the physical key
-rather than the character it produces:
+The terminal lives in the bottom dock, under the repository view, separated
+from it by a draggable divider; the dock's height is remembered between
+sessions (and carries over the height the terminal had when it lived under
+the chat). The chat panel has the right-hand column to itself. The dock also
+holds the Commands panel (see `09-command-log.md`): when both are open they
+sit side by side with a draggable divider between them, and either one alone
+takes the whole width. Two toggles open the terminal: the repository
+toolbar's "Terminal" button (see `05-remote-and-stash.md`), highlighted while
+the terminal is open, whose tooltip names the shortcuts and which is not
+shown while the selected repository is missing; and the button in the
+terminal panel's own header to hide it again. Two shortcuts toggle it from
+anywhere in the window, both matched on the physical key rather than the
+character it produces:
 
 - **Cmd+J** on macOS, **Ctrl+J** elsewhere — the one that works on every
   keyboard layout. Ctrl+J is a line feed to a shell, so on Windows and Linux
@@ -79,8 +82,8 @@ is closed explicitly or the application restarts. Tabs are not restored
 across an application restart — every tab, running or exited, is gone once
 the application closes.
 
-Resizing the panel (dragging either divider) resizes the visible terminal to
-match, the same as resizing a real terminal window would.
+Resizing the panel (dragging any of its dividers) resizes the visible
+terminal to match, the same as resizing a real terminal window would.
 
 ## Staying fresh
 

@@ -33,7 +33,7 @@ the current working tree.
 The log view's header carries the repository toolbar: a ~60 px header with
 the repository name and, under it, its path on the left, and on the right
 labelled buttons (a 20 px outline icon with its name under it) in groups —
-Commit, Stash · Fetch, Pull, Push · Branch, Merge · Terminal, Finder
+Commit, Stash · Fetch, Pull, Push · Branch, Merge · Terminal, Commands, Finder
 ("Folder" off macOS), Chat. Tag, rebase and cherry-pick are not on it: they
 act on a selected commit and stay in context menus. A missing (moved or
 deleted) repository shows no toolbar. Every disabled button's tooltip says
@@ -49,6 +49,7 @@ why it is disabled; an enabled one's says what it does.
 | Branch | The "New branch" dialog, from HEAD (a detached HEAD's commit included) | busy |
 | Merge | The branch picker below, then the usual merge confirmation | busy; a conflict is in progress; detached HEAD ("Check out a branch first"); no branch other than the current one, local or remote ("No other branches") |
 | Terminal | A toggle: shows or hides the terminal panel, and looks pressed (soft background and border, no colour) while it is open | never |
+| Commands | A toggle, like Terminal, for the Commands panel (see `09-command-log.md`) | never |
 | Finder / Folder | Opens the repository folder | never |
 | Chat | A toggle, like Terminal, for the chat panel | never |
 

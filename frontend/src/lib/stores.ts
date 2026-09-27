@@ -75,8 +75,11 @@ export async function explainIntoChat(repoID: string, call: () => Promise<void>)
   }
 }
 export const terminalOpen = persisted('terminalOpen', false)
-/** Height of the terminal under the chat, in pixels. */
-export const terminalHeight = persisted('terminalHeight', 260)
+/** Height of the bottom dock (Terminal and Commands), in pixels. Stored
+ *  under the old terminal-height key so an existing setting carries over. */
+export const dockHeight = persisted('terminalHeight', 260)
+/** Width of the Terminal when Commands shares the dock with it, in pixels. */
+export const dockSplit = persisted('dockSplit', 480)
 export const commandsOpen = persisted('commandsOpen', false)
 /** Whether the Commands panel lists reads too (off: only writes). */
 export const commandsShowReads = persisted('commandsShowReads', false)

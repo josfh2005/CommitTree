@@ -1,10 +1,11 @@
+import { commandsShortcutLabel } from './cmdlog'
 import { revealLabel } from './platform'
 import { terminalShortcutLabel } from './terminal'
 import type { PickItem } from './pick'
 import type { AheadBehind, Branch, MergeState, Refs, WorktreeState } from './types'
 import { uncommittedCount } from './uncommitted'
 
-export type ToolbarId = 'commit' | 'stash' | 'fetch' | 'pull' | 'push' | 'branch' | 'merge' | 'terminal' | 'folder' | 'chat'
+export type ToolbarId = 'commit' | 'stash' | 'fetch' | 'pull' | 'push' | 'branch' | 'merge' | 'terminal' | 'commands' | 'folder' | 'chat'
 export type ToolbarGroup = 'work' | 'sync' | 'refs' | 'tools'
 
 export interface ToolbarInput {
@@ -14,6 +15,7 @@ export interface ToolbarInput {
   busy: string
   remote: AheadBehind | null
   terminalOpen: boolean
+  commandsOpen: boolean
   chatOpen: boolean
   platform: string
 }
@@ -54,6 +56,7 @@ export function toolbarItems(i: ToolbarInput): ToolbarItem[] {
     item('branch', 'Branch', 'branch', 'refs', first([!!i.busy, i.busy]), 'New branch from HEAD'),
     item('merge', 'Merge', 'merge', 'refs', first([!!i.busy, i.busy], [conflict, blocked], [!!i.refs?.detached, 'Check out a branch first'], [mergeCandidates(i.refs).length === 0, 'No other branches']), 'Merge a branch into the current one'),
     item('terminal', 'Terminal', 'terminal', 'tools', '', `${i.terminalOpen ? 'Hide' : 'Show'} terminal (${shortcut})`, { active: i.terminalOpen }),
+    item('commands', 'Commands', 'list', 'tools', '', `${i.commandsOpen ? 'Hide' : 'Show'} git commands (${commandsShortcutLabel(i.platform)})`, { active: i.commandsOpen }),
     item('folder', i.platform === 'darwin' ? 'Finder' : 'Folder', 'folder', 'tools', '', revealLabel(i.platform)),
     item('chat', 'Chat', 'chat', 'tools', '', i.chatOpen ? 'Hide chat' : 'Show chat', { active: i.chatOpen }),
   ]

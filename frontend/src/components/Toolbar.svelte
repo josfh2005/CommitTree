@@ -2,11 +2,11 @@
   import Icon from './Icon.svelte'
   import { fetchRemote, newBranch, openRepoFolder, pickAndMerge, pull, push, startCommit, stashChanges } from '../lib/actions'
   import { toolbarItems, type ToolbarGroup, type ToolbarId } from '../lib/toolbar'
-  import { busy, chatOpen, mergeState, platform, refs, remoteInfo, stashConflictDismissed, terminalOpen, worktreeState } from '../lib/stores'
+  import { busy, chatOpen, commandsOpen, mergeState, platform, refs, remoteInfo, stashConflictDismissed, terminalOpen, worktreeState } from '../lib/stores'
 
   export let repoId: string
 
-  $: items = toolbarItems({ refs: $refs, worktree: $worktreeState, merge: $mergeState, busy: $busy, remote: $remoteInfo, terminalOpen: $terminalOpen, chatOpen: $chatOpen, platform: $platform })
+  $: items = toolbarItems({ refs: $refs, worktree: $worktreeState, merge: $mergeState, busy: $busy, remote: $remoteInfo, terminalOpen: $terminalOpen, commandsOpen: $commandsOpen, chatOpen: $chatOpen, platform: $platform })
   const GROUPS: ToolbarGroup[] = ['work', 'sync', 'refs', 'tools']
 
   function act(id: ToolbarId) {
@@ -19,6 +19,7 @@
       case 'branch': return newBranch(repoId, $refs?.headHash ?? 'HEAD', $refs?.head ?? 'HEAD')
       case 'merge': return pickAndMerge(repoId)
       case 'terminal': return terminalOpen.update((open) => !open)
+      case 'commands': return commandsOpen.update((open) => !open)
       case 'folder': return openRepoFolder(repoId)
       case 'chat': return chatOpen.update((open) => !open)
     }

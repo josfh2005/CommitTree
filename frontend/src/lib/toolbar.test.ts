@@ -7,14 +7,14 @@ const clean: WorktreeState = { staged: [], unstaged: [], untracked: [], merging:
 const dirty: WorktreeState = { staged: [], unstaged: [{ path: 'a.txt', status: 'M' }], untracked: [], merging: false }
 const conflict = (kind: MergeState['kind']): MergeState => ({ kind, merging: true, from: 'x', into: 'main', conflicts: ['a.txt'], manual: [], staged: [], unstaged: [] })
 const input = (over: Partial<ToolbarInput> = {}): ToolbarInput => ({
-  refs: refs(), worktree: clean, merge: null, busy: '', remote: null, terminalOpen: false, chatOpen: true, platform: 'darwin', ...over,
+  refs: refs(), worktree: clean, merge: null, busy: '', remote: null, terminalOpen: false, commandsOpen: false, chatOpen: true, platform: 'darwin', ...over,
 })
 const item = (over: Partial<ToolbarInput>, id: string) => toolbarItems(input(over)).find((i) => i.id === id)!
 
 describe('toolbarItems', () => {
   it('lists the ten buttons in their groups and order', () => {
     expect(toolbarItems(input()).map((i) => `${i.group}:${i.id}`)).toEqual([
-      'work:commit', 'work:stash', 'sync:fetch', 'sync:pull', 'sync:push', 'refs:branch', 'refs:merge', 'tools:terminal', 'tools:folder', 'tools:chat',
+      'work:commit', 'work:stash', 'sync:fetch', 'sync:pull', 'sync:push', 'refs:branch', 'refs:merge', 'tools:terminal', 'tools:commands', 'tools:folder', 'tools:chat',
     ])
   })
 
@@ -40,7 +40,7 @@ describe('toolbarItems', () => {
     for (const id of ['commit', 'stash', 'fetch', 'pull', 'push', 'branch', 'merge']) {
       expect(item({ worktree: dirty, busy: 'Pushing…' }, id), id).toMatchObject({ enabled: false, title: 'Pushing…' })
     }
-    for (const id of ['terminal', 'folder', 'chat']) expect(item({ busy: 'Pushing…' }, id).enabled).toBe(true)
+    for (const id of ['terminal', 'commands', 'folder', 'chat']) expect(item({ busy: 'Pushing…' }, id).enabled).toBe(true)
   })
 
   it('disables Merge on a detached HEAD but keeps Branch', () => {
@@ -61,6 +61,13 @@ describe('toolbarItems', () => {
     expect(item({ terminalOpen: false, platform: 'linux' }, 'terminal')).toMatchObject({ active: false, title: 'Show terminal (Ctrl+J or Ctrl+`)' })
     expect(item({ chatOpen: true }, 'chat')).toMatchObject({ active: true, title: 'Hide chat' })
     expect(item({ chatOpen: false }, 'chat')).toMatchObject({ active: false, title: 'Show chat' })
+  })
+
+  it('has a Commands toggle after Terminal', () => {
+    const ids = toolbarItems(input()).map((i) => i.id)
+    expect(ids.indexOf('commands')).toBe(ids.indexOf('terminal') + 1)
+    expect(item({ commandsOpen: true }, 'commands')).toMatchObject({ active: true, label: 'Commands', title: 'Hide git commands (⌘⇧J)' })
+    expect(item({ commandsOpen: false, platform: 'linux' }, 'commands')).toMatchObject({ active: false, title: 'Show git commands (Ctrl+Shift+J)' })
   })
 
   it('names the folder button after the platform', () => {
