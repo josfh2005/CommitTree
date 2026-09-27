@@ -8,13 +8,23 @@ export const ORIGIN_LABEL: Record<CommandOrigin, string> = { you: 'You', ai: 'AI
 
 /** mergeEntries adds more to list — only entries whose repo matches the key
  *  the backend returned from CommandLog (repoKey; see CommandLogView),
- *  never a frontend-computed Repo.path — without duplicates (the initial
- *  load and live events overlap) — newest first, capped. */
+ *  never a frontend-computed Repo.path. An entry list already holds is
+ *  replaced only when it is running and the new one is its end: the initial
+ *  load and live events overlap, and a late running event must not bring a
+ *  finished row back. Newest first, capped; the same array when nothing
+ *  changes. */
 export function mergeEntries(list: CommandEntry[], more: CommandEntry[], repoKey: string): CommandEntry[] {
-  const seen = new Set(list.map((e) => e.id))
-  const add = more.filter((e) => e.repo === repoKey && !seen.has(e.id) && seen.add(e.id))
-  if (add.length === 0) return list
-  return [...list, ...add].sort((a, b) => b.id - a.id).slice(0, MAX_ENTRIES)
+  const byId = new Map(list.map((e) => [e.id, e]))
+  let changed = false
+  for (const e of more) {
+    if (e.repo !== repoKey) continue
+    const had = byId.get(e.id)
+    if (had && (had.outcome !== 'running' || e.outcome === 'running')) continue
+    byId.set(e.id, e)
+    changed = true
+  }
+  if (!changed) return list
+  return [...byId.values()].sort((a, b) => b.id - a.id).slice(0, MAX_ENTRIES)
 }
 
 export function visibleEntries(list: CommandEntry[], showReads: boolean): CommandEntry[] {
@@ -29,6 +39,16 @@ export function emptyMessage(list: CommandEntry[], showReads: boolean): '' | 'no
 
 export function formatDuration(ms: number): string {
   return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`
+}
+
+/** How long a running command has been running at now (ms since epoch). */
+export function elapsedMs(e: CommandEntry, now: number): number {
+  return Math.max(0, now - Date.parse(e.start))
+}
+
+/** Elapsed time of a running command, in whole seconds: it ticks once a second. */
+export function formatElapsed(ms: number): string {
+  return `${Math.floor(ms / 1000)} s`
 }
 
 export function formatClock(iso: string): string {
@@ -46,6 +66,8 @@ export function commandLine(args: string[]): string {
 }
 
 export function outcomeText(e: CommandEntry): string {
+  if (e.outcome === 'running') return 'Running'
+  if (e.outcome === 'cancelled') return 'Cancelled'
   if (e.outcome === 'timeout') return 'Timed out'
   if (e.outcome === 'failed') return `Failed · exit code ${e.exitCode}`
   return `Exit code ${e.exitCode}`

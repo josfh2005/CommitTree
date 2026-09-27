@@ -37,6 +37,7 @@ export const api = {
   commandLog: (id: string) => call<CommandLogView>(Go.CommandLog(id)),
   commandLogOutput: (id: string, entryId: number) => call<CommandOutput>(Go.CommandLogOutput(id, entryId)),
   clearCommandLog: (id: string) => call<void>(Go.ClearCommandLog(id)),
+  cancelCommand: (id: string, entryId: number) => call<void>(Go.CancelCommand(id, entryId)),
 
   checkout: (id: string, branch: string) => call<void>(Go.Checkout(id, branch)),
   checkoutRemote: (id: string, remote: string, name: string) => call<void>(Go.CheckoutRemote(id, remote, name)),

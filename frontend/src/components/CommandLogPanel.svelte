@@ -2,7 +2,7 @@
   import { onDestroy } from 'svelte'
   import Icon from './Icon.svelte'
   import { api } from '../lib/api'
-  import { commandLine, emptyMessage, formatClock, formatDuration, mergeEntries, ORIGIN_LABEL, outcomeText, visibleEntries } from '../lib/cmdlog'
+  import { commandLine, elapsedMs, emptyMessage, formatClock, formatDuration, formatElapsed, mergeEntries, ORIGIN_LABEL, outcomeText, visibleEntries } from '../lib/cmdlog'
   import { commandsOpen, commandsShowReads, selectedRepo } from '../lib/stores'
   import type { CommandEntry, CommandOutput } from '../lib/types'
   import { copyText } from '../lib/ui'
@@ -16,6 +16,19 @@
   let loadedId = ''
   let loadedRepoKey = ''
   let list: HTMLElement
+  let cancelling: Record<number, boolean> = {}
+  // now ticks once a second while a command is running, for its elapsed time.
+  let now = Date.now()
+  let timer: ReturnType<typeof setInterval> | undefined
+  $: anyRunning = entries.some((e) => e.outcome === 'running')
+  $: if (anyRunning && !timer) {
+    now = Date.now()
+    timer = setInterval(() => (now = Date.now()), 1000)
+  } else if (!anyRunning && timer) {
+    clearInterval(timer)
+    timer = undefined
+  }
+  onDestroy(() => clearInterval(timer))
 
   $: repoId = $selectedRepo && !$selectedRepo.missing ? $selectedRepo.id : ''
   $: if (repoId !== loadedId) load(repoId)
@@ -29,6 +42,7 @@
     outputs = {}
     outputErrors = {}
     expanded = null
+    cancelling = {}
     error = ''
     if (!id) return
     try {
@@ -48,6 +62,7 @@
   onDestroy(off)
 
   async function toggle(e: CommandEntry) {
+    if (e.outcome === 'running') return
     expanded = expanded === e.id ? null : e.id
     if (expanded !== e.id || e.outputDropped || outputs[e.id] || outputErrors[e.id]) return
     try {
@@ -62,13 +77,27 @@
     try {
       await api.clearCommandLog(id)
       if (loadedId === id) {
-        entries = []
+        // The backend keeps running commands: their end is still to come.
+        entries = entries.filter((e) => e.outcome === 'running')
         outputs = {}
         outputErrors = {}
         expanded = null
       }
     } catch (e) {
       if (loadedId === id) error = String(e)
+    }
+  }
+
+  async function cancel(e: CommandEntry) {
+    const id = loadedId
+    cancelling = { ...cancelling, [e.id]: true }
+    try {
+      await api.cancelCommand(id, e.id)
+    } catch (err) {
+      if (loadedId !== id) return
+      cancelling = Object.fromEntries(Object.entries(cancelling).filter(([k]) => Number(k) !== e.id))
+      // It ended on its own while the click was on its way: nothing to report.
+      if (entries.find((x) => x.id === e.id)?.outcome === 'running') error = String(err)
     }
   }
 
@@ -90,22 +119,29 @@
     <span class="title">Commands</span>
     <label class="reads"><input type="checkbox" bind:checked={$commandsShowReads} /> Show reads</label>
     <span class="spacer"></span>
-    <button class="btn" disabled={!entries.length} on:click={clear}>Clear</button>
+    <button class="btn" disabled={!entries.some((e) => e.outcome !== 'running')} on:click={clear}>Clear</button>
     <button class="icon-btn" title="Hide commands" on:click={() => commandsOpen.set(false)}><Icon name="list" /></button>
   </header>
   {#if error}<div class="error ellipsis" title={error}>{error}</div>{/if}
   <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
   <div class="body" role="list" bind:this={list} on:keydown={onKeydown}>
     {#each shown as e (e.id)}
-      <div class="entry" role="listitem" class:failed={e.outcome !== 'ok'}>
+      <div class="entry" role="listitem" class:failed={e.outcome === 'failed' || e.outcome === 'timeout'} class:cancelled={e.outcome === 'cancelled'}>
         <div class="line">
-          <button class="main" aria-expanded={expanded === e.id} title={commandLine(e.args)} on:click={() => toggle(e)}>
-            <span class="mark" aria-label={e.outcome === 'ok' ? 'Succeeded' : outcomeText(e)}>{e.outcome === 'ok' ? '✓' : '✗'}</span>
+          <button class="main" aria-expanded={e.outcome === 'running' ? undefined : expanded === e.id} title={commandLine(e.args)} on:click={() => toggle(e)}>
+            {#if e.outcome === 'running'}
+              <span class="mark"><span class="spinner" role="img" aria-label="Running"></span></span>
+            {:else}
+              <span class="mark" aria-label={e.outcome === 'ok' ? 'Succeeded' : outcomeText(e)}>{e.outcome === 'ok' ? '✓' : e.outcome === 'cancelled' ? '⊘' : '✗'}</span>
+            {/if}
             <span class="cmd ellipsis">{commandLine(e.args)}</span>
             <span class="badge {e.origin}">{ORIGIN_LABEL[e.origin]}</span>
             <span class="time">{formatClock(e.start)}</span>
-            <span class="dur">{formatDuration(e.durationMs)}</span>
+            <span class="dur">{e.outcome === 'running' ? formatElapsed(elapsedMs(e, now)) : formatDuration(e.durationMs)}</span>
           </button>
+          {#if e.outcome === 'running'}
+            <button class="btn cancel" disabled={cancelling[e.id]} on:click={() => cancel(e)}>Cancel</button>
+          {/if}
           <button class="icon-btn" title="Copy command" on:click={() => copyText(commandLine(e.args))}><Icon name="copy" size={14} /></button>
         </div>
         {#if expanded === e.id}
@@ -146,6 +182,11 @@
   .main:hover, .main:focus-visible { background: var(--hover); }
   .mark { flex: none; width: 1em; color: var(--ok); }
   .failed .mark { color: var(--danger); }
+  .cancelled .mark { color: var(--muted); }
+  .spinner { display: inline-block; width: 9px; height: 9px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+  .cancel { flex: none; padding: 1px 8px; font-size: 11px; }
   .cmd { flex: 1; min-width: 0; font-family: var(--mono); }
   .badge { flex: none; padding: 0 6px; border: 1px solid var(--border); border-radius: 8px; font-size: 11px; color: var(--muted); }
   .badge.ai { color: var(--accent); border-color: var(--accent); }

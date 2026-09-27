@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { commandLine, commandsShortcutLabel, emptyMessage, formatClock, formatDuration, isCommandsToggle, MAX_ENTRIES, mergeEntries, outcomeText, visibleEntries } from './cmdlog'
+import { commandLine, commandsShortcutLabel, elapsedMs, emptyMessage, formatClock, formatDuration, formatElapsed, isCommandsToggle, MAX_ENTRIES, mergeEntries, outcomeText, visibleEntries } from './cmdlog'
 import type { CommandEntry } from './types'
 
 const entry = (id: number, over: Partial<CommandEntry> = {}): CommandEntry => ({
@@ -59,6 +59,38 @@ describe('formatting', () => {
     expect(outcomeText(entry(1))).toBe('Exit code 0')
     expect(outcomeText(entry(1, { outcome: 'failed', exitCode: 128 }))).toBe('Failed · exit code 128')
     expect(outcomeText(entry(1, { outcome: 'timeout', exitCode: -1 }))).toBe('Timed out')
+  })
+})
+
+describe('running entries', () => {
+  const running = (id: number) => entry(id, { kind: 'write', origin: 'you', args: ['push'], outcome: 'running', durationMs: 0 })
+  it('replaces a running entry with its end', () => {
+    const list = mergeEntries([], [running(5)], '/r')
+    const done = entry(5, { kind: 'write', args: ['push'], outcome: 'ok', durationMs: 900 })
+    const next = mergeEntries(list, [done], '/r')
+    expect(next).toHaveLength(1)
+    expect(next[0].outcome).toBe('ok')
+  })
+  it('never turns a finished entry back into running', () => {
+    const done = entry(5, { kind: 'write', args: ['push'], outcome: 'cancelled' })
+    const list = [done]
+    expect(mergeEntries(list, [running(5)], '/r')).toBe(list)
+  })
+  it('ignores a repeated running event', () => {
+    const list = mergeEntries([], [running(5)], '/r')
+    expect(mergeEntries(list, [running(5)], '/r')).toBe(list)
+  })
+  it('counts elapsed time in whole seconds', () => {
+    const e = running(1)
+    const start = Date.parse(e.start)
+    expect(elapsedMs(e, start + 2500)).toBe(2500)
+    expect(elapsedMs(e, start - 10)).toBe(0)
+    expect(formatElapsed(2500)).toBe('2 s')
+    expect(formatElapsed(0)).toBe('0 s')
+  })
+  it('describes running and cancelled', () => {
+    expect(outcomeText(running(1))).toBe('Running')
+    expect(outcomeText(entry(1, { outcome: 'cancelled', exitCode: -1 }))).toBe('Cancelled')
   })
 })
 

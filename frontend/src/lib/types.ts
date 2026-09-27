@@ -374,7 +374,8 @@ export interface CommandEntry {
   start: string
   durationMs: number
   exitCode: number
-  outcome: 'ok' | 'failed' | 'timeout'
+  /** 'running' until a write ends; reads are only sent once they end. */
+  outcome: 'running' | 'ok' | 'failed' | 'timeout' | 'cancelled'
   outputTruncated: boolean
   outputDropped: boolean
 }

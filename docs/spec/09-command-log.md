@@ -22,14 +22,16 @@ shared, draggable, and remembered.
 
 The selected repository's commands, newest first. Each row shows:
 
-- ✓ or ✗ (a timed-out command is a ✗ that says "Timed out" when expanded);
+- ✓ or ✗ (a timed-out command is a ✗ that says "Timed out" when expanded),
+  ⊘ for a cancelled command ("Cancelled"), or a spinner while it runs;
 - the command line, `git …`, in monospace, cut with an ellipsis (the full
   line is in the tooltip);
 - who asked for it: **You** (a change made from the interface), **AI** (a
   tool call of the chat, including the changes the user approved), or
   **Auto** (a read the application made on its own, such as a refresh —
   reads made because of a click count as Auto too);
-- the time it started (HH:MM:SS) and how long it took.
+- the time it started (HH:MM:SS) and how long it took — while it runs, the
+  seconds elapsed so far.
 
 Clicking a row (or Enter on it) expands it: the exit code and what the
 command printed, standard output and standard error apart. Each stream is
@@ -41,6 +43,22 @@ no longer kept") but stay listed. A copy button copies the command line.
 Reads are hidden unless **Show reads** is ticked (remembered). With nothing
 to show the panel says "No git commands yet", or "Only reads so far" with a
 Show reads button.
+
+## Running commands and Cancel
+
+A write appears as soon as git starts, with a spinner and its elapsed time
+counting every second; when it ends the same row shows how it ended. Reads
+appear only when they end, whether or not **Show reads** is ticked. A
+running row cannot be expanded (there is no live output) and has a
+**Cancel** button: it stops the command as Ctrl+C would in a terminal — git
+and any hook or helper it started get an interrupt, and whatever is still
+alive five seconds later is killed (on Windows the command is killed at
+once). The operation that ran it reports an error ("git command cancelled")
+the way it reports any failure — a toast for an action from the interface,
+a failed change for the AI chat. An interrupted rebase, merge or
+cherry-pick stays in progress and is continued or aborted from its banner.
+A command that runs past its time limit is interrupted the same way and
+shows "Timed out". **Clear** leaves running commands in place.
 
 ## Retention and privacy
 
