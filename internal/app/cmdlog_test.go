@@ -6,10 +6,12 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"git-ui/internal/ai"
 	"git-ui/internal/ai/tools"
 	"git-ui/internal/cmdlog"
+	"git-ui/internal/gitcmd"
 	"git-ui/internal/gitlog"
 )
 
@@ -199,6 +201,31 @@ func TestRunningEntryEmittedBeforeFinished(t *testing.T) {
 			t.Fatalf("a running read was emitted: %+v", e)
 		}
 	}
+}
+
+// TestBeginGitReturnsIDEvenWhenEmitPanics covers M1: emitCommand can panic
+// (Wails' EventsEmit calls log.Fatalf after the window has gone away), and
+// that must not cost the caller the ID cmds.Begin already reserved and
+// stored as running — losing it would leave that entry running forever,
+// since gitcmd's own begin() recovers around the whole Recorder.Begin call
+// and would otherwise turn the panic into a returned ID of 0.
+func TestBeginGitReturnsIDEvenWhenEmitPanics(t *testing.T) {
+	a, id := newTestApp(t)
+	dir, err := a.dir(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.started.Store(true)
+	a.cmdEmit = func(cmdlog.Entry) { panic("boom") }
+
+	got := a.beginGit(gitcmd.Start{Ctx: context.Background(), Dir: dir, Args: []string{"branch", "x"}, Start: time.Now()})
+	if got == 0 {
+		t.Fatal("beginGit returned ID 0 despite a stored running entry")
+	}
+
+	a.cmdEmit = func(cmdlog.Entry) { panic("boom") }
+	a.recordGit(gitcmd.Record{ID: got, Ctx: context.Background(), Dir: dir, Args: []string{"branch", "x"}, Start: time.Now()})
+	// recordGit must not itself panic even though its own emit does.
 }
 
 func TestAIWriteMarkAppliesWhileRunning(t *testing.T) {

@@ -20,7 +20,7 @@ func (a *App) beginGit(s gitcmd.Start) int64 {
 	s.Ctx = a.originContext(s.Ctx, s.Dir, s.Args)
 	e, shown := a.cmds.Begin(s)
 	if shown {
-		a.emitCommand(e)
+		a.emitCommandSafe(e)
 	}
 	return e.ID
 }
@@ -29,7 +29,19 @@ func (a *App) beginGit(s gitcmd.Start) int64 {
 // in the log, and once the window is up, in the panel.
 func (a *App) recordGit(r gitcmd.Record) {
 	r.Ctx = a.originContext(r.Ctx, r.Dir, r.Args)
-	a.emitCommand(a.cmds.Add(r))
+	a.emitCommandSafe(a.cmds.Add(r))
+}
+
+// emitCommandSafe calls emitCommand recovering any panic — the Wails
+// runtime call it wraps can panic after the window has gone away (its
+// EventsEmit calls log.Fatalf on a shutdown context, and gitcmd's own begin
+// recovers around the whole Recorder.Begin call, which would otherwise
+// swallow the ID Log.Begin already returned and leave that entry running
+// forever). Losing one emitted event to a shutdown race is fine; losing the
+// ID is not.
+func (a *App) emitCommandSafe(e cmdlog.Entry) {
+	defer func() { _ = recover() }()
+	a.emitCommand(e)
 }
 
 // originContext marks ctx as AI for a write run in a repository where an
