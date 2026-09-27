@@ -5,6 +5,7 @@ package gitcmd_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,6 +52,35 @@ func TestCancelStopsCommitAndItsHook(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(r.Dir, ".git", "index.lock")); !os.IsNotExist(err) {
 		t.Fatalf("index.lock left behind: %v", err)
+	}
+}
+
+// TestCancelledErrorMessageIgnoresStderr covers I2a: a cancelled command's
+// hook can print output (or the shell can print "Killed by signal 2.") to
+// stderr before the signal lands, but that text says nothing about why the
+// command actually stopped, so Error() must say "cancelled" instead of
+// surfacing it.
+func TestCancelledErrorMessageIgnoresStderr(t *testing.T) {
+	r := testrepo.New(t)
+	r.Commit("first")
+	hooksPath := sleepyCommit(t, r)
+	gitcmd.SetRecorder(&gitcmd.Recorder{Begin: func(s gitcmd.Start) int64 {
+		time.AfterFunc(300*time.Millisecond, s.Cancel)
+		return 1
+	}})
+	t.Cleanup(func() { gitcmd.SetRecorder(nil) })
+
+	_, err := gitcmd.Run(context.Background(), r.Dir, gitcmd.HookTimeout, "-c", hooksPath, "commit", "-m", "x")
+	var gerr *gitcmd.Error
+	if !errors.As(err, &gerr) {
+		t.Fatalf("want *gitcmd.Error, got %T: %v", err, err)
+	}
+	if !errors.Is(gerr, gitcmd.ErrCancelled) {
+		t.Fatalf("got %v, want ErrCancelled", err)
+	}
+	want := fmt.Sprintf("git -c %s commit -m x: git command cancelled", hooksPath)
+	if gerr.Error() != want {
+		t.Fatalf("Error() = %q, want %q", gerr.Error(), want)
 	}
 }
 

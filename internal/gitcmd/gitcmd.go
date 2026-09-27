@@ -40,6 +40,13 @@ type Error struct {
 }
 
 func (e *Error) Error() string {
+	// A cancel's stderr is whatever git or a hook printed before the signal
+	// reached it — hook output, or a shell's "Killed by signal 2." — which
+	// says nothing useful about why the command stopped; ErrCancelled's own
+	// message is what the user needs to see.
+	if errors.Is(e.Err, ErrCancelled) {
+		return fmt.Sprintf("git %s: %s", strings.Join(e.Args, " "), ErrCancelled.Error())
+	}
 	msg := strings.TrimSpace(e.Stderr)
 	if msg == "" {
 		msg = e.Err.Error()
