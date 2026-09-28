@@ -30,7 +30,7 @@ export function Checkout(arg1:string,arg2:string):Promise<void>;
 
 export function CheckoutDetached(arg1:string,arg2:string):Promise<void>;
 
-export function CheckoutRemote(arg1:string,arg2:string,arg3:string):Promise<void>;
+export function CheckoutRemote(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function CherryPick(arg1:string,arg2:string):Promise<merge.Result>;
 

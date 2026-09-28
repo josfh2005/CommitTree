@@ -151,14 +151,21 @@ func (a *App) executeWrite(repoID, tool string, p writetools.Proposal) (string, 
 		}
 		return p.Title, nil
 	case "checkout_branch":
-		var err error
-		if p.Remote != "" {
-			err = a.CheckoutRemote(repoID, p.Remote, p.Name)
-		} else {
-			err = a.Checkout(repoID, p.Name)
+		if p.Remote == "" {
+			if err := a.Checkout(repoID, p.Name); err != nil {
+				return "", err
+			}
+			return p.Title, nil
 		}
+		outcome, err := a.CheckoutRemote(repoID, p.Remote, p.Name)
 		if err != nil {
 			return "", err
+		}
+		switch ops.CheckoutOutcome(outcome) {
+		case ops.CheckoutFastForwarded:
+			return fmt.Sprintf("%s (fast-forwarded %s to %s/%s)", p.Title, p.Name, p.Remote, p.Name), nil
+		case ops.CheckoutDiverged:
+			return fmt.Sprintf("%s (local %s has commits not on %s/%s; it was left as it was)", p.Title, p.Name, p.Remote, p.Name), nil
 		}
 		return p.Title, nil
 	case "stash_push":

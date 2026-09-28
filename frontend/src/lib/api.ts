@@ -40,7 +40,8 @@ export const api = {
   cancelCommand: (id: string, entryId: number) => call<void>(Go.CancelCommand(id, entryId)),
 
   checkout: (id: string, branch: string) => call<void>(Go.Checkout(id, branch)),
-  checkoutRemote: (id: string, remote: string, name: string) => call<void>(Go.CheckoutRemote(id, remote, name)),
+  /** Resolves to an ops.CheckoutOutcome: created, switched, fastForwarded or diverged. */
+  checkoutRemote: (id: string, remote: string, name: string) => call<string>(Go.CheckoutRemote(id, remote, name)),
   checkoutDetached: (id: string, hash: string) => call<void>(Go.CheckoutDetached(id, hash)),
   resetBranch: (id: string, hash: string, mode: ResetMode) => call<void>(Go.ResetBranch(id, hash, mode)),
   getResetPreview: (id: string, hash: string) => call<ResetInfo>(Go.GetResetPreview(id, hash)),

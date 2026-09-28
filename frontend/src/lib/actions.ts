@@ -5,6 +5,7 @@ import type { Branch, FileStatus, MergeState, RebasePreview, Repo, ResetInfo, Re
 import { PULL_UP_TO_DATE, UP_TO_DATE } from './types'
 import { abortWarning, commitWarning, isEmptyStepError, skipWarning, takeMessage } from './merge'
 import { doneMessage, rebaseMessage } from './rebase'
+import { checkoutNotice } from './checkout'
 import { resetMessage } from './reset'
 import { discardMessage, neverCommitted } from './worktree'
 import { stashApplyAction } from './stash'
@@ -239,10 +240,15 @@ export async function relocateRepo(id: string) {
   }
 }
 
-export async function checkoutBranch(id: string, branch: Branch) {
-  const ok = await run('Checking out…', () =>
-    branch.remote ? api.checkoutRemote(id, branch.remote, branch.name) : api.checkout(id, branch.name))
-  if (ok) await warnMovedSubmodules(id)
+export async function checkoutBranch(id: string, branch: Pick<Branch, 'name' | 'remote'>) {
+  let notice = ''
+  const ok = await run('Checking out…', async () => {
+    if (!branch.remote) return api.checkout(id, branch.name)
+    notice = checkoutNotice(await api.checkoutRemote(id, branch.remote, branch.name), branch.remote, branch.name)
+  })
+  if (!ok) return
+  if (notice) toast(notice)
+  await warnMovedSubmodules(id)
 }
 
 export async function checkoutCommit(id: string, hash: string) {

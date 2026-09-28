@@ -333,6 +333,16 @@ held, or if it is already the current branch); its context menu offers:
 | New tag here… | Never. |
 | Delete… (local) / Delete on remote… (remote-tracking) | It is the current branch. |
 
+Checking out a remote-tracking branch `<remote>/<name>` switches to the
+local branch `<name>`, creating it to track the remote branch when it does
+not exist. When it exists and is only behind the remote branch, it is
+fast-forwarded to it after the switch, and a notice says "`<name>`
+fast-forwarded to `<remote>/<name>`". When it has commits the remote branch
+lacks, it is checked out as it is and a notice says so ("`<name>` has
+commits not on `<remote>/<name>` — checked out your local `<name>`, not the
+remote commit"). A local branch that is ahead is checked out silently. The
+chat's checkout tool reports the same two cases in its result.
+
 The toolbar's Merge button offers the same merge for any local or
 remote-tracking branch through a searchable picker (see
 `05-remote-and-stash.md`, "Merge branch picker").

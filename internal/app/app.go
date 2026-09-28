@@ -517,8 +517,15 @@ func (a *App) Checkout(id, branch string) error {
 	return a.write(id, func(ctx context.Context, dir string) error { return ops.Checkout(ctx, dir, branch) })
 }
 
-func (a *App) CheckoutRemote(id, remote, name string) error {
-	return a.write(id, func(ctx context.Context, dir string) error { return ops.CheckoutRemote(ctx, dir, remote, name) })
+// CheckoutRemote returns an ops.CheckoutOutcome as a plain string: Wails
+// generates no TypeScript for named string types.
+func (a *App) CheckoutRemote(id, remote, name string) (string, error) {
+	var outcome ops.CheckoutOutcome
+	err := a.write(id, func(ctx context.Context, dir string) (err error) {
+		outcome, err = ops.CheckoutRemote(ctx, dir, remote, name)
+		return err
+	})
+	return string(outcome), err
 }
 
 func (a *App) CheckoutDetached(id, hash string) error {

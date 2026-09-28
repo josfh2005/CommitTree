@@ -252,8 +252,12 @@ func TestCountsWithNoUpstream(t *testing.T) {
 func TestCheckoutRemoteCreatesTrackingBranch(t *testing.T) {
 	a, _ := clones(t)
 
-	if err := ops.CheckoutRemote(ctx, a.Dir, "origin", "feature"); err != nil {
+	outcome, err := ops.CheckoutRemote(ctx, a.Dir, "origin", "feature")
+	if err != nil {
 		t.Fatal(err)
+	}
+	if outcome != ops.CheckoutCreated {
+		t.Errorf("outcome = %q, want created", outcome)
 	}
 	if name := a.Git("symbolic-ref", "--short", "HEAD"); name != "feature" {
 		t.Fatalf("branch = %s", name)
@@ -263,8 +267,99 @@ func TestCheckoutRemoteCreatesTrackingBranch(t *testing.T) {
 	}
 
 	a.Git("switch", "-q", "main")
-	if err := ops.CheckoutRemote(ctx, a.Dir, "origin", "feature"); err != nil {
+	outcome, err = ops.CheckoutRemote(ctx, a.Dir, "origin", "feature")
+	if err != nil {
 		t.Fatalf("second checkout of existing local branch: %v", err)
+	}
+	if outcome != ops.CheckoutSwitched {
+		t.Errorf("outcome = %q, want switched", outcome)
+	}
+}
+
+// behindFeature leaves a with a local feature one commit behind origin/feature
+// and main checked out; it returns origin/feature's hash.
+func behindFeature(t *testing.T) (*testrepo.Repo, string) {
+	t.Helper()
+	a, b := clones(t)
+	a.Git("switch", "-q", "feature")
+	a.Git("switch", "-q", "main")
+	b.Git("switch", "-q", "feature")
+	h := b.Commit("newer on feature")
+	b.Git("push", "-q", "origin", "feature")
+	a.Git("fetch", "-q")
+	return a, h
+}
+
+func TestCheckoutRemoteFastForwardsAStaleLocalBranch(t *testing.T) {
+	a, h := behindFeature(t)
+
+	outcome, err := ops.CheckoutRemote(ctx, a.Dir, "origin", "feature")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcome != ops.CheckoutFastForwarded {
+		t.Errorf("outcome = %q, want fastForwarded", outcome)
+	}
+	if name := a.Git("symbolic-ref", "--short", "HEAD"); name != "feature" {
+		t.Fatalf("branch = %s", name)
+	}
+	if got := a.Git("rev-parse", "HEAD"); got != h {
+		t.Fatalf("HEAD = %s, want origin/feature %s", got, h)
+	}
+}
+
+func TestCheckoutRemoteFastForwardsTheCurrentBranch(t *testing.T) {
+	a, h := behindFeature(t)
+	a.Git("switch", "-q", "feature")
+
+	outcome, err := ops.CheckoutRemote(ctx, a.Dir, "origin", "feature")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcome != ops.CheckoutFastForwarded {
+		t.Errorf("outcome = %q, want fastForwarded", outcome)
+	}
+	if got := a.Git("rev-parse", "HEAD"); got != h {
+		t.Fatalf("HEAD = %s, want origin/feature %s", got, h)
+	}
+}
+
+func TestCheckoutRemoteKeepsADivergedLocalBranch(t *testing.T) {
+	a, h := behindFeature(t)
+	a.Git("switch", "-q", "feature")
+	mine := a.Commit("local only")
+	a.Git("switch", "-q", "main")
+
+	outcome, err := ops.CheckoutRemote(ctx, a.Dir, "origin", "feature")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcome != ops.CheckoutDiverged {
+		t.Errorf("outcome = %q, want diverged", outcome)
+	}
+	if got := a.Git("rev-parse", "HEAD"); got != mine {
+		t.Fatalf("HEAD = %s, want the local commit %s", got, mine)
+	}
+	if got := a.Git("rev-parse", "origin/feature"); got != h {
+		t.Fatalf("origin/feature moved to %s", got)
+	}
+}
+
+func TestCheckoutRemoteLeavesALocalBranchThatIsAhead(t *testing.T) {
+	a, _ := clones(t)
+	a.Git("switch", "-q", "feature")
+	mine := a.Commit("local only")
+	a.Git("switch", "-q", "main")
+
+	outcome, err := ops.CheckoutRemote(ctx, a.Dir, "origin", "feature")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcome != ops.CheckoutSwitched {
+		t.Errorf("outcome = %q, want switched", outcome)
+	}
+	if got := a.Git("rev-parse", "HEAD"); got != mine {
+		t.Fatalf("HEAD = %s, want %s", got, mine)
 	}
 }
 

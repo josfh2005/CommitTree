@@ -83,18 +83,69 @@ func checkedOutElsewhere(branch string, err error) error {
 	return err
 }
 
-func CheckoutRemote(ctx context.Context, dir, remote, name string) error {
+// CheckoutOutcome says what CheckoutRemote did to the local branch.
+type CheckoutOutcome string
+
+const (
+	CheckoutCreated       CheckoutOutcome = "created"       // no local branch: one tracking the remote was made
+	CheckoutSwitched      CheckoutOutcome = "switched"      // the local branch already had the remote's commit
+	CheckoutFastForwarded CheckoutOutcome = "fastForwarded" // the local branch was behind and moved up to the remote
+	CheckoutDiverged      CheckoutOutcome = "diverged"      // the local branch has its own commits and was left alone
+)
+
+// CheckoutRemote switches to the local branch for remote/name, creating it
+// when missing. A local branch that is only behind is fast-forwarded to the
+// remote, so the checkout lands on the commit the user picked; one with
+// commits of its own is checked out untouched and reported as diverged.
+func CheckoutRemote(ctx context.Context, dir, remote, name string) (CheckoutOutcome, error) {
 	if err := checkRef(remote); err != nil {
-		return err
+		return "", err
 	}
 	if err := checkRef(name); err != nil {
-		return err
+		return "", err
 	}
-	if _, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--verify", "--quiet", "refs/heads/"+name); err == nil {
-		return Checkout(ctx, dir, name)
+	upstream := remote + "/" + name
+	local, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--verify", "--quiet", "refs/heads/"+name)
+	if err != nil {
+		if _, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "switch", "-c", name, "--track", upstream); err != nil {
+			return "", err
+		}
+		return CheckoutCreated, nil
 	}
-	_, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "switch", "-c", name, "--track", remote+"/"+name)
-	return err
+	outcome := CheckoutSwitched
+	if target, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--verify", "--quiet", "refs/remotes/"+upstream); err == nil {
+		outcome = relate(ctx, dir, strings.TrimSpace(local), strings.TrimSpace(target))
+	}
+	// Switch first, then fast-forward with a merge: moving the ref before the
+	// switch would drag a branch another worktree has checked out.
+	if current, _ := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "symbolic-ref", "--quiet", "--short", "HEAD"); strings.TrimSpace(current) != name {
+		if err := Checkout(ctx, dir, name); err != nil {
+			return "", err
+		}
+	}
+	if outcome == CheckoutFastForwarded {
+		if _, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "merge", "--ff-only", "--quiet", upstream); err != nil {
+			return "", fmt.Errorf("switched to %s but could not fast-forward it to %s: %w", name, upstream, err)
+		}
+	}
+	return outcome, nil
+}
+
+// relate tells whether moving a local branch from local to target is a
+// no-op, a fast-forward, or impossible without losing local commits.
+func relate(ctx context.Context, dir, local, target string) CheckoutOutcome {
+	isAncestor := func(a, b string) bool {
+		_, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "merge-base", "--is-ancestor", a, b)
+		return err == nil
+	}
+	switch {
+	case local == target, isAncestor(target, local):
+		return CheckoutSwitched
+	case isAncestor(local, target):
+		return CheckoutFastForwarded
+	default:
+		return CheckoutDiverged
+	}
 }
 
 func CheckoutDetached(ctx context.Context, dir, hash string) error {

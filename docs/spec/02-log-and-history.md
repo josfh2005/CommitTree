@@ -209,7 +209,23 @@ commits made there won't belong to any branch), creating a new branch or
 tag at that commit, cherry-picking the commit onto the current branch,
 rebasing the current branch onto the commit, resetting the current branch
 to it, copying its hash, and asking the AI assistant to explain the commit
-in the chat panel. Both cherry-pick and rebase confirm first. Reset
+in the chat panel. Both cherry-pick and rebase confirm first.
+
+When branches point at the commit, the menu starts (after "Explain in chat")
+with one "Check out `<branch>`" entry per branch, in badge order. A local
+branch and its remote-tracking twin on the same commit are one entry, the
+local branch. A branch only on remotes is checked out through the remote its
+local branch tracks, else `origin`, else the first remote carrying it, the
+same way as a remote-tracking branch in the sidebar (see Repositories and
+sidebar): a missing local branch is created tracking it, and a local branch
+that is only behind is fast-forwarded to it, so the checkout lands on the
+commit that was clicked. Tags and `origin/HEAD` get no entry. When the
+current branch itself is on the commit, its entry reads "Check out
+`<branch>` (current)" and is disabled (a current branch that is behind a
+remote twin on the commit is offered, and fast-forwards in place);
+one for a branch checked out in another worktree is disabled with that
+worktree's path as its tooltip; all of them are disabled while a write is
+running. Reset
 is refused when there is no current branch to move, the head is detached, a
 merge is already in progress, the target is already where the branch points
 (nothing to move), or a write is already running.

@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte'
   import { api } from '../lib/api'
-  import { checkoutCommit, cherryPick, newBranch, newTag, rebaseOnto, resetBranch } from '../lib/actions'
+  import { checkoutBranch, checkoutCommit, cherryPick, newBranch, newTag, rebaseOnto, resetBranch } from '../lib/actions'
+  import { checkoutChoices } from '../lib/checkout'
   import { relativeDate } from '../lib/format'
   import {
     arrowAt, DOT_RADIUS, edgeSegment, graphWidth, LANE_WIDTH, laneColor, laneX, ROW_HEIGHT, rowCenterY, visibleRange,
@@ -291,8 +292,15 @@
       const contained = await api.isAncestorOfHead(repoId, row.hash).catch(() => false)
       const rebaseWhy = rebaseBlocker({ ...common, isHead: row.hash === $refs?.headHash, contained }, head, row.short)
       const pickWhy = cherryPickBlocker({ ...common, contained, isMerge: row.parents.length > 1 })
+      const branches = checkoutChoices(row.refs, $refs).map((c) => ({
+        label: c.current ? `Check out ${c.name} (current)` : `Check out ${c.name}`,
+        action: () => checkoutBranch(repoId, c),
+        disabled: c.current || c.worktree !== '' || !!$busy,
+        title: c.worktree ? `Checked out in another worktree: ${c.worktree}` : undefined,
+      }))
       return [
         { label: '✨ Explain in chat', action: () => explain(row) },
+        ...branches,
         { label: 'Check out (detached)…', action: () => checkoutCommit(repoId, row.hash) },
         { label: 'New branch here…', action: () => newBranch(repoId, row.hash, row.short) },
         { label: 'New tag here…', action: () => newTag(repoId, row.hash, row.short) },
