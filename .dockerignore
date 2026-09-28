@@ -1,0 +1,9 @@
+.git
+.claude
+.qartez
+.superpowers
+.aider*
+build/bin
+build/icon-previews
+frontend/node_modules
+frontend/dist

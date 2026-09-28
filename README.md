@@ -31,7 +31,11 @@ cd frontend && npm test && npm run check
 ```bash
 make build   # → build/bin/CommitTree.app
 make icon    # re-render build/appicon.png from assets/icon.svg
+make build-linux            # Docker → build/bin/CommitTree-linux-amd64.tar.gz
+make build-linux ARCH=arm64 # same for arm64
 ```
+
+The Linux build runs in Docker (`build/linux/Dockerfile`, Debian 12), so it needs Docker Desktop with buildx but no Linux machine. On Apple silicon the amd64 build is emulated and slower.
 
 ### Releases
 
