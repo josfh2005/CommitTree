@@ -33,6 +33,10 @@ make build   # → build/bin/CommitTree.app
 make icon    # re-render build/appicon.png from assets/icon.svg
 ```
 
+### Releases
+
+Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds a universal macOS app (ad-hoc signed, not notarized) and a Linux amd64 binary and attaches them to a GitHub Release. Running the workflow by hand (Actions → Release → Run workflow) builds the same files as downloadable artifacts without publishing a release. Windows is not built yet: the embedded terminal uses Unix-only syscalls.
+
 ## AI providers
 
 API keys are stored securely in the operating system's secret store (Keychain on macOS, Secret Service on Linux, Credential Manager on Windows) and never in the settings file. Configure providers and API keys in Settings.
