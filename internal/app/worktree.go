@@ -74,9 +74,12 @@ func (a *App) DiscardFile(id, path string) error {
 // ApplyHunkSelection stages, unstages or discards part of one file (see
 // worktree.ApplySelection). A discard's patch is kept as the repository's
 // last discard, for UndoDiscard.
-func (a *App) ApplyHunkSelection(id, path string, staged bool, hash string, sel worktree.Selection, action string) error {
+//
+// sel is a plain slice, not worktree.Selection, so Wails generates its type
+// (Array<worktree.HunkPick>) instead of a name models.ts never defines.
+func (a *App) ApplyHunkSelection(id, path string, staged bool, hash string, sel []worktree.HunkPick, action string) error {
 	return a.writeWorktree(id, func(ctx context.Context, dir string) error {
-		patch, err := worktree.ApplySelection(ctx, dir, path, staged, hash, sel, worktree.Action(action))
+		patch, err := worktree.ApplySelection(ctx, dir, path, staged, hash, worktree.Selection(sel), worktree.Action(action))
 		if err != nil {
 			return err
 		}
@@ -136,13 +139,9 @@ func (a *App) GetWorktreeDiff(id, path string, staged bool) (WorktreeDiff, error
 	if err != nil {
 		return WorktreeDiff{}, err
 	}
-	out, err := worktree.FileDiff(a.ctx, dir, path, staged)
+	out, st, err := worktree.FileDiffAndStatus(a.ctx, dir, path, staged)
 	if err != nil {
 		return WorktreeDiff{Text: out}, err
-	}
-	st, err := worktree.Status(a.ctx, dir)
-	if err != nil {
-		return WorktreeDiff{}, err
 	}
 	text := tools.Truncate(out, worktreeDiffCap)
 	return WorktreeDiff{

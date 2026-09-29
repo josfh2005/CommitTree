@@ -17,10 +17,22 @@ import (
 // the renderer or a model cannot be used to read the disk. The diff is not
 // capped; callers cut it to their own budget.
 func FileDiff(ctx context.Context, dir, path string, staged bool) (string, error) {
+	out, _, err := FileDiffAndStatus(ctx, dir, path, staged)
+	return out, err
+}
+
+// FileDiffAndStatus is FileDiff that also returns the status it checked the
+// path against, for a caller that needs both without reading it twice.
+func FileDiffAndStatus(ctx context.Context, dir, path string, staged bool) (string, State, error) {
 	st, err := Status(ctx, dir)
 	if err != nil {
-		return "", err
+		return "", State{}, err
 	}
+	out, err := fileDiff(ctx, dir, path, staged, st)
+	return out, st, err
+}
+
+func fileDiff(ctx context.Context, dir, path string, staged bool, st State) (string, error) {
 	known := []string{}
 	for _, list := range [][]FileStatus{st.Staged, st.Unstaged, st.Untracked} {
 		for _, f := range list {

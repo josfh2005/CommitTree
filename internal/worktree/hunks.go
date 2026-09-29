@@ -23,11 +23,11 @@ const (
 )
 
 var (
-	// ErrDiffChanged and ErrUndoStale are shown to the user as they are.
+	// These are shown to the user as they are, in an error toast.
 	ErrDiffChanged  = errors.New("The file changed since it was shown — reloaded")
 	ErrUndoStale    = errors.New("Can't undo: the file changed since the discard")
-	ErrNotPatchable = errors.New("worktree: only a modified text file can be changed by hunk or line")
-	ErrWrongSection = errors.New("worktree: staged changes can only be unstaged; unstaged ones can be staged or discarded")
+	ErrNotPatchable = errors.New("Only a modified text file can be changed by hunk or line")
+	ErrWrongSection = errors.New("Staged changes can only be unstaged; unstaged ones can be staged or discarded")
 )
 
 // DiffHash identifies the exact diff the user was shown.
@@ -77,11 +77,7 @@ func ApplySelection(ctx context.Context, dir, path string, staged bool, hash str
 	if (action == ActionUnstage) != staged {
 		return "", ErrWrongSection
 	}
-	diff, err := FileDiff(ctx, dir, path, staged)
-	if err != nil {
-		return "", err
-	}
-	st, err := Status(ctx, dir)
+	diff, st, err := FileDiffAndStatus(ctx, dir, path, staged)
 	if err != nil {
 		return "", err
 	}
@@ -106,16 +102,21 @@ func ApplySelection(ctx context.Context, dir, path string, staged bool, hash str
 }
 
 // Reapply undoes a discard by applying its patch forward to the working
-// tree again. git apply is atomic: a patch that no longer fits changes nothing.
+// tree again. git apply is atomic: a patch that no longer fits changes
+// nothing, and git's refusal (exit 1) is reported as ErrUndoStale; any other
+// failure (a timeout, a cancel, git missing) is returned as it is.
 func Reapply(ctx context.Context, dir, patch string) error {
-	if err := applyPatch(ctx, dir, patch); err != nil {
+	err := applyPatch(ctx, dir, patch)
+	var gerr *gitcmd.Error
+	if errors.As(err, &gerr) && gerr.ExitCode == 1 && !errors.Is(err, gitcmd.ErrTimeout) && !errors.Is(err, gitcmd.ErrCancelled) {
 		return ErrUndoStale
 	}
-	return nil
+	return err
 }
 
 // applyPatch feeds patch to git apply through a temporary file (gitcmd has
-// no stdin).
+// no stdin). Like git add and git reset in stage.go, this local write runs
+// under ReadTimeout: it touches one file, never hooks or the network.
 func applyPatch(ctx context.Context, dir, patch string, extra ...string) error {
 	f, err := os.CreateTemp("", "committree-*.patch")
 	if err != nil {

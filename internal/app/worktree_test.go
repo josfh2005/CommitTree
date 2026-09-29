@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -318,5 +319,32 @@ func TestApplyHunkSelectionStageKeepsNothingToUndo(t *testing.T) {
 	}
 	if err := a.UndoDiscard(id); err == nil {
 		t.Error("undo after a stage succeeded")
+	}
+}
+
+// Opening a diff reads the status once: the path check and the patchable
+// flag share it.
+func TestGetWorktreeDiffReadsTheStatusOnce(t *testing.T) {
+	a, r, id := newMergeApp(t)
+	r.WriteFile("greeting.txt", "hey\n")
+	statuses := func() int {
+		v, err := a.CommandLog(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		n := 0
+		for _, e := range v.Entries {
+			if slices.Contains(e.Args, "status") {
+				n++
+			}
+		}
+		return n
+	}
+	before := statuses()
+	if _, err := a.GetWorktreeDiff(id, "greeting.txt", false); err != nil {
+		t.Fatal(err)
+	}
+	if n := statuses() - before; n != 1 {
+		t.Errorf("git status ran %d times, want 1", n)
 	}
 }

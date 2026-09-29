@@ -51,10 +51,10 @@ type HunkPick struct {
 type Selection []HunkPick
 
 var (
-	ErrEmptySelection = errors.New("worktree: nothing selected")
+	ErrEmptySelection = errors.New("Nothing is selected")
 	// ErrSplitsLastLine refuses a selection that would keep a last line with
 	// no trailing newline in the middle of the result, which no file can be.
-	ErrSplitsLastLine = errors.New("worktree: this selection splits the file's last line, which has no newline; act on the whole hunk")
+	ErrSplitsLastLine = errors.New("This selection would split the file's last line, which has no newline at the end; act on the whole hunk instead")
 )
 
 var hunkHeader = regexp.MustCompile(`^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)$`)

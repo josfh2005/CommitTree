@@ -1,13 +1,17 @@
 package worktree_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 
+	"git-ui/internal/gitcmd"
 	"git-ui/internal/testrepo"
 	"git-ui/internal/worktree"
 )
@@ -296,5 +300,52 @@ func TestApplySelectionIgnoresContextAndPrefixSettings(t *testing.T) {
 	apply(t, r, false, worktree.Selection{{Hunk: 0, Lines: []int{2}}}, worktree.ActionStage)
 	if cached := r.Git("diff", "--cached"); !strings.Contains(cached, "+TWO") || strings.Contains(cached, "+TWO-B") {
 		t.Errorf("staged diff = %s", cached)
+	}
+}
+
+// One status read per action: the path check and the patchable check share
+// the status FileDiff already read.
+func TestApplySelectionReadsTheStatusOnce(t *testing.T) {
+	r := twoHunks(t)
+	hash := worktree.DiffHash(diffOf(t, r, false))
+	var mu sync.Mutex
+	statuses := 0
+	gitcmd.SetRecorder(&gitcmd.Recorder{Begin: func(s gitcmd.Start) int64 {
+		if s.Dir == r.Dir && slices.Contains(s.Args, "status") {
+			mu.Lock()
+			statuses++
+			mu.Unlock()
+		}
+		return 0
+	}})
+	defer gitcmd.SetRecorder(nil)
+	if _, err := worktree.ApplySelection(ctx, r.Dir, "f.txt", false, hash, worktree.Selection{{Hunk: 0}}, worktree.ActionStage); err != nil {
+		t.Fatal(err)
+	}
+	if statuses != 1 {
+		t.Errorf("git status ran %d times, want 1", statuses)
+	}
+}
+
+// Only git apply refusing the patch means the lines changed; any other
+// failure (here a cancelled context) is reported as it is.
+func TestReapplyReportsOtherFailuresAsThemselves(t *testing.T) {
+	r := twoHunks(t)
+	patch := apply(t, r, false, worktree.Selection{{Hunk: 0}}, worktree.ActionDiscard)
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	err := worktree.Reapply(cancelled, r.Dir, patch)
+	if err == nil || errors.Is(err, worktree.ErrUndoStale) {
+		t.Fatalf("err = %v, want the real failure, not ErrUndoStale", err)
+	}
+}
+
+// These reach the user in an error toast: plain sentences, no package prefix.
+func TestHunkErrorsReadAsSentences(t *testing.T) {
+	for _, err := range []error{worktree.ErrSplitsLastLine, worktree.ErrNotPatchable, worktree.ErrWrongSection, worktree.ErrEmptySelection} {
+		msg := err.Error()
+		if strings.HasPrefix(msg, "worktree:") || msg[:1] != strings.ToUpper(msg[:1]) {
+			t.Errorf("message %q is not a plain sentence", msg)
+		}
 	}
 }
