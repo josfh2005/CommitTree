@@ -83,10 +83,12 @@ type FlowBranch struct {
   `hotfix/`).
 - A branch's type is found by its prefix, compared **case-insensitively**, so
   `Warmfix/NEXO-39_2` is a warmfix.
-- `InProgress` compares the branch against its finish targets (hotfix:
-  master and develop only, since releases are optional) with
-  `merge-base --is-ancestor`. It is what the "In progress" group shows after
-  an interrupted finish.
+- `InProgress` is true when some required finish target (hotfix: master
+  and develop only, since releases are optional) has a merge commit whose
+  second parent is the branch tip (`rev-list --merges --parents
+  --ancestry-path tip..target`). Plain containment is not used: a branch
+  just started from develop is contained in develop too. It is what the
+  "In progress" group shows after an interrupted finish.
 - `Problem` is set when the config names a master or develop branch that does
   not exist; the UI then offers only Init.
 
