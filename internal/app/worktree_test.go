@@ -95,10 +95,11 @@ func TestGetWorktreeDiffRefusesAnUnlistedPath(t *testing.T) {
 	if _, err := a.GetWorktreeDiff(id, "../secrets.txt", false); err == nil {
 		t.Error("want a refusal for a path outside the listed changes")
 	}
-	out, err := a.GetWorktreeDiff(id, "a.txt", false)
+	d, err := a.GetWorktreeDiff(id, "a.txt", false)
 	if err != nil {
 		t.Fatal(err)
 	}
+	out := d.Text
 	if !strings.Contains(out, "changed") {
 		t.Errorf("diff = %q, want the change in it", out)
 	}
@@ -114,10 +115,11 @@ func TestGetWorktreeDiffOfAVanishedUntrackedFileErrors(t *testing.T) {
 	a, r, id, _ := newAIMergeApp(t, "http://127.0.0.1:0")
 	r.WriteFile("a.txt", "changed\n")
 
-	out, err := a.GetWorktreeDiff(id, "a.txt", false)
+	d, err := a.GetWorktreeDiff(id, "a.txt", false)
 	if err != nil {
 		t.Fatal(err)
 	}
+	out := d.Text
 	if !strings.Contains(out, "changed") {
 		t.Errorf("diff = %q, want the file's contents in it", out)
 	}
@@ -125,8 +127,8 @@ func TestGetWorktreeDiffOfAVanishedUntrackedFileErrors(t *testing.T) {
 	if err := os.Remove(filepath.Join(r.Dir, "a.txt")); err != nil {
 		t.Fatal(err)
 	}
-	if out, err := a.GetWorktreeDiff(id, "a.txt", false); err == nil {
-		t.Errorf("want an error for a path that vanished before the diff, got out = %q", out)
+	if d, err := a.GetWorktreeDiff(id, "a.txt", false); err == nil {
+		t.Errorf("want an error for a path that vanished before the diff, got out = %q", d.Text)
 	}
 }
 
@@ -140,10 +142,11 @@ func TestGetWorktreeDiffTruncatesALargeDiff(t *testing.T) {
 
 	big := strings.Repeat("x", worktreeDiffCap+1024) + "\n"
 	r.WriteFile("huge.txt", big)
-	out, err := a.GetWorktreeDiff(id, "huge.txt", false)
+	d, err := a.GetWorktreeDiff(id, "huge.txt", false)
 	if err != nil {
 		t.Fatal(err)
 	}
+	out := d.Text
 	if len(out) > worktreeDiffCap+64 {
 		t.Errorf("untracked diff length = %d, want it capped near %d", len(out), worktreeDiffCap)
 	}
@@ -152,10 +155,11 @@ func TestGetWorktreeDiffTruncatesALargeDiff(t *testing.T) {
 	}
 
 	r.WriteFile("small.txt", "one line\n")
-	small, err := a.GetWorktreeDiff(id, "small.txt", false)
+	sd, err := a.GetWorktreeDiff(id, "small.txt", false)
 	if err != nil {
 		t.Fatal(err)
 	}
+	small := sd.Text
 	if strings.Contains(small, "truncated") {
 		t.Errorf("small diff = %q, want it untouched", small)
 	}
@@ -171,10 +175,11 @@ func TestGetWorktreeDiffOfASubmodulePointerMove(t *testing.T) {
 	}
 	r.Git("-C", subDir, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-am", "moved")
 
-	out, err := a.GetWorktreeDiff(id, "lib", false)
+	d, err := a.GetWorktreeDiff(id, "lib", false)
 	if err != nil {
 		t.Fatal(err)
 	}
+	out := d.Text
 	if !strings.Contains(out, "Submodule lib ") {
 		t.Errorf("diff = %q, want the submodule=log summary", out)
 	}
@@ -239,5 +244,79 @@ func TestGenerateCommitMessageUsesTheTaskModelNotTheChatModel(t *testing.T) {
 
 	if gotModel != "task-model" {
 		t.Errorf("model sent to Ollama = %q, want the task model %q", gotModel, "task-model")
+	}
+}
+
+// A plain modification is patchable and carries the full diff's hash; an
+// untracked file is not patchable; a truncated diff says so.
+func TestGetWorktreeDiffFlags(t *testing.T) {
+	a, r, id := newMergeApp(t)
+	r.WriteFile("greeting.txt", "hey\n")
+	d, err := a.GetWorktreeDiff(id, "greeting.txt", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !d.Patchable || d.Truncated || d.Hash != worktree.DiffHash(d.Text) {
+		t.Errorf("modified file: %+v", d)
+	}
+
+	r.WriteFile("new.txt", "new\n")
+	if d, err := a.GetWorktreeDiff(id, "new.txt", false); err != nil || d.Patchable {
+		t.Errorf("untracked file: %+v, %v", d, err)
+	}
+
+	r.WriteFile("greeting.txt", strings.Repeat("y", worktreeDiffCap+1024)+"\n")
+	d, err = a.GetWorktreeDiff(id, "greeting.txt", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	full, _ := worktree.FileDiff(context.Background(), r.Dir, "greeting.txt", false)
+	if !d.Truncated || d.Hash != worktree.DiffHash(full) {
+		t.Errorf("truncated diff: truncated=%v, hash of the full diff=%v", d.Truncated, d.Hash == worktree.DiffHash(full))
+	}
+}
+
+func TestApplyHunkSelectionDiscardAndUndo(t *testing.T) {
+	a, r, id, _ := newAIMergeApp(t, "http://127.0.0.1:0")
+	r.WriteFile("greeting.txt", "hey\n")
+	d, err := a.GetWorktreeDiff(id, "greeting.txt", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.ApplyHunkSelection(id, "greeting.txt", false, d.Hash, worktree.Selection{{Hunk: 0}}, "discard"); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.Git("show", "HEAD:greeting.txt"); got != "hi" {
+		t.Fatalf("HEAD content = %q", got)
+	}
+	data, _ := os.ReadFile(filepath.Join(r.Dir, "greeting.txt"))
+	if string(data) != "hi\n" {
+		t.Fatalf("after discard = %q, want the committed content", data)
+	}
+
+	if err := a.UndoDiscard(id); err != nil {
+		t.Fatal(err)
+	}
+	data, _ = os.ReadFile(filepath.Join(r.Dir, "greeting.txt"))
+	if string(data) != "hey\n" {
+		t.Fatalf("after undo = %q", data)
+	}
+	if err := a.UndoDiscard(id); err == nil {
+		t.Error("a second undo succeeded; there is nothing left to undo")
+	}
+}
+
+func TestApplyHunkSelectionStageKeepsNothingToUndo(t *testing.T) {
+	a, r, id, _ := newAIMergeApp(t, "http://127.0.0.1:0")
+	r.WriteFile("greeting.txt", "hey\n")
+	d, _ := a.GetWorktreeDiff(id, "greeting.txt", false)
+	if err := a.ApplyHunkSelection(id, "greeting.txt", false, d.Hash, worktree.Selection{{Hunk: 0}}, "stage"); err != nil {
+		t.Fatal(err)
+	}
+	if cached := r.Git("diff", "--cached"); !strings.Contains(cached, "+hey") {
+		t.Fatalf("staged diff = %s", cached)
+	}
+	if err := a.UndoDiscard(id); err == nil {
+		t.Error("undo after a stage succeeded")
 	}
 }

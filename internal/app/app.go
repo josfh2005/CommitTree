@@ -90,6 +90,7 @@ type App struct {
 	// in production, a temp path in tests.
 	gitSettingsPath string
 	owedDrops       sync.Map // repo ID → stash index still to drop once resolved
+	discards        sync.Map // repo ID → the last hunk/line discard's patch, for Undo
 	term            *terminal.Manager
 	// worktrees are the linked worktrees the last ListRepos detected, by id.
 	// They are not list entries: nothing about them is stored, and the map

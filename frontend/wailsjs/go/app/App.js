@@ -14,6 +14,10 @@ export function AddRepo() {
   return window['go']['app']['App']['AddRepo']();
 }
 
+export function ApplyHunkSelection(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['app']['App']['ApplyHunkSelection'](arg1, arg2, arg3, arg4, arg5, arg6);
+}
+
 export function CancelCommand(arg1, arg2) {
   return window['go']['app']['App']['CancelCommand'](arg1, arg2);
 }
@@ -384,6 +388,10 @@ export function TerminalShell() {
 
 export function TerminalWrite(arg1, arg2) {
   return window['go']['app']['App']['TerminalWrite'](arg1, arg2);
+}
+
+export function UndoDiscard(arg1) {
+  return window['go']['app']['App']['UndoDiscard'](arg1);
 }
 
 export function UnstageFile(arg1, arg2) {

@@ -71,6 +71,38 @@ func (a *App) DiscardFile(id, path string) error {
 	})
 }
 
+// ApplyHunkSelection stages, unstages or discards part of one file (see
+// worktree.ApplySelection). A discard's patch is kept as the repository's
+// last discard, for UndoDiscard.
+func (a *App) ApplyHunkSelection(id, path string, staged bool, hash string, sel worktree.Selection, action string) error {
+	return a.writeWorktree(id, func(ctx context.Context, dir string) error {
+		patch, err := worktree.ApplySelection(ctx, dir, path, staged, hash, sel, worktree.Action(action))
+		if err != nil {
+			return err
+		}
+		if worktree.Action(action) == worktree.ActionDiscard {
+			a.discards.Store(id, patch)
+		}
+		return nil
+	})
+}
+
+// UndoDiscard puts the last hunk/line discard back. It is kept when the undo
+// fails (the lines changed since), so it can be tried again.
+func (a *App) UndoDiscard(id string) error {
+	return a.writeWorktree(id, func(ctx context.Context, dir string) error {
+		patch, ok := a.discards.Load(id)
+		if !ok {
+			return errors.New("nothing to undo")
+		}
+		if err := worktree.Reapply(ctx, dir, patch.(string)); err != nil {
+			return err
+		}
+		a.discards.Delete(id)
+		return nil
+	})
+}
+
 func (a *App) CommitChanges(id, message string, amend bool) error {
 	return a.writeWorktree(id, func(ctx context.Context, dir string) error {
 		return worktree.Commit(ctx, dir, message, amend)
@@ -85,19 +117,40 @@ func (a *App) GetCommitPreview(id string) (worktree.CommitInfo, error) {
 	return worktree.Preview(a.ctx, dir)
 }
 
+// WorktreeDiff is one changed file's diff as the pane shows it. Hash is the
+// SHA-256 of the full (untruncated) diff; the pane sends it back with a hunk
+// or line action so Go can refuse a diff that changed since. Patchable says
+// whether the file can be acted on by hunk or line at all.
+type WorktreeDiff struct {
+	Text      string `json:"text"`
+	Hash      string `json:"hash"`
+	Truncated bool   `json:"truncated"`
+	Patchable bool   `json:"patchable"`
+}
+
 // GetWorktreeDiff returns what one changed file shows in the pane: the staged
 // diff against HEAD, or the unstaged diff against the index, capped. Only a
 // path the status just listed can be read (see worktree.FileDiff).
-func (a *App) GetWorktreeDiff(id, path string, staged bool) (string, error) {
+func (a *App) GetWorktreeDiff(id, path string, staged bool) (WorktreeDiff, error) {
 	dir, err := a.dir(id)
 	if err != nil {
-		return "", err
+		return WorktreeDiff{}, err
 	}
 	out, err := worktree.FileDiff(a.ctx, dir, path, staged)
 	if err != nil {
-		return out, err
+		return WorktreeDiff{Text: out}, err
 	}
-	return tools.Truncate(out, worktreeDiffCap), nil
+	st, err := worktree.Status(a.ctx, dir)
+	if err != nil {
+		return WorktreeDiff{}, err
+	}
+	text := tools.Truncate(out, worktreeDiffCap)
+	return WorktreeDiff{
+		Text:      text,
+		Hash:      worktree.DiffHash(out),
+		Truncated: text != out,
+		Patchable: worktree.Patchable(st, path, staged, out),
+	}, nil
 }
 
 // GenerateCommitMessage streams a commit message for the staged changes. It

@@ -365,6 +365,24 @@ export namespace app {
 	        this.submoduleCount = source["submoduleCount"];
 	    }
 	}
+	export class WorktreeDiff {
+	    text: string;
+	    hash: string;
+	    truncated: boolean;
+	    patchable: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new WorktreeDiff(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.text = source["text"];
+	        this.hash = source["hash"];
+	        this.truncated = source["truncated"];
+	        this.patchable = source["patchable"];
+	    }
+	}
 
 }
 
@@ -1152,6 +1170,20 @@ export namespace worktree {
 	        this.subCommit = source["subCommit"];
 	        this.subModified = source["subModified"];
 	        this.subUntracked = source["subUntracked"];
+	    }
+	}
+	export class HunkPick {
+	    hunk: number;
+	    lines: number[];
+	
+	    static createFrom(source: any = {}) {
+	        return new HunkPick(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hunk = source["hunk"];
+	        this.lines = source["lines"];
 	    }
 	}
 	export class State {
