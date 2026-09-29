@@ -112,7 +112,12 @@ file-level actions.
 - A click on a `+` or `-` line selects it; Shift+click selects the change
   lines between the last clicked line and this one; Cmd+click (Ctrl+click)
   adds or removes one line. Context and header lines cannot be selected. A
-  drag still selects text for copying. Esc clears the selection.
+  drag still selects text for copying. Change lines can also be reached with
+  Tab; Enter or Space acts as a click, with the same Shift and Cmd (Ctrl)
+  modifiers. Esc clears the selection, unless it is closing a menu or a
+  dialog or the focus is elsewhere (the commit message, the chat). The
+  selection survives a reload that brings back the same diff, and is cleared
+  when the file, its section or its diff changes.
 - With lines selected, a bar at the top of the diff shows the count and
   **Stage lines** / **Discard lines** (Unstaged) or **Unstage lines**
   (Staged). Staging some lines of a hunk leaves the others unstaged, and so

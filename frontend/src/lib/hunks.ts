@@ -111,3 +111,17 @@ export function pickSummary(picks: HunkPick[]): string {
  *  valid while it is unchanged, so a reload that brings back the same diff
  *  (a window focus, an unrelated change) keeps the selection. */
 export const selectionKey = (path: string, staged: boolean, diff: WorktreeDiff) => `${staged ? 'staged' : 'unstaged'}:${diff.hash}:${path}`
+
+/** escapeClears says whether Esc should clear the line selection: not while
+ *  a menu or dialog is open (that Esc closes it), and only when the focus is
+ *  in the diff (or nowhere), not in the commit box or the chat. */
+export function escapeClears(key: string, where: { overlayOpen: boolean; inPane: boolean }): boolean {
+  return key === 'Escape' && !where.overlayOpen && where.inPane
+}
+
+/** keyMods makes Enter and Space on a focused line act like a click, with the
+ *  same modifiers; any other key is not a selection key (null). */
+export function keyMods(e: { key: string; shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }): { shift: boolean; toggle: boolean } | null {
+  if (e.key !== 'Enter' && e.key !== ' ') return null
+  return { shift: e.shiftKey, toggle: e.metaKey || e.ctrlKey }
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clickSelect, diffRows, emptySelection, pickSummary, rowKey, selectionKey, toPicks } from './hunks'
+import { clickSelect, diffRows, emptySelection, escapeClears, keyMods, pickSummary, rowKey, selectionKey, toPicks } from './hunks'
 
 const header = 'diff --git a/f.txt b/f.txt\nindex 1..2 100644\n--- a/f.txt\n+++ b/f.txt\n'
 const text = header + '@@ -1,3 +1,3 @@\n one\n-two\n+TWO\n\\ No newline at end of file\n@@ -10,2 +10,2 @@\n-ten\n+TEN\n'
@@ -87,5 +87,28 @@ describe('selectionKey', () => {
     expect(selectionKey('g.txt', false, diff)).not.toBe(key)
     expect(selectionKey('f.txt', true, diff)).not.toBe(key)
     expect(selectionKey('f.txt', false, { ...diff, hash: 'h2' })).not.toBe(key)
+  })
+})
+
+describe('escapeClears', () => {
+  it('clears on Esc only when nothing else is open and the focus is in the diff', () => {
+    expect(escapeClears('Escape', { overlayOpen: false, inPane: true })).toBe(true)
+    expect(escapeClears('Escape', { overlayOpen: true, inPane: true })).toBe(false)
+    expect(escapeClears('Escape', { overlayOpen: false, inPane: false })).toBe(false)
+    expect(escapeClears('Enter', { overlayOpen: false, inPane: true })).toBe(false)
+  })
+})
+
+describe('keyMods', () => {
+  const key = (k: string, over: Partial<{ shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }> = {}) => ({ key: k, shiftKey: false, metaKey: false, ctrlKey: false, ...over })
+  it('treats Enter and Space on a line like a click, with the same modifiers', () => {
+    expect(keyMods(key('Enter'))).toEqual({ shift: false, toggle: false })
+    expect(keyMods(key(' ', { shiftKey: true }))).toEqual({ shift: true, toggle: false })
+    expect(keyMods(key('Enter', { metaKey: true }))).toEqual({ shift: false, toggle: true })
+    expect(keyMods(key(' ', { ctrlKey: true }))).toEqual({ shift: false, toggle: true })
+  })
+  it('ignores other keys', () => {
+    expect(keyMods(key('a'))).toBeNull()
+    expect(keyMods(key('Escape'))).toBeNull()
   })
 })
