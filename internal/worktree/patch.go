@@ -132,6 +132,10 @@ func BuildPatch(d ParsedDiff, sel Selection, reverse bool) (string, error) {
 
 	var b strings.Builder
 	for _, l := range d.Header {
+		// A mode change belongs to the whole file, not to part of it.
+		if strings.HasPrefix(l, "old mode ") || strings.HasPrefix(l, "new mode ") {
+			continue
+		}
 		b.WriteString(l)
 		b.WriteByte('\n')
 	}
@@ -166,10 +170,8 @@ func BuildPatch(d ParsedDiff, sel Selection, reverse bool) (string, error) {
 		if changes == 0 {
 			continue
 		}
-		for _, l := range body[:len(body)-1] {
-			if l.NoNewline && l.Kind == LineContext {
-				return "", ErrSplitsLastLine
-			}
+		if splitsLastLine(body) {
+			return "", ErrSplitsLastLine
 		}
 		changed = true
 
@@ -207,4 +209,23 @@ func BuildPatch(d ParsedDiff, sel Selection, reverse bool) (string, error) {
 		return "", ErrEmptySelection
 	}
 	return b.String(), nil
+}
+
+// splitsLastLine reports whether a line marked "no newline at end of file"
+// would be followed by more lines on the same side (old: context and -, new:
+// context and +); git apply would glue them together.
+func splitsLastLine(body []DiffLine) bool {
+	for _, skip := range []LineKind{LineAdd, LineDel} {
+		marked := false
+		for _, l := range body {
+			if l.Kind == skip {
+				continue
+			}
+			if marked {
+				return true
+			}
+			marked = l.NoNewline
+		}
+	}
+	return false
 }

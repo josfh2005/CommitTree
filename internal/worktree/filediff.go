@@ -51,11 +51,13 @@ func FileDiff(ctx context.Context, dir, path string, staged bool) (string, error
 		return out, err
 	}
 	// The pane's text is also what hunk and line actions rebuild a patch
-	// from, so no user setting may change its shape: prefixes stay a/ b/,
-	// and external diff drivers, textconv and colour are off.
+	// from, so no user setting may change its shape: prefixes stay a/ b/, hunks
+	// keep 3 lines of context, and external diff drivers, textconv and
+	// colour are off.
 	args := []string{
 		"-c", "diff.noprefix=false", "-c", "diff.mnemonicPrefix=false",
-		"--literal-pathspecs", "diff", "--no-ext-diff", "--no-textconv", "--no-color", "--submodule=log",
+		"-c", "diff.srcPrefix=a/", "-c", "diff.dstPrefix=b/",
+		"--literal-pathspecs", "diff", "-U3", "--no-ext-diff", "--no-textconv", "--no-color", "--submodule=log",
 	}
 	if staged {
 		args = append(args, "--cached")

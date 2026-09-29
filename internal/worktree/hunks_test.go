@@ -3,6 +3,8 @@ package worktree_test
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -241,5 +243,58 @@ func TestApplySelectionKeepsCRLF(t *testing.T) {
 
 	if got := r.Git("cat-file", "-p", ":f.txt"); got != "one\r\nTWO\r\nthree" {
 		t.Errorf("index blob = %q", got)
+	}
+}
+
+// Review Focus 3, reproduced by review: a line added after a last line that
+// had no newline. Discarding or unstaging "-b" alone must change nothing.
+func TestApplySelectionRefusesSplittingANoNewlineLastLine(t *testing.T) {
+	r := testrepo.New(t)
+	r.WriteFile("f.txt", "a\nb")
+	r.Git("add", "f.txt")
+	r.Git("commit", "-q", "-m", "f")
+	r.WriteFile("f.txt", "a\nb\nc")
+	for _, lines := range [][]int{{1}, {1, 2}} {
+		_, err := worktree.ApplySelection(ctx, r.Dir, "f.txt", false, worktree.DiffHash(diffOf(t, r, false)), worktree.Selection{{Hunk: 0, Lines: lines}}, worktree.ActionDiscard)
+		if !errors.Is(err, worktree.ErrSplitsLastLine) {
+			t.Errorf("discard %v: err = %v, want ErrSplitsLastLine", lines, err)
+		}
+		if got := read(t, r.Dir, "f.txt"); got != "a\nb\nc" {
+			t.Fatalf("discard %v changed the file to %q", lines, got)
+		}
+	}
+	r.Git("add", "f.txt")
+	_, err := worktree.ApplySelection(ctx, r.Dir, "f.txt", true, worktree.DiffHash(diffOf(t, r, true)), worktree.Selection{{Hunk: 0, Lines: []int{1}}}, worktree.ActionUnstage)
+	if !errors.Is(err, worktree.ErrSplitsLastLine) {
+		t.Errorf("unstage: err = %v, want ErrSplitsLastLine", err)
+	}
+}
+
+// A hunk action leaves a pending mode change (chmod +x) alone.
+func TestApplySelectionKeepsTheModeChange(t *testing.T) {
+	r := twoHunks(t)
+	if err := os.Chmod(filepath.Join(r.Dir, "f.txt"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	apply(t, r, false, worktree.Selection{{Hunk: 0}}, worktree.ActionStage)
+	if got := r.Git("ls-files", "-s", "f.txt"); !strings.HasPrefix(got, "100644") {
+		t.Errorf("staging a hunk staged the mode: %s", got)
+	}
+	apply(t, r, false, worktree.Selection{{Hunk: 0}}, worktree.ActionDiscard)
+	if info, err := os.Stat(filepath.Join(r.Dir, "f.txt")); err != nil || info.Mode().Perm()&0o100 == 0 {
+		t.Errorf("discarding a hunk reset the mode: %v %v", info.Mode(), err)
+	}
+}
+
+// Review Focus 1, reproduced by review: zero-context hunks and custom
+// prefixes must not reach git apply.
+func TestApplySelectionIgnoresContextAndPrefixSettings(t *testing.T) {
+	r := twoHunks(t)
+	r.Git("config", "diff.context", "0")
+	r.Git("config", "diff.srcPrefix", "x/")
+	r.Git("config", "diff.dstPrefix", "y/")
+	apply(t, r, false, worktree.Selection{{Hunk: 0, Lines: []int{2}}}, worktree.ActionStage)
+	if cached := r.Git("diff", "--cached"); !strings.Contains(cached, "+TWO") || strings.Contains(cached, "+TWO-B") {
+		t.Errorf("staged diff = %s", cached)
 	}
 }

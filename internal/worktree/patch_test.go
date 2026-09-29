@@ -151,3 +151,30 @@ func TestBuildPatchRefuses(t *testing.T) {
 		})
 	}
 }
+
+// Review Focus 3, reverse side: the old side ends in "b" with no newline and
+// the new side goes on past it. Keeping "-b" while more old-side lines follow
+// it, or dropping "+b" after it, would glue lines together on apply.
+func TestBuildPatchRefusesSplittingANoNewlineSide(t *testing.T) {
+	d := parse(t, header+"@@ -1,2 +1,3 @@\n a\n-b\n\\ No newline at end of file\n+b\n+c\n\\ No newline at end of file\n")
+	for _, lines := range [][]int{{1}, {1, 2}} {
+		if _, err := worktree.BuildPatch(d, worktree.Selection{{Hunk: 0, Lines: lines}}, true); !errors.Is(err, worktree.ErrSplitsLastLine) {
+			t.Errorf("reverse %v: err = %v, want ErrSplitsLastLine", lines, err)
+		}
+	}
+	if _, err := worktree.BuildPatch(d, worktree.Selection{{Hunk: 0}}, true); err != nil {
+		t.Errorf("whole hunk: %v", err)
+	}
+}
+
+// A mode change belongs to the whole file: a partial patch must not carry it.
+func TestBuildPatchLeavesModeChangesOut(t *testing.T) {
+	d := parse(t, "diff --git a/f.txt b/f.txt\nold mode 100644\nnew mode 100755\nindex 1111111..2222222\n--- a/f.txt\n+++ b/f.txt\n@@ -1 +1 @@\n-a\n+b\n")
+	got, err := worktree.BuildPatch(d, worktree.Selection{{Hunk: 0}}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(got, "mode") {
+		t.Errorf("patch carries the mode change:\n%s", got)
+	}
+}
