@@ -7,7 +7,7 @@
   import {
     arrowAt, DOT_RADIUS, edgeSegment, graphWidth, LANE_WIDTH, laneColor, laneX, ROW_HEIGHT, rowCenterY, visibleRange,
   } from '../lib/geometry'
-  import { isCurrentBranchRef } from '../lib/refBadge'
+  import { badgeLaneColor, isCurrentBranchRef } from '../lib/refBadge'
   import { cherryPickBlocker, rebaseBlocker } from '../lib/rebase'
   import { isMine } from '../lib/identity'
   import { busy, chatOpen, explainIntoChat, filters, identity, jumpTo, logOrder, logVersion, mergeState, refs, selectedHash, toggleCommit, toggleUncommitted, uncommittedSelected, worktreeState } from '../lib/stores'
@@ -373,7 +373,8 @@
         >
           <span class="subject ellipsis">
             {#each row.refs.filter((r) => r.kind !== 'head') as ref}
-              <span class="badge {ref.kind}" class:current={isCurrentBranchRef(ref, row.isHead, $refs?.head ?? '')}>{ref.name}</span>
+              {@const lane = badgeLaneColor(ref, row.color)}
+              <span class="badge {ref.kind}" class:lane={!!lane} style={lane ? `--lane: ${lane}` : undefined} class:current={isCurrentBranchRef(ref, row.isHead, $refs?.head ?? '')}>{ref.name}</span>
             {/each}
             {row.subject}
           </span>
@@ -427,7 +428,14 @@
   .uncommitted .subject { font-style: italic; color: var(--muted); }
   .author, .date, .hash { color: var(--muted); font-size: 12px; }
   .badge { display: inline-block; margin-right: 6px; padding: 1px 6px; border-radius: 6px; font-size: 11px; line-height: 15px; }
-  .badge.local, .badge.remote { background: var(--branch-badge-bg); color: var(--branch-badge-text); }
+  /* A branch badge is tinted with its row's lane colour (badgeLaneColor): a
+     soft fill and a stronger border of that hue, over the page background so
+     it reads in both themes, with the label in the ordinary text colour. */
+  .badge.lane {
+    padding: 0 5px; color: var(--text);
+    background: color-mix(in srgb, var(--lane) 18%, var(--bg));
+    border: 1px solid color-mix(in srgb, var(--lane) 65%, var(--bg));
+  }
   .badge.tag { background: var(--tag-badge-bg); color: var(--tag-badge-text); }
   .badge.current { font-weight: 600; }
   .note { position: absolute; left: 0; right: 0; height: 28px; line-height: 28px; text-align: center; font-size: 12px; color: var(--faint); }

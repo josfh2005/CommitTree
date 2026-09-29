@@ -58,18 +58,16 @@ when the repository is selected and when the window regains focus. The commit cu
 `HEAD` is marked by drawing its graph dot hollow (outlined, not filled)
 rather than by an extra badge.
 
-A ref's badge is coloured by its kind, not by where its commit sits in the
-graph: every local or remote-tracking branch badge takes one hue (a soft
-tinted background with its label text in a saturated shade of the same
-hue), and every tag badge takes a second, distinct hue in the same style.
-The graph's lane colour (see below) is deliberately not reused here — the
-lane is already shown two columns to the left, so repeating it on the badge
-would add nothing, while "is this a branch or a tag" is information the
-badge can usefully carry instead. The branch currently checked out is drawn
-with the same branch hue as any other branch badge, not a different colour,
-but its own badge's text is bolder than an ordinary branch badge's — the
-one piece of the current-branch emphasis this view still carries, alongside
-the hollow `HEAD` dot in the graph.
+A branch badge, local or remote-tracking, takes the colour of its commit's
+dot in the graph: a soft tint of that lane colour with a border in a
+stronger shade of it, and its label in the ordinary text colour, so the name
+reads as part of the line it labels. Branches on the same commit share that
+colour. A tag badge keeps its own distinct hue (a soft tinted background with
+its label in a saturated shade). The branch currently checked out is drawn in
+the same lane colour as any other branch badge on its row, but its badge's
+text is bolder than an ordinary branch badge's — the one piece of the
+current-branch emphasis this view still carries, alongside the hollow `HEAD`
+dot in the graph.
 
 ### The header
 

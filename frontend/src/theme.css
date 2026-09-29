@@ -20,8 +20,6 @@
      --ok nor --accent is a pair — each is a single hue meant for text,
      icons or a thin bar, not a background a small badge's own text then has
      to sit on legibly — so this needed its own two pairs rather than reuse. */
-  --branch-badge-bg: #e3f4e3;
-  --branch-badge-text: #1f6d1f;
   --tag-badge-bg: #fbe9d0;
   --tag-badge-text: #99590a;
   --shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
@@ -82,8 +80,6 @@
   --merge-text: #8c8a85;
   --add-bg: #1f3a28;
   --del-bg: #45221f;
-  --branch-badge-bg: #1f3a28;
-  --branch-badge-text: #7cd47c;
   --tag-badge-bg: #40301a;
   --tag-badge-text: #e3a94f;
   --shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
