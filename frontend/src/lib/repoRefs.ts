@@ -16,3 +16,10 @@ export function refsView(repoId: string, selectedId: string, selected: RepoRefsD
   if (repoId === selectedId) return selected
   return side[repoId] ?? { refs: null, stash: [] }
 }
+
+/** isFilterRow says whether a ref row is the one the commit log is filtered
+ *  by. The filter belongs to the selected repository's log, so a row of any
+ *  other expanded repository is never marked, even with the same ref name. */
+export function isFilterRow(repoId: string, selectedId: string, filterRef: string, ref: string): boolean {
+  return filterRef !== '' && repoId === selectedId && filterRef === ref
+}

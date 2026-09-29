@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { refsView } from './repoRefs'
+import { isFilterRow, refsView } from './repoRefs'
 import type { Refs, StashEntry } from './types'
 
 const refsOf = (head: string): Refs => ({ head, headHash: 'h', detached: false, local: [], remotes: [], tags: [] }) as unknown as Refs
@@ -19,5 +19,17 @@ describe('refsView', () => {
 
   it('shows nothing for a repository whose refs have not loaded yet', () => {
     expect(refsView('unloaded', 'sel', selected, side)).toEqual({ refs: null, stash: [] })
+  })
+})
+
+describe('isFilterRow', () => {
+  it('marks the ref the selected repository\'s log is filtered by', () => {
+    expect(isFilterRow('sel', 'sel', 'refs/heads/master', 'refs/heads/master')).toBe(true)
+  })
+  it('never marks a row of another repository, whose log is not on screen', () => {
+    expect(isFilterRow('other', 'sel', 'refs/heads/master', 'refs/heads/master')).toBe(false)
+  })
+  it('marks nothing when the log is not filtered', () => {
+    expect(isFilterRow('sel', 'sel', '', 'refs/heads/master')).toBe(false)
   })
 })

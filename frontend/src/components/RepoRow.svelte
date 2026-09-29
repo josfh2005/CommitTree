@@ -141,7 +141,7 @@
   .repo.dragging { opacity: 0.5; }
   /* The selected repository: the selection background plus an accent bar at
      its left edge, so it is found at a glance among expanded repositories. */
-  .repo.active { background: var(--selection); box-shadow: inset 3px 0 0 var(--accent); }
+  .repo.active { background: var(--selection); box-shadow: inset 3px 0 0 var(--accent); border-radius: 0; }
   .repo.active .branch { color: var(--accent); font-weight: 500; }
   .fold { width: 20px; height: 20px; flex: none; }
   .fold:disabled { opacity: 0; }

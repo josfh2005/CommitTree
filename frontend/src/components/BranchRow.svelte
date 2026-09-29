@@ -29,6 +29,7 @@
   <span class="mark">{#if branch.current}<Icon name="check" size={12} />{/if}</span>
   <span class="ellipsis" class:current={branch.current}>{text}</span>
   {#if elsewhere}<span class="wt">worktree</span>{/if}
+  {#if active}<span class="filtered" title="The log is filtered to this branch — choose All branches in the filter bar to clear it"><Icon name="filter" size={11} /></span>{/if}
 </button>
 
 <style>
@@ -39,5 +40,7 @@
      siblings; a row selected as the log filter keeps its own background. */
   .checked-out:not(.active) { background: color-mix(in srgb, var(--accent) 12%, transparent); }
   .checked-out:not(.active):hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+  .filtered { margin-left: auto; flex: none; display: inline-grid; place-items: center; color: var(--muted); }
+  .wt + .filtered { margin-left: 6px; }
   .wt { margin-left: auto; flex: none; font-size: 11px; padding: 0 6px; border-radius: 4px; background: var(--hover); color: var(--muted); }
 </style>

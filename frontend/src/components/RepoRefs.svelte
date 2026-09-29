@@ -6,7 +6,7 @@
   import { groupBranches, leafName, type BranchGroup } from '../lib/branches'
   import { rebaseBlocker } from '../lib/rebase'
   import { busy, expandedStashSections, repos, expandedTagSections, filters, loadSideRefs, mainView, mergeState, refs, selectRepo, selectStash, selectedRepoId, selectedStash, sideRefs, stashEntries, toggleStashExpanded, toggleTagsExpanded } from '../lib/stores'
-  import { refsView } from '../lib/repoRefs'
+  import { isFilterRow, refsView } from '../lib/repoRefs'
   import type { Branch, StashEntry, Tag } from '../lib/types'
   import { openMenu, openMenuAsync } from '../lib/ui'
 
@@ -66,7 +66,10 @@
     ),
   } as Record<string, BranchGroup>
 
+  // A tag row of a repository other than the one on screen selects it first
+  // (which clears its filters), then filters its log.
   function toggleFilter(ref: string) {
+    if (repoId !== $selectedRepoId) selectRepo(repoId)
     filters.update((f) => ({ ...f, branch: f.branch === ref ? '' : ref }))
   }
 
@@ -150,7 +153,7 @@
       <BranchRow
         branch={b}
         text={b.name}
-        active={$filters.branch === branchRef(b)}
+        active={isFilterRow(repoId, $selectedRepoId, $filters.branch, branchRef(b))}
         title={b.upstream ? `${b.name} → ${b.upstream}` : b.name}
         onCheckout={checkout}
         onMenu={branchMenu}
@@ -170,7 +173,7 @@
             branch={b}
             text={leafName(b.name, group.name)}
             depth={1}
-            active={$filters.branch === branchRef(b)}
+            active={isFilterRow(repoId, $selectedRepoId, $filters.branch, branchRef(b))}
             title={b.upstream ? `${b.name} → ${b.upstream}` : b.name}
             onCheckout={checkout}
             onMenu={branchMenu}
@@ -196,7 +199,7 @@
                 branch={b}
                 text={b.name}
                 depth={1}
-                active={$filters.branch === branchRef(b)}
+                active={isFilterRow(repoId, $selectedRepoId, $filters.branch, branchRef(b))}
                 title={branchLabel(b)}
                 onCheckout={checkout}
                 onMenu={branchMenu}
@@ -220,7 +223,7 @@
                     branch={b}
                     text={leafName(b.name, group.name)}
                     depth={2}
-                    active={$filters.branch === branchRef(b)}
+                    active={isFilterRow(repoId, $selectedRepoId, $filters.branch, branchRef(b))}
                     title={branchLabel(b)}
                     onCheckout={checkout}
                     onMenu={branchMenu}
@@ -246,12 +249,13 @@
       {#each repoRefs.tags as t (t.name)}
         <button
           class="row-item ref"
-          class:active={$filters.branch === `refs/tags/${t.name}`}
+          class:active={isFilterRow(repoId, $selectedRepoId, $filters.branch, `refs/tags/${t.name}`)}
           on:click={() => toggleFilter(`refs/tags/${t.name}`)}
           on:contextmenu={(e) => tagMenu(e, t)}
         >
           <span class="mark"><Icon name="tag" size={12} /></span>
           <span class="ellipsis">{t.name}</span>
+          {#if isFilterRow(repoId, $selectedRepoId, $filters.branch, `refs/tags/${t.name}`)}<span class="filtered" title="The log is filtered to this tag — click again to show all branches"><Icon name="filter" size={11} /></span>{/if}
         </button>
       {:else}
         <div class="none">No tags</div>
@@ -305,6 +309,7 @@
   .mark { width: 12px; flex: none; display: inline-grid; place-items: center; color: var(--muted); }
   .current { font-weight: 500; }
   .detached { color: var(--muted); }
+  .filtered { margin-left: auto; flex: none; display: inline-grid; place-items: center; color: var(--muted); }
   .breadcrumb { color: var(--muted); }
   .group .count { margin-left: auto; font-size: 11px; color: var(--faint); }
   /* Empty-state lines stand in for the rows they describe (one step in
