@@ -1,5 +1,5 @@
 import * as Go from '../../wailsjs/go/app/App'
-import type { AIMessage, AISettings, AIStatus, AheadBehind, Blame, ChatConfirmEvent, CommandLogView, CommandOutput, CommitInfo, ConflictFile, Details, Filters, GitSettings, Identity, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
+import type { AIMessage, AISettings, AIStatus, AheadBehind, Blame, ChatConfirmEvent, CommandLogView, CommandOutput, CommitInfo, ConflictFile, Details, Filters, GitSettings, HunkAction, HunkPick, Identity, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeDiff, WorktreeRemovalInfo, WorktreeState } from './types'
 
 // The generated bindings use Wails model classes; the JSON is identical to our
 // interfaces, so cast at this single boundary.
@@ -89,7 +89,10 @@ export const api = {
   stageFile: (id: string, path: string) => call<void>(Go.StageFile(id, path)),
   unstageFile: (id: string, path: string) => call<void>(Go.UnstageFile(id, path)),
   discardFile: (id: string, path: string) => call<void>(Go.DiscardFile(id, path)),
-  getWorktreeDiff: (id: string, path: string, staged: boolean) => call<string>(Go.GetWorktreeDiff(id, path, staged)),
+  getWorktreeDiff: (id: string, path: string, staged: boolean) => call<WorktreeDiff>(Go.GetWorktreeDiff(id, path, staged)),
+  applyHunkSelection: (id: string, path: string, staged: boolean, hash: string, picks: HunkPick[], action: HunkAction) =>
+    call<void>(Go.ApplyHunkSelection(id, path, staged, hash, picks, action)),
+  undoDiscard: (id: string) => call<void>(Go.UndoDiscard(id)),
   getCommitPreview: (id: string) => call<CommitInfo>(Go.GetCommitPreview(id)),
   commitChanges: (id: string, message: string, amend: boolean) => call<void>(Go.CommitChanges(id, message, amend)),
   generateCommitMessage: (id: string, runID: string) => call<void>(Go.GenerateCommitMessage(id, runID)),

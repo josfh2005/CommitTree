@@ -1,7 +1,7 @@
 import { get } from 'svelte/store'
 import { api } from './api'
 import { busy, chatOpen, collapsedRepoGroups, expandedRepos, filters, focusCommitBox, loadIdentity, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, refs, repos, selectRepo, selectUncommitted, selectedHash, selectedRepoId, stashConflictDismissed } from './stores'
-import type { Branch, FileStatus, MergeState, RebasePreview, Repo, ResetInfo, ResetMode, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
+import type { Branch, FileStatus, HunkAction, HunkPick, MergeState, RebasePreview, Repo, ResetInfo, ResetMode, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
 import { PULL_UP_TO_DATE, UP_TO_DATE } from './types'
 import { abortWarning, commitWarning, isEmptyStepError, skipWarning, staleMergeChoice, takeMessage } from './merge'
 import { doneMessage, rebaseMessage } from './rebase'
@@ -258,6 +258,21 @@ export async function checkoutCommit(id: string, hash: string) {
     confirmLabel: 'Check out',
   })
   if (ok && (await run('Checking out…', () => api.checkoutDetached(id, hash)))) await warnMovedSubmodules(id)
+}
+
+const HUNK_BUSY: Record<HunkAction, string> = { stage: 'Staging…', unstage: 'Unstaging…', discard: 'Discarding…' }
+
+/** applyHunkSelection stages, unstages or discards part of one file. `what`
+ *  ("1 hunk", "3 lines") names it in the discard toast, whose Undo puts it back. */
+export async function applyHunkSelection(id: string, path: string, staged: boolean, hash: string, picks: HunkPick[], action: HunkAction, what: string) {
+  const ok = await run(HUNK_BUSY[action], () => api.applyHunkSelection(id, path, staged, hash, picks, action))
+  if (ok && action === 'discard') {
+    toast(`Discarded ${what} in ${path.split('/').pop()}`, 'info', { label: 'Undo', run: () => undoDiscard(id) })
+  }
+}
+
+export async function undoDiscard(id: string) {
+  await run('Restoring…', () => api.undoDiscard(id))
 }
 
 export async function resetBranch(id: string, hash: string, short: string, branch: string) {

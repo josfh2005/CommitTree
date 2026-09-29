@@ -383,3 +383,20 @@ export interface CommandOutput { stdout: string; stderr: string }
 /** CommandLog's result: the key the backend logs this repository's
  *  commands under, and the commands themselves (never null). */
 export interface CommandLogView { repo: string; entries: CommandEntry[] }
+
+/** One changed file's diff for the pane (app.WorktreeDiff). `hash` identifies
+ *  the full diff and goes back with a hunk or line action. */
+export interface WorktreeDiff {
+  text: string
+  hash: string
+  truncated: boolean
+  patchable: boolean
+}
+
+/** Lines of one hunk, by index among its body lines; empty = the whole hunk. */
+export interface HunkPick {
+  hunk: number
+  lines: number[]
+}
+
+export type HunkAction = 'stage' | 'unstage' | 'discard'

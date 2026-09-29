@@ -80,7 +80,7 @@
     try {
       const diff = await api.getWorktreeDiff(repoId, file.path, isStaged(file))
       if (current !== request) return
-      text = diff
+      text = diff.text
     } catch (e) {
       if (current === request) error = errorMessage(e)
     }
@@ -99,7 +99,7 @@
     try {
       const diff = await api.getWorktreeDiff(repoId, path, staged)
       if (current !== request) return
-      text = diff
+      text = diff.text
       error = ''
     } catch (e) {
       if (current === request) error = errorMessage(e)
