@@ -1,6 +1,7 @@
 import { derived, get, readable, writable, type Writable } from 'svelte/store'
 import { api } from './api'
 import type { BlameTarget } from './blame'
+import type { PendingFinish } from './flow'
 import { validSelectedStash, type SelectedStash } from './stash'
 import { nextSelection } from './submodules'
 import { emptyFilters, type AISettings, type AheadBehind, type Filters, type GitSettings, type Identity, type LogOrder, type MergeState, type Refs, type Repo, type StashEntry, type WorktreeState } from './types'
@@ -120,6 +121,10 @@ export const selectedHash = writable('')
 export const jumpTo = writable('')
 export const logVersion = writable(0)
 export const busy = writable('')
+
+/** A git-flow finish stopped by a conflict: in memory only, so the Merge
+ *  view can say what it belongs to and committing can offer to continue. */
+export const pendingFinish = writable<PendingFinish | null>(null)
 export const settingsOpen = writable(false)
 /** Wails' Environment().platform, read once at startup (App.svelte). */
 export const platform = writable('')

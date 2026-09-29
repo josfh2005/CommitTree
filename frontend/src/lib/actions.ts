@@ -10,6 +10,7 @@ import { resetMessage } from './reset'
 import { discardMessage, neverCommitted } from './worktree'
 import { stashApplyAction } from './stash'
 import { choiceDialog, confirmDialog, confirmDialogWithCheckbox, dismissToast, errorMessage, pickDialog, promptDialog, toast } from './ui'
+import { forgetPendingFinish, offerContinueFinish } from './flowActions'
 import { mergeCandidates } from './toolbar'
 import { resolveRepoDrop } from './repoDrop'
 import { moveGroup, moveRepo, nameOrder, type RepoPlace, type RepoSortOrder } from './repoGroups'
@@ -574,6 +575,7 @@ export async function abortMerge(id: string) {
   const warning = abortWarning(state ?? ({ kind: 'merge' } as MergeState))
   const ok = await confirmDialog({ ...warning, danger: true })
   if (ok) await run(`${warning.title}…`, () => api.abortMerge(id))
+  if (ok) forgetPendingFinish(id)
 }
 
 export async function commitMerge(id: string) {
@@ -585,9 +587,11 @@ export async function commitMerge(id: string) {
   }
   const kind = state?.kind
   const label = kind === 'rebase' || kind === 'cherry-pick' ? 'Continuing…' : 'Committing merge…'
+  let committed = false
   try {
     busy.set(label)
     await api.commitMerge(id)
+    committed = true
   } catch (e) {
     const message = errorMessage(e)
     if ((kind === 'rebase' || kind === 'cherry-pick') && isEmptyStepError(message)) {
@@ -600,6 +604,7 @@ export async function commitMerge(id: string) {
     busy.set('')
     await refreshRepo()
   }
+  if (committed) offerContinueFinish(id)
 }
 
 export const stageMergeFile = (id: string, path: string) => run('Staging…', () => api.stageMergeFile(id, path))

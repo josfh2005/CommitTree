@@ -7,7 +7,8 @@
   import { conflictActions, conflictHeader, mergeSections, takeLabels, type MergeFile } from '../lib/merge'
   import { lineClass } from '../lib/diff'
   import { nextSelection, type SelectionKey } from '../lib/worktree'
-  import { busy, loadMergeState, mergeState, owedStashDrop } from '../lib/stores'
+  import { busy, loadMergeState, mergeState, owedStashDrop, pendingFinish } from '../lib/stores'
+  import { finishingLine } from '../lib/flow'
   import { errorMessage, openMenu } from '../lib/ui'
   import { onDestroy } from 'svelte'
 
@@ -37,6 +38,7 @@
   $: fileSection = new Map(sections.flatMap((s) => s.files.map((f) => [f, s.title] as const)))
   $: pending = ($mergeState?.conflicts.length ?? 0) + ($mergeState?.manual.length ?? 0)
   $: head = $mergeState ? conflictHeader($mergeState) : null
+  $: flowLine = finishingLine($pendingFinish, repoId)
   $: acts = $mergeState ? conflictActions($mergeState) : { abort: null, confirm: null, ai: false, done: false, skip: false }
   $: selected = selection ? rowKey(selection.section, selection.path) : ''
   // Re-key the selection onto wherever its path now lives (a resolve/stage
@@ -154,6 +156,7 @@
       <button class="btn primary" disabled={!!$busy} on:click={dismissStashConflict}>Done</button>
     {/if}
   </header>
+  {#if flowLine}<div class="flow-note">{flowLine}</div>{/if}
 
   <div class="body">
     <FileList {sections} {selected} onSelect={(key) => { const f = files.find((ff) => keyOf(ff) === key); if (f) open(f) }} actions={actionsFor} onMenu={manualMenu} {glyph} />
@@ -171,6 +174,7 @@
 
 <style>
   .merge { display: flex; flex-direction: column; height: 100%; }
+  .flow-note { padding: 4px 10px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--border); }
   header { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); flex: none; }
   .title { font-size: 13px; }
   .count { font-size: 12px; color: var(--muted); }
