@@ -22,9 +22,11 @@ keeping half of an edit means leaving the app for a terminal or an editor.
   and the working tree at once; the file-level Discard already covers that.
 - **No confirmation for a hunk or line discard; an Undo instead.** The
   file-level Discard keeps its confirmation.
-- **Whole-file only** (no hunk or line actions) for: untracked files, binary
-  files, submodules, renamed or copied files. Their rows keep the file-level
-  actions exactly as today.
+- **Whole-file only** (no hunk or line actions) for anything that is not a
+  plain modification (status `M`): untracked, added, deleted, renamed or
+  copied files, type changes, submodules, and binary files. Their rows keep
+  the file-level actions exactly as today. (A partial patch of an added file
+  applied in reverse would be read by git as deleting the whole file.)
 - **Out of scope:** the chat's write tools (they stay file-level), the merge
   view's diff, the commit details' diff, editing lines in place, and
   word-level diffs.
@@ -62,26 +64,39 @@ keeping half of an edit means leaving the app for a terminal or an editor.
   into a header (the `diff`/`index`/`---`/`+++` lines) and hunks; each hunk
   keeps its `@@` line numbers and its body lines, each with a kind (context,
   add, del) and a flag for a following `\ No newline at end of file` marker.
-- `BuildPatch(d FileDiff, sel Selection) (string, error)`: builds a patch
-  containing only the selected changes. `Selection` maps a hunk index to the
-  indices of its selected body lines; a hunk given with no line list is taken
-  whole. Within a hunk, an unselected `-` line becomes a context line, and an
-  unselected `+` line is dropped. Hunks with nothing selected are left out.
-  The `@@` header counts are recomputed from the kept lines. An empty result
-  is an error ("nothing selected").
+- `BuildPatch(d FileDiff, sel Selection, reverse bool) (string, error)`:
+  builds a patch containing only the selected changes. `Selection` lists hunk
+  indices with the indices of their selected body lines; a hunk given with no
+  line list is taken whole. Unselected lines must stay as they are in the
+  content the patch is applied to:
+  - forward (stage, applied to the index, which has the `-` lines): an
+    unselected `-` line becomes context, an unselected `+` line is dropped;
+  - reverse (unstage and discard, applied with `-R` to the index or the
+    working tree, which have the `+` lines): an unselected `+` line becomes
+    context, an unselected `-` line is dropped.
+
+  Hunks with nothing selected are left out. The `@@` header counts are
+  recomputed from the kept lines, and the start of the side that changed is
+  shifted by the earlier hunks' net change. An empty result is an error
+  ("nothing selected").
+
+**`internal/worktree/filediff.go`:** the tracked-file diff is run with
+`--no-ext-diff --no-textconv --no-color` and `-c diff.noprefix=false
+-c diff.mnemonicPrefix=false`, so a user's diff configuration can never make
+the pane's text differ from a patch `git apply` accepts.
 
 **`internal/worktree/hunks.go`** (new):
 
 - `ApplySelection(ctx, dir, path string, staged bool, hash string, sel Selection, action Action) (patch string, err error)`,
   `Action` being `ActionStage`, `ActionUnstage` or `ActionDiscard`.
   1. Refuses a path the current status does not list (the same check
-     `FileDiff` makes), an untracked, binary, submodule or renamed path, and
+     `FileDiff` makes), a path that is not a plain text modification, and
      an action that does not belong to the section (`ActionUnstage` needs
      `staged`, the other two need `!staged`).
   2. Recomputes the file's **full** diff (never the truncated text the pane
      shows) with `FileDiff`, and refuses with `ErrDiffChanged` when its
      SHA-256 differs from `hash`.
-  3. Builds the partial patch and applies it with
+  3. Builds the partial patch (reverse for unstage and discard) and applies it with
      `git apply --recount --whitespace=nowarn` plus `--cached` (stage),
      `--cached -R` (unstage) or `-R` (discard), feeding it on stdin.
   4. Returns the applied patch (used for Undo after a discard).
@@ -140,7 +155,7 @@ keeping half of an edit means leaving the app for a terminal or an editor.
 | The diff changed since it was shown (hash mismatch) | Nothing is applied; toast "The file changed since it was shown — reloaded"; the diff reloads. |
 | `git apply` refuses the patch | Nothing is applied (git apply is atomic); git's message in an error toast. |
 | Undo after the lines changed again | Nothing is applied; toast "Can't undo: the file changed since the discard"; the patch is kept until the next discard. |
-| Path not listed, untracked, binary, submodule or renamed | Refused by Go even if the renderer asks. |
+| Path not listed, or not a plain text modification | Refused by Go even if the renderer asks. |
 | Action not valid for the section | Refused by Go. |
 | Empty selection | No buttons are shown; Go refuses it anyway. |
 | A write already running | Buttons disabled; Go returns the existing busy error. |
