@@ -5,6 +5,7 @@ import {repos} from '../models';
 import {worktree} from '../models';
 import {merge} from '../models';
 import {cmdlog} from '../models';
+import {gitflow} from '../models';
 import {settings} from '../models';
 import {gitlog} from '../models';
 import {ai} from '../models';
@@ -74,6 +75,8 @@ export function Fetch(arg1:string):Promise<void>;
 
 export function Fingerprint(arg1:string):Promise<string>;
 
+export function FinishFlow(arg1:string,arg2:string,arg3:Array<string>):Promise<gitflow.FinishResult>;
+
 export function GenerateCommitMessage(arg1:string,arg2:string):Promise<void>;
 
 export function GetAISettings():Promise<settings.Settings>;
@@ -93,6 +96,8 @@ export function GetConflictFile(arg1:string,arg2:string):Promise<app.ConflictFil
 export function GetDetails(arg1:string,arg2:string):Promise<gitlog.Details>;
 
 export function GetDiff(arg1:string,arg2:string,arg3:string,arg4:Array<string>):Promise<string>;
+
+export function GetFlow(arg1:string):Promise<gitflow.Flow>;
 
 export function GetGitSettings():Promise<gitsettings.Settings>;
 
@@ -126,6 +131,8 @@ export function GetWorktreeState(arg1:string):Promise<worktree.State>;
 
 export function InitAllSubmodules(arg1:string):Promise<void>;
 
+export function InitFlow(arg1:string,arg2:gitflow.Config):Promise<void>;
+
 export function InitSubmodule(arg1:string,arg2:string):Promise<void>;
 
 export function IsAncestorOfHead(arg1:string,arg2:string):Promise<boolean>;
@@ -145,6 +152,8 @@ export function OpenPromptsFolder():Promise<void>;
 export function OpenRepoFolder(arg1:string):Promise<void>;
 
 export function OwedStashDrop(arg1:string):Promise<number>;
+
+export function PlanFinish(arg1:string,arg2:string,arg3:Array<string>):Promise<gitflow.Plan>;
 
 export function Pull(arg1:string):Promise<ops.Result>;
 
@@ -187,6 +196,8 @@ export function SkipStep(arg1:string):Promise<void>;
 export function StageFile(arg1:string,arg2:string):Promise<void>;
 
 export function StageMergeFile(arg1:string,arg2:string):Promise<void>;
+
+export function StartFlow(arg1:string,arg2:string,arg3:string,arg4:string):Promise<gitflow.StartResult>;
 
 export function StashApply(arg1:string,arg2:number):Promise<void>;
 

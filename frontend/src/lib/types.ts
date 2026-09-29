@@ -400,3 +400,42 @@ export interface HunkPick {
 }
 
 export type HunkAction = 'stage' | 'unstage' | 'discard'
+
+export type FlowType = 'feature' | 'release' | 'hotfix' | 'warmfix'
+
+export interface FlowPrefixes { feature: string; release: string; hotfix: string; warmfix: string }
+
+/** A local branch whose name starts with a git-flow prefix. */
+export interface FlowBranch {
+  name: string
+  type: FlowType
+  short: string
+  /** gitflow.branch.<name>.base, '' when not recorded */
+  base: string
+  /** A finish already merged it into at least one target. */
+  inProgress: boolean
+}
+
+export interface Flow {
+  initialized: boolean
+  /** Set when the config names a master/develop that does not exist. */
+  problem: string
+  master: string
+  develop: string
+  prefixes: FlowPrefixes
+  current: FlowBranch | null
+  branches: FlowBranch[]
+  releases: string[]
+}
+
+export interface FlowConfig { master: string; develop: string; prefixes: FlowPrefixes }
+export interface FlowStartResult { branch: string; notes: string[] }
+export interface FlowStep { target: string; done: boolean }
+export interface FlowPlan { branch: string; type: FlowType; steps: FlowStep[]; ending: string }
+export interface FlowFinishResult {
+  outcome: 'finished' | 'conflicted'
+  target: string
+  conflicts: string[]
+  merged: string[]
+  notes: string[]
+}

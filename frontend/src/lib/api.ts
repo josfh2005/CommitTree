@@ -1,5 +1,5 @@
 import * as Go from '../../wailsjs/go/app/App'
-import type { AIMessage, AISettings, AIStatus, AheadBehind, Blame, ChatConfirmEvent, CommandLogView, CommandOutput, CommitInfo, ConflictFile, Details, Filters, GitSettings, HunkAction, HunkPick, Identity, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeDiff, WorktreeRemovalInfo, WorktreeState } from './types'
+import type { AIMessage, AISettings, AIStatus, AheadBehind, Blame, ChatConfirmEvent, CommandLogView, CommandOutput, CommitInfo, ConflictFile, Details, Filters, Flow, FlowConfig, FlowFinishResult, FlowPlan, FlowStartResult, FlowType, GitSettings, HunkAction, HunkPick, Identity, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeDiff, WorktreeRemovalInfo, WorktreeState } from './types'
 
 // The generated bindings use Wails model classes; the JSON is identical to our
 // interfaces, so cast at this single boundary.
@@ -72,6 +72,11 @@ export const api = {
   deleteTag: (id: string, name: string) => call<void>(Go.DeleteTag(id, name)),
 
   mergeBranch: (id: string, branch: string) => call<MergeResult>(Go.MergeBranch(id, branch)),
+  getFlow: (id: string) => call<Flow>(Go.GetFlow(id)),
+  initFlow: (id: string, cfg: FlowConfig) => call<void>(Go.InitFlow(id, cfg as any)),
+  startFlow: (id: string, type: FlowType, name: string, base: string) => call<FlowStartResult>(Go.StartFlow(id, type, name, base)),
+  planFinish: (id: string, branch: string, releases: string[]) => call<FlowPlan>(Go.PlanFinish(id, branch, releases)),
+  finishFlow: (id: string, branch: string, releases: string[]) => call<FlowFinishResult>(Go.FinishFlow(id, branch, releases)),
   rebaseOnto: (id: string, onto: string) => call<MergeResult>(Go.RebaseOnto(id, onto)),
   getRebasePreview: (id: string, onto: string) => call<RebasePreview>(Go.GetRebasePreview(id, onto)),
   cherryPick: (id: string, rev: string) => call<MergeResult>(Go.CherryPick(id, rev)),
