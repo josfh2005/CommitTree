@@ -13,6 +13,7 @@ vi.mock('./api', () => ({
     getWorktreeRemovalInfo: vi.fn(),
     removeWorktree: vi.fn().mockResolvedValue(undefined),
     mergeBranch: vi.fn().mockResolvedValue({ outcome: 0 }),
+    applyHunkSelection: vi.fn().mockResolvedValue(undefined),
   },
 }))
 
@@ -26,11 +27,11 @@ vi.mock('./ui', async (importOriginal) => {
   }
 })
 
-import { commitMerge, deleteBranch, deleteTag, removeWorktree, skipStep } from './actions'
+import { applyHunkSelection, commitMerge, deleteBranch, deleteTag, removeWorktree, skipStep } from './actions'
 import { api } from './api'
 import { filters, mergeState } from './stores'
 import type { Branch, Filters, MergeState, Repo, WorktreeRemovalInfo } from './types'
-import { confirmDialog, confirmDialogWithCheckbox } from './ui'
+import { confirmDialog, confirmDialogWithCheckbox, toasts } from './ui'
 
 function mergeStateOf(over: Partial<MergeState>): MergeState {
   return { kind: 'rebase', merging: true, from: 'feature', into: 'main', conflicts: [], manual: [], staged: [], unstaged: [], ...over }
@@ -319,5 +320,17 @@ describe('pickAndMerge', () => {
     await withRefs(true)
     await pickAndMerge('r1')
     expect(ui.pickDialog).not.toHaveBeenCalled()
+  })
+})
+
+describe('applyHunkSelection', () => {
+  // Undo always restores the repository's latest discard, so an older
+  // discard's toast must not stay around offering to bring its own back.
+  it('keeps only the latest discard toast of a repository', async () => {
+    toasts.set([])
+    await applyHunkSelection('r1', 'a.txt', false, 'h', [{ hunk: 0, lines: [] }], 'discard', '1 hunk')
+    await applyHunkSelection('r1', 'b.txt', false, 'h', [{ hunk: 0, lines: [1] }], 'discard', '1 line')
+    const undo = get(toasts).filter((t) => t.action?.label === 'Undo')
+    expect(undo.map((t) => t.message)).toEqual(['Discarded 1 line in b.txt'])
   })
 })

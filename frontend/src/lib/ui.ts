@@ -15,10 +15,11 @@ let nextToast = 1
 // A toast with an action is not auto-dismissed: it stays until the user acts
 // on it or dismisses it themselves, since the action is easy to miss if it
 // disappears on its own timer.
-export function toast(message: string, kind: Toast['kind'] = 'info', action?: Toast['action']) {
+export function toast(message: string, kind: Toast['kind'] = 'info', action?: Toast['action']): number {
   const id = nextToast++
   toasts.update((list) => [...list, { id, message, kind, action }])
   if (kind === 'info' && !action) setTimeout(() => dismissToast(id), 3000)
+  return id
 }
 
 export function dismissToast(id: number) {

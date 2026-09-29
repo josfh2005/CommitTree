@@ -1,4 +1,4 @@
-import type { HunkPick } from './types'
+import type { HunkPick, WorktreeDiff } from './types'
 
 export type RowKind = 'meta' | 'hunk' | 'context' | 'add' | 'del' | 'note'
 
@@ -106,3 +106,8 @@ export function pickSummary(picks: HunkPick[]): string {
   const n = picks.reduce((sum, p) => sum + p.lines.length, 0)
   return n === 1 ? '1 line' : `${n} lines`
 }
+
+/** selectionKey names the diff a line selection belongs to. Row indices stay
+ *  valid while it is unchanged, so a reload that brings back the same diff
+ *  (a window focus, an unrelated change) keeps the selection. */
+export const selectionKey = (path: string, staged: boolean, diff: WorktreeDiff) => `${staged ? 'staged' : 'unstaged'}:${diff.hash}:${path}`

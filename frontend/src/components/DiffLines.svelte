@@ -1,6 +1,6 @@
 <script lang="ts">
   import { applyHunkSelection } from '../lib/actions'
-  import { clickSelect, diffRows, emptySelection, pickSummary, rowKey, selectable, toPicks, type LineSelection } from '../lib/hunks'
+  import { clickSelect, diffRows, emptySelection, pickSummary, rowKey, selectable, selectionKey, toPicks, type LineSelection } from '../lib/hunks'
   import { busy } from '../lib/stores'
   import type { HunkAction, HunkPick, WorktreeDiff } from '../lib/types'
 
@@ -13,8 +13,10 @@
 
   $: parsed = diffRows(diff.text, diff.truncated)
   $: actionable = diff.patchable ? parsed.actionable : new Set<number>()
-  // A new diff (a reload after any change, or another file) drops the selection.
-  $: diff, (sel = emptySelection())
+  // Another file, section or diff content drops the selection; a reload that
+  // brings back the same diff (the key is a string, compared by value) keeps it.
+  $: key = selectionKey(path, staged, diff)
+  $: key, (sel = emptySelection())
   $: actions = (staged ? [['unstage', 'Unstage']] : [['stage', 'Stage'], ['discard', 'Discard']]) as [HunkAction, string][]
 
   function click(event: MouseEvent, index: number) {

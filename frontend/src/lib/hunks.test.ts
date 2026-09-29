@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clickSelect, diffRows, emptySelection, pickSummary, rowKey, toPicks } from './hunks'
+import { clickSelect, diffRows, emptySelection, pickSummary, rowKey, selectionKey, toPicks } from './hunks'
 
 const header = 'diff --git a/f.txt b/f.txt\nindex 1..2 100644\n--- a/f.txt\n+++ b/f.txt\n'
 const text = header + '@@ -1,3 +1,3 @@\n one\n-two\n+TWO\n\\ No newline at end of file\n@@ -10,2 +10,2 @@\n-ten\n+TEN\n'
@@ -74,5 +74,18 @@ describe('toPicks and pickSummary', () => {
     expect(pickSummary([{ hunk: 0, lines: [] }, { hunk: 1, lines: [] }])).toBe('2 hunks')
     expect(pickSummary([{ hunk: 0, lines: [1] }])).toBe('1 line')
     expect(pickSummary([{ hunk: 0, lines: [1] }, { hunk: 1, lines: [0, 1] }])).toBe('3 lines')
+  })
+})
+
+describe('selectionKey', () => {
+  const diff = { text: 'x', hash: 'h1', truncated: false, patchable: true }
+  it('is the same for a reload of the same diff, so the selection survives it', () => {
+    expect(selectionKey('f.txt', false, { ...diff })).toBe(selectionKey('f.txt', false, diff))
+  })
+  it('changes with the file, the section or the diff', () => {
+    const key = selectionKey('f.txt', false, diff)
+    expect(selectionKey('g.txt', false, diff)).not.toBe(key)
+    expect(selectionKey('f.txt', true, diff)).not.toBe(key)
+    expect(selectionKey('f.txt', false, { ...diff, hash: 'h2' })).not.toBe(key)
   })
 })

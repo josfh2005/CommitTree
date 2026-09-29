@@ -9,7 +9,7 @@ import { checkoutNotice } from './checkout'
 import { resetMessage } from './reset'
 import { discardMessage, neverCommitted } from './worktree'
 import { stashApplyAction } from './stash'
-import { choiceDialog, confirmDialog, confirmDialogWithCheckbox, errorMessage, pickDialog, promptDialog, toast } from './ui'
+import { choiceDialog, confirmDialog, confirmDialogWithCheckbox, dismissToast, errorMessage, pickDialog, promptDialog, toast } from './ui'
 import { mergeCandidates } from './toolbar'
 import { resolveRepoDrop } from './repoDrop'
 import { classifyGroupRename, renameCollapsedGroup } from './repoGroupRename'
@@ -264,10 +264,17 @@ const HUNK_BUSY: Record<HunkAction, string> = { stage: 'Staging…', unstage: 'U
 
 /** applyHunkSelection stages, unstages or discards part of one file. `what`
  *  ("1 hunk", "3 lines") names it in the discard toast, whose Undo puts it back. */
+// Undo restores a repository's latest discard only, so each new discard
+// replaces the previous discard's toast instead of leaving it offering an
+// Undo that would bring back something else.
+const discardToasts = new Map<string, number>()
+
 export async function applyHunkSelection(id: string, path: string, staged: boolean, hash: string, picks: HunkPick[], action: HunkAction, what: string) {
   const ok = await run(HUNK_BUSY[action], () => api.applyHunkSelection(id, path, staged, hash, picks, action))
   if (ok && action === 'discard') {
-    toast(`Discarded ${what} in ${path.split('/').pop()}`, 'info', { label: 'Undo', run: () => undoDiscard(id) })
+    const previous = discardToasts.get(id)
+    if (previous !== undefined) dismissToast(previous)
+    discardToasts.set(id, toast(`Discarded ${what} in ${path.split('/').pop()}`, 'info', { label: 'Undo', run: () => undoDiscard(id) }))
   }
 }
 
