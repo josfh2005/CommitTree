@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { abortWarning, commitWarning, conflictActions, conflictHeader, isEmptyStepError, mergeSections, sideLabel, skipWarning, takeLabels } from './merge'
+import { abortWarning, commitWarning, conflictActions, conflictHeader, isEmptyStepError, mergeSections, sideLabel, skipWarning, staleMergeChoice, takeLabels } from './merge'
 import type { MergeState } from './types'
 
 const state = (over: Partial<MergeState> = {}): MergeState => ({
@@ -174,5 +174,30 @@ describe('isEmptyStepError', () => {
     expect(isEmptyStepError('The previous cherry-pick is now empty, possibly due to conflict resolution.')).toBe(true)
     expect(isEmptyStepError('nothing to commit, working tree clean')).toBe(true)
     expect(isEmptyStepError('fatal: bad revision')).toBe(false)
+  })
+})
+
+describe('staleMergeChoice', () => {
+  it('offers the upstream first when the branch is behind', () => {
+    const c = staleMergeChoice('master', 'origin/master', 'release/21', { ahead: 0, behind: 3 })
+    expect(c.options).toEqual([
+      { value: 'origin/master', label: 'Merge origin/master' },
+      { value: 'master', label: 'Merge master as it is' },
+    ])
+    expect(c.value).toBe('origin/master')
+    expect(c.message('origin/master')).toBe(
+      'master is 3 commits behind origin/master — those commits are only on the remote. Merge origin/master into release/21? A merge commit is always created.',
+    )
+    expect(c.message('master')).toBe(
+      'Only what your local master has will be merged into release/21; the 3 newer commits on origin/master will not. A merge commit is always created.',
+    )
+    expect(c.confirmLabel('master')).toBe('Merge')
+  })
+
+  it('says what merging the upstream leaves out when the branch has its own commits', () => {
+    const c = staleMergeChoice('master', 'origin/master', 'main', { ahead: 2, behind: 1 })
+    expect(c.message('origin/master')).toBe(
+      'master is 1 commit behind origin/master and 2 ahead of it; merging origin/master leaves those 2 out. Merge origin/master into main? A merge commit is always created.',
+    )
   })
 })

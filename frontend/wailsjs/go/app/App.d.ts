@@ -26,6 +26,8 @@ export function CancelCommand(arg1:string,arg2:number):Promise<void>;
 
 export function CancelPull():Promise<void>;
 
+export function BranchCounts(arg1:string,arg2:string):Promise<ops.AheadBehind>;
+
 export function Checkout(arg1:string,arg2:string):Promise<void>;
 
 export function CheckoutDetached(arg1:string,arg2:string):Promise<void>;

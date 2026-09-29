@@ -22,6 +22,10 @@ export function CancelPull() {
   return window['go']['app']['App']['CancelPull']();
 }
 
+export function BranchCounts(arg1, arg2) {
+  return window['go']['app']['App']['BranchCounts'](arg1, arg2);
+}
+
 export function Checkout(arg1, arg2) {
   return window['go']['app']['App']['Checkout'](arg1, arg2);
 }

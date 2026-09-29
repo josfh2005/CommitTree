@@ -91,6 +91,17 @@ describe('mergeCandidates', () => {
   it('is empty without refs', () => {
     expect(mergeCandidates(null)).toEqual([])
   })
+  it('lists the branches on the selected commit first, once', () => {
+    const at = (name: string, remote: string, hash: string, current = false) => ({ name, remote, hash, current, upstream: '' })
+    const r = refs({
+      local: [at('main', '', 'm', true), at('master', '', 'old'), at('dev', '', 'new')],
+      remotes: [{ name: 'origin', branches: [at('HEAD', 'origin', 'new'), at('master', 'origin', 'new'), at('dev', 'origin', 'x')] }],
+    })
+    expect(mergeCandidates(r, 'new').map((c) => `${c.group}:${c.label}`)).toEqual([
+      'On selected commit:dev', 'On selected commit:origin/master', 'Local:master', 'Remote:origin/dev',
+    ])
+    expect(mergeCandidates(r, 'm').map((c) => c.group)).not.toContain('On selected commit')
+  })
 })
 
 describe('toolbarItems, follow-ups', () => {

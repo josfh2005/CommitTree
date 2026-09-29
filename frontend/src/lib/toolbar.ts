@@ -62,16 +62,19 @@ export function toolbarItems(i: ToolbarInput): ToolbarItem[] {
   ]
 }
 
-export interface MergeCandidate extends PickItem { group: 'Local' | 'Remote'; branch: Branch }
+export interface MergeCandidate extends PickItem { group: 'On selected commit' | 'Local' | 'Remote'; branch: Branch }
 
-/** mergeCandidates is what the Merge picker offers: local branches, then
- *  remote-tracking ones as remote/name, leaving out the current branch and
- *  a remote's HEAD symref. */
-export function mergeCandidates(refs: Refs | null): MergeCandidate[] {
+/** mergeCandidates is what the Merge picker offers: the branches on the
+ *  selected commit first (so the one picked in the log is at hand), then the
+ *  other local branches, then remote-tracking ones as remote/name, leaving
+ *  out the current branch and a remote's HEAD symref. */
+export function mergeCandidates(refs: Refs | null, selectedHash = ''): MergeCandidate[] {
   if (!refs) return []
   const local = refs.local.filter((b) => !b.current).map((b): MergeCandidate => ({ key: b.name, label: b.name, group: 'Local', branch: b }))
   const remote = refs.remotes.flatMap((r) =>
     r.branches.filter((b) => b.name !== 'HEAD').map((b): MergeCandidate => ({ key: `${r.name}/${b.name}`, label: `${r.name}/${b.name}`, group: 'Remote', branch: b })),
   )
-  return [...local, ...remote]
+  const all = [...local, ...remote]
+  const onSelected = (c: MergeCandidate) => selectedHash !== '' && c.branch.hash === selectedHash
+  return [...all.filter(onSelected).map((c): MergeCandidate => ({ ...c, group: 'On selected commit' })), ...all.filter((c) => !onSelected(c))]
 }

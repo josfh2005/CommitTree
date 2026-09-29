@@ -1,9 +1,9 @@
 import { get } from 'svelte/store'
 import { api } from './api'
-import { busy, chatOpen, collapsedRepoGroups, expandedRepos, filters, focusCommitBox, loadIdentity, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, refs, repos, selectRepo, selectUncommitted, selectedRepoId, stashConflictDismissed } from './stores'
+import { busy, chatOpen, collapsedRepoGroups, expandedRepos, filters, focusCommitBox, loadIdentity, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, refs, repos, selectRepo, selectUncommitted, selectedHash, selectedRepoId, stashConflictDismissed } from './stores'
 import type { Branch, FileStatus, MergeState, RebasePreview, Repo, ResetInfo, ResetMode, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
 import { PULL_UP_TO_DATE, UP_TO_DATE } from './types'
-import { abortWarning, commitWarning, isEmptyStepError, skipWarning, takeMessage } from './merge'
+import { abortWarning, commitWarning, isEmptyStepError, skipWarning, staleMergeChoice, takeMessage } from './merge'
 import { doneMessage, rebaseMessage } from './rebase'
 import { checkoutNotice } from './checkout'
 import { resetMessage } from './reset'
@@ -434,14 +434,37 @@ export function startFocusRefresh(): () => void {
   }
 }
 
-export async function mergeBranch(id: string, branch: Branch, into: string) {
+// staleCounts is how far a local branch is behind its upstream, or null
+// when there is nothing to warn about: a remote branch, no upstream, not
+// behind, or the counts could not be read.
+async function staleCounts(id: string, branch: Branch) {
+  if (branch.remote || !branch.upstream) return null
+  try {
+    const counts = await api.branchCounts(id, branch.name)
+    return counts.behind > 0 ? counts : null
+  } catch {
+    return null
+  }
+}
+
+// confirmMerge asks before merging and resolves to what to merge, or null.
+// A local branch behind its upstream gets a choice between the upstream and
+// the branch as it is; everything else the plain confirmation.
+async function confirmMerge(id: string, branch: Branch, into: string): Promise<string | null> {
   const label = branch.remote ? `${branch.remote}/${branch.name}` : branch.name
+  const counts = await staleCounts(id, branch)
+  if (counts) return choiceDialog(staleMergeChoice(branch.name, branch.upstream, into, counts))
   const ok = await confirmDialog({
     title: 'Merge branch',
     message: `Merge ${label} into ${into}? A merge commit is always created.`,
     confirmLabel: 'Merge',
   })
-  if (!ok) return
+  return ok ? label : null
+}
+
+export async function mergeBranch(id: string, branch: Branch, into: string) {
+  const label = await confirmMerge(id, branch, into)
+  if (label === null) return
   busy.set('Merging…')
   try {
     const result = await api.mergeBranch(id, label)
@@ -462,11 +485,12 @@ export function startCommit() {
   focusCommitBox.set(true)
 }
 
-/** The toolbar's Merge: pick a branch, then the usual merge confirmation. */
+/** The toolbar's Merge: pick a branch (the selected commit's first), then
+ *  the usual merge confirmation. */
 export async function pickAndMerge(id: string) {
   const current = get(refs)
   if (!current || current.detached) return
-  const candidates = mergeCandidates(current)
+  const candidates = mergeCandidates(current, get(selectedHash))
   const key = await pickDialog({
     title: `Merge into ${current.head}`,
     placeholder: 'Search branches…',

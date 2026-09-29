@@ -40,6 +40,16 @@ func (a *App) GetRemoteInfo(id string) (ops.AheadBehind, error) {
 	return ops.Counts(a.ctx, dir)
 }
 
+// BranchCounts is how far a local branch is from its upstream; the merge
+// confirmation uses it to warn about merging a stale branch.
+func (a *App) BranchCounts(id, branch string) (ops.AheadBehind, error) {
+	dir, err := a.dir(id)
+	if err != nil {
+		return ops.AheadBehind{}, err
+	}
+	return ops.BranchCounts(a.ctx, dir, branch)
+}
+
 func (a *App) gitSettingsFile() (string, error) {
 	if a.gitSettingsPath != "" {
 		return a.gitSettingsPath, nil

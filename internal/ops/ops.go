@@ -264,6 +264,24 @@ func Counts(ctx context.Context, dir string) (AheadBehind, error) {
 	return AheadBehind{Ahead: ahead, Behind: behind}, nil
 }
 
+// BranchCounts is how far a local branch and its upstream have diverged, as
+// the last fetch left them. Unlike Counts it reports a missing upstream as
+// an error, so a caller can tell "up to date" from "nothing to compare".
+func BranchCounts(ctx context.Context, dir, branch string) (AheadBehind, error) {
+	if err := checkRef(branch); err != nil {
+		return AheadBehind{}, err
+	}
+	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-list", "--left-right", "--count", branch+"..."+branch+"@{upstream}")
+	if err != nil {
+		return AheadBehind{}, err
+	}
+	var counts AheadBehind
+	if _, err := fmt.Sscan(out, &counts.Ahead, &counts.Behind); err != nil {
+		return AheadBehind{}, fmt.Errorf("ops: unexpected rev-list output %q", out)
+	}
+	return counts, nil
+}
+
 func checkRef(ref string) error {
 	if ref == "" || strings.HasPrefix(ref, "-") {
 		return fmt.Errorf("%w: %q", ErrInvalidRef, ref)

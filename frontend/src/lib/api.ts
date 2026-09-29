@@ -49,6 +49,7 @@ export const api = {
   push: (id: string) => call<void>(Go.Push(id)),
   pull: (id: string) => call<PullResult>(Go.Pull(id)),
   getRemoteInfo: (id: string) => call<AheadBehind>(Go.GetRemoteInfo(id)),
+  branchCounts: (id: string, branch: string) => call<AheadBehind>(Go.BranchCounts(id, branch)),
   getGitSettings: () => call<GitSettings>(Go.GetGitSettings()),
   saveGitSettings: (s: GitSettings) => call<void>(Go.SaveGitSettings(s as any)),
 

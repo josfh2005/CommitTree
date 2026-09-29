@@ -1,4 +1,5 @@
-import type { ConflictKind, MergeState } from './types'
+import type { AheadBehind, ConflictKind, MergeState } from './types'
+import type { ChoiceOptions } from './ui'
 
 export type MergeFileStatus = 'conflict' | 'manual' | 'unstaged' | 'staged'
 
@@ -156,5 +157,39 @@ export function abortWarning(state: MergeState): { title: string; message: strin
     title: label,
     message: `Throw away every resolution from ${what} and go back to where the branch was?`,
     confirmLabel: label,
+  }
+}
+
+const commits = (n: number) => `${n} commit${n === 1 ? '' : 's'}`
+
+/**
+ * staleMergeChoice is the merge confirmation for a local branch that is
+ * behind its upstream: merging it as it is leaves out the commits only the
+ * remote has, which is rarely what was meant. It offers the upstream first,
+ * and the branch as it is second.
+ */
+export function staleMergeChoice(branch: string, upstream: string, into: string, counts: AheadBehind): ChoiceOptions<string> {
+  const { ahead, behind } = counts
+  const tail = 'A merge commit is always created.'
+  return {
+    title: 'Merge branch',
+    label: 'What to merge',
+    options: [
+      { value: upstream, label: `Merge ${upstream}` },
+      { value: branch, label: `Merge ${branch} as it is` },
+    ],
+    value: upstream,
+    message: (v) => {
+      if (v === branch) {
+        const newer = behind === 1 ? 'newer commit' : `${behind} newer commits`
+        return `Only what your local ${branch} has will be merged into ${into}; the ${newer} on ${upstream} will not. ${tail}`
+      }
+      const state =
+        ahead > 0
+          ? `${branch} is ${commits(behind)} behind ${upstream} and ${ahead} ahead of it; merging ${upstream} leaves ${ahead === 1 ? 'that one' : `those ${ahead}`} out.`
+          : `${branch} is ${commits(behind)} behind ${upstream} — those commits are only on the remote.`
+      return `${state} Merge ${upstream} into ${into}? ${tail}`
+    },
+    confirmLabel: () => 'Merge',
   }
 }

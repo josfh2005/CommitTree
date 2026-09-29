@@ -401,3 +401,29 @@ func TestCheckoutConflictReturnsGitError(t *testing.T) {
 		t.Fatalf("want git overwrite error, got %v", err)
 	}
 }
+
+func TestBranchCounts(t *testing.T) {
+	a, _ := behindFeature(t)
+	if got, err := ops.BranchCounts(ctx, a.Dir, "feature"); err != nil || got != (ops.AheadBehind{Ahead: 0, Behind: 1}) {
+		t.Fatalf("behind: %+v, %v", got, err)
+	}
+
+	a.Git("switch", "-q", "feature")
+	a.Commit("local only")
+	a.Git("switch", "-q", "main")
+	if got, err := ops.BranchCounts(ctx, a.Dir, "feature"); err != nil || got != (ops.AheadBehind{Ahead: 1, Behind: 1}) {
+		t.Fatalf("diverged: %+v, %v", got, err)
+	}
+
+	if got, err := ops.BranchCounts(ctx, a.Dir, "main"); err != nil || got != (ops.AheadBehind{}) {
+		t.Fatalf("up to date: %+v, %v", got, err)
+	}
+
+	a.Git("branch", "loose")
+	if _, err := ops.BranchCounts(ctx, a.Dir, "loose"); err == nil {
+		t.Fatal("a branch with no upstream has no counts")
+	}
+	if _, err := ops.BranchCounts(ctx, a.Dir, "-x"); !errors.Is(err, ops.ErrInvalidRef) {
+		t.Fatalf("want ErrInvalidRef, got %v", err)
+	}
+}

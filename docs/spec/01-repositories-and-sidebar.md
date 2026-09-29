@@ -327,7 +327,7 @@ held, or if it is already the current branch); its context menu offers:
 | Action | Refused when |
 |---|---|
 | Check out | It is the current branch, or a write is already running. |
-| Merge `<branch>` into `<head>` | It is the current branch, a write is running, the head is detached, or a merge is already in progress. |
+| Merge `<branch>` into `<head>` | It is the current branch, a write is running, the head is detached, or a merge is already in progress. The confirmation asks "Merge `<branch>` into `<head>`? A merge commit is always created." When `<branch>` is a local branch behind its upstream (counted from the last fetch; nothing is fetched), it becomes a choice instead: "Merge `<upstream>`" (the default) or "Merge `<branch>` as it is", with a message naming how many commits only the upstream has (and, when the branch also has commits of its own, that merging the upstream leaves those out); the chosen one is merged. A remote-tracking branch, a branch without an upstream or not behind it, or counts that cannot be read keep the plain confirmation. |
 | Rebase `<head>` onto `<branch>` | It is the current branch, the head already contains it, a write is running, the head is detached, or any conflicted operation is in progress. Uncommitted changes to tracked files refuse it on click ("Commit or stash your changes first"). The confirmation states how many commits are replayed and warns, without blocking, when some are already on the upstream (a force-push, which the application does not offer, would be needed) or when merge commits in the range will be flattened. |
 | New branch from here… | Never. |
 | New tag here… | Never. |

@@ -84,15 +84,19 @@ per repository.
 
 The toolbar's Merge opens a dialog titled "Merge into <current branch>": a
 search field ("Search branches…", focused), a list and Cancel / Merge. The
-list holds the local branches under "Local", then the remote-tracking ones
-as `remote/name` under "Remote"; the current branch and a remote's `HEAD`
-are left out. Typing filters the list by any part of the name, ignoring case
+list holds the branches on the commit selected in the log under "On selected
+commit" (local and remote-tracking, so the branch picked in the log is at
+hand), then the other local branches under "Local", then the other
+remote-tracking ones as `remote/name` under "Remote"; no branch is listed
+twice, the group is absent when no other branch is on the selected commit,
+and the current branch and a remote's `HEAD` are left out. Typing filters the list by any part of the name, ignoring case
 (`log` finds `feature/login`); with no match it reads "No branches match"
 and Merge is disabled. The first item is selected when the dialog opens and
 after every change to the search; ↑/↓ move the selection, Enter or a double
 click confirms, Escape or a click outside cancels. Confirming runs the same
 merge as the branch menu's "Merge `<branch>` into `<head>`": its
-confirmation, its "already up to date" message, its conflicts and submodule
+confirmation (including the choice offered for a local branch behind its
+upstream), its "already up to date" message, its conflicts and submodule
 warnings are unchanged.
 
 ### Fetch
