@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -346,5 +347,44 @@ func TestOpenWithoutGroupFieldLoadsUngrouped(t *testing.T) {
 	list := s.List()
 	if len(list) != 1 || list[0].ID != "abc123def456" || list[0].Group != "" {
 		t.Fatalf("list = %+v, want one ungrouped entry", list)
+	}
+}
+
+// Reorder rewrites the stored order, which is the sidebar's manual order:
+// unknown ids are ignored, ids left out keep their relative order at the end,
+// and the order survives a reopen.
+func TestReorderPersists(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "repos.json")
+	s, _ := repos.Open(file)
+	var ids []string
+	for range 3 {
+		added, err := s.Add(ctx, testrepo.New(t).Dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, added.ID)
+	}
+	a, b, c := ids[0], ids[1], ids[2]
+
+	if err := s.Reorder([]string{c, "nope", a}); err != nil {
+		t.Fatal(err)
+	}
+	order := func(list []repos.Repo) []string {
+		out := []string{}
+		for _, r := range list {
+			out = append(out, r.ID)
+		}
+		return out
+	}
+	want := []string{c, a, b}
+	if got := order(s.List()); !slices.Equal(got, want) {
+		t.Fatalf("order = %v, want %v", got, want)
+	}
+	reopened, err := repos.Open(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := order(reopened.List()); !slices.Equal(got, want) {
+		t.Fatalf("reopened order = %v, want %v", got, want)
 	}
 }

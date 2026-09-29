@@ -162,6 +162,8 @@ export function RemoveWorktree(arg1:string,arg2:boolean,arg3:boolean):Promise<vo
 
 export function RenameRepoGroup(arg1:string,arg2:string):Promise<void>;
 
+export function ReorderRepos(arg1:Array<string>):Promise<void>;
+
 export function ResetBranch(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function ResetPrompt(arg1:string):Promise<void>;

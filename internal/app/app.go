@@ -327,6 +327,12 @@ func (a *App) SetRepoGroup(id, group string) error {
 	return a.store.SetGroup(id, group)
 }
 
+// ReorderRepos sets the stored order of the repositories, which the sidebar
+// shows in its manual order. See repos.Store.Reorder.
+func (a *App) ReorderRepos(ids []string) error {
+	return a.store.Reorder(ids)
+}
+
 // RenameRepoGroup renames every repository in oldName to newName. See
 // repos.Store.RenameGroup for the merge and no-op semantics.
 func (a *App) RenameRepoGroup(oldName, newName string) error {

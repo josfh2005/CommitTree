@@ -151,6 +151,38 @@ func (s *Store) SetGroup(id, group string) error {
 	return ErrUnknownRepo
 }
 
+// Reorder rewrites the stored order, which the sidebar uses as its manual
+// order, to follow ids: ids naming no stored repository are ignored, and
+// repositories ids leaves out keep their relative order after the others.
+func (s *Store) Reorder(ids []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	byID := make(map[string]Repo, len(s.repos))
+	for _, r := range s.repos {
+		byID[r.ID] = r
+	}
+	next := make([]Repo, 0, len(s.repos))
+	placed := make(map[string]bool, len(s.repos))
+	for _, id := range ids {
+		if r, ok := byID[id]; ok && !placed[id] {
+			next = append(next, r)
+			placed[id] = true
+		}
+	}
+	for _, r := range s.repos {
+		if !placed[r.ID] {
+			next = append(next, r)
+		}
+	}
+	old := s.repos
+	s.repos = next
+	if err := s.save(); err != nil {
+		s.repos = old
+		return err
+	}
+	return nil
+}
+
 // RenameGroup moves every repository in oldName to newName, in a single
 // persisted write. Renaming to the current name is a no-op. Renaming to a
 // name that already has repositories under it merges the two groups — a
