@@ -5,7 +5,8 @@
   import { checkoutBranch, deleteBranch, deleteTag, mergeBranch, newBranch, newTag, rebaseOnto, stashApply, stashDrop, stashPop } from '../lib/actions'
   import { groupBranches, leafName, type BranchGroup } from '../lib/branches'
   import { rebaseBlocker } from '../lib/rebase'
-  import { busy, expandedStashSections, repos, expandedTagSections, filters, mainView, mergeState, refs, selectRepo, selectStash, selectedRepoId, selectedStash, stashEntries, toggleStashExpanded, toggleTagsExpanded } from '../lib/stores'
+  import { busy, expandedStashSections, repos, expandedTagSections, filters, loadSideRefs, mainView, mergeState, refs, selectRepo, selectStash, selectedRepoId, selectedStash, sideRefs, stashEntries, toggleStashExpanded, toggleTagsExpanded } from '../lib/stores'
+  import { refsView } from '../lib/repoRefs'
   import type { Branch, StashEntry, Tag } from '../lib/types'
   import { openMenu, openMenuAsync } from '../lib/ui'
 
@@ -16,6 +17,18 @@
   export let submodulePath = ''
 
   let showRemotes = true
+  // This repository's own refs and stash: the live stores when it is the
+  // selected one, its sideRefs entry otherwise (never the selected one's).
+  $: view = refsView(repoId, $selectedRepoId, { refs: $refs, stash: $stashEntries }, $sideRefs)
+  $: repoRefs = view.refs
+  $: stash = view.stash
+  // A repository expanded but not selected loads its own refs, and reloads
+  // them whenever the repository list is re-read (after an action, a fetch or
+  // a window focus) or it stops being the selected one.
+  $: if (repoId !== $selectedRepoId) reloadSide($repos)
+  function reloadSide(_list: unknown) {
+    loadSideRefs(repoId)
+  }
   // git keeps one stash per repository, shared by all of its worktrees.
   $: isWorktree = !!$repos.find((r) => r.id === repoId)?.worktree
   $: parentId = $repos.find((r) => r.id === repoId)?.parentId ?? ''
@@ -25,7 +38,7 @@
   const branchRef = (b: Branch) => (b.remote ? `refs/remotes/${b.remote}/${b.name}` : `refs/heads/${b.name}`)
   const branchLabel = (b: Branch) => (b.remote ? `${b.remote}/${b.name}` : b.name)
 
-  $: local = groupBranches($refs?.local ?? [])
+  $: local = groupBranches(repoRefs?.local ?? [])
 
   // A group opens on demand, and on its own when it holds the current branch
   // or the branch the log is filtered by. `open` is taken as a parameter
@@ -47,7 +60,7 @@
   $: groupsByKey = {
     ...Object.fromEntries(local.groups.map((g) => [`local:${g.name}`, g])),
     ...Object.fromEntries(
-      ($refs?.remotes ?? []).flatMap((remote) =>
+      (repoRefs?.remotes ?? []).flatMap((remote) =>
         groupBranches(remote.branches).groups.map((g) => [`${remote.name}:${g.name}`, g]),
       ),
     ),
@@ -62,11 +75,11 @@
   }
 
   function branchMenu(event: MouseEvent, b: Branch) {
-    const head = $refs?.head ?? ''
+    const head = repoRefs?.head ?? ''
     openMenuAsync(event, async () => {
       const contained = b.current ? false : await api.isAncestorOfHead(repoId, branchLabel(b)).catch(() => false)
       const rebaseWhy = rebaseBlocker(
-        { isHead: b.current, contained, detached: !!$refs?.detached, busy: !!$busy, kind: $mergeState?.merging ? $mergeState.kind : '' },
+        { isHead: b.current, contained, detached: !!repoRefs?.detached, busy: !!$busy, kind: $mergeState?.merging ? $mergeState.kind : '' },
         head,
         branchLabel(b),
       )
@@ -75,7 +88,7 @@
         {
           label: `Merge ${branchLabel(b)} into ${head}`,
           action: () => mergeBranch(repoId, b, head),
-          disabled: b.current || !!$busy || !!$refs?.detached || !!$mergeState?.merging,
+          disabled: b.current || !!$busy || !!repoRefs?.detached || !!$mergeState?.merging,
         },
         {
           label: `Rebase ${head} onto ${branchLabel(b)}`,
@@ -114,7 +127,7 @@
   }
 </script>
 
-{#if $refs}
+{#if repoRefs}
   <div class="refs">
     {#if submodulePath}
       <button class="row-item ref breadcrumb" title="Back to the repository" on:click={() => selectRepo(parentId)}>
@@ -127,10 +140,10 @@
         <Icon name="plus" size={14} />
       </button>
     </div>
-    {#if $refs.detached}
+    {#if repoRefs.detached}
       <div class="row-item ref detached">
         <span class="mark"><Icon name="check" size={12} /></span>
-        <span class="mono">HEAD ({$refs.headHash.slice(0, 8)})</span>
+        <span class="mono">HEAD ({repoRefs.headHash.slice(0, 8)})</span>
       </div>
     {/if}
     {#each local.loose as b (b.name)}
@@ -166,12 +179,12 @@
       {/if}
     {/each}
 
-    {#if $refs.remotes.length}
+    {#if repoRefs.remotes.length}
       <div class="section">
         <button class="section-title" on:click={() => (showRemotes = !showRemotes)}>Remotes</button>
       </div>
       {#if showRemotes}
-        {#each $refs.remotes as remote (remote.name)}
+        {#each repoRefs.remotes as remote (remote.name)}
           {@const grouped = groupBranches(remote.branches)}
           <button class="row-item ref" on:click={() => (openRemotes = { ...openRemotes, [remote.name]: !openRemotes[remote.name] })}>
             <span class="mark"><Icon name={openRemotes[remote.name] ? 'chevron-down' : 'chevron-right'} size={12} /></span>
@@ -223,14 +236,14 @@
     <div class="section">
       <span class="section-heading">
         <button class="section-title" on:click={() => toggleTagsExpanded(repoId)}>Tags</button>
-        <span class="count">{$refs.tags.length}</span>
+        <span class="count">{repoRefs.tags.length}</span>
       </span>
       <button class="icon-btn" title="New tag at HEAD" on:click={() => newTag(repoId, 'HEAD', 'HEAD')}>
         <Icon name="plus" size={14} />
       </button>
     </div>
     {#if $expandedTagSections.includes(repoId)}
-      {#each $refs.tags as t (t.name)}
+      {#each repoRefs.tags as t (t.name)}
         <button
           class="row-item ref"
           class:active={$filters.branch === `refs/tags/${t.name}`}
@@ -251,11 +264,11 @@
           class="section-title"
           title={isWorktree ? 'Shared with the main repository and its other worktrees' : undefined}
           on:click={() => toggleStashExpanded(repoId)}>Stash</button>
-        <span class="count">{$stashEntries.length}</span>
+        <span class="count">{stash.length}</span>
       </span>
     </div>
     {#if $expandedStashSections.includes(repoId)}
-      {#each $stashEntries as entry (entry.index)}
+      {#each stash as entry (entry.index)}
         <button
           class="row-item ref"
           class:active={repoId === $selectedRepoId && $mainView === 'stash' && $selectedStash?.hash === entry.hash}

@@ -139,6 +139,10 @@
   .body { padding-bottom: 12px; }
   .repo { padding: 0 4px 0 4px; gap: 4px; }
   .repo.dragging { opacity: 0.5; }
+  /* The selected repository: the selection background plus an accent bar at
+     its left edge, so it is found at a glance among expanded repositories. */
+  .repo.active { background: var(--selection); box-shadow: inset 3px 0 0 var(--accent); }
+  .repo.active .branch { color: var(--accent); font-weight: 500; }
   .fold { width: 20px; height: 20px; flex: none; }
   .fold:disabled { opacity: 0; }
   .select { flex: 1; min-width: 0; height: 100%; display: flex; align-items: center; gap: 8px; color: var(--muted); }

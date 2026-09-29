@@ -19,6 +19,7 @@
 <button
   class="row-item ref"
   class:active
+  class:checked-out={branch.current}
   style="padding-left: calc(var(--row-base-indent) + {depth} * var(--row-indent-step))"
   title={elsewhere || title || text}
   on:click={() => onSelect?.(branch)}
@@ -33,6 +34,10 @@
 <style>
   .ref { height: 26px; }
   .mark { width: 12px; flex: none; display: inline-grid; place-items: center; color: var(--accent); }
-  .current { font-weight: 500; }
+  .current { font-weight: 600; }
+  /* The branch checked out: a soft accent tint so it stands out among its
+     siblings; a row selected as the log filter keeps its own background. */
+  .checked-out:not(.active) { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  .checked-out:not(.active):hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
   .wt { margin-left: auto; flex: none; font-size: 11px; padding: 0 6px; border-radius: 4px; background: var(--hover); color: var(--muted); }
 </style>

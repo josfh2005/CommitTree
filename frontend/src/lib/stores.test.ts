@@ -249,3 +249,28 @@ describe('theme', () => {
     expect(get(theme)).toBe('light')
   })
 })
+
+describe('loadSideRefs', () => {
+  it('keeps each repository\'s own refs and stash', async () => {
+    const { api } = await import('./api')
+    const { loadSideRefs, repos, sideRefs } = await import('./stores')
+    repos.set([{ id: 'a', name: 'a', path: '/a' }, { id: 'b', name: 'b', path: '/b' }] as never)
+    Object.assign(api, {
+      getRefs: vi.fn(async (id: string) => ({ head: id === 'a' ? 'main' : 'develop' })),
+      getStashEntries: vi.fn(async (id: string) => (id === 'a' ? [{ index: 0 }] : [])),
+    })
+    await loadSideRefs('a')
+    await loadSideRefs('b')
+    const got = get(sideRefs)
+    expect(got.a.refs?.head).toBe('main')
+    expect(got.a.stash).toHaveLength(1)
+    expect(got.b.refs?.head).toBe('develop')
+  })
+
+  it('leaves a missing repository without refs', async () => {
+    const { loadSideRefs, repos, sideRefs } = await import('./stores')
+    repos.set([{ id: 'gone', name: 'gone', path: '/gone', missing: true }] as never)
+    await loadSideRefs('gone')
+    expect(get(sideRefs).gone).toEqual({ refs: null, stash: [] })
+  })
+})

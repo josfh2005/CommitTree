@@ -284,9 +284,20 @@ expanded, independently of whether refs loaded. The current branch (or
 `HEAD (<short-hash>)` when the head is detached) is not part of this list; a
 detached head is shown as its own, non-interactive row above the branches.
 
+Every expanded repository shows its own branches, remotes, tags and stash,
+never the selected repository's. The selected repository's sections follow
+the live state every action refreshes; any other expanded repository reads
+its own when it is expanded, and again whenever the repository list is
+re-read (after an action, a fetch or a window focus) and when it stops
+being the selected one. Until they have loaded its sections stay hidden.
+
 An opened submodule (see Submodules below) shows this same set of sections
 except Submodules itself — its own submodules, if any, are already part of
 the top repository's flat list.
+
+The selected repository's row stands out from every other: it has the
+selection background, an accent-coloured bar along its left edge, its name
+in bold and its branch label in the accent colour.
 
 The selected repository's row shows, after its branch, a small count of
 its uncommitted changes (distinct changed paths) when the working tree has
@@ -306,8 +317,10 @@ directory has been deleted but that git has not pruned yet — git still holds
 the branch for it — and the tooltip then adds that the directory is gone and
 `git worktree prune` releases it.
 
-Local branches whose name contains no `/` are listed loose, each showing a
-checkmark next to the current branch. A "+" control next to the section
+Local branches whose name contains no `/` are listed loose. The current
+branch shows a checkmark, its name in bold and a soft accent-tinted
+background (unless it is the branch the log is filtered by, which keeps that
+row's own highlight). A "+" control next to the section
 heading creates a new branch from `HEAD`. Local branches whose name does
 contain a `/` are grouped by the first path segment (so `feature/x` and
 `feature/y` fall under a `feature` group, and a name only one level deep

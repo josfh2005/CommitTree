@@ -5,6 +5,7 @@ import { validSelectedStash, type SelectedStash } from './stash'
 import { nextSelection } from './submodules'
 import { emptyFilters, type AISettings, type AheadBehind, type Filters, type GitSettings, type Identity, type LogOrder, type MergeState, type Refs, type Repo, type StashEntry, type WorktreeState } from './types'
 import { isLogOrder } from './logOrder'
+import type { RepoRefsData } from './repoRefs'
 import { removeRepoTabs, terminalState } from './terminal'
 import { isThemePref, resolveTheme, type ThemePref } from './theme'
 
@@ -230,6 +231,9 @@ export const selectedStash = writable<SelectedStash | null>(null)
 
 export const remoteInfo = writable<AheadBehind | null>(null)
 export const stashEntries = writable<StashEntry[]>([])
+/** Refs and stash of every expanded repository other than the selected one,
+ *  by repository id, so each shows its own branches (see refsView). */
+export const sideRefs = writable<Record<string, RepoRefsData>>({})
 export const gitSettings = writable<GitSettings | null>(null)
 // The index a conflicted stash pop still owes a drop for, or -1.
 export const owedStashDrop = writable<number>(-1)
@@ -290,6 +294,24 @@ export async function loadRefs() {
     refs.set(await api.getRefs(repo.id))
   } catch {
     refs.set(null)
+  }
+}
+
+/** loadSideRefs reads one non-selected, expanded repository's refs and
+ *  stash into sideRefs. A missing repository, or one whose refs fail to
+ *  load, is stored empty so its sections stay hidden. */
+export async function loadSideRefs(id: string) {
+  const repo = get(repos).find((r) => r.id === id)
+  const store = (data: RepoRefsData) => sideRefs.update((m) => ({ ...m, [id]: data }))
+  if (!repo || repo.missing) {
+    store({ refs: null, stash: [] })
+    return
+  }
+  try {
+    const [refsOf, stash] = await Promise.all([api.getRefs(id), api.getStashEntries(id).catch(() => [] as StashEntry[])])
+    store({ refs: refsOf, stash })
+  } catch {
+    store({ refs: null, stash: [] })
   }
 }
 
