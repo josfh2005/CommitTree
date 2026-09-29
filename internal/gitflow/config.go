@@ -67,6 +67,9 @@ type FlowBranch struct {
 	// InProgress: a finish already merged the branch into at least one of
 	// its targets (a merge commit whose second parent is the branch tip).
 	InProgress bool `json:"inProgress"`
+	// baseKey is the config key Base came from, as spelled there: its case
+	// may differ from Name's (SourceTree's Warmfix/ vs warmfix/).
+	baseKey string
 }
 
 type Flow struct {
@@ -191,6 +194,18 @@ func Read(ctx context.Context, dir string) (Flow, error) {
 	if err != nil {
 		return f, err
 	}
+	// Branch names are compared ignoring case: on a case-insensitive
+	// filesystem a branch created as warmfix/X inside an existing Warmfix/
+	// directory is listed as Warmfix/X while HEAD and its base key say
+	// warmfix/X.
+	bases := map[string][2]string{}
+	for key, value := range cfg {
+		if name, ok := strings.CutPrefix(key, "gitflow.branch."); ok {
+			if name, ok := strings.CutSuffix(name, ".base"); ok {
+				bases[strings.ToLower(name)] = [2]string{key, value}
+			}
+		}
+	}
 	current := currentBranch(ctx, dir)
 	for _, line := range strings.Split(out, "\n") {
 		name, tip, _ := strings.Cut(line, "\t")
@@ -198,7 +213,8 @@ func Read(ctx context.Context, dir string) (Flow, error) {
 		if !ok {
 			continue
 		}
-		b := FlowBranch{Name: name, Type: typ, Short: short, Base: cfg["gitflow.branch."+name+".base"]}
+		base := bases[strings.ToLower(name)]
+		b := FlowBranch{Name: name, Type: typ, Short: short, Base: base[1], baseKey: base[0]}
 		if typ == Release {
 			f.Releases = append(f.Releases, name)
 		}
@@ -209,7 +225,7 @@ func Read(ctx context.Context, dir string) (Flow, error) {
 			}
 		}
 		f.Branches = append(f.Branches, b)
-		if name == current {
+		if current != "" && strings.EqualFold(name, current) {
 			cur := b
 			f.Current = &cur
 		}

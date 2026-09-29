@@ -74,5 +74,12 @@ toast or from the menu — always carries on where it stopped. Nothing about
 the interrupted finish is stored on disk; aborting the merge only drops the
 offer, and the branch stays under "In progress".
 
-An error part-way (a hook rejecting a merge, a target checked out in another
-worktree) is reported with the targets already merged; Finish again continues.
+Before anything moves, Finish also refuses when the branch, or a target that
+still needs it, is checked out in another worktree ("develop is checked out
+in another worktree (<path>); switch away from it there first"). An error
+part-way (a hook rejecting a merge) is reported with the targets already
+merged; Finish again continues.
+
+Branch names and their `.base` keys are matched ignoring case, because on a
+case-insensitive filesystem a branch created as `warmfix/X` next to
+SourceTree's `Warmfix/…` branches is listed as `Warmfix/X`.

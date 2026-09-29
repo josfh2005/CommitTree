@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"git-ui/internal/merge"
@@ -47,7 +48,7 @@ func lookup(ctx context.Context, dir, branch string) (Flow, FlowBranch, error) {
 		return f, FlowBranch{}, errors.New(f.Problem)
 	}
 	for _, b := range f.Branches {
-		if b.Name == branch {
+		if strings.EqualFold(b.Name, branch) {
 			return f, b, nil
 		}
 	}
@@ -106,15 +107,35 @@ func Finish(ctx context.Context, dir, branch string, releases []string) (FinishR
 	if err != nil {
 		return res, err
 	}
+	branch = b.Name
 	res.Notes = append(res.Notes, fetchNotes(ctx, dir)...)
-	// Bring every target up to date before the first merge, so a diverged
-	// one stops the finish with nothing changed.
+	// Everything that can stop the finish is checked before anything
+	// moves: a branch busy in another worktree, a diverged target.
+	elsewhere, err := worktreeBranches(ctx, dir)
+	if err != nil {
+		return res, err
+	}
+	if path, ok := elsewhere[branch]; ok {
+		return res, fmt.Errorf("%s is checked out in another worktree (%s); switch away from it there first", branch, path)
+	}
+	var pending []string
 	for _, t := range ts {
-		if done, err := isAncestor(ctx, dir, branch, t); err != nil {
+		done, err := isAncestor(ctx, dir, branch, t)
+		if err != nil {
 			return res, err
-		} else if done {
+		}
+		if done {
 			continue
 		}
+		if path, ok := elsewhere[t]; ok {
+			return res, fmt.Errorf("%s is checked out in another worktree (%s); switch away from it there first", t, path)
+		}
+		if err := checkBranch(ctx, dir, t); err != nil {
+			return res, err
+		}
+		pending = append(pending, t)
+	}
+	for _, t := range pending {
 		note, err := syncBranch(ctx, dir, t)
 		if err != nil {
 			return res, err
@@ -161,11 +182,42 @@ func Finish(ctx context.Context, dir, branch string, releases []string) (FinishR
 	if _, err := git(ctx, dir, "branch", "-D", branch); err != nil {
 		return fail(err)
 	}
-	if b.Base != "" {
-		if _, err := git(ctx, dir, "config", "--unset", "gitflow.branch."+branch+".base"); err != nil {
+	if b.baseKey != "" {
+		if _, err := git(ctx, dir, "config", "--unset", b.baseKey); err != nil {
 			return fail(err)
 		}
 	}
 	res.Outcome = "finished"
 	return res, nil
+}
+
+// worktreeBranches maps each branch checked out in another worktree of the
+// repository to that worktree's path.
+func worktreeBranches(ctx context.Context, dir string) (map[string]string, error) {
+	top, err := git(ctx, dir, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return nil, err
+	}
+	out, err := git(ctx, dir, "worktree", "list", "--porcelain")
+	if err != nil {
+		return nil, err
+	}
+	here := realPath(top)
+	busy := map[string]string{}
+	path := ""
+	for _, line := range strings.Split(out, "\n") {
+		if p, ok := strings.CutPrefix(line, "worktree "); ok {
+			path = p
+		} else if ref, ok := strings.CutPrefix(line, "branch refs/heads/"); ok && realPath(path) != here {
+			busy[ref] = path
+		}
+	}
+	return busy, nil
+}
+
+func realPath(p string) string {
+	if r, err := filepath.EvalSymlinks(p); err == nil {
+		return r
+	}
+	return p
 }
