@@ -2,13 +2,13 @@
   import CommitBox from './CommitBox.svelte'
   import FileList, { rowKey } from './FileList.svelte'
   import SubmoduleDiffView from './SubmoduleDiff.svelte'
+  import DiffLines from './DiffLines.svelte'
   import { api } from '../lib/api'
   import { discardFile, stageFile, unstageFile, updateSubmodule } from '../lib/actions'
   import { blameBlocker } from '../lib/blame'
-  import { lineClass } from '../lib/diff'
   import { hasStagedChanges, nextSelection, worktreeSections, type SelectionKey } from '../lib/worktree'
   import { parseSubmoduleDiff, submoduleRepoId, type SubmoduleDiff } from '../lib/submodules'
-  import type { FileStatus } from '../lib/types'
+  import type { FileStatus, WorktreeDiff } from '../lib/types'
   import { busy, openBlame, repos, selectRepo, worktreeState } from '../lib/stores'
   import { errorMessage, openMenu, toast } from '../lib/ui'
 
@@ -19,7 +19,7 @@
   // moves the file to a different section — see nextSelection. `selected` is
   // just its rowKey(...) projection, for FileList's highlighting/onSelect.
   let selection: SelectionKey | null = null
-  let text = ''
+  let diff: WorktreeDiff | null = null
   let error = ''
   let request = 0
 
@@ -41,7 +41,7 @@
   // flash of an empty "Submodule <path>" box. Only a successfully parsed,
   // content-only, unstaged row (pointer hasn't moved, nothing to stage or
   // update here) gets its note overridden to say why.
-  $: sub = selectedFile?.submodule ? submoduleDiffFor(text, selectedFile) : null
+  $: sub = selectedFile?.submodule ? submoduleDiffFor(diff?.text ?? '', selectedFile) : null
   $: subRepoId = selectedFile?.submodule ? submoduleRepoId($repos, repoId, selectedFile.path) : undefined
 
   function submoduleDiffFor(diffText: string, file: FileStatus): SubmoduleDiff | null {
@@ -75,12 +75,12 @@
   async function open(file: FileStatus) {
     const current = ++request
     selection = { section: fileSection.get(file) ?? '', path: file.path }
-    text = ''
+    diff = null
     error = ''
     try {
-      const diff = await api.getWorktreeDiff(repoId, file.path, isStaged(file))
+      const next = await api.getWorktreeDiff(repoId, file.path, isStaged(file))
       if (current !== request) return
-      text = diff.text
+      diff = next
     } catch (e) {
       if (current === request) error = errorMessage(e)
     }
@@ -97,9 +97,9 @@
     const path = selection.path
     const staged = selection.section === 'Staged'
     try {
-      const diff = await api.getWorktreeDiff(repoId, path, staged)
+      const next = await api.getWorktreeDiff(repoId, path, staged)
       if (current !== request) return
-      text = diff.text
+      diff = next
       error = ''
     } catch (e) {
       if (current === request) error = errorMessage(e)
@@ -177,10 +177,8 @@
         <div class="error">{error}</div>
       {:else if sub}
         <SubmoduleDiffView diff={sub} onOpen={subRepoId ? () => selectRepo(subRepoId) : null} />
-      {:else}
-        {#each text.split('\n') as line}
-          <div class="line {lineClass(line)}">{line || ' '}</div>
-        {/each}
+      {:else if diff && selection}
+        <DiffLines {repoId} path={selection.path} staged={selection.section === 'Staged'} {diff} />
       {/if}
     </div>
   </div>
@@ -190,12 +188,7 @@
 <style>
   .changes { display: flex; flex-direction: column; height: 100%; }
   .body { display: grid; grid-template-columns: minmax(260px, 36%) 1fr; flex: 1; min-height: 0; }
-  .content { overflow: auto; padding: 8px 0; -webkit-user-select: text; user-select: text; }
-  .line { padding: 0 12px; white-space: pre; line-height: 18px; }
-  .add { background: var(--add-bg); }
-  .del { background: var(--del-bg); }
-  .hunk { color: var(--accent); }
-  .meta { color: var(--faint); }
+  .content { overflow: auto; padding: 0 0 8px; -webkit-user-select: text; user-select: text; }
   .error { padding: 12px; color: var(--danger); white-space: pre-wrap; }
   .empty { padding: 12px; color: var(--faint); }
 </style>

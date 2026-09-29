@@ -74,8 +74,10 @@ rather than handed to the view whole, so a single very large file cannot
 freeze the interface.
 
 Diff lines are coloured by their leading character: `+` lines as additions,
-`-` lines as deletions, `@@` hunk headers and `diff`/`index`/`+++`/`---`
-lines as metadata; everything else is plain.
+`-` lines as deletions, `@@` hunk headers and the `diff`/`index`/`+++`/`---`
+lines before the first hunk as metadata; everything else is plain. Inside a
+hunk a line is read by its first character only, so an added `++ x` (shown
+`+++ x`) is an addition, not metadata.
 
 A changed path that is a submodule shows git's `--submodule=log` summary
 instead of an ordinary diff: the old and new commit it points at, plus the
@@ -96,6 +98,36 @@ saying so plus an "Open submodule" link that selects it as a repository
 pointer has not moved — its own content is dirty but there is nothing to
 stage or update here — that note is replaced with "Commit inside the
 submodule first".
+
+### Acting on part of a file
+
+A file whose change is a plain text modification (status `M`: not added,
+deleted, renamed, copied, type-changed, binary or a submodule) can be acted
+on by hunk or by line from its diff. Every other file keeps only the
+file-level actions.
+
+- Each hunk header carries **Stage hunk** and **Discard hunk** for a file in
+  Unstaged, or **Unstage hunk** for a file in Staged. Discarding from Staged
+  is only offered for the whole file.
+- A click on a `+` or `-` line selects it; Shift+click selects the change
+  lines between the last clicked line and this one; Cmd+click (Ctrl+click)
+  adds or removes one line. Context and header lines cannot be selected. A
+  drag still selects text for copying. Esc clears the selection.
+- With lines selected, a bar at the top of the diff shows the count and
+  **Stage lines** / **Discard lines** (Unstaged) or **Unstage lines**
+  (Staged). Staging some lines of a hunk leaves the others unstaged, and so
+  on for the other two actions.
+- The last hunk of a truncated diff has no actions, since it may be cut short.
+- The action is refused, with "The file changed since it was shown —
+  reloaded", when the file's diff changed after it was shown (an edit in an
+  editor or a terminal); the diff then reloads and nothing is changed.
+- A hunk or line discard is not confirmed. It shows "Discarded 1 hunk in
+  `<file>`" (or "N lines") with **Undo**, which stays until dismissed. Undo
+  puts the discarded lines back; only the last discard of the repository can
+  be undone, and only while the app is open. If those lines changed since,
+  Undo reports "Can't undo: the file changed since the discard" and changes
+  nothing.
+- All buttons are disabled while another write is running.
 
 ## Staging, unstaging and discarding
 
