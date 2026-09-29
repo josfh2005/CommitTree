@@ -14,6 +14,8 @@ vi.mock('./api', () => ({
     removeWorktree: vi.fn().mockResolvedValue(undefined),
     mergeBranch: vi.fn().mockResolvedValue({ outcome: 0 }),
     applyHunkSelection: vi.fn().mockResolvedValue(undefined),
+    setRepoGroup: vi.fn().mockResolvedValue(undefined),
+    reorderRepos: vi.fn().mockResolvedValue(undefined),
   },
 }))
 
@@ -27,7 +29,7 @@ vi.mock('./ui', async (importOriginal) => {
   }
 })
 
-import { applyHunkSelection, commitMerge, deleteBranch, deleteTag, removeWorktree, skipStep } from './actions'
+import { applyHunkSelection, commitMerge, placeRepo, placeRepoGroup, setRepoSortOrder, deleteBranch, deleteTag, removeWorktree, skipStep } from './actions'
 import { api } from './api'
 import { filters, mergeState } from './stores'
 import type { Branch, Filters, MergeState, Repo, WorktreeRemovalInfo } from './types'
@@ -332,5 +334,39 @@ describe('applyHunkSelection', () => {
     await applyHunkSelection('r1', 'b.txt', false, 'h', [{ hunk: 0, lines: [1] }], 'discard', '1 line')
     const undo = get(toasts).filter((t) => t.action?.label === 'Undo')
     expect(undo.map((t) => t.message)).toEqual(['Discarded 1 line in b.txt'])
+  })
+})
+
+describe('manual repository order', () => {
+  const repo = (id: string, group = ''): Repo => ({ id, name: id, path: `/r/${id}`, missing: false, branch: 'main', ...(group ? { group } : {}) }) as Repo
+
+  it('starts the first manual arrangement from the by-name order, once', async () => {
+    const { repos, repoSortOrder, repoManualSeeded } = await import('./stores')
+    repoManualSeeded.set(false)
+    repos.set([repo('b'), repo('a')])
+    vi.mocked(api.reorderRepos).mockClear()
+    await setRepoSortOrder('manual')
+    expect(api.reorderRepos).toHaveBeenCalledWith(['a', 'b'])
+    expect(get(repoSortOrder)).toBe('manual')
+    await setRepoSortOrder('name')
+    await setRepoSortOrder('manual')
+    expect(api.reorderRepos).toHaveBeenCalledTimes(1)
+  })
+
+  it('places a repository in another group at the drop spot', async () => {
+    const { repos } = await import('./stores')
+    repos.set([repo('a'), repo('c', 'work'), repo('d', 'work')])
+    vi.mocked(api.reorderRepos).mockClear()
+    await placeRepo('a', { group: 'work', beforeId: 'd' })
+    expect(api.setRepoGroup).toHaveBeenCalledWith('a', 'work')
+    expect(api.reorderRepos).toHaveBeenCalledWith(['c', 'a', 'd'])
+  })
+
+  it('moves a group as a block', async () => {
+    const { repos } = await import('./stores')
+    repos.set([repo('a', 'work'), repo('b', 'home')])
+    vi.mocked(api.reorderRepos).mockClear()
+    await placeRepoGroup('home', 'work')
+    expect(api.reorderRepos).toHaveBeenCalledWith(['b', 'a'])
   })
 })

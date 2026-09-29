@@ -5,6 +5,9 @@ import type { Repo } from './types'
  *  (e.g. dragging text or a file) and ignore it. */
 export const REPO_DRAG_MIME = 'application/x-git-ui-repo'
 
+/** Drag data type for a group header dragged to reorder groups (manual order). */
+export const GROUP_DRAG_MIME = 'application/x-git-ui-repo-group'
+
 /** Where a repo can be dropped: the loose (ungrouped) area is `''`, same
  *  as `Repo.group`'s "no group" value; anything else names a group. */
 export interface RepoDropTarget {

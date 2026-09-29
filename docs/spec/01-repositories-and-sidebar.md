@@ -236,10 +236,26 @@ collapsed group with an expanded one, the result is collapsed.
 
 ### Layout
 
-Loose repositories are listed first, followed by one section per group,
-sorted alphabetically by group name. Within the loose area and within every
-group, repositories are sorted by display name, ignoring case and accents,
-with the path breaking ties — never by the order they were added.
+Loose repositories are listed first, followed by one section per group.
+The order button next to the "Repos" heading chooses how the rest is
+ordered, and the choice is remembered:
+
+- **By name** (the default): groups are sorted alphabetically by name, and
+  within the loose area and every group repositories are sorted by display
+  name, ignoring case and accents, with the path breaking ties — never by
+  the order they were added. Dragging a repository only moves it into or
+  out of a group (see Groups).
+- **Manual (drag to arrange)**: repositories and groups keep the order the
+  user arranges. Dropping a repository on another repository row places it
+  just above that row — in the same area, or in that row's group, moving it
+  there — with an accent line marking the spot; dropping it on a group's
+  header or on the empty space of an area puts it at the end of that group
+  or area. A group header can be dragged too: over the upper half of another
+  group it lands above that group, over the lower half below it. A newly
+  added repository goes to the end of the loose area. The first switch to
+  manual order starts from the by-name order, so nothing moves; later
+  switches back and forth keep the manual arrangement, which is stored with
+  the repository list.
 
 A repository's detected worktrees are rows directly under its own row (after
 its expanded sections, when it is expanded), indented one level deeper and

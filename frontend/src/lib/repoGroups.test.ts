@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compareRepos, groupRepos, type RepoNode } from './repoGroups'
+import { compareRepos, groupRepos, moveGroup, moveRepo, nameOrder, type RepoNode } from './repoGroups'
 import type { Repo } from './types'
 
 const r = (id: string, extra: Partial<Repo> = {}): Repo => ({
@@ -81,5 +81,62 @@ describe('groupRepos', () => {
 describe('compareRepos', () => {
   it('orders by name then path', () => {
     expect(compareRepos(r('a', { name: 'X' }), r('b', { name: 'x', path: '/z' }))).toBeLessThan(0)
+  })
+})
+
+describe('groupRepos in manual order', () => {
+  const repos = [r('c'), r('b', { group: 'work' }), r('a'), r('z', { group: 'home' }), r('y', { group: 'work' })]
+
+  it('keeps the stored order of repositories and groups', () => {
+    const { loose, groups } = groupRepos(repos, 'manual')
+    expect(ids(loose)).toEqual(['c', 'a'])
+    expect(groups.map((g) => [g.name, ids(g.repos)])).toEqual([
+      ['work', ['b', 'y']],
+      ['home', ['z']],
+    ])
+  })
+
+  it('still lists worktrees under their repository by name', () => {
+    const list = [r('main'), r('wt-b', { parentId: 'main' }), r('wt-a', { parentId: 'main' })]
+    expect(groupRepos(list, 'manual').loose[0].children.map((c) => c.id)).toEqual(['wt-a', 'wt-b'])
+  })
+})
+
+describe('moveRepo', () => {
+  const repos = [r('a'), r('b'), r('c', { group: 'work' }), r('d', { group: 'work' })]
+
+  it('places a repository before another in the same area', () => {
+    expect(moveRepo(repos, 'b', { group: '', beforeId: 'a' })).toEqual(['b', 'a', 'c', 'd'])
+  })
+
+  it('places a repository inside another group at the spot it was dropped', () => {
+    expect(moveRepo(repos, 'a', { group: 'work', beforeId: 'd' })).toEqual(['b', 'c', 'a', 'd'])
+  })
+
+  it('puts a repository at the end of a group when dropped on its empty space', () => {
+    expect(moveRepo(repos, 'a', { group: 'work', beforeId: null })).toEqual(['b', 'c', 'd', 'a'])
+  })
+
+  it('puts a repository at the end of the loose area', () => {
+    expect(moveRepo(repos, 'c', { group: '', beforeId: null })).toEqual(['a', 'b', 'c', 'd'])
+  })
+})
+
+describe('moveGroup', () => {
+  const repos = [r('a'), r('b', { group: 'work' }), r('c', { group: 'home' }), r('d', { group: 'work' })]
+
+  it('moves a group\'s repositories as a block before another group', () => {
+    expect(moveGroup(repos, 'home', 'work')).toEqual(['a', 'c', 'b', 'd'])
+  })
+
+  it('moves a group to the end', () => {
+    expect(moveGroup(repos, 'work', null)).toEqual(['a', 'c', 'b', 'd'])
+  })
+})
+
+describe('nameOrder', () => {
+  it('is the by-name display order, the start of a first manual arrangement', () => {
+    const repos = [r('c'), r('b', { group: 'work' }), r('a'), r('z', { group: 'home' })]
+    expect(nameOrder(repos)).toEqual(['a', 'c', 'z', 'b'])
   })
 })

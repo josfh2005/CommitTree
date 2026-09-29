@@ -1,6 +1,6 @@
 import { get } from 'svelte/store'
 import { api } from './api'
-import { busy, chatOpen, collapsedRepoGroups, expandedRepos, filters, focusCommitBox, loadIdentity, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, refs, repos, selectRepo, selectUncommitted, selectedHash, selectedRepoId, stashConflictDismissed } from './stores'
+import { busy, chatOpen, collapsedRepoGroups, expandedRepos, filters, focusCommitBox, loadIdentity, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, refs, repoManualSeeded, repos, repoSortOrder, selectRepo, selectUncommitted, selectedHash, selectedRepoId, stashConflictDismissed } from './stores'
 import type { Branch, FileStatus, HunkAction, HunkPick, MergeState, RebasePreview, Repo, ResetInfo, ResetMode, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
 import { PULL_UP_TO_DATE, UP_TO_DATE } from './types'
 import { abortWarning, commitWarning, isEmptyStepError, skipWarning, staleMergeChoice, takeMessage } from './merge'
@@ -12,6 +12,7 @@ import { stashApplyAction } from './stash'
 import { choiceDialog, confirmDialog, confirmDialogWithCheckbox, dismissToast, errorMessage, pickDialog, promptDialog, toast } from './ui'
 import { mergeCandidates } from './toolbar'
 import { resolveRepoDrop } from './repoDrop'
+import { moveGroup, moveRepo, nameOrder, type RepoPlace, type RepoSortOrder } from './repoGroups'
 import { classifyGroupRename, renameCollapsedGroup } from './repoGroupRename'
 import { movedMessage, updateMessage } from './submodules'
 import { removeRepoTabs, terminalState } from './terminal'
@@ -182,6 +183,50 @@ export async function dropRepoOnGroup(repoId: string, group: string) {
 
   try {
     await api.setRepoGroup(repo.id, next)
+    await loadRepos()
+  } catch (e) {
+    toast(errorMessage(e), 'error')
+  }
+}
+
+/** setRepoSortOrder switches the sidebar between by-name and manual order.
+ *  The first switch to manual stores the by-name order, so the list does not
+ *  jump to the order repositories were added in; later switches keep the
+ *  manual arrangement. */
+export async function setRepoSortOrder(order: RepoSortOrder) {
+  if (order === 'manual' && !get(repoManualSeeded)) {
+    try {
+      await api.reorderRepos(nameOrder(get(repos)))
+      repoManualSeeded.set(true)
+      await loadRepos()
+    } catch (e) {
+      toast(errorMessage(e), 'error')
+      return
+    }
+  }
+  repoSortOrder.set(order)
+}
+
+/** placeRepo drops a repository at `place` in manual order: into another
+ *  group when the place is in one, then at that spot of the stored order. */
+export async function placeRepo(repoId: string, place: RepoPlace) {
+  const list = get(repos)
+  const repo = list.find((r) => r.id === repoId)
+  if (!repo) return
+  try {
+    if ((repo.group ?? '') !== place.group) await api.setRepoGroup(repoId, place.group)
+    await api.reorderRepos(moveRepo(list, repoId, place))
+    await loadRepos()
+  } catch (e) {
+    toast(errorMessage(e), 'error')
+  }
+}
+
+/** placeRepoGroup moves a whole group before another one (or to the end). */
+export async function placeRepoGroup(name: string, before: string | null) {
+  if (name === before) return
+  try {
+    await api.reorderRepos(moveGroup(get(repos), name, before))
     await loadRepos()
   } catch (e) {
     toast(errorMessage(e), 'error')

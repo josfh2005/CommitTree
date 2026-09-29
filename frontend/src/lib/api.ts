@@ -15,6 +15,7 @@ export const api = {
   removeWorktree: (id: string, force: boolean, deleteBranch: boolean) => call<void>(Go.RemoveWorktree(id, force, deleteBranch)),
   setRepoGroup: (id: string, group: string) => call<void>(Go.SetRepoGroup(id, group)),
   renameRepoGroup: (oldName: string, newName: string) => call<void>(Go.RenameRepoGroup(oldName, newName)),
+  reorderRepos: (ids: string[]) => call<void>(Go.ReorderRepos(ids)),
 
   getRefs: (id: string) => call<Refs>(Go.GetRefs(id)),
   getLog: (id: string, filters: Filters, order: LogOrder, offset: number, limit: number) =>

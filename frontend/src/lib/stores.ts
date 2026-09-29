@@ -5,6 +5,7 @@ import { validSelectedStash, type SelectedStash } from './stash'
 import { nextSelection } from './submodules'
 import { emptyFilters, type AISettings, type AheadBehind, type Filters, type GitSettings, type Identity, type LogOrder, type MergeState, type Refs, type Repo, type StashEntry, type WorktreeState } from './types'
 import { isLogOrder } from './logOrder'
+import { isRepoSortOrder, type RepoSortOrder } from './repoGroups'
 import type { RepoRefsData } from './repoRefs'
 import { removeRepoTabs, terminalState } from './terminal'
 import { isThemePref, resolveTheme, type ThemePref } from './theme'
@@ -106,6 +107,11 @@ export const collapsedRepoGroups = persisted<string[]>('collapsedRepoGroups', []
  *  in a per-repo backend setting (contrast gitSettings below, which is
  *  per-repository and backend-owned). */
 export const logOrder = persisted<LogOrder>('logOrder', 'topo', isLogOrder)
+/** The sidebar's repository order (see groupRepos), and whether a manual
+ *  arrangement has been started yet: the first switch to manual starts from
+ *  the by-name order (setRepoSortOrder), later ones keep what was arranged. */
+export const repoSortOrder = persisted<RepoSortOrder>('repoSortOrder', 'name', isRepoSortOrder)
+export const repoManualSeeded = persisted<boolean>('repoManualSeeded', false, (v): v is boolean => typeof v === 'boolean')
 
 export const repos = writable<Repo[]>([])
 export const refs = writable<Refs | null>(null)
