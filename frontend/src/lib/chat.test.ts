@@ -398,10 +398,17 @@ describe('decisionCard', () => {
 
 describe('choiceState', () => {
   it('follows the recorded result', () => {
-    expect(choiceState({})).toBe('pending')
     expect(choiceState({ summary: 'Shown to the user as a card with 2 options; they will choose' })).toBe('pending')
     expect(choiceState({ summary: 'The user chose "remove" for x (region y); it was written.' })).toBe('chosen')
     expect(choiceState({ summary: 'Settled another way: region y of x is no longer in conflict.' })).toBe('settled')
+  })
+})
+
+describe('choiceState without a card', () => {
+  it('is null until the tool accepted the card, and when it refused it', () => {
+    expect(choiceState({})).toBeNull()
+    expect(choiceState({ summary: 'Not shown: a card has 2 to 4 options, not 5.' })).toBeNull()
+    expect(choiceState({ summary: 'Option "x": Not applied: your resolution starts with …' })).toBeNull()
   })
 })
 

@@ -385,6 +385,11 @@ describe('chooseRegionOption', () => {
     expect(await chooseRegionOption('r', 'c1', -1, 'mine\n', 'a.txt')).toBe(true)
     expect(get(toasts).map((t) => t.message)).toContain('Region resolved')
   })
+  it('says nothing when the region was already settled another way', async () => {
+    vi.mocked(api.chooseRegionOption).mockResolvedValue({ left: 0, staged: false, settled: true })
+    expect(await chooseRegionOption('r', 'c1', 0, '', 'a.txt')).toBe(true)
+    expect(get(toasts)).toEqual([])
+  })
   it('shows the error and reports failure', async () => {
     vi.mocked(api.chooseRegionOption).mockRejectedValue(new Error('the AI is busy'))
     expect(await chooseRegionOption('r', 'c1', 0, '', 'a.txt')).toBe(false)

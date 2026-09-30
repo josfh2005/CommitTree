@@ -229,12 +229,13 @@
             {:else}
               {@const tool = part.tool}
               {@const card = decisionCard(tool)}
-              {#if card && tool.id}
+              {@const cardState = card && tool.id ? choiceState(tool) : null}
+              {#if card && tool.id && cardState}
                 {@const id = tool.id}
                 <div class="confirm decision">
                   <div class="confirm-title">{card.path} · region {card.region}</div>
                   <div class="decision-question">{card.question}</div>
-                  {#if choiceState(tool) === 'pending'}
+                  {#if cardState === 'pending'}
                     {#each card.options as opt, k}
                       <label class="decision-option">
                         <input type="radio" name={id} checked={(pick[id] ?? 0) === k} on:change={() => (pick = { ...pick, [id]: k })} />
@@ -258,7 +259,7 @@
                       {#if state.runID !== null}<span class="decision-wait">Available when the AI finishes</span>{/if}
                       <button class="btn primary" disabled={state.runID !== null || applying[id]} on:click={() => applyChoice(id, card)}>Apply</button>
                     </div>
-                  {:else if choiceState(tool) === 'chosen'}
+                  {:else if cardState === 'chosen'}
                     <div class="confirm-result">{tool.summary}</div>
                   {:else}
                     <div class="confirm-result">Settled another way</div>

@@ -275,6 +275,10 @@ func regionsLeft(path string, n int) string {
 	return fmt.Sprintf("%s has %d conflict(s) left, numbered 0 to %d; regions renumber after each resolve, so the next one is region 0.", path, n, n-1)
 }
 
+// CardShown starts propose_options' result when the card was accepted; the
+// app only lets the user answer a card whose result starts with it.
+const CardShown = "Shown to the user as a card"
+
 // Option is one choice of a propose_options card.
 type Option struct{ Label, Text string }
 
@@ -341,7 +345,7 @@ func proposeOptions(ctx context.Context, dir string, args map[string]any) string
 		}
 		labels[label], texts[o.Text] = true, true
 	}
-	return fmt.Sprintf("Shown to the user as a card with %d options; they will choose after you finish. Do not resolve this region yourself; carry on with the rest.", len(opts))
+	return fmt.Sprintf(CardShown+" with %d options; they will choose after you finish. Do not resolve this region yourself; carry on with the rest.", len(opts))
 }
 
 func stageFile(ctx context.Context, dir string, args map[string]any) (string, bool) {

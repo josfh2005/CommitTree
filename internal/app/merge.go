@@ -48,6 +48,9 @@ type ConflictFile struct {
 type RegionResult struct {
 	Left   int  `json:"left"`
 	Staged bool `json:"staged"`
+	// Settled: a decision card's region was already resolved another way,
+	// so nothing was written.
+	Settled bool `json:"settled"`
 }
 
 // MergeBranch merges branch into the repository's current branch. A
@@ -424,7 +427,9 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 			RunTool: func(ctx context.Context, call ai.ToolCall, step int) string {
 				nudge.saw(call)
 				if isMergeTool(call.Name) {
-					return a.runMergeTool(ctx, repoID, startedFor, sides, call)
+					out := a.runMergeTool(ctx, repoID, startedFor, sides, call)
+					nudge.carded(call, out)
+					return out
 				}
 				return tools.Run(ctx, repo.Path, call)
 			},
@@ -478,6 +483,42 @@ type resolveNudge struct {
 	dir, startedFor string
 	asks            int
 	read            map[string]bool // read_conflict paths since the last nudge
+	cards           map[string]bool // path + "\x00" + region id left as cards
+}
+
+// carded notes a region the model left to the user as a card (a
+// propose_options call the tool accepted).
+func (n *resolveNudge) carded(call ai.ToolCall, result string) {
+	if call.Name != "propose_options" || !strings.HasPrefix(result, shownMark) {
+		return
+	}
+	path, _ := call.Args["path"].(string)
+	region, _ := call.Args["region"].(string)
+	if n.cards == nil {
+		n.cards = map[string]bool{}
+	}
+	n.cards[path+"\x00"+region] = true
+}
+
+// allCarded reports whether every region still open in the conflicted
+// files has a card: the model has nothing left to do.
+func (n *resolveNudge) allCarded(conflicts []string) bool {
+	for _, path := range conflicts {
+		data, err := os.ReadFile(filepath.Join(n.dir, path))
+		if err != nil {
+			return false
+		}
+		hunks, err := merge.Parse(string(data))
+		if err != nil || len(hunks) == 0 {
+			return false
+		}
+		for _, h := range hunks {
+			if !n.cards[path+"\x00"+h.ID] {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // saw notes a tool call of the run (calls and Continue share its goroutine).
@@ -501,6 +542,9 @@ func (n *resolveNudge) next(ctx context.Context) string {
 	if err != nil || !st.Merging || len(st.Conflicts) == 0 {
 		return ""
 	}
+	if n.allCarded(st.Conflicts) {
+		return ""
+	}
 	if n.asks > 0 && !slices.ContainsFunc(st.Conflicts, func(p string) bool { return !n.read[p] }) {
 		return ""
 	}
@@ -509,7 +553,8 @@ func (n *resolveNudge) next(ctx context.Context) string {
 	n.read = nil
 	return "CommitTree: you stopped, but git still reports these files in conflict:\n" + left +
 		"\nCarry on with read_conflict, resolve_hunk and stage_file; a file whose regions are all resolved still needs stage_file. " +
-		"If you are leaving a region for the user on purpose, call propose_options for it (or, if even the options are unclear, name it and say why in one line), then stop."
+		"If you are leaving a region for the user on purpose, call propose_options for it (or, if even the options are unclear, name it and say why in one line), then stop. " +
+		"Regions you already left as cards are the user's: do not resolve them or propose them again."
 }
 
 // resolveSummary is what git says is left once a resolve run ends, or ""
@@ -579,6 +624,7 @@ type ChatChoiceEvent struct {
 }
 
 const (
+	shownMark   = mergetools.CardShown
 	choseMark   = "The user chose "
 	settledMark = "Settled another way"
 )
@@ -614,8 +660,12 @@ func (a *App) ChooseRegionOption(repoID, callID string, option int, text string)
 	if result < 0 || call.Name != "propose_options" {
 		return RegionResult{}, fmt.Errorf("no such choice %q", callID)
 	}
-	if c := history[result].Content; strings.HasPrefix(c, choseMark) || strings.HasPrefix(c, settledMark) {
+	switch c := history[result].Content; {
+	case strings.HasPrefix(c, choseMark) || strings.HasPrefix(c, settledMark):
 		return RegionResult{}, errors.New("this card was already decided")
+	case !strings.HasPrefix(c, shownMark):
+		// The tool refused these options; no card was shown.
+		return RegionResult{}, fmt.Errorf("no such choice %q", callID)
 	}
 	path, _ := call.Args["path"].(string)
 	region, _ := call.Args["region"].(string)
@@ -636,7 +686,7 @@ func (a *App) ChooseRegionOption(repoID, callID string, option int, text string)
 	switch {
 	case errors.Is(err, merge.ErrNoSuchRegion) || (errors.Is(err, merge.ErrNotInMerge) && a.stillMerging(repoID)):
 		summary = fmt.Sprintf("%s: region %s of %s is no longer in conflict.", settledMark, region, path)
-		res = RegionResult{}
+		res = RegionResult{Settled: true}
 	case err != nil:
 		return RegionResult{}, err
 	default:

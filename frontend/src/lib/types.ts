@@ -351,6 +351,8 @@ export interface Region {
 export interface RegionResult {
   left: number
   staged: boolean
+  // A decision card whose region was already resolved another way.
+  settled?: boolean
 }
 
 export type RegionChoice = 'ours' | 'theirs' | 'both' | 'text'

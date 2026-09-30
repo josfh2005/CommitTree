@@ -268,10 +268,17 @@ def proposed_paths(chat_file):
     """Paths the resolver left as cards (propose_options calls) in a chat history."""
     with open(chat_file, encoding="utf-8") as f:
         messages = json.load(f)
+    # A call's result is the k-th tool message after its assistant message
+    # for its k-th call; only cards the tool accepted (or that were since
+    # answered) were shown to the user.
+    shown = ("Shown to the user as a card", "The user chose ", "Settled another way")
     out = set()
-    for m in messages:
-        for c in m.get("toolCalls") or []:
-            if c.get("name") == "propose_options":
+    for i, m in enumerate(messages):
+        for k, c in enumerate(m.get("toolCalls") or []):
+            if c.get("name") != "propose_options":
+                continue
+            j = i + 1 + k
+            if j < len(messages) and messages[j].get("role") == "tool" and messages[j].get("content", "").startswith(shown):
                 out.add((c.get("args") or {}).get("path"))
     return out
 

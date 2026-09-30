@@ -843,8 +843,8 @@ func TestChooseRegionOptionOnASettledRegion(t *testing.T) {
 	if _, err := a.ResolveMergeRegion(id, "greeting.txt", f.Regions[0].ID, "ours", ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.ChooseRegionOption(id, callID, 1, ""); err != nil {
-		t.Fatalf("err = %v, want nil (settled another way)", err)
+	if res, err := a.ChooseRegionOption(id, callID, 1, ""); err != nil || !res.Settled {
+		t.Fatalf("res = %+v, err = %v, want settled another way", res, err)
 	}
 	if got := storedContent(t, a, id, 3); !strings.HasPrefix(got, "Settled another way") {
 		t.Fatalf("tool message = %q", got)
@@ -906,5 +906,68 @@ func TestChooseRegionOptionRefusals(t *testing.T) {
 	}
 	if _, err := a.ChooseRegionOption(id, callID, 1, ""); err == nil || !strings.Contains(err.Error(), "already decided") {
 		t.Errorf("second choice: %v", err)
+	}
+}
+
+// A region left as a card is the user's: once every region still open has
+// a card, the model is done and is not told to carry on.
+func TestResolveNudgeLeavesCardedRegionsAlone(t *testing.T) {
+	r := testrepo.New(t)
+	for _, f := range []string{"a.txt", "b.txt"} {
+		r.WriteFile(f, "base\n")
+	}
+	r.Git("add", ".")
+	r.Git("commit", "-q", "-m", "base")
+	r.Git("switch", "-q", "-c", "feature")
+	r.WriteFile("a.txt", "theirs\n")
+	r.WriteFile("b.txt", "theirs\n")
+	r.Git("commit", "-q", "-am", "theirs")
+	r.Git("switch", "-q", "main")
+	r.WriteFile("a.txt", "ours\n")
+	r.WriteFile("b.txt", "ours\n")
+	r.Git("commit", "-q", "-am", "ours")
+	ctx := context.Background()
+	if _, err := merge.Start(ctx, r.Dir, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	card := func(n *resolveNudge, path string, result string) {
+		data, _ := os.ReadFile(filepath.Join(r.Dir, path))
+		hunks, _ := merge.Parse(string(data))
+		n.carded(ai.ToolCall{Name: "propose_options", Args: map[string]any{"path": path, "region": hunks[0].ID}}, result)
+	}
+
+	n := &resolveNudge{dir: r.Dir, startedFor: merge.Fingerprint(ctx, r.Dir)}
+	card(n, "a.txt", "Shown to the user as a card with 2 options; …")
+	card(n, "b.txt", "Not shown: a card has 2 to 4 options, not 5.")
+	msg := n.next(ctx)
+	if !strings.Contains(msg, "b.txt") || !strings.Contains(msg, "do not resolve them or propose them again") {
+		t.Fatalf("nudge = %q", msg)
+	}
+
+	n = &resolveNudge{dir: r.Dir, startedFor: merge.Fingerprint(ctx, r.Dir)}
+	card(n, "a.txt", "Shown to the user as a card with 2 options; …")
+	card(n, "b.txt", "Shown to the user as a card with 3 options; …")
+	if msg := n.next(ctx); msg != "" {
+		t.Fatalf("nudged with every open region carded: %q", msg)
+	}
+}
+
+func TestChooseRegionOptionRefusesACardTheToolRefused(t *testing.T) {
+	a, r, id, _ := newAIMergeApp(t, "http://127.0.0.1:0")
+	if _, err := a.MergeBranch(id, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	callID := withCard(t, a, id)
+	h, _ := a.ai.deps.Chats.Load(id)
+	h[3].Content = `Option "hola (feature)": Not applied: your resolution starts with …`
+	if err := a.ai.deps.Chats.Save(id, h); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(filepath.Join(r.Dir, "greeting.txt"))
+	if _, err := a.ChooseRegionOption(id, callID, 1, ""); err == nil || !strings.Contains(err.Error(), "no such choice") {
+		t.Fatalf("err = %v", err)
+	}
+	if after, _ := os.ReadFile(filepath.Join(r.Dir, "greeting.txt")); string(after) != string(before) {
+		t.Fatal("wrote a refused card's option")
 	}
 }

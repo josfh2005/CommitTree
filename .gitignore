@@ -5,3 +5,4 @@ frontend/dist/
 helpers/apple/.build/
 build/icon-previews/
 .aider*
+__pycache__/

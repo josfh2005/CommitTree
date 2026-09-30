@@ -334,11 +334,18 @@ an AI run is working on the repository the card is shown but Apply is
 disabled, with "Available when the AI finishes" — the card is answered after
 the run, not during it.
 
+The card only appears once the tool has accepted the options: options it
+refused (too few or too many, repeated, with conflict markers, or failing
+the resolution checks) show as an ordinary tool row, and cannot be applied.
+When every region still in conflict has a card, the resolver is not told to
+carry on.
+
 Once answered the card shrinks to one line saying what was chosen; if the
 region was settled some other way first (the region buttons, or the file
 edited outside), Apply turns the card into "Settled another way" instead.
-The choice is recorded in the chat's history, so the card keeps its state
-after a reload, and a later chat with the model knows what was chosen. If
+The choice is recorded in the chat's history, in place of the tool's
+result, so the card keeps its state after a reload; a later chat with the
+model sees it while that result is still among the recent ones sent back. If
 the operation was committed or aborted meanwhile, Apply shows git's error
 and the card stays as it was. A card can be answered once. Files without
 conflict markers never get a card; they keep their Take buttons.

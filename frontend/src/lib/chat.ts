@@ -370,12 +370,14 @@ export function decisionCard(tool: Pick<ChatToolUse, 'name' | 'args'>): Decision
 export type ChoiceState = 'pending' | 'chosen' | 'settled'
 
 /** What a decision card shows, read from its recorded tool result (the
- *  backend rewrites it when the user chooses). */
-export function choiceState(tool: Pick<ChatToolUse, 'summary'>): ChoiceState {
+ *  backend rewrites it when the user chooses) — or null when there is no
+ *  card: the result has not arrived yet, or the tool refused the options. */
+export function choiceState(tool: Pick<ChatToolUse, 'summary'>): ChoiceState | null {
   const s = tool.summary ?? ''
+  if (s.startsWith('Shown to the user as a card')) return 'pending'
   if (s.startsWith('The user chose ')) return 'chosen'
   if (s.startsWith('Settled another way')) return 'settled'
-  return 'pending'
+  return null
 }
 
 /** Records a card's answer on its tool, found by call id in any item. */

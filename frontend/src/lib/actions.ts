@@ -646,7 +646,8 @@ export async function chooseRegionOption(repoID: string, callID: string, option:
   busy.set('Resolving…')
   try {
     const res = await api.chooseRegionOption(repoID, callID, option, text)
-    toast(res.staged ? `${path} resolved and staged` : 'Region resolved')
+    // Settled another way: nothing was written; the card says so itself.
+    if (!res.settled) toast(res.staged ? `${path} resolved and staged` : 'Region resolved')
     return true
   } catch (e) {
     toast(errorMessage(e), 'error')
