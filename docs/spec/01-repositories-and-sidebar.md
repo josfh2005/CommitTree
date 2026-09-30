@@ -280,9 +280,10 @@ repository.
 
 ## Selection
 
-Clicking a repository row selects it. Selecting a repository that is already
-folded also unfolds it, so its branches/remotes/tags/stash become visible;
-folding it back afterwards does not deselect it. Switching the selected
+Clicking a repository row selects it and loads its log, without unfolding
+its branches/remotes/tags/stash: those show or hide with the row's chevron,
+or by double-clicking the row. Folding or unfolding never changes the
+selection. Switching the selected
 repository resets the commit-log filters, clears the selected commit and any
 stash preview, and returns the main view to the log.
 

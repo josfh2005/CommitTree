@@ -1,7 +1,7 @@
 import { get } from 'svelte/store'
 import { api } from './api'
-import { busy, chatOpen, collapsedRepoGroups, expandedRepos, filters, focusCommitBox, loadIdentity, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, refs, repoManualSeeded, repos, repoSortOrder, selectRepo, selectUncommitted, selectedHash, selectedRepoId, stashConflictDismissed } from './stores'
-import type { Branch, FileStatus, HunkAction, HunkPick, MergeState, RebasePreview, Repo, ResetInfo, ResetMode, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
+import { busy, chatOpen, chatRunRepo, collapsedRepoGroups, expandedRepos, filters, focusCommitBox, loadIdentity, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, refs, repoManualSeeded, repos, repoSortOrder, selectRepo, selectUncommitted, selectedHash, selectedRepoId, stashConflictDismissed } from './stores'
+import type { Branch, FileStatus, HunkAction, HunkPick, MergeState, RebasePreview, RegionChoice, Repo, ResetInfo, ResetMode, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
 import { PULL_UP_TO_DATE, UP_TO_DATE } from './types'
 import { abortWarning, commitWarning, isEmptyStepError, skipWarning, staleMergeChoice, takeMessage } from './merge'
 import { doneMessage, rebaseMessage } from './rebase'
@@ -579,7 +579,7 @@ export async function pickAndMerge(id: string) {
 
 export async function abortMerge(id: string) {
   const state = get(mergeState)
-  const warning = abortWarning(state ?? ({ kind: 'merge' } as MergeState))
+  const warning = abortWarning(state ?? ({ kind: 'merge' } as MergeState), get(chatRunRepo) === id)
   const ok = await confirmDialog({ ...warning, danger: true })
   if (ok) await run(`${warning.title}…`, () => api.abortMerge(id))
 }
@@ -620,6 +620,33 @@ export async function takeMergeSide(id: string, path: string, side: 'ours' | 'th
     danger: true,
   })
   if (ok) await run(side === 'ours' ? 'Taking ours…' : 'Taking theirs…', () => api.takeMergeSide(id, path, side))
+}
+
+/** resolveMergeRegion settles one region from the Merge view. A region the
+ *  AI or another click resolved meanwhile writes nothing; the view reloads. */
+export async function resolveMergeRegion(id: string, path: string, region: string, choice: RegionChoice, text: string, reload: () => void) {
+  busy.set('Resolving…')
+  try {
+    const res = await api.resolveMergeRegion(id, path, region, choice, text)
+    if (res.staged) toast(`${path} resolved and staged`)
+  } catch (e) {
+    const message = errorMessage(e)
+    toast(message.includes('no such conflict region') ? 'That region changed; reloaded.' : message, 'error')
+    reload()
+  } finally {
+    busy.set('')
+    await refreshRepo()
+  }
+}
+
+export async function restartConflictFile(id: string, path: string) {
+  const ok = await confirmDialog({
+    title: 'Restart file',
+    message: `Put ${path} back as the merge left it, with its conflict markers? What was resolved in it, by hand or by the AI, is lost.`,
+    confirmLabel: 'Restart file',
+    danger: true,
+  })
+  if (ok) await run('Restarting…', () => api.restartConflictFile(id, path))
 }
 
 export async function rebaseOnto(id: string, onto: string, ontoLabel: string, head: string) {

@@ -22,10 +22,32 @@ import (
 
 // ConflictFile is one file of a merge as the UI shows it: the raw content
 // with markers while it is conflicted, and the staged diff once it is not.
+// Region is where one conflict region sits in ConflictFile.Text: lines
+// Start (its <<<<<<< line) to End (after its >>>>>>> line), 0-based.
+type Region struct {
+	ID    string `json:"id"`
+	Start int    `json:"start"`
+	End   int    `json:"end"`
+	// BaseAt is the ||||||| line (-1 without an ancestor section), Sep the
+	// ======= line: the view needs no marker parsing of its own.
+	BaseAt int `json:"baseAt"`
+	Sep    int `json:"sep"`
+}
+
 type ConflictFile struct {
-	Path     string `json:"path"`
-	Resolved bool   `json:"resolved"`
-	Text     string `json:"text"`
+	Path     string   `json:"path"`
+	Resolved bool     `json:"resolved"`
+	Text     string   `json:"text"`
+	Regions  []Region `json:"regions"`
+	// Restartable: Restart file can put it back as git first wrote it.
+	Restartable bool `json:"restartable"`
+}
+
+// RegionResult is what resolving one region left: the file's regions still
+// to settle, and whether it was staged because none were.
+type RegionResult struct {
+	Left   int  `json:"left"`
+	Staged bool `json:"staged"`
 }
 
 // MergeBranch merges branch into the repository's current branch. A
@@ -99,6 +121,8 @@ func (a *App) GetConflictFile(id, path string) (ConflictFile, error) {
 	if !mergePaths(st)[path] {
 		return ConflictFile{}, fmt.Errorf("%q is not part of this merge", path)
 	}
+	can, _ := merge.Restartable(a.ctx, dir)
+	restartable := slices.Contains(can, path)
 	// Check if the path is in the Conflicts list.
 	for _, p := range st.Conflicts {
 		if p == path {
@@ -106,13 +130,19 @@ func (a *App) GetConflictFile(id, path string) (ConflictFile, error) {
 			if err != nil {
 				return ConflictFile{}, err
 			}
-			return ConflictFile{Path: path, Text: string(data)}, nil
+			f := ConflictFile{Path: path, Text: string(data), Regions: []Region{}, Restartable: restartable}
+			if hunks, err := merge.Parse(f.Text); err == nil {
+				for _, h := range hunks {
+					f.Regions = append(f.Regions, Region{ID: h.ID, Start: h.Start, End: h.End, BaseAt: h.BaseAt, Sep: h.Sep})
+				}
+			}
+			return f, nil
 		}
 	}
 	// Check if the path is in the Manual list.
 	for _, p := range st.Manual {
 		if p == path {
-			return ConflictFile{Path: path, Text: "This file has no conflict markers to edit here. Right-click it in the list to take ours or theirs, or resolve it in your editor."}, nil
+			return ConflictFile{Path: path, Text: "This file has no conflict markers to edit here. Take one side with the buttons above, or resolve it in your editor.", Regions: []Region{}, Restartable: restartable}, nil
 		}
 	}
 	// Otherwise it is settled: show what the merge commit changes against
@@ -126,7 +156,7 @@ func (a *App) GetConflictFile(id, path string) (ConflictFile, error) {
 	if err != nil {
 		return ConflictFile{}, err
 	}
-	return ConflictFile{Path: path, Resolved: true, Text: out}, nil
+	return ConflictFile{Path: path, Resolved: true, Text: out, Regions: []Region{}, Restartable: restartable}, nil
 }
 
 // StageMergeFile adds one of the merge's unstaged files to the index.
@@ -143,7 +173,54 @@ func (a *App) UnstageMergeFile(id, path string) error {
 // TakeMergeSide settles one of the merge's Manual files with one side's
 // version, "ours" or "theirs", and stages it.
 func (a *App) TakeMergeSide(id, path, side string) error {
+	if a.aiBusy(id) {
+		return fmt.Errorf("%w; wait for it or stop it first", ErrChatBusy)
+	}
 	return a.writeMerge(id, func(ctx context.Context, dir string) error { return merge.Take(ctx, dir, path, merge.Side(side)) })
+}
+
+// ResolveMergeRegion settles one conflict region of path: one side whole
+// ("ours", "theirs"), both ours first ("both"), or the user's own text
+// ("text"). It stages the file once no regions are left.
+func (a *App) ResolveMergeRegion(id, path, region, choice, text string) (RegionResult, error) {
+	if a.aiBusy(id) {
+		return RegionResult{}, fmt.Errorf("%w; wait for it or stop it first", ErrChatBusy)
+	}
+	var res RegionResult
+	err := a.writeMerge(id, func(ctx context.Context, dir string) error {
+		content := text
+		if choice != "text" {
+			h, err := merge.Region(dir, path, region)
+			if err != nil {
+				return err
+			}
+			if content, err = merge.RegionText(h, choice); err != nil {
+				return err
+			}
+		}
+		left, err := merge.ResolveRegion(ctx, dir, path, region, content)
+		if err != nil {
+			return err
+		}
+		res.Left = left
+		if left == 0 {
+			if err := merge.Stage(ctx, dir, path); err != nil {
+				return err
+			}
+			res.Staged = true
+		}
+		return nil
+	})
+	return res, err
+}
+
+// RestartConflictFile puts path back as the operation left it, markers
+// included, discarding what was resolved in it.
+func (a *App) RestartConflictFile(id, path string) error {
+	if a.aiBusy(id) {
+		return fmt.Errorf("%w; wait for it or stop it first", ErrChatBusy)
+	}
+	return a.writeMerge(id, func(ctx context.Context, dir string) error { return merge.Restart(ctx, dir, path) })
 }
 
 // writeMerge runs fn under the repository's write lock, so it can't

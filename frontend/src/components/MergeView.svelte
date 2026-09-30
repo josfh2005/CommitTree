@@ -3,13 +3,14 @@
   import Icon from './Icon.svelte'
   import FileList, { rowKey } from './FileList.svelte'
   import { api } from '../lib/api'
-  import { abortMerge, commitMerge, dismissStashConflict, resolveConflicts, skipStep, stageMergeFile, stashDrop, takeMergeSide, unstageMergeFile } from '../lib/actions'
-  import { conflictActions, conflictHeader, mergeSections, takeLabels, type MergeFile } from '../lib/merge'
+  import { abortMerge, commitMerge, dismissStashConflict, resolveConflicts, resolveMergeRegion, restartConflictFile, skipStep, stageMergeFile, stashDrop, takeMergeSide, unstageMergeFile } from '../lib/actions'
+  import { conflictActions, conflictHeader, keptEdit, layoutLines, mergeSections, regionSides, takeLabels, withLineEndings, type MergeFile } from '../lib/merge'
   import { lineClass } from '../lib/diff'
   import { nextSelection, type SelectionKey } from '../lib/worktree'
-  import { busy, loadMergeState, mergeState, owedStashDrop, pendingFinish } from '../lib/stores'
+  import { busy, chatRunRepo, loadMergeState, mergeState, owedStashDrop, pendingFinish } from '../lib/stores'
+  import type { Region } from '../lib/types'
   import { finishingLine } from '../lib/flow'
-  import { errorMessage, openMenu } from '../lib/ui'
+  import { errorMessage, openMenu, toast } from '../lib/ui'
   import { onDestroy } from 'svelte'
 
   export let repoId: string
@@ -23,6 +24,49 @@
   let resolved = false
   let error = ''
   let request = 0
+
+  let regions: Region[] = []
+  let restartable = false
+  // What a hovered Take button would keep, to dim the rest of its region.
+  let hover: { id: string; keep: 'ours' | 'theirs' } | null = null
+  // The region being edited by hand, and its text box's content.
+  // sample is the region's original text, whose line endings the edit keeps.
+  let editing: { id: string; value: string; sample: string } | null = null
+
+  $: lines = text.split('\n')
+  $: layout = layoutLines(lines, regions)
+  $: locked = !!$busy || $chatRunRepo === repoId
+  $: sides = takeLabels($mergeState)
+  $: current = files.find((f) => selection && f.path === selection.path)
+
+  function dimmed(i: number): boolean {
+    const l = layout[i]
+    if (!hover || l.region?.id !== hover.id) return false
+    return l.part !== hover.keep
+  }
+
+  function take(regionId: string, choice: 'ours' | 'theirs' | 'both') {
+    if (!selection) return
+    hover = null
+    resolveMergeRegion(repoId, selection.path, regionId, choice, '', refresh)
+  }
+
+  function startEdit(regionId: string) {
+    const s = regionSides(lines, layout, regionId)
+    editing = { id: regionId, value: s.ours + s.theirs, sample: s.ours + s.theirs }
+  }
+
+  function applyEdit() {
+    if (!selection || !editing) return
+    const { id, value, sample } = editing
+    editing = null
+    resolveMergeRegion(repoId, selection.path, id, 'text', withLineEndings(value, sample), refresh)
+  }
+
+  function editKeys(e: KeyboardEvent) {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); applyEdit() }
+    if (e.key === 'Escape') { e.preventDefault(); editing = null }
+  }
 
   // The pane follows $mergeState (below), so the handler only reloads it.
   const off = EventsOn('merge:changed', (payload: { repoID: string }) => {
@@ -59,12 +103,17 @@
     const current = ++request
     selection = { section: fileSection.get(file) ?? '', path: file.path }
     text = ''
+    regions = []
+    restartable = false
     error = ''
     try {
       const f = await api.getConflictFile(repoId, file.path)
       if (current !== request) return
       text = f.text
       resolved = f.resolved
+      regions = f.regions ?? []
+      restartable = f.restartable
+      editing = null
     } catch (e) {
       if (current === request) error = errorMessage(e)
     }
@@ -82,6 +131,11 @@
       if (current !== request) return
       text = f.text
       resolved = f.resolved
+      regions = f.regions ?? []
+      restartable = f.restartable
+      const kept = keptEdit(editing, regions)
+      if (editing && !kept) toast('The region you were editing was resolved meanwhile; your edit was dropped.', 'error')
+      editing = kept
       error = ''
     } catch (e) {
       if (current === request) error = errorMessage(e)
@@ -132,18 +186,18 @@
     <span class="count">{pending} left</span>
     <span class="spacer"></span>
     {#if acts.ai}
-      <button class="btn" disabled={!!$busy || pending === 0} on:click={() => resolveConflicts(repoId)}>
+      <button class="btn" disabled={locked || pending === 0} title={$chatRunRepo === repoId ? "The AI is resolving; stop it from the chat" : undefined} on:click={() => resolveConflicts(repoId)}>
         <Icon name="sparkle" size={14} /><span>Resolve with AI</span>
       </button>
     {/if}
     {#if acts.abort}
-      <button class="btn" disabled={!!$busy} on:click={() => abortMerge(repoId)}>{acts.abort}</button>
+      <button class="btn" disabled={!!$busy} title={$chatRunRepo === repoId ? "Stops the AI resolver, then aborts" : undefined} on:click={() => abortMerge(repoId)}>{acts.abort}</button>
     {/if}
     {#if acts.skip}
       <button class="btn" disabled={!!$busy} on:click={() => skipStep(repoId)}>Skip this commit</button>
     {/if}
     {#if acts.confirm}
-      <button class="btn primary" disabled={!!$busy || pending > 0} on:click={() => commitMerge(repoId)}>{acts.confirm}</button>
+      <button class="btn primary" disabled={locked || pending > 0} title={$chatRunRepo === repoId ? "The AI is resolving; wait for it or stop it from the chat" : undefined} on:click={() => commitMerge(repoId)}>{acts.confirm}</button>
     {/if}
     {#if acts.done}
       <!-- A stash conflict has no git-level abort or continue. Drop stash is
@@ -164,8 +218,42 @@
       {#if error}
         <div class="error">{error}</div>
       {:else}
-        {#each text.split('\n') as line}
-          <div class="line {lineClass(line, resolved)}">{line || ' '}</div>
+        {#if selection && (restartable || current?.status === 'manual')}
+          <div class="file-actions">
+            {#if current?.status === 'manual'}
+              <button class="btn" disabled={locked} on:click={() => selection && takeMergeSide(repoId, selection.path, 'ours', sides.ours)}>Take {sides.ours}</button>
+              <button class="btn" disabled={locked} on:click={() => selection && takeMergeSide(repoId, selection.path, 'theirs', sides.theirs)}>Take {sides.theirs}</button>
+            {/if}
+            <span class="spacer"></span>
+            {#if restartable}
+              <button class="btn" disabled={locked} title="Put the file back as the merge left it, with its conflict markers" on:click={() => selection && restartConflictFile(repoId, selection.path)}>Restart file</button>
+            {/if}
+          </div>
+        {/if}
+        {#each lines as line, i}
+          {@const l = layout[i]}
+          {#if l.starts && l.region}
+            {@const id = l.region.id}
+            {#if editing?.id === id}
+              <div class="region-edit">
+                <textarea class="mono" rows={Math.max(3, editing.value.split('\n').length)} bind:value={editing.value} on:keydown={editKeys}></textarea>
+                <div class="region-bar">
+                  <button class="btn primary" on:click={applyEdit}>Apply</button>
+                  <button class="btn" on:click={() => (editing = null)}>Cancel</button>
+                </div>
+              </div>
+            {:else}
+              <div class="region-bar">
+                <button class="btn" disabled={locked} on:mouseenter={() => (hover = { id, keep: 'ours' })} on:mouseleave={() => (hover = null)} on:click={() => take(id, 'ours')}>Take {sides.ours}</button>
+                <button class="btn" disabled={locked} on:mouseenter={() => (hover = { id, keep: 'theirs' })} on:mouseleave={() => (hover = null)} on:click={() => take(id, 'theirs')}>Take {sides.theirs}</button>
+                <button class="btn" disabled={locked} on:click={() => take(id, 'both')}>Both</button>
+                <button class="btn" disabled={locked} on:click={() => startEdit(id)}>Edit…</button>
+              </div>
+            {/if}
+          {/if}
+          {#if !(editing && l.region?.id === editing.id)}
+            <div class="line {lineClass(line, resolved)}" class:dim={dimmed(i)}>{line || ' '}</div>
+          {/if}
         {/each}
       {/if}
     </div>
@@ -188,4 +276,11 @@
   .hunk { color: var(--accent); }
   .meta { color: var(--faint); }
   .error { padding: 12px; color: var(--danger); white-space: pre-wrap; }
+  .file-actions { display: flex; gap: 6px; padding: 0 12px 8px; }
+  .file-actions .spacer { flex: 1; }
+  .region-bar { display: flex; gap: 6px; padding: 4px 12px; font-family: var(--font-ui, inherit); }
+  .region-bar .btn { font-size: 12px; padding: 2px 8px; }
+  .region-edit { padding: 4px 12px; }
+  .region-edit textarea { width: 100%; box-sizing: border-box; font-size: 12px; line-height: 18px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); resize: vertical; }
+  .line.dim { opacity: 0.35; }
 </style>

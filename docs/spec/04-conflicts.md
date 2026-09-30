@@ -103,8 +103,8 @@ are listed.
 Selecting a conflicted file shows its raw content, markers and all, with
 marker lines picked out visually. Selecting a manual file shows an
 explanatory placeholder instead of content, since there is nothing here to
-edit line by line — it points at right-click for taking a side, or at
-resolving it outside the application. Selecting a settled file shows the
+edit line by line — it points at its Take buttons, or at resolving it
+outside the application. Selecting a settled file shows the
 diff the closing commit or step would carry for it: against the index if it
 is staged, against HEAD if it is only in the worktree. Only a path that is
 part of the operation currently in progress can be read this way; nothing
@@ -116,6 +116,29 @@ Staged, or Unstaged → Staged) — an edit through the AI resolver or an
 action taken here re-diffs the same file in place rather than dropping the
 selection.
 
+## Region actions
+
+Above each conflict region of a text file the pane shows a row of buttons
+named after the two sides — "Take develop", "Take feature/checkout" (the
+names the rest of the view uses for this operation) — plus "Both" (ours,
+then theirs) and "Edit…". Hovering a Take button dims the lines it would
+drop. Edit… turns the region into a text box holding both sides, applied
+with Apply or ⌘↵ and dropped with Cancel or Esc. Each writes only that
+region, found by its content id: if the region changed meanwhile (the AI,
+another click), nothing is written and the file reloads. When a file's
+last region is settled it is staged ("… resolved and staged").
+
+"Restart file" puts a file of the operation that was in conflict — still
+conflicted, or staged since — back as git first wrote it, markers
+included and unstaged, after a confirmation; it is the undo for anything
+resolved in it, by hand or by the AI. A file the merge settled cleanly
+has no Restart.
+
+A file without markers shows its "Take <side>" choices as buttons at the
+top of the pane (the right-click menu still offers them). All of these are
+disabled while another operation runs or an AI run is working on the
+repository, and the app refuses them then as well.
+
 ## Per-file actions
 
 | File status | Actions | Effect |
@@ -123,7 +146,7 @@ selection.
 | Conflict (has markers) | Stage | Same staging operation as a settled file; refused while any marker remains in the file (see "The marker check" below). |
 | Unstaged (settled, not staged) | Stage | Adds it to the index. |
 | Staged | Unstage | Removes it from the index, keeping its content in the worktree. |
-| Manual | Take `<side>` (right-click) | Replaces the file wholly with one side's version — or deletes it, if that side deleted it — and stages the result. |
+| Manual | Take `<side>` (buttons at the top of the pane, or right-click) | Replaces the file wholly with one side's version — or deletes it, if that side deleted it — and stages the result. |
 
 The side is named for what it actually is, per kind: for a merge it is the
 current branch / the branch merged in; for a rebase, the branch being
@@ -258,7 +281,11 @@ run at once, and it is itself stopped whenever the operation is continued
 or aborted from this view.
 
 The button is offered for a merge, a rebase and a cherry-pick, and the
-resolver refuses to run for any other kind. A run is tied to the operation
+resolver refuses to run for any other kind. While a run is working on the
+repository the button is disabled (its tooltip says to stop the run from
+the chat), as are the region and Take buttons and the commit/continue
+button. Abort stays available as the way out: its tooltip and its
+confirmation say the resolver is stopped first. A run is tied to the operation
 it started for by a fingerprint: the kind plus the commit being combined —
 `MERGE_HEAD` for a merge, `CHERRY_PICK_HEAD` for a cherry-pick, and for a
 rebase the commit currently being replayed (`REBASE_HEAD`, or `HEAD` on the

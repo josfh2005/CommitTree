@@ -4,6 +4,8 @@
 package merge
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -26,10 +28,19 @@ type Hunk struct {
 	Theirs  string
 	Base    string
 	HasBase bool
-	Before string
-	After  string
+	Before  string
+	After   string
 
-	start, end int // line indices of the marker block; end is exclusive
+	// ID names the region by its content, so the name survives the
+	// renumbering every resolve causes; the AI resolver and the Merge
+	// view's buttons both use it.
+	ID string
+	// Start and End are the line indices of the marker block; End is
+	// exclusive. BaseAt is the ||||||| line (-1 in the two-way style) and
+	// Sep the ======= line, so a view can tell the sides apart without
+	// telling git's markers from look-alike content itself.
+	Start, End  int
+	BaseAt, Sep int
 }
 
 // Parse returns the conflicted regions of content, in file order.
@@ -40,7 +51,7 @@ func Parse(content string) ([]Hunk, error) {
 		if !marker(lines[i], "<<<<<<<") {
 			continue
 		}
-		h := Hunk{Index: len(hunks), start: i}
+		h := Hunk{Index: len(hunks), Start: i, BaseAt: -1}
 		var ours, base, theirs []string
 		side := &ours
 		closed := false
@@ -52,21 +63,23 @@ func Parse(content string) ([]Hunk, error) {
 			case marker(line, "|||||||") && side == &ours:
 				side = &base
 				h.HasBase = true
+				h.BaseAt = i
 			case marker(line, "=======") && side != &theirs:
 				side = &theirs
+				h.Sep = i
 			case marker(line, ">>>>>>>") && side == &theirs:
-				h.end = i + 1
+				h.End = i + 1
 				closed = true
 			default:
 				*side = append(*side, line)
 			}
 		}
 		if !closed {
-			return nil, fmt.Errorf("%w: unterminated conflict at line %d", ErrBadConflict, h.start+1)
+			return nil, fmt.Errorf("%w: unterminated conflict at line %d", ErrBadConflict, h.Start+1)
 		}
-		i = h.end - 1
+		i = h.End - 1
 		h.Ours, h.Base, h.Theirs = strings.Join(ours, ""), strings.Join(base, ""), strings.Join(theirs, "")
-		h.Before = strings.Join(lines[max(0, h.start-ContextLines):h.start], "")
+		h.Before = strings.Join(lines[max(0, h.Start-ContextLines):h.Start], "")
 		hunks = append(hunks, h)
 	}
 	// After is filled second: it stops at the next conflict, which isn't
@@ -74,9 +87,24 @@ func Parse(content string) ([]Hunk, error) {
 	for i := range hunks {
 		limit := len(lines)
 		if i+1 < len(hunks) {
-			limit = hunks[i+1].start
+			limit = hunks[i+1].Start
 		}
-		hunks[i].After = strings.Join(lines[hunks[i].end:min(limit, hunks[i].end+ContextLines)], "")
+		hunks[i].After = strings.Join(lines[hunks[i].End:min(limit, hunks[i].End+ContextLines)], "")
+	}
+	// A region's id is its content, so it survives the renumbering other
+	// resolves cause. Regions with the same content also carry their line:
+	// resolving one moves the other, so a stale id — a second click, the
+	// AI retrying — finds nothing rather than landing on the twin.
+	count := map[string]int{}
+	for i := range hunks {
+		sum := sha1.Sum([]byte(hunks[i].Ours + "\x00" + hunks[i].Base + "\x00" + hunks[i].Theirs))
+		hunks[i].ID = hex.EncodeToString(sum[:4])
+		count[hunks[i].ID]++
+	}
+	for i := range hunks {
+		if count[hunks[i].ID] > 1 {
+			hunks[i].ID = fmt.Sprintf("%s@%d", hunks[i].ID, hunks[i].Start)
+		}
 	}
 	return hunks, nil
 }
@@ -141,12 +169,12 @@ func Splice(content string, index int, resolved string) (string, error) {
 	}
 	lines := splitLines(content)
 	h := hunks[index]
-	tail := strings.Join(lines[h.end:], "")
+	tail := strings.Join(lines[h.End:], "")
 	body := resolved
 	// The block replaced whole lines, so the replacement ends a line too —
 	// unless it sits at the end of a file that never had a final newline.
 	if body != "" && !strings.HasSuffix(body, "\n") && (tail != "" || strings.HasSuffix(content, "\n")) {
 		body += "\n"
 	}
-	return strings.Join(lines[:h.start], "") + body + tail, nil
+	return strings.Join(lines[:h.Start], "") + body + tail, nil
 }

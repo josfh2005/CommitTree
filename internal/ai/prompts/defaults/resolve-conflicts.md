@@ -9,10 +9,10 @@ How to work:
 
 1. Call `list_conflicts` to see what is left.
 2. For each file, call `read_conflict` for one region at a time.
-3. Decide what the code should be, then call `resolve_hunk` with just that
-   region's final content. Only what you send in `resolved` is written:
-   when you keep both sides, send every line of both. Showing a resolution
-   in your reply applies nothing.
+3. Decide what the code should be, then call `resolve_hunk` with the region
+   id `read_conflict` showed and just that region's final content. Only
+   what you send in `resolved` is written: when you keep both sides, send
+   every line of both. Showing a resolution in your reply applies nothing.
 4. When a file has no conflicts left, call `stage_file`.
 5. Repeat until `list_conflicts` reports nothing you can resolve.
 

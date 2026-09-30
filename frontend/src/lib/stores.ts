@@ -125,6 +125,10 @@ export const busy = writable('')
 /** A git-flow finish stopped by a conflict: in memory only, so the Merge
  *  view can say what it belongs to and committing can offer to continue. */
 export const pendingFinish = writable<PendingFinish | null>(null)
+
+/** The repository an AI run is working on, '' when none (tracked from chat events in App),
+ *  so the Merge view's buttons wait for it. */
+export const chatRunRepo = writable('')
 export const settingsOpen = writable(false)
 /** Wails' Environment().platform, read once at startup (App.svelte). */
 export const platform = writable('')
@@ -477,8 +481,6 @@ export function selectRepo(id: string) {
     identity.set(null)
   }
   selectedRepoId.set(id)
-  // Selecting a folded repo unfolds it; folding it later keeps it selected.
-  expandedRepos.update((ids) => (ids.includes(id) ? ids : [...ids, id]))
   loadRefs()
   loadMergeState()
   loadWorktreeState()

@@ -13,11 +13,12 @@
   import StashView from './components/StashView.svelte'
   import Toasts from './components/Toasts.svelte'
   import { startFocusRefresh } from './lib/actions'
+  import { nextChatRunRepo } from './lib/chat'
   import { isCommandsToggle } from './lib/cmdlog'
   import { isSettingsShortcut } from './lib/shortcuts'
   import { isTerminalToggle } from './lib/terminal'
   import { conflictOwnsScreen } from './lib/remote'
-  import { blameTarget, chatOpen, chatWidth, closeBlame, commandsOpen, dockHeight, loadAISettings, loadRefs, loadRepos, loadWorktreeState, mainView, mergeState, platform, refreshRepo, selectedHash, selectedRepo, selectedStash, settingsOpen, sidebarWidth, stashConflictDismissed, stashEntries, terminalOpen, uncommittedSelected } from './lib/stores'
+  import { blameTarget, chatOpen, chatRunRepo, chatWidth, closeBlame, commandsOpen, dockHeight, loadAISettings, loadRefs, loadRepos, loadWorktreeState, mainView, mergeState, platform, refreshRepo, selectedHash, selectedRepo, selectedStash, settingsOpen, sidebarWidth, stashConflictDismissed, stashEntries, terminalOpen, uncommittedSelected } from './lib/stores'
   import type { RepoChangedEvent, WorktreeChangedEvent } from './lib/types'
   import { Environment, EventsOn } from '../wailsjs/runtime/runtime'
 
@@ -92,11 +93,17 @@
     })
     // macOS: the native menu's Settings… item (⌘,), see internal/app/menu.go.
     const offSettings = EventsOn('menu:settings', () => settingsOpen.set(true))
+    // Which repository an AI run holds, for the Merge view's buttons —
+    // tracked here, not in ChatPanel, which is unmounted when closed.
+    const offRuns = ['chat:start', 'chat:done', 'chat:error'].map((name) =>
+      EventsOn(name, (payload: { repoID?: string }) => chatRunRepo.update((cur) => nextChatRunRepo(cur, name, payload))),
+    )
     return () => {
       stopFocus()
       offWorktree()
       offRepoChanged()
       offSettings()
+      offRuns.forEach((off) => off())
     }
   })
 

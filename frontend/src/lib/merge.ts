@@ -1,4 +1,4 @@
-import type { AheadBehind, ConflictKind, MergeState } from './types'
+import type { AheadBehind, ConflictKind, MergeState, Region } from './types'
 import type { ChoiceOptions } from './ui'
 
 export type MergeFileStatus = 'conflict' | 'manual' | 'unstaged' | 'staged'
@@ -143,7 +143,7 @@ export function conflictActions(state: MergeState): ConflictActions {
 // abortWarning is the confirmation before throwing a resolution away. The
 // wording has to follow the kind: "Abort merge / go back to where the
 // branch was" is plainly wrong for a rebase or a cherry-pick.
-export function abortWarning(state: MergeState): { title: string; message: string; confirmLabel: string } {
+export function abortWarning(state: MergeState, aiRunning = false): { title: string; message: string; confirmLabel: string } {
   const label = conflictActions(state).abort ?? 'Abort'
   const what = {
     merge: 'this merge',
@@ -155,7 +155,7 @@ export function abortWarning(state: MergeState): { title: string; message: strin
   }[state.kind || 'merge']
   return {
     title: label,
-    message: `Throw away every resolution from ${what} and go back to where the branch was?`,
+    message: `Throw away every resolution from ${what} and go back to where the branch was?` + (aiRunning ? ' The AI resolver working on it is stopped first.' : ''),
     confirmLabel: label,
   }
 }
@@ -192,4 +192,52 @@ export function staleMergeChoice(branch: string, upstream: string, into: string,
     },
     confirmLabel: () => 'Merge',
   }
+}
+
+export type LinePart = 'marker' | 'ours' | 'base' | 'theirs' | null
+
+export interface LineInfo {
+  part: LinePart
+  region: Region | null
+  /** true on a region's <<<<<<< line, where its buttons go */
+  starts: boolean
+}
+
+/** layoutLines says, for each line of a conflict file, which region and
+ *  which side of it the line belongs to — all from the backend's spans, so
+ *  content that looks like a marker (a Markdown underline) stays content. */
+export function layoutLines(lines: string[], regions: Region[]): LineInfo[] {
+  const info: LineInfo[] = lines.map(() => ({ part: null, region: null, starts: false }))
+  for (const r of regions) {
+    const oursEnd = r.baseAt >= 0 ? r.baseAt : r.sep
+    for (let i = r.start; i < Math.min(r.end, lines.length); i++) {
+      let part: LinePart
+      if (i === r.start || i === r.end - 1 || i === r.baseAt || i === r.sep) part = 'marker'
+      else if (i < oursEnd) part = 'ours'
+      else if (i < r.sep) part = 'base'
+      else part = 'theirs'
+      info[i] = { part, region: r, starts: i === r.start }
+    }
+  }
+  return info
+}
+
+/** regionSides is a region's ours and theirs text, each line ending in \n. */
+export function regionSides(lines: string[], info: LineInfo[], id: string): { ours: string; theirs: string } {
+  const side = (part: LinePart) => lines.filter((_, i) => info[i].region?.id === id && info[i].part === part).map((l) => l + '\n').join('')
+  return { ours: side('ours'), theirs: side('theirs') }
+}
+
+/** keptEdit is the hand edit to keep after the file reloads (a focus
+ *  check, another file's write): the same one while its region is still
+ *  there, none once it is gone. */
+export function keptEdit<T extends { id: string }>(editing: T | null, regions: Region[]): T | null {
+  return editing && regions.some((r) => r.id === editing.id) ? editing : null
+}
+
+/** withLineEndings gives text the CRLF line endings sample uses. A text box
+ *  hands back LF only, so an edited region of a CRLF file would otherwise
+ *  come back with mixed endings. */
+export function withLineEndings(text: string, sample: string): string {
+  return sample.includes('\r\n') ? text.replace(/\r?\n/g, '\r\n') : text
 }

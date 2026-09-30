@@ -332,3 +332,12 @@ export function errorText(error: { message: string; code: string }): string {
   }
   return error.message
 }
+
+/** nextChatRunRepo tracks which repository an AI run is working on, from
+ *  the run's own events, so the Merge view can wait for it whether or not
+ *  the chat panel is open. */
+export function nextChatRunRepo(current: string, name: string, payload: { repoID?: string }): string {
+  if (name === 'chat:start') return payload.repoID ?? current
+  if ((name === 'chat:done' || name === 'chat:error') && payload.repoID === current) return ''
+  return current
+}

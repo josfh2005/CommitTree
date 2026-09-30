@@ -531,11 +531,11 @@ func TestResolveHunkRefusesRepeatedContextAndBrokenBrackets(t *testing.T) {
 		resolved string
 		want     string
 	}{
-		"imports with the lines before": {0, "import { Injectable } from '@angular/core';\nimport { HttpClient } from '@angular/common/http';\nimport { Observable } from 'rxjs';\nimport { retry } from 'rxjs/operators';\n", `"lines before"`},
+		"imports with the lines before":       {0, "import { Injectable } from '@angular/core';\nimport { HttpClient } from '@angular/common/http';\nimport { Observable } from 'rxjs';\nimport { retry } from 'rxjs/operators';\n", `"lines before"`},
 		"method with the closing brace after": {1, "  list(page: number, size = 20): Observable<Order[]> {\n    return this.http.get<Order[]>(url(page, size)).pipe(retry(2));\n  }\n", `"lines after"`},
 		// git leaves each method's closing brace under "lines after", so
 		// closing both inside the region doubles the last one.
-		"methods closing the brace after": {2, "  cancel(id: string) {\n    return this.http.post(id);\n  }\n\n  export(format: string) {\n    return this.http.get(format);\n  }\n", `"lines after"`},
+		"methods closing the brace after":  {2, "  cancel(id: string) {\n    return this.http.post(id);\n  }\n\n  export(format: string) {\n    return this.http.get(format);\n  }\n", `"lines after"`},
 		"method missing its opening brace": {1, "  list(page: number, size = 20): Observable<Order[]>\n    return this.http.get<Order[]>(url(page, size)).pipe(retry(2));\n", "brackets"},
 	}
 	for name, c := range cases {
@@ -558,5 +558,60 @@ func TestResolveHunkAcceptsARightResolution(t *testing.T) {
 		if out := resolve(r, 0, res); !strings.HasPrefix(out, "Applied.") {
 			t.Fatalf("out = %q for %q", out, res)
 		}
+	}
+}
+
+func regionID(t *testing.T, r *testrepo.Repo, hunk int) string {
+	t.Helper()
+	out, _ := mergetools.Run(context.Background(), r.Dir, call("read_conflict", map[string]any{"path": "orders.ts", "hunk": float64(hunk)}), mergetools.Sides{})
+	_, id, ok := strings.Cut(strings.SplitN(out, "\n", 2)[0], "region id ")
+	if !ok {
+		t.Fatalf("no region id in %q", out)
+	}
+	return id
+}
+
+func resolveRegion(r *testrepo.Repo, id, resolved string) string {
+	out, _ := mergetools.Run(context.Background(), r.Dir, call("resolve_hunk", map[string]any{"path": "orders.ts", "region": id, "resolved": resolved}), mergetools.Sides{})
+	return out
+}
+
+// What Sonnet 5.5 did in the conflict lab: read all three regions, then
+// resolved them in one turn with the numbers it read. By id, each lands on
+// the region it was meant for.
+func TestResolvingSeveralRegionsInOneTurnByID(t *testing.T) {
+	r := orders(t)
+	ids := []string{regionID(t, r, 0), regionID(t, r, 1), regionID(t, r, 2)}
+	for i, res := range []string{
+		"import { Observable } from 'rxjs';\nimport { retry } from 'rxjs/operators';\n",
+		"  list(page: number, size = 20): Observable<Order[]> {\n    return this.http.get<Order[]>(url(page, size)).pipe(retry(2));\n",
+		"  cancel(id: string) {\n    return this.http.post(id);\n  }\n\n  export(format: string) {\n    return this.http.get(format);\n",
+	} {
+		if out := resolveRegion(r, ids[i], res); !strings.HasPrefix(out, "Applied.") {
+			t.Fatalf("region %d: %q", i, out)
+		}
+	}
+	data, _ := os.ReadFile(filepath.Join(r.Dir, "orders.ts"))
+	got := string(data)
+	for _, want := range []string{"retry(2)", "cancel(id: string)", "export(format: string)"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in:\n%s", want, got)
+		}
+	}
+	if strings.Count(got, "list(page") != 1 {
+		t.Errorf("list() appears %d times:\n%s", strings.Count(got, "list(page"), got)
+	}
+}
+
+func TestResolveByAStaleRegionIDWritesNothing(t *testing.T) {
+	r := orders(t)
+	id := regionID(t, r, 0)
+	resolveRegion(r, id, "import { Observable } from 'rxjs';\n")
+	before, _ := os.ReadFile(filepath.Join(r.Dir, "orders.ts"))
+	if out := resolveRegion(r, id, "import { retry } from 'rxjs/operators';\n"); !strings.Contains(out, "Not applied") || !strings.Contains(out, id) {
+		t.Fatalf("out = %q", out)
+	}
+	if after, _ := os.ReadFile(filepath.Join(r.Dir, "orders.ts")); string(after) != string(before) {
+		t.Fatal("a stale id changed the file")
 	}
 }

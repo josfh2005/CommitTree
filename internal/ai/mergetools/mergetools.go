@@ -6,7 +6,6 @@ package mergetools
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -45,12 +44,13 @@ func Specs() []ai.ToolSpec {
 		},
 		{
 			Name:        "resolve_hunk",
-			Description: "Replace one conflicting region with the resolved code. Send only the lines that belong in place of the region, with no conflict markers.",
+			Description: "Replace one conflicting region with the resolved code. Send only the lines that belong in place of the region, with no conflict markers. Name the region by the id read_conflict gave: region numbers shift after every resolve, ids do not, so several regions can be resolved in one turn.",
 			Parameters: object(map[string]any{
 				"path":     str("File path."),
-				"hunk":     num("Which conflicting region, counting from 0. Regions renumber as you resolve them, so re-read the file after each change."),
+				"region":   str("The region's id, as read_conflict showed it. Prefer it to hunk."),
+				"hunk":     num("Which conflicting region, counting from 0, when no region id is given. Numbers shift after each resolve."),
 				"resolved": str("The final content for that region, exactly as it will be written to the file: every line of both sides you keep, in order. What you describe in your reply is not applied; only this is. Leave out the lines shown before and after the region: they stay in the file."),
-			}, "path", "hunk", "resolved"),
+			}, "path", "resolved"),
 		},
 		{
 			Name:        "stage_file",
@@ -132,7 +132,7 @@ func readConflict(ctx context.Context, dir string, args map[string]any, sides Si
 		theirs = "their side (the branch being merged)"
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s, conflict %d of %d\n\n", path, index, len(hunks))
+	fmt.Fprintf(&b, "%s, conflict %d of %d, region id %s\n\n", path, index, len(hunks), h.ID)
 	fmt.Fprintf(&b, "--- lines before ---\n%s\n", h.Before)
 	switch {
 	case h.HasBase && h.Base == "":
@@ -153,54 +153,32 @@ func resolveHunk(ctx context.Context, dir string, args map[string]any) (string, 
 	if msg != "" {
 		return msg, false
 	}
-	full := filepath.Join(dir, path)
-	data, err := os.ReadFile(full)
+	resolved, _ := args["resolved"].(string)
+	data, err := os.ReadFile(filepath.Join(dir, path))
 	if err != nil {
 		return "Could not read " + path + ": " + err.Error(), false
 	}
-	resolved, _ := args["resolved"].(string)
-	index := argInt(args, "hunk")
-	if hunks, err := merge.Parse(string(data)); err == nil && index >= 0 && index < len(hunks) {
-		if msg := checkResolution(hunks[index], resolved); msg != "" {
-			return msg, false
+	hunks, _ := merge.Parse(string(data))
+	id, _ := args["region"].(string)
+	if id == "" {
+		index := argInt(args, "hunk")
+		if index < 0 || index >= len(hunks) {
+			return fmt.Sprintf("There is no region %d. %s", index, regionsLeft(path, len(hunks))), false
 		}
+		id = hunks[index].ID
 	}
-	out, err := merge.Splice(string(data), index, resolved)
-	if errors.Is(err, merge.ErrNoSuchHunk) {
-		hunks, _ := merge.Parse(string(data))
-		return fmt.Sprintf("There is no region %d. %s", index, regionsLeft(path, len(hunks))), false
+	i := slices.IndexFunc(hunks, func(h merge.Hunk) bool { return h.ID == id })
+	if i < 0 {
+		return fmt.Sprintf("Not applied: %s has no region %s (already resolved, or never there). Call read_conflict for the current regions.", path, id), false
 	}
+	if msg := checkResolution(hunks[i], resolved); msg != "" {
+		return msg, false
+	}
+	left, err := merge.ResolveRegion(ctx, dir, path, id, resolved)
 	if err != nil {
 		return "Could not apply the resolution: " + err.Error(), false
 	}
-	info, err := os.Stat(full)
-	if err != nil {
-		return "Could not read the file mode of " + path + ": " + err.Error(), false
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(full), ".git-ui-merge-*")
-	if err != nil {
-		return "Could not write " + path + ": " + err.Error(), false
-	}
-	name := tmp.Name()
-	_, writeErr := tmp.WriteString(out)
-	closeErr := tmp.Close()
-	if writeErr != nil || closeErr != nil {
-		os.Remove(name)
-		return "Could not write " + path + ": " + errors.Join(writeErr, closeErr).Error(), false
-	}
-	if err := os.Chmod(name, info.Mode().Perm()); err != nil {
-		os.Remove(name)
-		return "Could not set the file mode of " + path + ": " + err.Error(), false
-	}
-	if err := os.Rename(name, full); err != nil {
-		os.Remove(name)
-		return "Could not replace " + path + ": " + err.Error(), false
-	}
-	left, err := merge.Parse(out)
-	if err != nil {
-		return "Wrote " + path + ", but it no longer parses: " + err.Error(), true
-	}
-	return "Applied. " + regionsLeft(path, len(left)), true
+	return "Applied. " + regionsLeft(path, left), true
 }
 
 // checkResolution catches the two slips small models make most, before
@@ -246,7 +224,9 @@ func hasText(lines []string) bool {
 	return slices.ContainsFunc(lines, func(l string) bool { return strings.TrimSpace(l) != "" })
 }
 
-func hasPrefix(lines, p []string) bool { return len(lines) >= len(p) && slices.Equal(lines[:len(p)], p) }
+func hasPrefix(lines, p []string) bool {
+	return len(lines) >= len(p) && slices.Equal(lines[:len(p)], p)
+}
 
 func hasSuffix(lines, s []string) bool {
 	return len(lines) >= len(s) && slices.Equal(lines[len(lines)-len(s):], s)

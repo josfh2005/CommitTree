@@ -211,10 +211,32 @@ export namespace app {
 	        this.details = source["details"];
 	    }
 	}
+	export class Region {
+	    id: string;
+	    start: number;
+	    end: number;
+	    baseAt: number;
+	    sep: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Region(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.start = source["start"];
+	        this.end = source["end"];
+	        this.baseAt = source["baseAt"];
+	        this.sep = source["sep"];
+	    }
+	}
 	export class ConflictFile {
 	    path: string;
 	    resolved: boolean;
 	    text: string;
+	    regions: Region[];
+	    restartable: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ConflictFile(source);
@@ -225,6 +247,40 @@ export namespace app {
 	        this.path = source["path"];
 	        this.resolved = source["resolved"];
 	        this.text = source["text"];
+	        this.regions = this.convertValues(source["regions"], Region);
+	        this.restartable = source["restartable"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class RegionResult {
+	    left: number;
+	    staged: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new RegionResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.left = source["left"];
+	        this.staged = source["staged"];
 	    }
 	}
 	export class Identity {

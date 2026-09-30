@@ -1,5 +1,5 @@
 import * as Go from '../../wailsjs/go/app/App'
-import type { AIMessage, AISettings, AIStatus, AheadBehind, Blame, ChatConfirmEvent, CommandLogView, CommandOutput, CommitInfo, ConflictFile, Details, Filters, Flow, FlowConfig, FlowFinishResult, FlowPlan, FlowStartResult, FlowType, GitSettings, HunkAction, HunkPick, Identity, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeDiff, WorktreeRemovalInfo, WorktreeState } from './types'
+import type { AIMessage, AISettings, AIStatus, AheadBehind, Blame, ChatConfirmEvent, CommandLogView, CommandOutput, CommitInfo, ConflictFile, Details, Filters, Flow, FlowConfig, FlowFinishResult, FlowPlan, FlowStartResult, FlowType, GitSettings, HunkAction, HunkPick, Identity, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, RegionChoice, RegionResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeDiff, WorktreeRemovalInfo, WorktreeState } from './types'
 
 // The generated bindings use Wails model classes; the JSON is identical to our
 // interfaces, so cast at this single boundary.
@@ -91,6 +91,8 @@ export const api = {
   stageMergeFile: (id: string, path: string) => call<void>(Go.StageMergeFile(id, path)),
   unstageMergeFile: (id: string, path: string) => call<void>(Go.UnstageMergeFile(id, path)),
   takeMergeSide: (id: string, path: string, side: 'ours' | 'theirs') => call<void>(Go.TakeMergeSide(id, path, side)),
+  resolveMergeRegion: (id: string, path: string, region: string, choice: RegionChoice, text: string) => call<RegionResult>(Go.ResolveMergeRegion(id, path, region, choice, text)),
+  restartConflictFile: (id: string, path: string) => call<void>(Go.RestartConflictFile(id, path)),
 
   getWorktreeState: (id: string) => call<WorktreeState>(Go.GetWorktreeState(id)),
   stageFile: (id: string, path: string) => call<void>(Go.StageFile(id, path)),

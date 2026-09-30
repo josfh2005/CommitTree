@@ -438,6 +438,18 @@ func chatErrorCode(err error) string {
 	return "other"
 }
 
+// aiBusy reports whether an AI run holds repoID; the Merge view's writes
+// wait for it rather than edit the files under it.
+func (a *App) aiBusy(repoID string) bool {
+	if a.ai == nil {
+		return false
+	}
+	a.ai.mu.Lock()
+	defer a.ai.mu.Unlock()
+	_, busy := a.ai.runs[repoID]
+	return busy
+}
+
 func (a *App) StopChat(repoID string) error {
 	if a.ai == nil {
 		return ErrAIDisabled

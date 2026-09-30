@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { abortWarning, commitWarning, conflictActions, conflictHeader, isEmptyStepError, mergeSections, sideLabel, skipWarning, staleMergeChoice, takeLabels } from './merge'
+import { abortWarning, keptEdit, withLineEndings, layoutLines, regionSides, commitWarning, conflictActions, conflictHeader, isEmptyStepError, mergeSections, sideLabel, skipWarning, staleMergeChoice, takeLabels } from './merge'
 import type { MergeState } from './types'
 
 const state = (over: Partial<MergeState> = {}): MergeState => ({
@@ -110,6 +110,11 @@ describe('conflictActions', () => {
 })
 
 describe('abortWarning', () => {
+  it('says the AI resolver is stopped first when one is working', () => {
+    expect(abortWarning(state(), true).message).toMatch(/The AI resolver working on it is stopped first\.$/)
+    expect(abortWarning(state()).message).not.toMatch(/AI/)
+  })
+
   it('says rebase, not merge, for a rebase', () => {
     const w = abortWarning(state({ kind: 'rebase' }))
     expect(w.title).toBe('Abort rebase')
@@ -199,5 +204,58 @@ describe('staleMergeChoice', () => {
     expect(c.message('origin/master')).toBe(
       'master is 1 commit behind origin/master and 2 ahead of it; merging origin/master leaves those 2 out. Merge origin/master into main? A merge commit is always created.',
     )
+  })
+})
+
+describe('layoutLines', () => {
+  const text = 'a\n<<<<<<< HEAD\nours1\nours2\n||||||| base\nbase1\n=======\ntheirs1\n>>>>>>> feature\nz'
+  const lines = text.split('\n')
+  const regions = [{ id: 'r1', start: 1, end: 9, baseAt: 4, sep: 6 }]
+
+  it('marks each line with the side it belongs to and where regions start', () => {
+    const info = layoutLines(lines, regions)
+    expect(info.map((l) => l.part)).toEqual([null, 'marker', 'ours', 'ours', 'marker', 'base', 'marker', 'theirs', 'marker', null])
+    expect(info.map((l) => l.starts)).toEqual([false, true, false, false, false, false, false, false, false, false])
+    expect(info[3].region?.id).toBe('r1')
+    expect(info[0].region).toBeNull()
+  })
+
+  it('gives each side of a region as text, for Edit…', () => {
+    const info = layoutLines(lines, regions)
+    expect(regionSides(lines, info, 'r1')).toEqual({ ours: 'ours1\nours2\n', theirs: 'theirs1\n' })
+  })
+
+  it('takes the separators from the backend, so a Markdown underline stays content', () => {
+    const md = ['<<<<<<< HEAD', 'Title', '==========', 'ours', '=======', 'Other', '>>>>>>> b']
+    const info = layoutLines(md, [{ id: 'r', start: 0, end: 7, baseAt: -1, sep: 4 }])
+    expect(info.map((l) => l.part)).toEqual(['marker', 'ours', 'ours', 'ours', 'marker', 'theirs', 'marker'])
+    expect(regionSides(md, info, 'r')).toEqual({ ours: 'Title\n==========\nours\n', theirs: 'Other\n' })
+  })
+
+  it('handles a two-way region with no ancestor', () => {
+    const two = ['<<<<<<< HEAD', 'o', '=======', 't', '>>>>>>> x']
+    expect(layoutLines(two, [{ id: 'r', start: 0, end: 5, baseAt: -1, sep: 2 }]).map((l) => l.part)).toEqual(['marker', 'ours', 'marker', 'theirs', 'marker'])
+  })
+})
+
+describe('keptEdit', () => {
+  const r = (id: string) => ({ id, start: 0, end: 5, baseAt: -1, sep: 2 })
+  it('keeps an edit in progress across a reload while its region is still there', () => {
+    const editing = { id: 'a', value: 'typed' }
+    expect(keptEdit(editing, [r('b'), r('a')])).toBe(editing)
+  })
+  it('drops it once the region is gone', () => {
+    expect(keptEdit({ id: 'a', value: 'typed' }, [r('b')])).toBeNull()
+    expect(keptEdit(null, [r('a')])).toBeNull()
+  })
+})
+
+describe('withLineEndings', () => {
+  it('gives an edited region back the CRLF endings its file uses', () => {
+    expect(withLineEndings('a\nb\n', 'x\r\ny\r\n')).toBe('a\r\nb\r\n')
+  })
+  it('leaves LF files, and already-CRLF text, alone', () => {
+    expect(withLineEndings('a\nb\n', 'x\ny\n')).toBe('a\nb\n')
+    expect(withLineEndings('a\r\nb\n', 'x\r\n')).toBe('a\r\nb\r\n')
   })
 })
