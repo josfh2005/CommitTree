@@ -281,7 +281,9 @@ run at once, and it is itself stopped whenever the operation is continued
 or aborted from this view.
 
 The button is offered for a merge, a rebase and a cherry-pick, and the
-resolver refuses to run for any other kind. A run is tied to the operation
+resolver refuses to run for any other kind. While a run is working on the
+repository the button is disabled (its tooltip says to stop the run from
+the chat), as are the region and Take buttons. A run is tied to the operation
 it started for by a fingerprint: the kind plus the commit being combined —
 `MERGE_HEAD` for a merge, `CHERRY_PICK_HEAD` for a cherry-pick, and for a
 rebase the commit currently being replayed (`REBASE_HEAD`, or `HEAD` on the

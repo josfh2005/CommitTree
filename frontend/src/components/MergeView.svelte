@@ -186,7 +186,7 @@
     <span class="count">{pending} left</span>
     <span class="spacer"></span>
     {#if acts.ai}
-      <button class="btn" disabled={!!$busy || pending === 0} on:click={() => resolveConflicts(repoId)}>
+      <button class="btn" disabled={locked || pending === 0} title={$chatRunRepo === repoId ? "The AI is resolving; stop it from the chat" : undefined} on:click={() => resolveConflicts(repoId)}>
         <Icon name="sparkle" size={14} /><span>Resolve with AI</span>
       </button>
     {/if}
