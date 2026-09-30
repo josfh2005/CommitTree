@@ -7,6 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
+
+	"git-ui/internal/gitcmd"
 )
 
 // ErrNoSuchRegion means the file has no region with that id any more —
@@ -111,4 +114,46 @@ func writeAtomic(full string, perm os.FileMode, content string) error {
 		return err
 	}
 	return nil
+}
+
+// Restartable are the operation's files Restart can put back as git first
+// wrote them: those still in conflict, and settled ones git kept a
+// resolve-undo record for (it keeps one when a conflicted file is staged).
+// A file the merge settled cleanly has none, so it is never offered.
+func Restartable(ctx context.Context, dir string) ([]string, error) {
+	st, err := Status(ctx, dir)
+	if err != nil {
+		return nil, err
+	}
+	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "ls-files", "-z", "--resolve-undo")
+	if err != nil {
+		return nil, err
+	}
+	undo := map[string]bool{}
+	for _, rec := range strings.Split(out, "\x00") {
+		if _, path, ok := strings.Cut(rec, "\t"); ok {
+			undo[path] = true
+		}
+	}
+	can := slices.Clone(st.Conflicts)
+	for _, p := range append(slices.Clone(st.Staged), st.Unstaged...) {
+		if undo[p] && !slices.Contains(can, p) {
+			can = append(can, p)
+		}
+	}
+	return can, nil
+}
+
+// Restart puts path back as the operation left it, markers included, and
+// unstaged — discarding what was resolved in it, by hand or by the AI.
+func Restart(ctx context.Context, dir, path string) error {
+	can, err := Restartable(ctx, dir)
+	if err != nil {
+		return err
+	}
+	if !slices.Contains(can, path) {
+		return fmt.Errorf("%w: %q was not in conflict", ErrNotInMerge, path)
+	}
+	_, err = gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "--literal-pathspecs", "checkout", "-m", "--", path)
+	return err
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -151,4 +152,55 @@ func TestResolveRegionRefusesWhatIsNotATextConflict(t *testing.T) {
 	if _, err := ResolveRegion(context.Background(), r.Dir, "f.txt", id, "<<<<<<< x\n"); !errors.Is(err, ErrMarkersLeft) {
 		t.Errorf("markers: %v", err)
 	}
+}
+
+// A resolved and staged file comes back with its markers, unstaged; a file
+// the merge settled cleanly is never offered and is refused.
+func TestRestartBringsBackAStagedFile(t *testing.T) {
+	r := twoRegionConflict(t)
+	ctx := context.Background()
+	original := readFile(t, r.Dir, "f.txt")
+	for _, h := range regions(t, r.Dir) {
+		if _, err := ResolveRegion(ctx, r.Dir, "f.txt", h.ID, "done\n"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := Stage(ctx, r.Dir, "f.txt"); err != nil {
+		t.Fatal(err)
+	}
+	can, err := Restartable(ctx, r.Dir)
+	if err != nil || !slices.Contains(can, "f.txt") {
+		t.Fatalf("restartable = %v, %v", can, err)
+	}
+	if err := Restart(ctx, r.Dir, "f.txt"); err != nil {
+		t.Fatal(err)
+	}
+	// git checkout -m cannot know the original marker labels (HEAD, the
+	// base commit, the branch name) and writes ours/base/theirs instead;
+	// the regions themselves, and so their ids, come back unchanged.
+	if got := markerLabelsDropped(readFile(t, r.Dir, "f.txt")); got != markerLabelsDropped(original) {
+		t.Fatalf("file = %q, want the original conflict %q", got, original)
+	}
+	if st := status(t, r.Dir); !slices.Contains(st.Conflicts, "f.txt") {
+		t.Fatalf("not conflicted again: %+v", st)
+	}
+}
+
+func TestRestartRefusesAFileThatWasNeverConflicted(t *testing.T) {
+	r := twoRegionConflict(t)
+	if err := Restart(context.Background(), r.Dir, "not-in-the-merge.txt"); !errors.Is(err, ErrNotInMerge) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func markerLabelsDropped(s string) string {
+	lines := strings.SplitAfter(s, "\n")
+	for i, l := range lines {
+		for _, m := range []string{"<<<<<<<", "|||||||", ">>>>>>>"} {
+			if strings.HasPrefix(l, m) {
+				lines[i] = m + "\n"
+			}
+		}
+	}
+	return strings.Join(lines, "")
 }
