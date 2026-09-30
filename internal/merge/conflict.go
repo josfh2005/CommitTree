@@ -86,16 +86,20 @@ func Parse(content string) ([]Hunk, error) {
 		}
 		hunks[i].After = strings.Join(lines[hunks[i].End:min(limit, hunks[i].End+ContextLines)], "")
 	}
-	seen := map[string]int{}
+	// A region's id is its content, so it survives the renumbering other
+	// resolves cause. Regions with the same content also carry their line:
+	// resolving one moves the other, so a stale id — a second click, the
+	// AI retrying — finds nothing rather than landing on the twin.
+	count := map[string]int{}
 	for i := range hunks {
-		h := &hunks[i]
-		sum := sha1.Sum([]byte(h.Ours + "\x00" + h.Base + "\x00" + h.Theirs))
-		id := hex.EncodeToString(sum[:4])
-		seen[id]++
-		if n := seen[id]; n > 1 {
-			id = fmt.Sprintf("%s-%d", id, n)
+		sum := sha1.Sum([]byte(hunks[i].Ours + "\x00" + hunks[i].Base + "\x00" + hunks[i].Theirs))
+		hunks[i].ID = hex.EncodeToString(sum[:4])
+		count[hunks[i].ID]++
+	}
+	for i := range hunks {
+		if count[hunks[i].ID] > 1 {
+			hunks[i].ID = fmt.Sprintf("%s@%d", hunks[i].ID, hunks[i].Start)
 		}
-		h.ID = id
 	}
 	return hunks, nil
 }

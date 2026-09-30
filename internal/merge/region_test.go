@@ -73,8 +73,34 @@ func TestRegionIDsTellRepeatsApart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if hs[1].ID != hs[0].ID+"-2" {
+	if hs[0].ID == hs[1].ID {
 		t.Fatalf("ids = %q, %q", hs[0].ID, hs[1].ID)
+	}
+}
+
+// Resolving one of two identical regions must not let a stale id — a
+// second click on it, or the AI retrying — land on the other one.
+func TestAStaleIDOfARepeatedRegionNeverHitsItsTwin(t *testing.T) {
+	same := func(s string) string { return strings.ReplaceAll(s, "X", "same") }
+	base := "a\nX\nb\nc\nd\ne\nf\ng\nh\nX\ni\n"
+	r := textConflict(t, "f.txt", same(base), strings.ReplaceAll(same(base), "same", "ours"), strings.ReplaceAll(same(base), "same", "theirs"))
+	hs := regions(t, r.Dir)
+	if len(hs) != 2 {
+		t.Fatalf("want two identical regions, got %+v", hs)
+	}
+	first, second := hs[0].ID, hs[1].ID
+	ctx := context.Background()
+	if _, err := ResolveRegion(ctx, r.Dir, "f.txt", first, "one\n"); err != nil {
+		t.Fatal(err)
+	}
+	before := readFile(t, r.Dir, "f.txt")
+	for _, id := range []string{first, second} {
+		if _, err := ResolveRegion(ctx, r.Dir, "f.txt", id, "stale\n"); !errors.Is(err, ErrNoSuchRegion) {
+			t.Errorf("stale id %s: err = %v", id, err)
+		}
+	}
+	if readFile(t, r.Dir, "f.txt") != before {
+		t.Fatal("a stale id wrote into the twin region")
 	}
 }
 
