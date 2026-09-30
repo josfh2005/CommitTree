@@ -230,3 +230,29 @@ func markerLabelsDropped(s string) string {
 	}
 	return strings.Join(lines, "")
 }
+
+// A modify/delete file, once taken, has a resolve-undo record but no pair
+// of sides to merge again: Restart must not be offered for it.
+func TestRestartIsNotOfferedForATakenModifyDelete(t *testing.T) {
+	r := testrepo.New(t)
+	r.WriteFile("gone.txt", "base\n")
+	r.Git("add", "gone.txt")
+	r.Git("commit", "-q", "-m", "base")
+	r.Git("switch", "-q", "-c", "feature")
+	r.Git("rm", "-q", "gone.txt")
+	r.Git("commit", "-q", "-m", "delete")
+	r.Git("switch", "-q", "main")
+	r.WriteFile("gone.txt", "changed\n")
+	r.Git("commit", "-q", "-am", "change")
+	ctx := context.Background()
+	if _, err := Start(ctx, r.Dir, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	if err := Take(ctx, r.Dir, "gone.txt", Theirs); err != nil {
+		t.Fatal(err)
+	}
+	can, err := Restartable(ctx, r.Dir)
+	if err != nil || slices.Contains(can, "gone.txt") {
+		t.Fatalf("restartable = %v, %v", can, err)
+	}
+}

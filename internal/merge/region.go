@@ -129,11 +129,27 @@ func Restartable(ctx context.Context, dir string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	undo := map[string]bool{}
+	// Records are "<mode> <object> <stage>\t<path>", one per stage. Only a
+	// file that had both sides (stages 2 and 3) can be merged again: a
+	// modify/delete that was taken has one, and checkout -m refuses it.
+	stages := map[string]map[string]bool{}
 	for _, rec := range strings.Split(out, "\x00") {
-		if _, path, ok := strings.Cut(rec, "\t"); ok {
-			undo[path] = true
+		meta, path, ok := strings.Cut(rec, "\t")
+		if !ok {
+			continue
 		}
+		f := strings.Fields(meta)
+		if len(f) != 3 {
+			continue
+		}
+		if stages[path] == nil {
+			stages[path] = map[string]bool{}
+		}
+		stages[path][f[2]] = true
+	}
+	undo := map[string]bool{}
+	for path, st := range stages {
+		undo[path] = st["2"] && st["3"]
 	}
 	can := slices.Clone(st.Conflicts)
 	for _, p := range append(slices.Clone(st.Staged), st.Unstaged...) {
