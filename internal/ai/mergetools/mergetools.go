@@ -6,6 +6,8 @@ package mergetools
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -45,12 +47,13 @@ func Specs() []ai.ToolSpec {
 		},
 		{
 			Name:        "resolve_hunk",
-			Description: "Replace one conflicting region with the resolved code. Send only the lines that belong in place of the region, with no conflict markers.",
+			Description: "Replace one conflicting region with the resolved code. Send only the lines that belong in place of the region, with no conflict markers. Name the region by the id read_conflict gave: region numbers shift after every resolve, ids do not, so several regions can be resolved in one turn.",
 			Parameters: object(map[string]any{
 				"path":     str("File path."),
-				"hunk":     num("Which conflicting region, counting from 0. Regions renumber as you resolve them, so re-read the file after each change."),
+				"region":   str("The region's id, as read_conflict showed it. Prefer it to hunk."),
+				"hunk":     num("Which conflicting region, counting from 0, when no region id is given. Numbers shift after each resolve."),
 				"resolved": str("The final content for that region, exactly as it will be written to the file: every line of both sides you keep, in order. What you describe in your reply is not applied; only this is. Leave out the lines shown before and after the region: they stay in the file."),
-			}, "path", "hunk", "resolved"),
+			}, "path", "resolved"),
 		},
 		{
 			Name:        "stage_file",
@@ -132,7 +135,7 @@ func readConflict(ctx context.Context, dir string, args map[string]any, sides Si
 		theirs = "their side (the branch being merged)"
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s, conflict %d of %d\n\n", path, index, len(hunks))
+	fmt.Fprintf(&b, "%s, conflict %d of %d, region id %s\n\n", path, index, len(hunks), regionIDs(hunks)[index])
 	fmt.Fprintf(&b, "--- lines before ---\n%s\n", h.Before)
 	switch {
 	case h.HasBase && h.Base == "":
@@ -160,6 +163,16 @@ func resolveHunk(ctx context.Context, dir string, args map[string]any) (string, 
 	}
 	resolved, _ := args["resolved"].(string)
 	index := argInt(args, "hunk")
+	// A region id names the region the model read, wherever it now sits:
+	// a model resolving several regions in one turn would otherwise hit the
+	// wrong one once the first resolve renumbered the rest.
+	if id, _ := args["region"].(string); id != "" {
+		hunks, _ := merge.Parse(string(data))
+		index = slices.Index(regionIDs(hunks), id)
+		if index < 0 {
+			return fmt.Sprintf("Not applied: %s has no region %s (already resolved, or never there). Call read_conflict for the current regions.", path, id), false
+		}
+	}
 	if hunks, err := merge.Parse(string(data)); err == nil && index >= 0 && index < len(hunks) {
 		if msg := checkResolution(hunks[index], resolved); msg != "" {
 			return msg, false
@@ -264,6 +277,24 @@ func bracketDelta(s string) int {
 		}
 	}
 	return d
+}
+
+// regionIDs names each region by its content, so the name survives the
+// renumbering every resolve causes. Identical regions in one file are told
+// apart by order: abcd1234, abcd1234-2.
+func regionIDs(hunks []merge.Hunk) []string {
+	ids := make([]string, len(hunks))
+	seen := map[string]int{}
+	for i, h := range hunks {
+		sum := sha1.Sum([]byte(h.Ours + "\x00" + h.Base + "\x00" + h.Theirs))
+		id := hex.EncodeToString(sum[:4])
+		seen[id]++
+		if n := seen[id]; n > 1 {
+			id = fmt.Sprintf("%s-%d", id, n)
+		}
+		ids[i] = id
+	}
+	return ids
 }
 
 // regionsLeft tells the model where a file's remaining regions are. Regions
