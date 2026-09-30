@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { abortWarning, layoutLines, regionSides, commitWarning, conflictActions, conflictHeader, isEmptyStepError, mergeSections, sideLabel, skipWarning, staleMergeChoice, takeLabels } from './merge'
+import { abortWarning, keptEdit, layoutLines, regionSides, commitWarning, conflictActions, conflictHeader, isEmptyStepError, mergeSections, sideLabel, skipWarning, staleMergeChoice, takeLabels } from './merge'
 import type { MergeState } from './types'
 
 const state = (over: Partial<MergeState> = {}): MergeState => ({
@@ -230,5 +230,17 @@ describe('layoutLines', () => {
   it('handles a two-way region with no ancestor', () => {
     const two = ['<<<<<<< HEAD', 'o', '=======', 't', '>>>>>>> x']
     expect(layoutLines(two, [{ id: 'r', start: 0, end: 5, baseAt: -1, sep: 2 }]).map((l) => l.part)).toEqual(['marker', 'ours', 'marker', 'theirs', 'marker'])
+  })
+})
+
+describe('keptEdit', () => {
+  const r = (id: string) => ({ id, start: 0, end: 5, baseAt: -1, sep: 2 })
+  it('keeps an edit in progress across a reload while its region is still there', () => {
+    const editing = { id: 'a', value: 'typed' }
+    expect(keptEdit(editing, [r('b'), r('a')])).toBe(editing)
+  })
+  it('drops it once the region is gone', () => {
+    expect(keptEdit({ id: 'a', value: 'typed' }, [r('b')])).toBeNull()
+    expect(keptEdit(null, [r('a')])).toBeNull()
   })
 })

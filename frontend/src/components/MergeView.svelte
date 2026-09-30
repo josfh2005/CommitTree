@@ -4,13 +4,13 @@
   import FileList, { rowKey } from './FileList.svelte'
   import { api } from '../lib/api'
   import { abortMerge, commitMerge, dismissStashConflict, resolveConflicts, resolveMergeRegion, restartConflictFile, skipStep, stageMergeFile, stashDrop, takeMergeSide, unstageMergeFile } from '../lib/actions'
-  import { conflictActions, conflictHeader, layoutLines, mergeSections, regionSides, takeLabels, type MergeFile } from '../lib/merge'
+  import { conflictActions, conflictHeader, keptEdit, layoutLines, mergeSections, regionSides, takeLabels, type MergeFile } from '../lib/merge'
   import { lineClass } from '../lib/diff'
   import { nextSelection, type SelectionKey } from '../lib/worktree'
   import { busy, chatRunRepo, loadMergeState, mergeState, owedStashDrop, pendingFinish } from '../lib/stores'
   import type { Region } from '../lib/types'
   import { finishingLine } from '../lib/flow'
-  import { errorMessage, openMenu } from '../lib/ui'
+  import { errorMessage, openMenu, toast } from '../lib/ui'
   import { onDestroy } from 'svelte'
 
   export let repoId: string
@@ -132,7 +132,9 @@
       resolved = f.resolved
       regions = f.regions ?? []
       restartable = f.restartable
-      editing = null
+      const kept = keptEdit(editing, regions)
+      if (editing && !kept) toast('The region you were editing was resolved meanwhile; your edit was dropped.', 'error')
+      editing = kept
       error = ''
     } catch (e) {
       if (current === request) error = errorMessage(e)

@@ -227,3 +227,10 @@ export function regionSides(lines: string[], info: LineInfo[], id: string): { ou
   const side = (part: LinePart) => lines.filter((_, i) => info[i].region?.id === id && info[i].part === part).map((l) => l + '\n').join('')
   return { ours: side('ours'), theirs: side('theirs') }
 }
+
+/** keptEdit is the hand edit to keep after the file reloads (a focus
+ *  check, another file's write): the same one while its region is still
+ *  there, none once it is gone. */
+export function keptEdit<T extends { id: string }>(editing: T | null, regions: Region[]): T | null {
+  return editing && regions.some((r) => r.id === editing.id) ? editing : null
+}
