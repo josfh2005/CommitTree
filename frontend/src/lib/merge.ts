@@ -143,7 +143,7 @@ export function conflictActions(state: MergeState): ConflictActions {
 // abortWarning is the confirmation before throwing a resolution away. The
 // wording has to follow the kind: "Abort merge / go back to where the
 // branch was" is plainly wrong for a rebase or a cherry-pick.
-export function abortWarning(state: MergeState): { title: string; message: string; confirmLabel: string } {
+export function abortWarning(state: MergeState, aiRunning = false): { title: string; message: string; confirmLabel: string } {
   const label = conflictActions(state).abort ?? 'Abort'
   const what = {
     merge: 'this merge',
@@ -155,7 +155,7 @@ export function abortWarning(state: MergeState): { title: string; message: strin
   }[state.kind || 'merge']
   return {
     title: label,
-    message: `Throw away every resolution from ${what} and go back to where the branch was?`,
+    message: `Throw away every resolution from ${what} and go back to where the branch was?` + (aiRunning ? ' The AI resolver working on it is stopped first.' : ''),
     confirmLabel: label,
   }
 }

@@ -191,13 +191,13 @@
       </button>
     {/if}
     {#if acts.abort}
-      <button class="btn" disabled={!!$busy} on:click={() => abortMerge(repoId)}>{acts.abort}</button>
+      <button class="btn" disabled={!!$busy} title={$chatRunRepo === repoId ? "Stops the AI resolver, then aborts" : undefined} on:click={() => abortMerge(repoId)}>{acts.abort}</button>
     {/if}
     {#if acts.skip}
       <button class="btn" disabled={!!$busy} on:click={() => skipStep(repoId)}>Skip this commit</button>
     {/if}
     {#if acts.confirm}
-      <button class="btn primary" disabled={!!$busy || pending > 0} on:click={() => commitMerge(repoId)}>{acts.confirm}</button>
+      <button class="btn primary" disabled={locked || pending > 0} title={$chatRunRepo === repoId ? "The AI is resolving; wait for it or stop it from the chat" : undefined} on:click={() => commitMerge(repoId)}>{acts.confirm}</button>
     {/if}
     {#if acts.done}
       <!-- A stash conflict has no git-level abort or continue. Drop stash is

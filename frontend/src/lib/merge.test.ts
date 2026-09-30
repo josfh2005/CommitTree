@@ -110,6 +110,11 @@ describe('conflictActions', () => {
 })
 
 describe('abortWarning', () => {
+  it('says the AI resolver is stopped first when one is working', () => {
+    expect(abortWarning(state(), true).message).toMatch(/The AI resolver working on it is stopped first\.$/)
+    expect(abortWarning(state()).message).not.toMatch(/AI/)
+  })
+
   it('says rebase, not merge, for a rebase', () => {
     const w = abortWarning(state({ kind: 'rebase' }))
     expect(w.title).toBe('Abort rebase')

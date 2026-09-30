@@ -1,6 +1,6 @@
 import { get } from 'svelte/store'
 import { api } from './api'
-import { busy, chatOpen, collapsedRepoGroups, expandedRepos, filters, focusCommitBox, loadIdentity, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, refs, repoManualSeeded, repos, repoSortOrder, selectRepo, selectUncommitted, selectedHash, selectedRepoId, stashConflictDismissed } from './stores'
+import { busy, chatOpen, chatRunRepo, collapsedRepoGroups, expandedRepos, filters, focusCommitBox, loadIdentity, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, refs, repoManualSeeded, repos, repoSortOrder, selectRepo, selectUncommitted, selectedHash, selectedRepoId, stashConflictDismissed } from './stores'
 import type { Branch, FileStatus, HunkAction, HunkPick, MergeState, RebasePreview, RegionChoice, Repo, ResetInfo, ResetMode, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
 import { PULL_UP_TO_DATE, UP_TO_DATE } from './types'
 import { abortWarning, commitWarning, isEmptyStepError, skipWarning, staleMergeChoice, takeMessage } from './merge'
@@ -579,7 +579,7 @@ export async function pickAndMerge(id: string) {
 
 export async function abortMerge(id: string) {
   const state = get(mergeState)
-  const warning = abortWarning(state ?? ({ kind: 'merge' } as MergeState))
+  const warning = abortWarning(state ?? ({ kind: 'merge' } as MergeState), get(chatRunRepo) === id)
   const ok = await confirmDialog({ ...warning, danger: true })
   if (ok) await run(`${warning.title}…`, () => api.abortMerge(id))
 }
