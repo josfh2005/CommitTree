@@ -633,12 +633,13 @@ func TestResolveConflictsRefusesOutsideARealMerge(t *testing.T) {
 	}
 }
 
-// A stopped resolve run is told to carry on while conflicts are left, but
-// not twice in a row without progress, and not beyond the cap.
+// A stopped resolve run is always told to carry on once; again only when
+// it left a conflicted file unread since, and never beyond the cap.
 func TestResolveNudge(t *testing.T) {
 	r := testrepo.New(t)
-	r.WriteFile("a.txt", "base\n")
-	r.WriteFile("b.txt", "base\n")
+	for _, f := range []string{"a.txt", "b.txt"} {
+		r.WriteFile(f, "base\n")
+	}
 	r.Git("add", ".")
 	r.Git("commit", "-q", "-m", "base")
 	r.Git("switch", "-q", "-c", "feature")
@@ -653,21 +654,30 @@ func TestResolveNudge(t *testing.T) {
 	if _, err := merge.Start(ctx, r.Dir, "feature"); err != nil {
 		t.Fatal(err)
 	}
-	n := &resolveNudge{dir: r.Dir, startedFor: merge.Fingerprint(ctx, r.Dir)}
+	read := func(n *resolveNudge, path string) {
+		n.saw(ai.ToolCall{Name: "read_conflict", Args: map[string]any{"path": path}})
+	}
 
-	first := n.next(ctx)
-	if !strings.Contains(first, "a.txt") || !strings.Contains(first, "b.txt") {
+	// Read everything, declined everything: nudged once, then left alone.
+	n := &resolveNudge{dir: r.Dir, startedFor: merge.Fingerprint(ctx, r.Dir)}
+	read(n, "a.txt")
+	read(n, "b.txt")
+	if first := n.next(ctx); !strings.Contains(first, "a.txt") || !strings.Contains(first, "b.txt") {
 		t.Fatalf("first nudge = %q", first)
 	}
+	read(n, "a.txt")
+	read(n, "b.txt")
 	if again := n.next(ctx); again != "" {
-		t.Fatalf("nudged again with no progress: %q", again)
+		t.Fatalf("nudged a model that read every file left: %q", again)
 	}
-	r.WriteFile("a.txt", "ours\ntheirs\n")
-	r.Git("add", "a.txt")
-	if second := n.next(ctx); !strings.Contains(second, "b.txt") || strings.Contains(second, "a.txt") {
+
+	// Stopped without reading b.txt: nudged again, but not past the cap.
+	n = &resolveNudge{dir: r.Dir, startedFor: merge.Fingerprint(ctx, r.Dir)}
+	n.next(ctx)
+	read(n, "a.txt")
+	if second := n.next(ctx); !strings.Contains(second, "b.txt") {
 		t.Fatalf("second nudge = %q", second)
 	}
-	r.WriteFile("b.txt", "ours\n")
 	if third := n.next(ctx); third != "" {
 		t.Fatalf("nudged past the cap: %q", third)
 	}

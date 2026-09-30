@@ -329,14 +329,16 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 
 	a.emit(agent.EventStart, agent.StartEvent{RepoID: repoID, RunID: runID, Text: text, Provider: cfg.ChatProvider, Model: cfg.ChatModel})
 
+	nudge := &resolveNudge{dir: repo.Path, startedFor: startedFor}
 	go func() {
 		run := agent.Run{
 			RepoID: repoID, RunID: runID,
 			Provider: provider, Model: cfg.ChatModel, System: system,
 			Tools:    append(mergetools.Specs(), tools.Specs()...),
 			MaxSteps: MergeMaxSteps,
-			Continue: (&resolveNudge{dir: repo.Path, startedFor: startedFor}).next,
+			Continue: nudge.next,
 			RunTool: func(ctx context.Context, call ai.ToolCall, step int) string {
+				nudge.saw(call)
 				if isMergeTool(call.Name) {
 					return a.runMergeTool(ctx, repoID, startedFor, sides, call)
 				}
@@ -381,15 +383,30 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 const MaxResolveNudges = 2
 
 // resolveNudge decides whether a resolve run whose model has stopped should
-// be told to carry on: only while the operation it was started for still
-// has conflicted files, at most MaxResolveNudges times, and — after the
-// first — only when the model made progress since the last nudge. A model
-// that stops again with nothing changed is leaving the rest on purpose (or
-// is stuck); pressing it further would push it to guess.
+// be told to carry on, while the operation it was started for still has
+// conflicted files and at most MaxResolveNudges times. The first time it
+// always does: even a strong model leaves a region it could settle with a
+// closer look. After that only when some conflicted file went unread since
+// the last nudge — a model that stopped without looking. One that read
+// every file left and still declined is leaving them on purpose; pressing
+// it again only pushes it to guess.
 type resolveNudge struct {
 	dir, startedFor string
 	asks            int
-	last            string
+	read            map[string]bool // read_conflict paths since the last nudge
+}
+
+// saw notes a tool call of the run (calls and Continue share its goroutine).
+func (n *resolveNudge) saw(call ai.ToolCall) {
+	if call.Name != "read_conflict" {
+		return
+	}
+	if path, _ := call.Args["path"].(string); path != "" {
+		if n.read == nil {
+			n.read = map[string]bool{}
+		}
+		n.read[path] = true
+	}
 }
 
 func (n *resolveNudge) next(ctx context.Context) string {
@@ -400,12 +417,12 @@ func (n *resolveNudge) next(ctx context.Context) string {
 	if err != nil || !st.Merging || len(st.Conflicts) == 0 {
 		return ""
 	}
-	left, _ := mergetools.Run(ctx, n.dir, ai.ToolCall{Name: "list_conflicts"}, mergetools.Sides{})
-	if n.asks > 0 && left == n.last {
+	if n.asks > 0 && !slices.ContainsFunc(st.Conflicts, func(p string) bool { return !n.read[p] }) {
 		return ""
 	}
+	left, _ := mergetools.Run(ctx, n.dir, ai.ToolCall{Name: "list_conflicts"}, mergetools.Sides{})
 	n.asks++
-	n.last = left
+	n.read = nil
 	return "CommitTree: you stopped, but git still reports these files in conflict:\n" + left +
 		"\nCarry on with read_conflict, resolve_hunk and stage_file; a file whose regions are all resolved still needs stage_file. " +
 		"If you are leaving a region for the user on purpose, name it and say why in one line, then stop."
