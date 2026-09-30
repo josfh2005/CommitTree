@@ -215,6 +215,8 @@ export namespace app {
 	    id: string;
 	    start: number;
 	    end: number;
+	    baseAt: number;
+	    sep: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Region(source);
@@ -225,6 +227,8 @@ export namespace app {
 	        this.id = source["id"];
 	        this.start = source["start"];
 	        this.end = source["end"];
+	        this.baseAt = source["baseAt"];
+	        this.sep = source["sep"];
 	    }
 	}
 	export class ConflictFile {

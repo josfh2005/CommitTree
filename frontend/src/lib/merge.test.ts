@@ -205,7 +205,7 @@ describe('staleMergeChoice', () => {
 describe('layoutLines', () => {
   const text = 'a\n<<<<<<< HEAD\nours1\nours2\n||||||| base\nbase1\n=======\ntheirs1\n>>>>>>> feature\nz'
   const lines = text.split('\n')
-  const regions = [{ id: 'r1', start: 1, end: 9 }]
+  const regions = [{ id: 'r1', start: 1, end: 9, baseAt: 4, sep: 6 }]
 
   it('marks each line with the side it belongs to and where regions start', () => {
     const info = layoutLines(lines, regions)
@@ -220,8 +220,15 @@ describe('layoutLines', () => {
     expect(regionSides(lines, info, 'r1')).toEqual({ ours: 'ours1\nours2\n', theirs: 'theirs1\n' })
   })
 
+  it('takes the separators from the backend, so a Markdown underline stays content', () => {
+    const md = ['<<<<<<< HEAD', 'Title', '==========', 'ours', '=======', 'Other', '>>>>>>> b']
+    const info = layoutLines(md, [{ id: 'r', start: 0, end: 7, baseAt: -1, sep: 4 }])
+    expect(info.map((l) => l.part)).toEqual(['marker', 'ours', 'ours', 'ours', 'marker', 'theirs', 'marker'])
+    expect(regionSides(md, info, 'r')).toEqual({ ours: 'Title\n==========\nours\n', theirs: 'Other\n' })
+  })
+
   it('handles a two-way region with no ancestor', () => {
     const two = ['<<<<<<< HEAD', 'o', '=======', 't', '>>>>>>> x']
-    expect(layoutLines(two, [{ id: 'r', start: 0, end: 5 }]).map((l) => l.part)).toEqual(['marker', 'ours', 'marker', 'theirs', 'marker'])
+    expect(layoutLines(two, [{ id: 'r', start: 0, end: 5, baseAt: -1, sep: 2 }]).map((l) => l.part)).toEqual(['marker', 'ours', 'marker', 'theirs', 'marker'])
   })
 })

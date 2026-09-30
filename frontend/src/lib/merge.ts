@@ -204,18 +204,18 @@ export interface LineInfo {
 }
 
 /** layoutLines says, for each line of a conflict file, which region and
- *  which side of it the line belongs to. The backend gives the spans; this
- *  only walks the markers inside them. */
+ *  which side of it the line belongs to — all from the backend's spans, so
+ *  content that looks like a marker (a Markdown underline) stays content. */
 export function layoutLines(lines: string[], regions: Region[]): LineInfo[] {
   const info: LineInfo[] = lines.map(() => ({ part: null, region: null, starts: false }))
   for (const r of regions) {
-    let side: LinePart = 'ours'
+    const oursEnd = r.baseAt >= 0 ? r.baseAt : r.sep
     for (let i = r.start; i < Math.min(r.end, lines.length); i++) {
-      const l = lines[i]
-      let part: LinePart = side
-      if (i === r.start || i === r.end - 1) part = 'marker'
-      else if (side === 'ours' && l.startsWith('|||||||')) { part = 'marker'; side = 'base' }
-      else if (side !== 'theirs' && l.startsWith('=======')) { part = 'marker'; side = 'theirs' }
+      let part: LinePart
+      if (i === r.start || i === r.end - 1 || i === r.baseAt || i === r.sep) part = 'marker'
+      else if (i < oursEnd) part = 'ours'
+      else if (i < r.sep) part = 'base'
+      else part = 'theirs'
       info[i] = { part, region: r, starts: i === r.start }
     }
   }

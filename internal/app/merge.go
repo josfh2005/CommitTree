@@ -28,6 +28,10 @@ type Region struct {
 	ID    string `json:"id"`
 	Start int    `json:"start"`
 	End   int    `json:"end"`
+	// BaseAt is the ||||||| line (-1 without an ancestor section), Sep the
+	// ======= line: the view needs no marker parsing of its own.
+	BaseAt int `json:"baseAt"`
+	Sep    int `json:"sep"`
 }
 
 type ConflictFile struct {
@@ -129,7 +133,7 @@ func (a *App) GetConflictFile(id, path string) (ConflictFile, error) {
 			f := ConflictFile{Path: path, Text: string(data), Regions: []Region{}, Restartable: restartable}
 			if hunks, err := merge.Parse(f.Text); err == nil {
 				for _, h := range hunks {
-					f.Regions = append(f.Regions, Region{ID: h.ID, Start: h.Start, End: h.End})
+					f.Regions = append(f.Regions, Region{ID: h.ID, Start: h.Start, End: h.End, BaseAt: h.BaseAt, Sep: h.Sep})
 				}
 			}
 			return f, nil

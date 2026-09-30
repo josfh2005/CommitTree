@@ -36,8 +36,11 @@ type Hunk struct {
 	// view's buttons both use it.
 	ID string
 	// Start and End are the line indices of the marker block; End is
-	// exclusive.
-	Start, End int
+	// exclusive. BaseAt is the ||||||| line (-1 in the two-way style) and
+	// Sep the ======= line, so a view can tell the sides apart without
+	// telling git's markers from look-alike content itself.
+	Start, End  int
+	BaseAt, Sep int
 }
 
 // Parse returns the conflicted regions of content, in file order.
@@ -48,7 +51,7 @@ func Parse(content string) ([]Hunk, error) {
 		if !marker(lines[i], "<<<<<<<") {
 			continue
 		}
-		h := Hunk{Index: len(hunks), Start: i}
+		h := Hunk{Index: len(hunks), Start: i, BaseAt: -1}
 		var ours, base, theirs []string
 		side := &ours
 		closed := false
@@ -60,8 +63,10 @@ func Parse(content string) ([]Hunk, error) {
 			case marker(line, "|||||||") && side == &ours:
 				side = &base
 				h.HasBase = true
+				h.BaseAt = i
 			case marker(line, "=======") && side != &theirs:
 				side = &theirs
+				h.Sep = i
 			case marker(line, ">>>>>>>") && side == &theirs:
 				h.End = i + 1
 				closed = true

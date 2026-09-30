@@ -341,6 +341,10 @@ export interface Region {
   id: string
   start: number
   end: number
+  /** the ||||||| line, -1 when there is no ancestor section */
+  baseAt: number
+  /** the ======= line */
+  sep: number
 }
 
 export interface RegionResult {

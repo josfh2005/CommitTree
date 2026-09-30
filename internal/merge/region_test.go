@@ -256,3 +256,19 @@ func TestRestartIsNotOfferedForATakenModifyDelete(t *testing.T) {
 		t.Fatalf("restartable = %v, %v", can, err)
 	}
 }
+
+// A setext heading's underline is content, not a separator: the spans the
+// view uses must say where git's own separators are.
+func TestParseGivesSeparatorLines(t *testing.T) {
+	hs, err := Parse("x\n<<<<<<< HEAD\nTitle\n==========\nours\n||||||| base\nold\n=======\nOther\n>>>>>>> b\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h := hs[0]; h.Start != 1 || h.BaseAt != 5 || h.Sep != 7 || h.End != 10 {
+		t.Fatalf("start %d baseAt %d sep %d end %d", h.Start, h.BaseAt, h.Sep, h.End)
+	}
+	two, _ := Parse("<<<<<<< HEAD\no\n=======\nt\n>>>>>>> b\n")
+	if two[0].BaseAt != -1 || two[0].Sep != 2 {
+		t.Fatalf("two-way: baseAt %d sep %d", two[0].BaseAt, two[0].Sep)
+	}
+}
