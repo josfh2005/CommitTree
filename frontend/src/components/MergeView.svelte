@@ -4,7 +4,7 @@
   import FileList, { rowKey } from './FileList.svelte'
   import { api } from '../lib/api'
   import { abortMerge, commitMerge, dismissStashConflict, resolveConflicts, resolveMergeRegion, restartConflictFile, skipStep, stageMergeFile, stashDrop, takeMergeSide, unstageMergeFile } from '../lib/actions'
-  import { conflictActions, conflictHeader, keptEdit, layoutLines, mergeSections, regionSides, takeLabels, type MergeFile } from '../lib/merge'
+  import { conflictActions, conflictHeader, keptEdit, layoutLines, mergeSections, regionSides, takeLabels, withLineEndings, type MergeFile } from '../lib/merge'
   import { lineClass } from '../lib/diff'
   import { nextSelection, type SelectionKey } from '../lib/worktree'
   import { busy, chatRunRepo, loadMergeState, mergeState, owedStashDrop, pendingFinish } from '../lib/stores'
@@ -30,7 +30,8 @@
   // What a hovered Take button would keep, to dim the rest of its region.
   let hover: { id: string; keep: 'ours' | 'theirs' } | null = null
   // The region being edited by hand, and its text box's content.
-  let editing: { id: string; value: string } | null = null
+  // sample is the region's original text, whose line endings the edit keeps.
+  let editing: { id: string; value: string; sample: string } | null = null
 
   $: lines = text.split('\n')
   $: layout = layoutLines(lines, regions)
@@ -52,14 +53,14 @@
 
   function startEdit(regionId: string) {
     const s = regionSides(lines, layout, regionId)
-    editing = { id: regionId, value: s.ours + s.theirs }
+    editing = { id: regionId, value: s.ours + s.theirs, sample: s.ours + s.theirs }
   }
 
   function applyEdit() {
     if (!selection || !editing) return
-    const { id, value } = editing
+    const { id, value, sample } = editing
     editing = null
-    resolveMergeRegion(repoId, selection.path, id, 'text', value, refresh)
+    resolveMergeRegion(repoId, selection.path, id, 'text', withLineEndings(value, sample), refresh)
   }
 
   function editKeys(e: KeyboardEvent) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { abortWarning, keptEdit, layoutLines, regionSides, commitWarning, conflictActions, conflictHeader, isEmptyStepError, mergeSections, sideLabel, skipWarning, staleMergeChoice, takeLabels } from './merge'
+import { abortWarning, keptEdit, withLineEndings, layoutLines, regionSides, commitWarning, conflictActions, conflictHeader, isEmptyStepError, mergeSections, sideLabel, skipWarning, staleMergeChoice, takeLabels } from './merge'
 import type { MergeState } from './types'
 
 const state = (over: Partial<MergeState> = {}): MergeState => ({
@@ -242,5 +242,15 @@ describe('keptEdit', () => {
   it('drops it once the region is gone', () => {
     expect(keptEdit({ id: 'a', value: 'typed' }, [r('b')])).toBeNull()
     expect(keptEdit(null, [r('a')])).toBeNull()
+  })
+})
+
+describe('withLineEndings', () => {
+  it('gives an edited region back the CRLF endings its file uses', () => {
+    expect(withLineEndings('a\nb\n', 'x\r\ny\r\n')).toBe('a\r\nb\r\n')
+  })
+  it('leaves LF files, and already-CRLF text, alone', () => {
+    expect(withLineEndings('a\nb\n', 'x\ny\n')).toBe('a\nb\n')
+    expect(withLineEndings('a\r\nb\n', 'x\r\n')).toBe('a\r\nb\r\n')
   })
 })

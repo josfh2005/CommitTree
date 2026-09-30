@@ -234,3 +234,10 @@ export function regionSides(lines: string[], info: LineInfo[], id: string): { ou
 export function keptEdit<T extends { id: string }>(editing: T | null, regions: Region[]): T | null {
   return editing && regions.some((r) => r.id === editing.id) ? editing : null
 }
+
+/** withLineEndings gives text the CRLF line endings sample uses. A text box
+ *  hands back LF only, so an edited region of a CRLF file would otherwise
+ *  come back with mixed endings. */
+export function withLineEndings(text: string, sample: string): string {
+  return sample.includes('\r\n') ? text.replace(/\r?\n/g, '\r\n') : text
+}
