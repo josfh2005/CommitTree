@@ -330,7 +330,25 @@ export interface ConflictFile {
   path: string
   resolved: boolean
   text: string
+  /** where each conflict region sits in text, by line (backend-parsed) */
+  regions: Region[]
+  /** Restart file can put it back as git first wrote it */
+  restartable: boolean
 }
+
+/** One conflict region of a ConflictFile: lines start..end (exclusive). */
+export interface Region {
+  id: string
+  start: number
+  end: number
+}
+
+export interface RegionResult {
+  left: number
+  staged: boolean
+}
+
+export type RegionChoice = 'ours' | 'theirs' | 'both' | 'text'
 
 export interface MergeChangedEvent { repoID: string }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { abortWarning, commitWarning, conflictActions, conflictHeader, isEmptyStepError, mergeSections, sideLabel, skipWarning, staleMergeChoice, takeLabels } from './merge'
+import { abortWarning, layoutLines, regionSides, commitWarning, conflictActions, conflictHeader, isEmptyStepError, mergeSections, sideLabel, skipWarning, staleMergeChoice, takeLabels } from './merge'
 import type { MergeState } from './types'
 
 const state = (over: Partial<MergeState> = {}): MergeState => ({
@@ -199,5 +199,29 @@ describe('staleMergeChoice', () => {
     expect(c.message('origin/master')).toBe(
       'master is 1 commit behind origin/master and 2 ahead of it; merging origin/master leaves those 2 out. Merge origin/master into main? A merge commit is always created.',
     )
+  })
+})
+
+describe('layoutLines', () => {
+  const text = 'a\n<<<<<<< HEAD\nours1\nours2\n||||||| base\nbase1\n=======\ntheirs1\n>>>>>>> feature\nz'
+  const lines = text.split('\n')
+  const regions = [{ id: 'r1', start: 1, end: 9 }]
+
+  it('marks each line with the side it belongs to and where regions start', () => {
+    const info = layoutLines(lines, regions)
+    expect(info.map((l) => l.part)).toEqual([null, 'marker', 'ours', 'ours', 'marker', 'base', 'marker', 'theirs', 'marker', null])
+    expect(info.map((l) => l.starts)).toEqual([false, true, false, false, false, false, false, false, false, false])
+    expect(info[3].region?.id).toBe('r1')
+    expect(info[0].region).toBeNull()
+  })
+
+  it('gives each side of a region as text, for Edit…', () => {
+    const info = layoutLines(lines, regions)
+    expect(regionSides(lines, info, 'r1')).toEqual({ ours: 'ours1\nours2\n', theirs: 'theirs1\n' })
+  })
+
+  it('handles a two-way region with no ancestor', () => {
+    const two = ['<<<<<<< HEAD', 'o', '=======', 't', '>>>>>>> x']
+    expect(layoutLines(two, [{ id: 'r', start: 0, end: 5 }]).map((l) => l.part)).toEqual(['marker', 'ours', 'marker', 'theirs', 'marker'])
   })
 })

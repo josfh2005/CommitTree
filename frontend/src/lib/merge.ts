@@ -1,4 +1,4 @@
-import type { AheadBehind, ConflictKind, MergeState } from './types'
+import type { AheadBehind, ConflictKind, MergeState, Region } from './types'
 import type { ChoiceOptions } from './ui'
 
 export type MergeFileStatus = 'conflict' | 'manual' | 'unstaged' | 'staged'
@@ -192,4 +192,38 @@ export function staleMergeChoice(branch: string, upstream: string, into: string,
     },
     confirmLabel: () => 'Merge',
   }
+}
+
+export type LinePart = 'marker' | 'ours' | 'base' | 'theirs' | null
+
+export interface LineInfo {
+  part: LinePart
+  region: Region | null
+  /** true on a region's <<<<<<< line, where its buttons go */
+  starts: boolean
+}
+
+/** layoutLines says, for each line of a conflict file, which region and
+ *  which side of it the line belongs to. The backend gives the spans; this
+ *  only walks the markers inside them. */
+export function layoutLines(lines: string[], regions: Region[]): LineInfo[] {
+  const info: LineInfo[] = lines.map(() => ({ part: null, region: null, starts: false }))
+  for (const r of regions) {
+    let side: LinePart = 'ours'
+    for (let i = r.start; i < Math.min(r.end, lines.length); i++) {
+      const l = lines[i]
+      let part: LinePart = side
+      if (i === r.start || i === r.end - 1) part = 'marker'
+      else if (side === 'ours' && l.startsWith('|||||||')) { part = 'marker'; side = 'base' }
+      else if (side !== 'theirs' && l.startsWith('=======')) { part = 'marker'; side = 'theirs' }
+      info[i] = { part, region: r, starts: i === r.start }
+    }
+  }
+  return info
+}
+
+/** regionSides is a region's ours and theirs text, each line ending in \n. */
+export function regionSides(lines: string[], info: LineInfo[], id: string): { ours: string; theirs: string } {
+  const side = (part: LinePart) => lines.filter((_, i) => info[i].region?.id === id && info[i].part === part).map((l) => l + '\n').join('')
+  return { ours: side('ours'), theirs: side('theirs') }
 }
