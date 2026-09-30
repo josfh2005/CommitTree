@@ -4,19 +4,39 @@
   import Icon from './Icon.svelte'
   import ModelPicker from './ModelPicker.svelte'
   import { api } from '../lib/api'
-  import { answeredBy, appliedText, applyEvent, parts, CHAT_EVENTS, isWriteTool, confirmResultText, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from '../lib/chat'
+  import { answeredBy, appliedText, applyEvent, choiceState, decisionCard, parts, CHAT_EVENTS, isWriteTool, confirmResultText, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState, type DecisionCard } from '../lib/chat'
   import { relativeDate } from '../lib/format'
   import { renderMarkdown } from '../lib/markdown'
   import { chatBlocker } from '../lib/providers'
   import { aiSettings, chatOpen, chatPreparing, jumpTo, selectedRepo, settingsOpen } from '../lib/stores'
   import type { AIStatus } from '../lib/types'
   import { copyText, errorMessage, toast } from '../lib/ui'
+  import { chooseRegionOption } from '../lib/actions'
 
   let state: ChatState = emptyChat('')
   let status: AIStatus | null = null
   let input = ''
   let list: HTMLDivElement
   let loadError = ''
+  // Decision cards, by call id: the selected option (-1 = Other…), the
+  // Other… text, and whether Apply is in flight.
+  let pick: Record<string, number> = {}
+  let own: Record<string, string> = {}
+  let applying: Record<string, boolean> = {}
+
+  function startOwn(id: string, card: DecisionCard) {
+    const from = pick[id] ?? 0
+    if (own[id] === undefined) own = { ...own, [id]: card.options[from >= 0 ? from : 0]?.text ?? '' }
+    pick = { ...pick, [id]: -1 }
+  }
+
+  async function applyChoice(id: string, card: DecisionCard) {
+    if (!state.repoID || state.runID !== null || applying[id]) return
+    const k = pick[id] ?? 0
+    applying = { ...applying, [id]: true }
+    await chooseRegionOption(state.repoID, id, k, k === -1 ? own[id] ?? '' : '', card.path)
+    applying = { ...applying, [id]: false }
+  }
 
   const offs = CHAT_EVENTS.map((name) =>
     EventsOn(name, (payload) => {
@@ -208,7 +228,43 @@
               <div class="notice">{part.text}</div>
             {:else}
               {@const tool = part.tool}
-              {#if tool.confirm}
+              {@const card = decisionCard(tool)}
+              {#if card && tool.id}
+                {@const id = tool.id}
+                <div class="confirm decision">
+                  <div class="confirm-title">{card.path} · region {card.region}</div>
+                  <div class="decision-question">{card.question}</div>
+                  {#if choiceState(tool) === 'pending'}
+                    {#each card.options as opt, k}
+                      <label class="decision-option">
+                        <input type="radio" name={id} checked={(pick[id] ?? 0) === k} on:change={() => (pick = { ...pick, [id]: k })} />
+                        <span>{opt.label}</span>
+                      </label>
+                      <pre class="decision-text" class:empty={opt.text === ''}>{opt.text === '' ? '(removes the region)' : opt.text}</pre>
+                    {/each}
+                    <label class="decision-option">
+                      <input type="radio" name={id} checked={pick[id] === -1} on:change={() => startOwn(id, card)} />
+                      <span>Other…</span>
+                    </label>
+                    {#if pick[id] === -1}
+                      <!-- svelte-ignore a11y_autofocus -->
+                      <textarea class="decision-edit" autofocus bind:value={own[id]}
+                        on:keydown={(e) => {
+                          if (e.key === 'Enter' && e.metaKey) { e.preventDefault(); applyChoice(id, card) }
+                          if (e.key === 'Escape') pick = { ...pick, [id]: 0 }
+                        }}></textarea>
+                    {/if}
+                    <div class="confirm-actions">
+                      {#if state.runID !== null}<span class="decision-wait">Available when the AI finishes</span>{/if}
+                      <button class="btn primary" disabled={state.runID !== null || applying[id]} on:click={() => applyChoice(id, card)}>Apply</button>
+                    </div>
+                  {:else if choiceState(tool) === 'chosen'}
+                    <div class="confirm-result">{tool.summary}</div>
+                  {:else}
+                    <div class="confirm-result">Settled another way</div>
+                  {/if}
+                </div>
+              {:else if tool.confirm}
                 {@const confirm = tool.confirm}
                 <div class="confirm">
                   <div class="confirm-title">{confirm.title}</div>
@@ -314,6 +370,12 @@
   .confirm-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }
   .confirm-result { margin-top: 6px; font-size: 12px; color: var(--muted); }
   .confirm-result.failed { color: var(--danger); }
+  .decision-question { margin: 4px 0 2px; }
+  .decision-option { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+  .decision-text { margin: 2px 0 0 22px; padding: 4px 6px; border-radius: 6px; background: var(--hover); font-family: var(--mono); font-size: 11px; white-space: pre-wrap; color: var(--text); }
+  .decision-text.empty { background: none; color: var(--faint); font-family: inherit; font-style: italic; }
+  .decision-edit { box-sizing: border-box; width: 100%; min-height: 60px; margin-top: 4px; font-family: var(--mono); font-size: 12px; }
+  .decision-wait { margin-right: auto; align-self: center; font-size: 12px; color: var(--faint); }
   .md :global(p) { margin: 0 0 6px; }
   .md :global(ul) { margin: 4px 0 6px; padding-left: 18px; }
   .md :global(code) { font-family: var(--mono); font-size: 12px; padding: 0 4px; border-radius: 4px; background: var(--hover); }

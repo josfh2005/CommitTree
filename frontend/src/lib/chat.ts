@@ -1,7 +1,9 @@
 import { providerShortLabel } from './providers'
-import type { AIMessage, ChatConfirmEvent, ChatDeltaEvent, ChatDoneEvent, ChatErrorEvent, ChatNoticeEvent, ChatStartEvent, ChatSuggestionsEvent, ChatToolEvent, ChatToolResultEvent } from './types'
+import type { AIMessage, ChatChoiceEvent, ChatConfirmEvent, ChatDeltaEvent, ChatDoneEvent, ChatErrorEvent, ChatNoticeEvent, ChatStartEvent, ChatSuggestionsEvent, ChatToolEvent, ChatToolResultEvent } from './types'
 
 export interface ChatToolUse {
+  // The call's id; a decision card (propose_options) is answered by it.
+  id?: string
   name: string
   args: Record<string, unknown> | null
   // How much of the answer's text came before this call, and when it came
@@ -128,7 +130,7 @@ export function fromMessages(repoID: string, messages: AIMessage[]): ChatState {
       last.model = m.model
     }
     if (m.at) last.at = m.at
-    for (const call of m.toolCalls ?? []) last.tools.push({ name: call.name, args: call.args, at: last.text.length, seq: nextSeq() })
+    for (const call of m.toolCalls ?? []) last.tools.push({ id: call.id, name: call.name, args: call.args, at: last.text.length, seq: nextSeq() })
     if (m.stopped) last.stopped = true
   }
   return { repoID, runID: null, items }
@@ -149,9 +151,9 @@ export function startRun(state: ChatState, text: string, runID: string): ChatSta
 // CHAT_EVENTS are every event applyEvent understands. The panel subscribes
 // to this list, so a new event added to the reducer reaches the UI instead of
 // being silently dropped.
-export const CHAT_EVENTS = ['chat:start', 'chat:delta', 'chat:tool', 'chat:tool_result', 'chat:confirm', 'chat:notice', 'chat:done', 'chat:error', 'chat:suggestions'] as const
+export const CHAT_EVENTS = ['chat:start', 'chat:delta', 'chat:tool', 'chat:tool_result', 'chat:confirm', 'chat:notice', 'chat:done', 'chat:error', 'chat:suggestions', 'chat:choice'] as const
 
-type Payload = ChatStartEvent | ChatDeltaEvent | ChatToolEvent | ChatToolResultEvent | ChatConfirmEvent | ChatNoticeEvent | ChatErrorEvent | ChatDoneEvent | ChatSuggestionsEvent
+type Payload = ChatStartEvent | ChatDeltaEvent | ChatToolEvent | ChatToolResultEvent | ChatConfirmEvent | ChatNoticeEvent | ChatErrorEvent | ChatDoneEvent | ChatSuggestionsEvent | ChatChoiceEvent
 
 export function confirmState(summary: string): 'done' | 'rejected' | 'failed' {
   if (summary.startsWith('done')) return 'done'
@@ -244,6 +246,11 @@ export function applyEvent(state: ChatState, name: string, payload: Payload): Ch
   // null), and withPendingConfirm itself checks repoID and adopts ev.runID
   // — dropping it here would strand the run with no card and no Stop.
   if (name === 'chat:confirm') return withPendingConfirm(state, payload as ChatConfirmEvent)
+  // chat:choice answers a decision card, usually long after its run ended.
+  if (name === 'chat:choice') {
+    const p = payload as ChatChoiceEvent
+    return withChoice(state, p.callID, p.summary)
+  }
   // Suggestions arrive seconds after chat:done; they only belong to the
   // answer that finished last, and only while nothing else is running.
   if (name === 'chat:suggestions') {
@@ -251,7 +258,7 @@ export function applyEvent(state: ChatState, name: string, payload: Payload): Ch
     if (state.runID !== null || p.runID !== state.lastRunID) return state
     return { ...state, suggestions: p.replies }
   }
-  if (payload.runID !== state.runID || state.runID === null) return state
+  if ((payload as Exclude<Payload, ChatChoiceEvent>).runID !== state.runID || state.runID === null) return state
   const items = state.items.slice()
   const last = { ...items[items.length - 1], tools: items[items.length - 1].tools.slice() }
   items[items.length - 1] = last
@@ -261,7 +268,7 @@ export function applyEvent(state: ChatState, name: string, payload: Payload): Ch
       return { ...state, items }
     case 'chat:tool': {
       const p = payload as ChatToolEvent
-      last.tools.push({ name: p.name, args: p.args, at: last.text.length, seq: nextSeq() })
+      last.tools.push({ id: p.id, name: p.name, args: p.args, at: last.text.length, seq: nextSeq() })
       return { ...state, items }
     }
     case 'chat:tool_result': {
@@ -340,4 +347,47 @@ export function nextChatRunRepo(current: string, name: string, payload: { repoID
   if (name === 'chat:start') return payload.repoID ?? current
   if ((name === 'chat:done' || name === 'chat:error') && payload.repoID === current) return ''
   return current
+}
+
+export interface DecisionCard { path: string; region: string; question: string; options: { label: string; text: string }[] }
+
+/** The card of a propose_options call, or null when it is not one or its
+ *  args are malformed (then the ordinary tool row shows). */
+export function decisionCard(tool: Pick<ChatToolUse, 'name' | 'args'>): DecisionCard | null {
+  if (tool.name !== 'propose_options' || !tool.args) return null
+  const { path, region, question, options } = tool.args
+  if (typeof path !== 'string' || typeof region !== 'string' || typeof question !== 'string' || !Array.isArray(options)) return null
+  const opts: DecisionCard['options'] = []
+  for (const o of options) {
+    if (!o || typeof o !== 'object') return null
+    const { label, text } = o as Record<string, unknown>
+    if (typeof label !== 'string' || typeof text !== 'string') return null
+    opts.push({ label, text })
+  }
+  return { path, region, question, options: opts }
+}
+
+export type ChoiceState = 'pending' | 'chosen' | 'settled'
+
+/** What a decision card shows, read from its recorded tool result (the
+ *  backend rewrites it when the user chooses). */
+export function choiceState(tool: Pick<ChatToolUse, 'summary'>): ChoiceState {
+  const s = tool.summary ?? ''
+  if (s.startsWith('The user chose ')) return 'chosen'
+  if (s.startsWith('Settled another way')) return 'settled'
+  return 'pending'
+}
+
+/** Records a card's answer on its tool, found by call id in any item. */
+export function withChoice(state: ChatState, callID: string, summary: string): ChatState {
+  for (let i = state.items.length - 1; i >= 0; i--) {
+    const idx = state.items[i].tools.findIndex((t) => t.id === callID)
+    if (idx < 0) continue
+    const items = state.items.slice()
+    const tools = items[i].tools.slice()
+    tools[idx] = { ...tools[idx], summary }
+    items[i] = { ...items[i], tools }
+    return { ...state, items }
+  }
+  return state
 }

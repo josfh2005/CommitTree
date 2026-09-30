@@ -244,7 +244,8 @@ export interface ModelDone {
 
 export interface ChatStartEvent { repoID: string; runID: string; text: string; provider: string; model: string }
 export interface ChatDeltaEvent { repoID: string; runID: string; text: string }
-export interface ChatToolEvent { repoID: string; runID: string; name: string; args: Record<string, unknown> | null }
+export interface ChatToolEvent { repoID: string; runID: string; id?: string; name: string; args: Record<string, unknown> | null }
+export interface ChatChoiceEvent { repoID: string; callID: string; summary: string }
 export interface ChatToolResultEvent { repoID: string; runID: string; name: string; summary: string }
 export interface ChatNoticeEvent { repoID: string; runID: string; text: string }
 export interface ChatSuggestionsEvent { repoID: string; runID: string; replies: string[] }

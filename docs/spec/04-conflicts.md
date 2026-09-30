@@ -313,6 +313,36 @@ says so and points at reviewing the staged files before committing; if
 something remains, it lists exactly which files are still conflicted and
 which still need a human, by name.
 
+### Decisions left to you
+
+When the two sides of a region genuinely contradict each other — two values
+for the same setting, one side deleting what the other edited — the resolver
+does not pick one: it leaves the region as a card in the chat and carries on
+with the rest. The card names the file and the region, asks a one-line
+question, and lists two to four options, each with its label and, under it,
+the exact text that would replace the region; an option that removes the
+region says "(removes the region)". A last option, "Other…", is always
+there: it opens a text box pre-filled with the text of the option selected
+before it (the first by default), where ⌘↵ applies and Esc goes back to the
+options.
+
+Apply writes the selected text in place of the region, through the same
+code as the region buttons, and stages the file when that was its last
+region; a toast says so ("config/settings.json resolved and staged", or
+"Region resolved"), and the Merge view reloads. Nothing is committed. While
+an AI run is working on the repository the card is shown but Apply is
+disabled, with "Available when the AI finishes" — the card is answered after
+the run, not during it.
+
+Once answered the card shrinks to one line saying what was chosen; if the
+region was settled some other way first (the region buttons, or the file
+edited outside), Apply turns the card into "Settled another way" instead.
+The choice is recorded in the chat's history, so the card keeps its state
+after a reload, and a later chat with the model knows what was chosen. If
+the operation was committed or aborted meanwhile, Apply shows git's error
+and the card stays as it was. A card can be answered once. Files without
+conflict markers never get a card; they keep their Take buttons.
+
 ## Rules
 
 1. Detection runs in a fixed order — cherry-pick, then revert, then merge,

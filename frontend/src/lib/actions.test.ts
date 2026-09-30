@@ -16,6 +16,7 @@ vi.mock('./api', () => ({
     applyHunkSelection: vi.fn().mockResolvedValue(undefined),
     setRepoGroup: vi.fn().mockResolvedValue(undefined),
     reorderRepos: vi.fn().mockResolvedValue(undefined),
+    chooseRegionOption: vi.fn(),
   },
 }))
 
@@ -29,7 +30,7 @@ vi.mock('./ui', async (importOriginal) => {
   }
 })
 
-import { applyHunkSelection, commitMerge, placeRepo, placeRepoGroup, setRepoSortOrder, deleteBranch, deleteTag, removeWorktree, skipStep } from './actions'
+import { applyHunkSelection, chooseRegionOption, commitMerge, placeRepo, placeRepoGroup, setRepoSortOrder, deleteBranch, deleteTag, removeWorktree, skipStep } from './actions'
 import { api } from './api'
 import { filters, mergeState } from './stores'
 import type { Branch, Filters, MergeState, Repo, WorktreeRemovalInfo } from './types'
@@ -368,5 +369,25 @@ describe('manual repository order', () => {
     vi.mocked(api.reorderRepos).mockClear()
     await placeRepoGroup('home', 'work')
     expect(api.reorderRepos).toHaveBeenCalledWith(['b', 'a'])
+  })
+})
+
+describe('chooseRegionOption', () => {
+  beforeEach(() => toasts.set([]))
+  it('applies the pick and names the staged file', async () => {
+    vi.mocked(api.chooseRegionOption).mockResolvedValue({ left: 0, staged: true })
+    expect(await chooseRegionOption('r', 'c1', 0, '', 'config/settings.json')).toBe(true)
+    expect(api.chooseRegionOption).toHaveBeenCalledWith('r', 'c1', 0, '')
+    expect(get(toasts).map((t) => t.message)).toContain('config/settings.json resolved and staged')
+  })
+  it('says a region was resolved when regions are left', async () => {
+    vi.mocked(api.chooseRegionOption).mockResolvedValue({ left: 1, staged: false })
+    expect(await chooseRegionOption('r', 'c1', -1, 'mine\n', 'a.txt')).toBe(true)
+    expect(get(toasts).map((t) => t.message)).toContain('Region resolved')
+  })
+  it('shows the error and reports failure', async () => {
+    vi.mocked(api.chooseRegionOption).mockRejectedValue(new Error('the AI is busy'))
+    expect(await chooseRegionOption('r', 'c1', 0, '', 'a.txt')).toBe(false)
+    expect(get(toasts).some((t) => t.kind === 'error' && t.message.includes('the AI is busy'))).toBe(true)
   })
 })

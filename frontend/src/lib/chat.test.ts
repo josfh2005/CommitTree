@@ -375,3 +375,60 @@ describe('nextChatRunRepo', () => {
     expect(nextChatRunRepo('r1', 'chat:done', { repoID: 'r2' })).toBe('r1')
   })
 })
+
+import { choiceState, decisionCard, withChoice } from './chat'
+
+const cardArgs = {
+  path: 'config/settings.json', region: '3f2a9c1b', question: 'Which timeout?',
+  options: [{ label: '45000 (develop)', text: '  "apiTimeoutMs": 45000,\n' }, { label: 'remove', text: '' }],
+}
+
+describe('decisionCard', () => {
+  it('reads a propose_options call', () => {
+    expect(decisionCard({ name: 'propose_options', args: cardArgs })).toEqual(cardArgs)
+  })
+  it('is null for other tools and malformed args', () => {
+    expect(decisionCard({ name: 'resolve_hunk', args: cardArgs })).toBeNull()
+    expect(decisionCard({ name: 'propose_options', args: { ...cardArgs, options: 'x' } })).toBeNull()
+    expect(decisionCard({ name: 'propose_options', args: { ...cardArgs, options: [{ label: 1, text: '' }] } })).toBeNull()
+    expect(decisionCard({ name: 'propose_options', args: { ...cardArgs, region: undefined } })).toBeNull()
+    expect(decisionCard({ name: 'propose_options', args: null })).toBeNull()
+  })
+})
+
+describe('choiceState', () => {
+  it('follows the recorded result', () => {
+    expect(choiceState({})).toBe('pending')
+    expect(choiceState({ summary: 'Shown to the user as a card with 2 options; they will choose' })).toBe('pending')
+    expect(choiceState({ summary: 'The user chose "remove" for x (region y); it was written.' })).toBe('chosen')
+    expect(choiceState({ summary: 'Settled another way: region y of x is no longer in conflict.' })).toBe('settled')
+  })
+})
+
+describe('chat:choice', () => {
+  const history: AIMessage[] = [
+    { role: 'user', content: 'resolve' },
+    { role: 'assistant', content: '', toolCalls: [{ id: 'c1', name: 'propose_options', args: cardArgs }] },
+    { role: 'tool', toolName: 'propose_options', content: 'Shown to the user as a card with 2 options' },
+  ]
+  it('updates the card after the run ended', () => {
+    const s = fromMessages('r', history)
+    expect(s.items[1].tools[0].id).toBe('c1')
+    const next = applyEvent(s, 'chat:choice', { repoID: 'r', callID: 'c1', summary: 'The user chose "remove" for x (region y); it was written.' })
+    expect(choiceState(next.items[1].tools[0])).toBe('chosen')
+    expect(choiceState(s.items[1].tools[0])).toBe('pending')
+  })
+  it('ignores another repository and unknown ids', () => {
+    const s = fromMessages('r', history)
+    expect(applyEvent(s, 'chat:choice', { repoID: 'other', callID: 'c1', summary: 'The user chose' })).toBe(s)
+    expect(withChoice(s, 'nope', 'The user chose')).toBe(s)
+  })
+  it('is subscribed to', () => {
+    expect(CHAT_EVENTS).toContain('chat:choice')
+  })
+  it('chat:tool carries the id', () => {
+    const s = startRun(emptyChat('r'), 'resolve', 'run1')
+    const next = applyEvent(s, 'chat:tool', { repoID: 'r', runID: 'run1', id: 'c9', name: 'propose_options', args: cardArgs })
+    expect(next.items[1].tools[0].id).toBe('c9')
+  })
+})
