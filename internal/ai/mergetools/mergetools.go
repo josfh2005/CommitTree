@@ -48,7 +48,7 @@ func Specs() []ai.ToolSpec {
 			Parameters: object(map[string]any{
 				"path":     str("File path."),
 				"hunk":     num("Which conflicting region, counting from 0. Regions renumber as you resolve them, so re-read the file after each change."),
-				"resolved": str("The final content for that region."),
+				"resolved": str("The final content for that region, exactly as it will be written to the file: every line of both sides you keep, in order. What you describe in your reply is not applied; only this is."),
 			}, "path", "hunk", "resolved"),
 		},
 		{
@@ -133,7 +133,12 @@ func readConflict(ctx context.Context, dir string, args map[string]any, sides Si
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s, conflict %d of %d\n\n", path, index, len(hunks))
 	fmt.Fprintf(&b, "--- lines before ---\n%s\n", h.Before)
-	if h.Base != "" {
+	switch {
+	case h.HasBase && h.Base == "":
+		// The strongest hint there is, and the easiest to miss when the
+		// section is simply left out: nothing was there, both sides added.
+		b.WriteString("--- common ancestor ---\n(empty: neither side had lines here before; both ADDED lines at this place. Nothing was replaced, so keep both sides' lines unless they duplicate each other.)\n")
+	case h.HasBase:
 		fmt.Fprintf(&b, "--- common ancestor ---\n%s\n", h.Base)
 	}
 	fmt.Fprintf(&b, "--- %s ---\n%s\n", ours, h.Ours)

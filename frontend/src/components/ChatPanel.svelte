@@ -4,7 +4,7 @@
   import Icon from './Icon.svelte'
   import ModelPicker from './ModelPicker.svelte'
   import { api } from '../lib/api'
-  import { answeredBy, applyEvent, CHAT_EVENTS, isWriteTool, confirmResultText, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from '../lib/chat'
+  import { answeredBy, appliedText, applyEvent, CHAT_EVENTS, isWriteTool, confirmResultText, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from '../lib/chat'
   import { relativeDate } from '../lib/format'
   import { renderMarkdown } from '../lib/markdown'
   import { chatBlocker } from '../lib/providers'
@@ -221,6 +221,13 @@
                 <span class="ellipsis">{toolLabel(tool)}</span>
                 {#if tool.summary}<span class="summary ellipsis">· {tool.summary}</span>{/if}
               </div>
+              {@const applied = appliedText(tool)}
+              {#if applied !== null}
+                <details class="applied" open>
+                  <summary>Written to the file</summary>
+                  <pre>{applied}</pre>
+                </details>
+              {/if}
             {/if}
           {/each}
           {#if item.text}
@@ -285,6 +292,9 @@
   .actions { display: flex; gap: 6px; }
   .msg { max-width: 100%; -webkit-user-select: text; user-select: text; line-height: 1.5; }
   .user { align-self: flex-end; max-width: 85%; padding: 8px 12px; border-radius: 12px; background: var(--active); white-space: pre-wrap; }
+  .applied { margin: -2px 0 6px; font-size: 12px; color: var(--muted); }
+  .applied summary { cursor: pointer; padding: 0 8px; }
+  .applied pre { margin: 4px 0 0; padding: 6px 8px; max-height: 240px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 11px; white-space: pre; }
   .tool { display: flex; align-items: center; gap: 6px; max-width: 100%; margin-bottom: 4px; padding: 2px 8px; border-radius: 6px; background: var(--hover); color: var(--muted); font-size: 12px; }
   .summary { color: var(--faint); }
   .confirm { margin-bottom: 6px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { answeredBy, applyEvent, isWriteTool, CHAT_EVENTS, confirmResultText, confirmState, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from './chat'
+import { answeredBy, appliedText, applyEvent, isWriteTool, CHAT_EVENTS, confirmResultText, confirmState, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from './chat'
 import type { AIMessage, ChatConfirmEvent } from './types'
 
 describe('fromMessages', () => {
@@ -317,5 +317,17 @@ describe('isWriteTool', () => {
     for (const name of ['search_log', 'working_tree_status', 'diff_working_file', 'blame_file']) {
       expect(isWriteTool(name), name).toBe(false)
     }
+  })
+})
+
+describe('appliedText', () => {
+  it('shows exactly what resolve_hunk wrote', () => {
+    expect(appliedText({ name: 'resolve_hunk', args: { path: 'a.html', hunk: 0, resolved: '<menu></menu>\n<form></form>\n' } })).toBe('<menu></menu>\n<form></form>')
+  })
+  it('says when the region was removed', () => {
+    expect(appliedText({ name: 'resolve_hunk', args: { path: 'a.html', hunk: 0, resolved: '' } })).toBe('(region removed: nothing written in its place)')
+  })
+  it('is null for other tools', () => {
+    expect(appliedText({ name: 'read_conflict', args: { path: 'a.html', hunk: 0 } })).toBeNull()
   })
 })

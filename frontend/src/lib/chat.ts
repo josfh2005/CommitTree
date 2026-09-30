@@ -240,12 +240,22 @@ export function applyEvent(state: ChatState, name: string, payload: Payload): Ch
   return state
 }
 
-// WRITE_TOOLS mirrors writetools.Specs in internal/ai/writetools: the chat
-// tools that change the repository, shown with a pencil instead of the
-// magnifier the read tools get.
-const WRITE_TOOLS = new Set(['stage_files', 'unstage_files', 'commit', 'create_branch', 'checkout_branch', 'stash_push', 'fetch', 'push', 'pull', 'merge_branch', 'cherry_pick'])
+// WRITE_TOOLS mirrors writetools.Specs in internal/ai/writetools, plus the
+// conflict agent's writes (internal/ai/mergetools): the tools that change
+// the repository, shown with a pencil instead of the magnifier the read
+// tools get.
+const WRITE_TOOLS = new Set(['stage_files', 'unstage_files', 'commit', 'create_branch', 'checkout_branch', 'stash_push', 'fetch', 'push', 'pull', 'merge_branch', 'cherry_pick', 'resolve_hunk', 'stage_file'])
 
 export const isWriteTool = (name: string): boolean => WRITE_TOOLS.has(name)
+
+/** appliedText is what a resolve_hunk call wrote in place of the region,
+ *  shown under its row: the model's reply can describe a different
+ *  resolution than the one it sent. null for any other tool. */
+export function appliedText(tool: { name: string; args: Record<string, unknown> | null }): string | null {
+  if (tool.name !== 'resolve_hunk') return null
+  const text = typeof tool.args?.resolved === 'string' ? tool.args.resolved : ''
+  return text.trim() === '' ? '(region removed: nothing written in its place)' : text.replace(/\n$/, '')
+}
 
 export function toolLabel(tool: { name: string; args: Record<string, unknown> | null }): string {
   const value = Object.values(tool.args ?? {}).find((v) => v !== '' && v !== null && v !== undefined)

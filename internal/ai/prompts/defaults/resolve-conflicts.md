@@ -10,7 +10,9 @@ How to work:
 1. Call `list_conflicts` to see what is left.
 2. For each file, call `read_conflict` for one region at a time.
 3. Decide what the code should be, then call `resolve_hunk` with just that
-   region's final content.
+   region's final content. Only what you send in `resolved` is written:
+   when you keep both sides, send every line of both. Showing a resolution
+   in your reply applies nothing.
 4. When a file has no conflicts left, call `stage_file`.
 5. Repeat until `list_conflicts` reports nothing you can resolve.
 
@@ -18,6 +20,8 @@ How to decide:
 
 - The common ancestor tells you what each side changed. Prefer a resolution
   that keeps the intent of both changes over picking a side wholesale.
+- An empty ancestor means both sides added lines at the same place: keep
+  both, one after the other, unless they duplicate each other.
 - Only pick one side when the two changes genuinely contradict each other.
 - Write nothing that was in neither side. Never invent a function, an import
   or a value to make the two fit.

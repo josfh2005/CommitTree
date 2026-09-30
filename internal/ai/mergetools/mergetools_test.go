@@ -441,3 +441,26 @@ func TestReadConflictPrintsTheGivenSides(t *testing.T) {
 		t.Fatalf("zero Sides must keep the merge wording; out = %s", out)
 	}
 }
+
+// Both sides appending at the end of a file leaves an empty ancestor; the
+// model must be told so rather than see no ancestor at all.
+func TestReadConflictSaysBothSidesAddedWhenTheAncestorIsEmpty(t *testing.T) {
+	r := testrepo.New(t)
+	r.Git("config", "merge.conflictStyle", "diff3")
+	r.WriteFile("page.html", "<main></main>\n")
+	r.Git("add", "page.html")
+	r.Git("commit", "-q", "-m", "page")
+	r.Git("switch", "-q", "-c", "feature")
+	r.WriteFile("page.html", "<main></main>\n<form></form>\n")
+	r.Git("commit", "-q", "-am", "form")
+	r.Git("switch", "-q", "main")
+	r.WriteFile("page.html", "<main></main>\n<menu></menu>\n")
+	r.Git("commit", "-q", "-am", "menu")
+	if _, err := merge.Start(context.Background(), r.Dir, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	out, _ := mergetools.Run(context.Background(), r.Dir, call("read_conflict", map[string]any{"path": "page.html", "hunk": float64(0)}), mergetools.Sides{})
+	if !strings.Contains(out, "--- common ancestor ---") || !strings.Contains(out, "both ADDED lines") {
+		t.Errorf("out = %q", out)
+	}
+}
