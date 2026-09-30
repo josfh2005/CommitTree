@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"git-ui/internal/ai"
@@ -48,7 +49,7 @@ func Specs() []ai.ToolSpec {
 			Parameters: object(map[string]any{
 				"path":     str("File path."),
 				"hunk":     num("Which conflicting region, counting from 0. Regions renumber as you resolve them, so re-read the file after each change."),
-				"resolved": str("The final content for that region, exactly as it will be written to the file: every line of both sides you keep, in order. What you describe in your reply is not applied; only this is."),
+				"resolved": str("The final content for that region, exactly as it will be written to the file: every line of both sides you keep, in order. What you describe in your reply is not applied; only this is. Leave out the lines shown before and after the region: they stay in the file."),
 			}, "path", "hunk", "resolved"),
 		},
 		{
@@ -159,6 +160,11 @@ func resolveHunk(ctx context.Context, dir string, args map[string]any) (string, 
 	}
 	resolved, _ := args["resolved"].(string)
 	index := argInt(args, "hunk")
+	if hunks, err := merge.Parse(string(data)); err == nil && index >= 0 && index < len(hunks) {
+		if msg := checkResolution(hunks[index], resolved); msg != "" {
+			return msg, false
+		}
+	}
 	out, err := merge.Splice(string(data), index, resolved)
 	if errors.Is(err, merge.ErrNoSuchHunk) {
 		hunks, _ := merge.Parse(string(data))
@@ -195,6 +201,69 @@ func resolveHunk(ctx context.Context, dir string, args map[string]any) (string, 
 		return "Wrote " + path + ", but it no longer parses: " + err.Error(), true
 	}
 	return "Applied. " + regionsLeft(path, len(left)), true
+}
+
+// checkResolution catches the two slips small models make most, before
+// anything is written: repeating the context lines read_conflict showed
+// around the region (they stay in the file, so they would appear twice),
+// and brackets that no longer balance the way both sides agree they should.
+// It returns why the resolution was refused, or "".
+func checkResolution(h merge.Hunk, resolved string) string {
+	r := textLines(resolved)
+	ours, theirs := textLines(h.Ours), textLines(h.Theirs)
+	before, after := textLines(h.Before), textLines(h.After)
+	for k := min(len(before), len(r)); k > 0; k-- {
+		echo := r[:k]
+		if hasText(echo) && slices.Equal(echo, before[len(before)-k:]) && !hasPrefix(ours, echo) && !hasPrefix(theirs, echo) {
+			return fmt.Sprintf("Not applied: your resolution starts with the %d line(s) shown under \"lines before\" (%q…). Those stay in the file, so they would appear twice. Send only what replaces the region.", k, echo[0])
+		}
+	}
+	for k := min(len(after), len(r)); k > 0; k-- {
+		echo := r[len(r)-k:]
+		if hasText(echo) && slices.Equal(echo, after[:k]) && !hasSuffix(ours, echo) && !hasSuffix(theirs, echo) {
+			return fmt.Sprintf("Not applied: your resolution ends with the %d line(s) shown under \"lines after\" (%q…). Those stay in the file, so they would appear twice. Send only what replaces the region.", k, echo[0])
+		}
+	}
+	if d := bracketDelta(h.Ours); d == bracketDelta(h.Theirs) && bracketDelta(resolved) != d {
+		return fmt.Sprintf("Not applied: both sides leave brackets unbalanced by %d here, your resolution by %d — a bracket was dropped or repeated (often a closing } that is already under \"lines after\"). Send the region again.", d, bracketDelta(resolved))
+	}
+	return ""
+}
+
+// textLines splits s into lines without their endings or trailing blanks.
+func textLines(s string) []string {
+	if s == "" {
+		return nil
+	}
+	lines := strings.Split(strings.TrimSuffix(s, "\n"), "\n")
+	for i, l := range lines {
+		lines[i] = strings.TrimRight(l, " \t\r")
+	}
+	return lines
+}
+
+func hasText(lines []string) bool {
+	return slices.ContainsFunc(lines, func(l string) bool { return strings.TrimSpace(l) != "" })
+}
+
+func hasPrefix(lines, p []string) bool { return len(lines) >= len(p) && slices.Equal(lines[:len(p)], p) }
+
+func hasSuffix(lines, s []string) bool {
+	return len(lines) >= len(s) && slices.Equal(lines[len(lines)-len(s):], s)
+}
+
+// bracketDelta is how many more brackets s opens than it closes.
+func bracketDelta(s string) int {
+	d := 0
+	for _, c := range s {
+		switch c {
+		case '(', '[', '{':
+			d++
+		case ')', ']', '}':
+			d--
+		}
+	}
+	return d
 }
 
 // regionsLeft tells the model where a file's remaining regions are. Regions

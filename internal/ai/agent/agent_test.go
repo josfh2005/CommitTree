@@ -359,3 +359,39 @@ func TestTrim(t *testing.T) {
 		t.Fatal("Trim modified its input")
 	}
 }
+
+// A run with Continue goes on when it says there is work left, sending its
+// text as a user message, and ends once it has nothing more to say.
+func TestContinueKeepsTheRunGoing(t *testing.T) {
+	p := &scripted{turns: [][]ai.Chunk{
+		{{Delta: "Next I will resolve b."}, {Done: true}},
+		{{ToolCalls: []ai.ToolCall{{ID: "c1", Name: "list_refs"}}}, {Done: true}},
+		{{Delta: "Done."}, {Done: true}},
+	}}
+	rec := &recorder{}
+	run := baseRun(p, rec)
+	asked := 0
+	run.Continue = func(context.Context) string {
+		asked++
+		if asked == 1 {
+			return "b is still conflicted; carry on."
+		}
+		return ""
+	}
+	got, err := agent.Execute(context.Background(), run, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if asked != 2 || len(p.requests) != 3 {
+		t.Fatalf("asked %d times, %d requests", asked, len(p.requests))
+	}
+	if !reflect.DeepEqual(got[2], ai.Message{Role: ai.RoleUser, Content: "b is still conflicted; carry on."}) {
+		t.Fatalf("history[2] = %#v", got[2])
+	}
+	if last := got[len(got)-1]; last.Content != "Done." {
+		t.Fatalf("last = %#v", last)
+	}
+	if rec.names[1] != agent.EventNotice {
+		t.Fatalf("events = %v", rec.names)
+	}
+}

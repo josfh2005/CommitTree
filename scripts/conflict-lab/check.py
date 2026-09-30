@@ -13,6 +13,10 @@ to <lab>-results.md, next to the lab, so a rebuilt lab keeps the history.
   PARTIAL     acceptable but not ideal (picked a side of a real contradiction)
   UNRESOLVED  markers left on something that had a clear answer
   FAIL        wrong: a side's lines lost, something invented, or broken code
+
+A resolved scenario whose file was never staged (the resolver still has to
+call stage_file) keeps its verdict but is flagged "not staged" and loses a
+quarter point: git still lists the file as conflicted.
 """
 import argparse
 import datetime
@@ -222,18 +226,20 @@ def modify_delete_file(lab):
     return "FAIL", "settled a modify/delete conflict the resolver must leave alone"
 
 
+# (id, name, check, file whose staging is checked — None for the scenario
+# that must stay unmerged)
 SCENARIOS = [
-    ("1", "HTML, both append at the end", html_both_appended),
-    ("2", "TS imports, both add", orders_imports),
-    ("3", "TS method, two compatible edits", orders_list),
-    ("4", "TS class, both add a method", orders_methods),
-    ("5", "rename + body change", format_rename),
-    ("6", "JSON, both add a flag", settings_features),
-    ("7", "JSON, contradicting values", settings_timeout),
-    ("8", "Python, both add an elif", tax_elifs),
-    ("9", "delete vs edit in a file", discount_delete_vs_edit),
-    ("10", "Markdown list, shared + different lines", readme_dedupe),
-    ("11", "modify/delete file (no markers)", modify_delete_file),
+    ("1", "HTML, both append at the end", html_both_appended, "src/app/chat-window.component.html"),
+    ("2", "TS imports, both add", orders_imports, "src/app/orders.service.ts"),
+    ("3", "TS method, two compatible edits", orders_list, "src/app/orders.service.ts"),
+    ("4", "TS class, both add a method", orders_methods, "src/app/orders.service.ts"),
+    ("5", "rename + body change", format_rename, "src/utils/format.ts"),
+    ("6", "JSON, both add a flag", settings_features, "config/settings.json"),
+    ("7", "JSON, contradicting values", settings_timeout, "config/settings.json"),
+    ("8", "Python, both add an elif", tax_elifs, "src/billing/tax.py"),
+    ("9", "delete vs edit in a file", discount_delete_vs_edit, "src/billing/discount.py"),
+    ("10", "Markdown list, shared + different lines", readme_dedupe, "README.md"),
+    ("11", "modify/delete file (no markers)", modify_delete_file, None),
 ]
 
 
@@ -250,23 +256,29 @@ def main():
 
     lab = Lab(root)
     rows, total = [], 0.0
-    for sid, name, check in SCENARIOS:
+    for sid, name, check, rel in SCENARIOS:
         verdict, why = check(lab)
-        total += POINTS[verdict]
+        points = POINTS[verdict]
+        # Resolved (not left for the user) but never staged: git still
+        # counts the file as conflicted.
+        if rel and verdict in ("PASS", "PARTIAL", "FAIL") and not lab.blocks(rel) and lab.unmerged(rel):
+            why += " — not staged"
+            points = max(0.0, points - 0.25)
+        total += points
         rows.append((sid, name, verdict, why))
 
     width = max(len(r[1]) for r in rows)
     print("Model: %s" % args.model)
     for sid, name, verdict, why in rows:
         print("%3s  %-*s  %-10s  %s" % (sid, width, name, verdict, why))
-    print("Score: %.1f / %d" % (total, len(rows)))
+    print("Score: %.2f / %d" % (total, len(rows)))
 
     log = root.rstrip("/") + "-results.md"
     new = not os.path.exists(log)
     with open(log, "a", encoding="utf-8") as f:
         if new:
             f.write("# Conflict lab results\n\n")
-        f.write("## %s — %s — %.1f/%d\n\n" % (args.model, datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), total, len(rows)))
+        f.write("## %s — %s — %.2f/%d\n\n" % (args.model, datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), total, len(rows)))
         f.write("| # | Scenario | Verdict | Why |\n|---|---|---|---|\n")
         for sid, name, verdict, why in rows:
             f.write("| %s | %s | %s | %s |\n" % (sid, name, verdict, why.replace("|", "\\|")))

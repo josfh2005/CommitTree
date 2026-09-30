@@ -549,10 +549,19 @@ func TestResolveConflictsEndsWithGitsSummary(t *testing.T) {
 	if err := a.ResolveConflicts(id, "run1"); err != nil {
 		t.Fatal(err)
 	}
-	notice := ev.wait(t, agent.EventNotice)
-	n, ok := notice.data.(agent.NoticeEvent)
-	if !ok || n.RunID != "run1" || n.RepoID != id || !strings.Contains(n.Text, "Still conflicted: greeting.txt") {
-		t.Fatalf("notice = %#v", notice.data)
+	// The fake model stops without resolving anything: the run is first
+	// told to carry on, then ends with git's own account.
+	var texts []string
+	for len(texts) == 0 || !strings.Contains(texts[len(texts)-1], "Still conflicted") {
+		notice := ev.wait(t, agent.EventNotice)
+		n, ok := notice.data.(agent.NoticeEvent)
+		if !ok || n.RunID != "run1" || n.RepoID != id {
+			t.Fatalf("notice = %#v", notice.data)
+		}
+		texts = append(texts, n.Text)
+	}
+	if !strings.Contains(texts[0], "carry on") || !strings.Contains(texts[len(texts)-1], "Still conflicted: greeting.txt") {
+		t.Fatalf("notices = %q", texts)
 	}
 	ev.wait(t, agent.EventDone)
 }
@@ -621,5 +630,45 @@ func TestResolveConflictsRefusesOutsideARealMerge(t *testing.T) {
 
 	if err := a.ResolveConflicts(id, "run1"); err == nil {
 		t.Error("want a refusal outside a merge")
+	}
+}
+
+// A stopped resolve run is told to carry on while conflicts are left, but
+// not twice in a row without progress, and not beyond the cap.
+func TestResolveNudge(t *testing.T) {
+	r := testrepo.New(t)
+	r.WriteFile("a.txt", "base\n")
+	r.WriteFile("b.txt", "base\n")
+	r.Git("add", ".")
+	r.Git("commit", "-q", "-m", "base")
+	r.Git("switch", "-q", "-c", "feature")
+	r.WriteFile("a.txt", "theirs\n")
+	r.WriteFile("b.txt", "theirs\n")
+	r.Git("commit", "-q", "-am", "theirs")
+	r.Git("switch", "-q", "main")
+	r.WriteFile("a.txt", "ours\n")
+	r.WriteFile("b.txt", "ours\n")
+	r.Git("commit", "-q", "-am", "ours")
+	ctx := context.Background()
+	if _, err := merge.Start(ctx, r.Dir, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	n := &resolveNudge{dir: r.Dir, startedFor: merge.Fingerprint(ctx, r.Dir)}
+
+	first := n.next(ctx)
+	if !strings.Contains(first, "a.txt") || !strings.Contains(first, "b.txt") {
+		t.Fatalf("first nudge = %q", first)
+	}
+	if again := n.next(ctx); again != "" {
+		t.Fatalf("nudged again with no progress: %q", again)
+	}
+	r.WriteFile("a.txt", "ours\ntheirs\n")
+	r.Git("add", "a.txt")
+	if second := n.next(ctx); !strings.Contains(second, "b.txt") || strings.Contains(second, "a.txt") {
+		t.Fatalf("second nudge = %q", second)
+	}
+	r.WriteFile("b.txt", "ours\n")
+	if third := n.next(ctx); third != "" {
+		t.Fatalf("nudged past the cap: %q", third)
 	}
 }

@@ -154,11 +154,11 @@ func toolCall(m sdk.Message, index int) (ai.ToolCall, bool) {
 
 // leadWithUser makes sure the list handed to the API starts with a user
 // message, as the Messages API requires. agent.Trim caps history at a fixed
-// window and only skips leading RoleTool messages; one agent run has
-// exactly one RoleUser message followed by ~2*MergeMaxSteps
-// assistant/tool-result messages, so once a run is long enough (a merge
-// resolution, whose MergeMaxSteps appends ~60 messages), Trim's window
-// slides past that single RoleUser entirely and starts on RoleAssistant -
+// window and only skips leading RoleTool messages; one agent run has one
+// RoleUser message (plus a couple of "carry on" nudges in a merge
+// resolution) followed by ~2*MergeMaxSteps assistant/tool-result messages,
+// so once a run is long enough (a merge resolution appends ~120), Trim's
+// window slides past every RoleUser and starts on RoleAssistant -
 // there is no RoleUser left to slice to. If one survives, start there,
 // dropping anything before it (a leading assistant's now-orphaned tool
 // calls included - their RoleTool results are dropped separately in

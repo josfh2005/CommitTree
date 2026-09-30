@@ -464,3 +464,99 @@ func TestReadConflictSaysBothSidesAddedWhenTheAncestorIsEmpty(t *testing.T) {
 		t.Errorf("out = %q", out)
 	}
 }
+
+// conflictedFile merges a branch that turned base into theirs into one that
+// turned it into ours, leaving one file in conflict (diff3 style).
+func conflictedFile(t *testing.T, name, base, ours, theirs string) *testrepo.Repo {
+	t.Helper()
+	r := testrepo.New(t)
+	r.Git("config", "merge.conflictStyle", "diff3")
+	r.WriteFile(name, base)
+	r.Git("add", name)
+	r.Git("commit", "-q", "-m", "base")
+	r.Git("switch", "-q", "-c", "feature")
+	r.WriteFile(name, theirs)
+	r.Git("commit", "-q", "-am", "theirs")
+	r.Git("switch", "-q", "main")
+	r.WriteFile(name, ours)
+	r.Git("commit", "-q", "-am", "ours")
+	if _, err := merge.Start(context.Background(), r.Dir, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
+const ordersBase = `import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+
+export class OrdersService {
+  constructor(private http: HttpClient) {}
+
+  list(page: number) {
+    return this.http.get(url(page));
+  }
+
+  get(id: string) {
+    return this.http.get(id);
+  }
+}
+`
+
+func orders(t *testing.T) *testrepo.Repo {
+	ours := strings.NewReplacer(
+		"import { HttpClient } from '@angular/common/http';\n", "import { HttpClient } from '@angular/common/http';\nimport { Observable } from 'rxjs';\n",
+		"  list(page: number) {\n    return this.http.get(url(page));", "  list(page: number, size = 20): Observable<Order[]> {\n    return this.http.get<Order[]>(url(page, size));",
+		"    return this.http.get(id);\n  }\n", "    return this.http.get(id);\n  }\n\n  cancel(id: string) {\n    return this.http.post(id);\n  }\n",
+	).Replace(ordersBase)
+	theirs := strings.NewReplacer(
+		"import { HttpClient } from '@angular/common/http';\n", "import { HttpClient } from '@angular/common/http';\nimport { retry } from 'rxjs/operators';\n",
+		"    return this.http.get(url(page));", "    return this.http.get(url(page)).pipe(retry(2));",
+		"    return this.http.get(id);\n  }\n", "    return this.http.get(id);\n  }\n\n  export(format: string) {\n    return this.http.get(format);\n  }\n",
+	).Replace(ordersBase)
+	return conflictedFile(t, "orders.ts", ordersBase, ours, theirs)
+}
+
+func resolve(r *testrepo.Repo, hunk int, resolved string) string {
+	out, _ := mergetools.Run(context.Background(), r.Dir, call("resolve_hunk", map[string]any{"path": "orders.ts", "hunk": float64(hunk), "resolved": resolved}), mergetools.Sides{})
+	return out
+}
+
+// The slips qwen3:14b made in the conflict lab are refused, and the file is
+// left as it was.
+func TestResolveHunkRefusesRepeatedContextAndBrokenBrackets(t *testing.T) {
+	r := orders(t)
+	before, _ := os.ReadFile(filepath.Join(r.Dir, "orders.ts"))
+	cases := map[string]struct {
+		hunk     int
+		resolved string
+		want     string
+	}{
+		"imports with the lines before": {0, "import { Injectable } from '@angular/core';\nimport { HttpClient } from '@angular/common/http';\nimport { Observable } from 'rxjs';\nimport { retry } from 'rxjs/operators';\n", `"lines before"`},
+		"method with the closing brace after": {1, "  list(page: number, size = 20): Observable<Order[]> {\n    return this.http.get<Order[]>(url(page, size)).pipe(retry(2));\n  }\n", `"lines after"`},
+		// git leaves each method's closing brace under "lines after", so
+		// closing both inside the region doubles the last one.
+		"methods closing the brace after": {2, "  cancel(id: string) {\n    return this.http.post(id);\n  }\n\n  export(format: string) {\n    return this.http.get(format);\n  }\n", `"lines after"`},
+		"method missing its opening brace": {1, "  list(page: number, size = 20): Observable<Order[]>\n    return this.http.get<Order[]>(url(page, size)).pipe(retry(2));\n", "brackets"},
+	}
+	for name, c := range cases {
+		if out := resolve(r, c.hunk, c.resolved); !strings.Contains(out, "Not applied") || !strings.Contains(out, c.want) {
+			t.Errorf("%s: out = %q", name, out)
+		}
+	}
+	if after, _ := os.ReadFile(filepath.Join(r.Dir, "orders.ts")); string(after) != string(before) {
+		t.Fatal("a refused resolution changed the file")
+	}
+}
+
+func TestResolveHunkAcceptsARightResolution(t *testing.T) {
+	r := orders(t)
+	for _, res := range []string{
+		"import { Observable } from 'rxjs';\nimport { retry } from 'rxjs/operators';\n",
+		"  list(page: number, size = 20): Observable<Order[]> {\n    return this.http.get<Order[]>(url(page, size)).pipe(retry(2));\n",
+		"  cancel(id: string) {\n    return this.http.post(id);\n  }\n\n  export(format: string) {\n    return this.http.get(format);\n",
+	} {
+		if out := resolve(r, 0, res); !strings.HasPrefix(out, "Applied.") {
+			t.Fatalf("out = %q for %q", out, res)
+		}
+	}
+}
