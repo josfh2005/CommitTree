@@ -275,6 +275,14 @@ export async function openRepoFolder(id: string) {
   }
 }
 
+export async function openRepoTerminal(id: string) {
+  try {
+    await api.openRepoTerminal(id)
+  } catch (e) {
+    toast(errorMessage(e), 'error')
+  }
+}
+
 export async function relocateRepo(id: string) {
   try {
     const repo = await api.relocateRepo(id)

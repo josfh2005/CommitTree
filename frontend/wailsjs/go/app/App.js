@@ -270,6 +270,10 @@ export function OpenRepoFolder(arg1) {
   return window['go']['app']['App']['OpenRepoFolder'](arg1);
 }
 
+export function OpenRepoTerminal(arg1) {
+  return window['go']['app']['App']['OpenRepoTerminal'](arg1);
+}
+
 export function OwedStashDrop(arg1) {
   return window['go']['app']['App']['OwedStashDrop'](arg1);
 }

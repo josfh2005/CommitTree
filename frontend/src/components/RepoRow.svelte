@@ -3,7 +3,7 @@
   import RepoRefs from './RepoRefs.svelte'
   import SubmoduleSection from './SubmoduleSection.svelte'
   import { api } from '../lib/api'
-  import { fetchRemote, moveRepoToGroup, openRepoFolder, pull, push, relocateRepo, removeRepo, removeWorktree } from '../lib/actions'
+  import { fetchRemote, moveRepoToGroup, openRepoFolder, openRepoTerminal, pull, push, relocateRepo, removeRepo, removeWorktree } from '../lib/actions'
   import { REPO_DRAG_MIME } from '../lib/repoDrop'
   import { revealLabel } from '../lib/platform'
   import { busy, expandedRepos, mergeState, platform, selectRepo, selectedRepo, selectedRepoId, toggleRepoExpanded, worktreeState } from '../lib/stores'
@@ -73,6 +73,7 @@
           { label: 'Pull', action: () => pull(repo.id), disabled: !!$busy || !!$mergeState?.merging },
           { label: 'Push', action: () => push(repo.id), disabled: !!$busy || !!$mergeState?.merging },
           { label: revealLabel($platform), action: () => openRepoFolder(repo.id) },
+          { label: 'Open in Terminal', action: () => openRepoTerminal(repo.id) },
           removeItem,
         ]
       })
@@ -84,6 +85,7 @@
       { label: 'Pull', action: () => pull(repo.id), disabled: repo.missing || !!$busy || !!$mergeState?.merging },
       { label: 'Push', action: () => push(repo.id), disabled: repo.missing || !!$busy || !!$mergeState?.merging },
       { label: revealLabel($platform), action: () => openRepoFolder(repo.id), disabled: repo.missing },
+      { label: 'Open in Terminal', action: () => openRepoTerminal(repo.id), disabled: repo.missing },
       ...(child ? [] : [{ label: 'Move to group…', action: () => moveRepoToGroup(repo) }]),
       { label: 'Remove from list…', action: () => removeRepo(repo), danger: true },
     ])
