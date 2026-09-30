@@ -278,8 +278,13 @@
   .error { padding: 12px; color: var(--danger); white-space: pre-wrap; }
   .file-actions { display: flex; gap: 6px; padding: 0 12px 8px; }
   .file-actions .spacer { flex: 1; }
-  .region-bar { display: flex; gap: 6px; padding: 4px 12px; font-family: var(--font-ui, inherit); }
-  .region-bar .btn { font-size: 12px; padding: 2px 8px; }
+  .region-bar { display: flex; gap: 4px; padding: 3px 12px; }
+  /* Compact, in the UI font (the pane itself is monospace), on a light
+     grey so they read as controls, not as file content. */
+  .region-bar .btn { font: 11px/16px var(--font); padding: 1px 8px; background: var(--hover); border-color: transparent; border-radius: 5px; }
+  .region-bar .btn:hover:not(:disabled) { background: var(--active); }
+  .region-bar .btn.primary { background: var(--text); color: var(--bg); }
+  .region-bar .btn.primary:hover:not(:disabled) { background: var(--text); opacity: 0.85; }
   .region-edit { padding: 4px 12px; }
   .region-edit textarea { width: 100%; box-sizing: border-box; font-size: 12px; line-height: 18px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); resize: vertical; }
   .line.dim { opacity: 0.35; }
