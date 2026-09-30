@@ -75,10 +75,14 @@ export function planReleases(flow: Flow, b: FlowBranch): string[] {
   return []
 }
 
-export function finishFields(flow: Flow, b: FlowBranch): FormField[] {
-  if (b.type === 'hotfix') return flow.releases.map((r) => ({ kind: 'checkbox', key: `release:${r}`, label: `Also merge into ${r}`, value: false }))
-  if (needsRelease(b) && flow.releases.length > 1)
-    return [{ kind: 'select', key: 'release', label: 'Release', value: flow.releases[0], options: flow.releases.map((r) => ({ value: r, label: r })) }]
+/** finishFields: ticked are releases chosen before — by the finish a
+ *  conflict interrupted, or already merged — so resuming keeps them. */
+export function finishFields(flow: Flow, b: FlowBranch, ticked: string[] = []): FormField[] {
+  if (b.type === 'hotfix') return flow.releases.map((r) => ({ kind: 'checkbox', key: `release:${r}`, label: `Also merge into ${r}`, value: ticked.includes(r) }))
+  if (needsRelease(b) && flow.releases.length > 1) {
+    const value = flow.releases.find((r) => ticked.includes(r)) ?? flow.releases[0]
+    return [{ kind: 'select', key: 'release', label: 'Release', value, options: flow.releases.map((r) => ({ value: r, label: r })) }]
+  }
   return []
 }
 

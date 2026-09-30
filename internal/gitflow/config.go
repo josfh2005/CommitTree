@@ -206,8 +206,14 @@ func Read(ctx context.Context, dir string) (Flow, error) {
 			}
 		}
 	}
+	lines := strings.Split(out, "\n")
+	local := map[string]bool{}
+	for _, line := range lines {
+		name, _, _ := strings.Cut(line, "\t")
+		local[strings.ToLower(name)] = true
+	}
 	current := currentBranch(ctx, dir)
-	for _, line := range strings.Split(out, "\n") {
+	for _, line := range lines {
 		name, tip, _ := strings.Cut(line, "\t")
 		typ, short, ok := classify(name, f.Prefixes)
 		if !ok {
@@ -215,14 +221,21 @@ func Read(ctx context.Context, dir string) (Flow, error) {
 		}
 		base := bases[strings.ToLower(name)]
 		b := FlowBranch{Name: name, Type: typ, Short: short, Base: base[1], baseKey: base[0]}
+		// A base that no longer exists (a release deleted since) is as
+		// good as none: finishing asks for the release again. baseKey
+		// stays so the finish still removes the stale key.
+		if !local[strings.ToLower(b.Base)] {
+			b.Base = ""
+		}
 		if typ == Release {
 			f.Releases = append(f.Releases, name)
 		}
-		for _, target := range required(f, b) {
-			if mergedVia(ctx, dir, tip, target) {
-				b.InProgress = true
-				break
-			}
+		// Only the first target counts: a finish always merges there
+		// first, while a later one (develop) may hold a merge of the
+		// tip for another reason — master back-merged into develop right
+		// after a hotfix started from it.
+		if ts := required(f, b); len(ts) > 0 && mergedVia(ctx, dir, tip, ts[0]) {
+			b.InProgress = true
 		}
 		f.Branches = append(f.Branches, b)
 		if current != "" && strings.EqualFold(name, current) {

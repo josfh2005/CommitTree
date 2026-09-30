@@ -97,6 +97,12 @@ describe('finish', () => {
     expect(finishReleases(f, fb('hotfix/h'), { 'release:release/a': false })).toEqual([])
   })
 
+  it('keeps the releases chosen before when resuming', () => {
+    const f = flow({ releases: ['release/a', 'release/b'] })
+    expect(finishFields(f, fb('hotfix/h'), ['release/b']).map((x) => x.value)).toEqual([false, true])
+    expect(finishFields(f, fb('warmfix/w'), ['release/b'])[0]).toMatchObject({ value: 'release/b' })
+  })
+
   it('asks for the release of a warmfix with no recorded base', () => {
     const f = flow({ releases: ['release/a', 'release/b'] })
     expect(finishFields(f, fb('warmfix/w', { base: 'release/a' }))).toEqual([])

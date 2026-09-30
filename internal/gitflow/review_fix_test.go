@@ -115,3 +115,54 @@ func TestFinishRefusesTargetCheckedOutElsewhere(t *testing.T) {
 		t.Fatal("master merged despite the refusal")
 	}
 }
+
+// Master back-merged into develop right after a hotfix started from it puts
+// a merge of the hotfix's tip in develop; that does not make the hotfix
+// "In progress".
+func TestFreshHotfixAfterBackMergeIsNotInProgress(t *testing.T) {
+	r := newFlowRepo(t)
+	r.Git("switch", "-q", "master")
+	r.Commit("fix on master")
+	r.Git("switch", "-q", "develop")
+	r.Commit("develop work")
+	r.Git("merge", "-q", "--no-ff", "--no-edit", "master")
+	r.Git("branch", "hotfix/h", "master")
+
+	f, err := Read(ctx, r.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, b := range f.Branches {
+		if b.Name == "hotfix/h" && b.InProgress {
+			t.Fatal("fresh hotfix listed as in progress")
+		}
+	}
+}
+
+// A warmfix whose recorded release was deleted asks for a release again,
+// and the finish removes the stale base key.
+func TestWarmfixWithDeletedBaseRelease(t *testing.T) {
+	r := newFlowRepo(t)
+	r.Git("branch", "release/1.0")
+	r.Git("switch", "-q", "-c", "warmfix/w", "release/1.0")
+	r.Commit("warm")
+	r.Git("config", "gitflow.branch.warmfix/w.base", "release/gone")
+
+	f, err := Read(ctx, r.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Current == nil || f.Current.Base != "" {
+		t.Fatalf("current = %+v", f.Current)
+	}
+	if _, err := Finish(ctx, r.Dir, "warmfix/w", nil); !errors.Is(err, ErrNoRelease) {
+		t.Fatalf("err = %v", err)
+	}
+	res := mustFinish(t, r, "warmfix/w", []string{"release/1.0"})
+	if !slices.Equal(res.Merged, []string{"release/1.0"}) {
+		t.Fatalf("merged = %v", res.Merged)
+	}
+	if out := r.GitFails("config", "gitflow.branch.warmfix/w.base"); strings.TrimSpace(out) != "" {
+		t.Fatalf("base key left: %q", out)
+	}
+}

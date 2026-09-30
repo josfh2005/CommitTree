@@ -1,7 +1,7 @@
 import { get } from 'svelte/store'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('./api', () => ({ api: { finishFlow: vi.fn() } }))
+vi.mock('./api', () => ({ api: { finishFlow: vi.fn(), planFinish: vi.fn() } }))
 
 // refreshRepo reloads everything through the api; these tests only care
 // about the finish itself.
@@ -10,15 +10,17 @@ vi.mock('./stores', async (importOriginal) => ({
   refreshRepo: vi.fn().mockResolvedValue(undefined),
 }))
 
-import { forgetPendingFinish, offerContinueFinish, runFinish } from './flowActions'
+import { runFinish } from './flowActions'
 import { api } from './api'
-import { pendingFinish } from './stores'
+import { mergeState, pendingFinish, selectedRepoId } from './stores'
+import type { FlowPlan, MergeState } from './types'
 import { toasts } from './ui'
 
 beforeEach(() => {
   pendingFinish.set(null)
   toasts.set([])
   vi.mocked(api.finishFlow).mockReset()
+  vi.mocked(api.planFinish).mockReset()
 })
 
 describe('runFinish', () => {
@@ -44,22 +46,36 @@ describe('runFinish', () => {
 })
 
 describe('after the conflicted merge', () => {
-  it('offers to continue once the merge is committed', () => {
+  const state = (merging: boolean) => ({ kind: merging ? 'merge' : '', merging }) as unknown as MergeState
+  const plan = (done: boolean): FlowPlan => ({ branch: 'hotfix/h', type: 'hotfix', steps: [{ target: 'master', done: true }, { target: 'develop', done }], ending: 'develop' })
+  const endMerge = async (repo: string) => {
+    selectedRepoId.set(repo)
+    mergeState.set(state(true))
+    mergeState.set(state(false))
+    await new Promise((r) => setTimeout(r))
+  }
+
+  beforeEach(() => {
     pendingFinish.set({ repoId: 'r1', branch: 'hotfix/h', releases: [], target: 'develop' })
-    offerContinueFinish('r1')
+  })
+
+  it('offers to continue once the target has the branch, however the merge was committed', async () => {
+    vi.mocked(api.planFinish).mockResolvedValue(plan(true))
+    await endMerge('r1')
     expect(get(pendingFinish)).toBeNull()
     expect(get(toasts).at(-1)?.action?.label).toBe('Continue finishing hotfix/h')
   })
 
-  it('does nothing for another repository', () => {
-    pendingFinish.set({ repoId: 'r1', branch: 'hotfix/h', releases: [], target: 'develop' })
-    offerContinueFinish('r2')
-    expect(get(pendingFinish)).not.toBeNull()
+  it('drops it quietly when the merge was aborted', async () => {
+    vi.mocked(api.planFinish).mockResolvedValue(plan(false))
+    await endMerge('r1')
+    expect(get(pendingFinish)).toBeNull()
+    expect(get(toasts)).toEqual([])
   })
 
-  it('forgets it when the merge is aborted', () => {
-    pendingFinish.set({ repoId: 'r1', branch: 'hotfix/h', releases: [], target: 'develop' })
-    forgetPendingFinish('r1')
-    expect(get(pendingFinish)).toBeNull()
+  it('leaves another repository’s finish alone', async () => {
+    await endMerge('r2')
+    expect(get(pendingFinish)).not.toBeNull()
+    expect(api.planFinish).not.toHaveBeenCalled()
   })
 })

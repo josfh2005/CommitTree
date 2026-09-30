@@ -175,7 +175,11 @@ func Finish(ctx context.Context, dir, branch string, releases []string) (FinishR
 	// finished branch may not have caught up with. This check is what makes
 	// the force safe.
 	for _, t := range ts {
-		if done, err := isAncestor(ctx, dir, branch, t); err != nil || !done {
+		done, err := isAncestor(ctx, dir, branch, t)
+		if err != nil {
+			return fail(err)
+		}
+		if !done {
 			return fail(fmt.Errorf("%s is not in %s; not deleting it", branch, t))
 		}
 	}

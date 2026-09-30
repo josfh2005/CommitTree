@@ -4,7 +4,7 @@ import {
   conflictMessage, finishFields, finishMessage, finishPickItems, finishReleases, finishedMessage, flowMenu,
   initConfig, initFields, planReleases, startBase, startFields, startedMessage,
 } from './flow'
-import { busy, mergeState, pendingFinish, refreshRepo, refs } from './stores'
+import { busy, mergeState, pendingFinish, refreshRepo, refs, selectedRepoId } from './stores'
 import type { Flow, FlowType } from './types'
 import { errorMessage, formDialog, menu, pickDialog, toast, type MenuItem } from './ui'
 
@@ -80,10 +80,15 @@ async function finishBranch(repoId: string, name: string) {
     const b = flow.branches.find((x) => x.name === name)
     if (!b) throw new Error(`${name} is not a git-flow branch`)
     const plan = await api.planFinish(repoId, name, planReleases(flow, b))
+    const p = get(pendingFinish)
+    const ticked = [
+      ...(p && p.repoId === repoId && p.branch === name ? p.releases : []),
+      ...plan.steps.filter((s) => s.done && flow.releases.includes(s.target)).map((s) => s.target),
+    ]
     const values = await formDialog({
       title: `Finish ${b.type} ${b.short}`,
       message: (v) => finishMessage(plan, b, v),
-      fields: finishFields(flow, b),
+      fields: finishFields(flow, b, ticked),
       submitLabel: 'Finish',
     })
     if (values) await runFinish(repoId, name, finishReleases(flow, b, values))
@@ -107,14 +112,28 @@ export async function runFinish(repoId: string, branch: string, releases: string
   })
 }
 
-/** Called after a merge commit: the finish it interrupted can go on. */
-export function offerContinueFinish(repoId: string) {
+/** settlePendingFinish runs once the interrupted merge is over, however it
+ *  ended — committed or aborted here, or in a terminal: when the target now
+ *  has the branch, the finish can go on; otherwise it is dropped. */
+export async function settlePendingFinish(repoId: string) {
   const p = get(pendingFinish)
-  if (!p || p.repoId !== repoId || get(mergeState)?.merging) return
+  if (!p || p.repoId !== repoId) return
   pendingFinish.set(null)
+  try {
+    const plan = await api.planFinish(repoId, p.branch, p.releases)
+    if (!plan.steps.find((s) => s.target === p.target)?.done) return
+  } catch {
+    return
+  }
   toast(`Merged ${p.branch} into ${p.target}.`, 'info', { label: `Continue finishing ${p.branch}`, run: () => runFinish(repoId, p.branch, p.releases) })
 }
 
-export function forgetPendingFinish(repoId: string) {
-  if (get(pendingFinish)?.repoId === repoId) pendingFinish.set(null)
-}
+// Whether each repository's last loaded merge state had a merge going on;
+// the step from true to false is the end of that merge.
+const wasMerging: Record<string, boolean> = {}
+mergeState.subscribe((state) => {
+  const id = get(selectedRepoId)
+  if (!state || !id) return
+  if (wasMerging[id] && !state.merging) settlePendingFinish(id)
+  wasMerging[id] = state.merging
+})

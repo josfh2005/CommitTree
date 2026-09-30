@@ -32,8 +32,10 @@ branch (created from production if missing) and the four prefixes.
 Otherwise it opens a menu:
 - **Finish <type> <name>…** when the checked-out branch is a git-flow
   branch; otherwise **Finish…**, a list of the local git-flow branches with
-  an "In progress" group first — branches a finish already merged into at
-  least one target (a merge commit whose second parent is the branch tip).
+  an "In progress" group first — branches a finish already merged into
+  their first target (a merge commit there whose second parent is the
+  branch tip; a merge into a later target, such as master back-merged into
+  develop, does not count).
 - **Start feature… / release… / hotfix… / warmfix…**. Warmfix is disabled
   with "No local release branch" when there is none.
 
@@ -52,7 +54,10 @@ the branch — uncommitted changes come along — and records
 The dialog spells out the plan: the targets in order, each marked "already
 there" when it contains the branch, then that the branch is deleted and
 which branch is left checked out. A hotfix lists one unticked checkbox per
-local release; a warmfix without a recorded base asks for its release.
+local release; a warmfix without a recorded base, or whose recorded release
+no longer exists, asks for its release. Opened again after a conflict, the
+dialog keeps the releases chosen before and ticks any release that already
+has the branch.
 
 Finish refuses while a conflict is in progress or tracked files have
 uncommitted changes (untracked files do not block). It fetches, brings every
@@ -67,12 +72,15 @@ branch and its `.base` key. Nothing is pushed, tagged or deleted remotely.
 
 A conflicting merge stops the finish on that target with the merge in
 progress, and the Merge view opens as for any merge, with the line "Part of
-finishing hotfix/X (into develop)". Committing the merge offers "Continue
-finishing hotfix/X", which runs Finish again without asking. Finish skips
-targets that already contain the branch, so running it again — from that
-toast or from the menu — always carries on where it stopped. Nothing about
-the interrupted finish is stored on disk; aborting the merge only drops the
-offer, and the branch stays under "In progress".
+finishing hotfix/X (into develop)". When that merge ends — committed here or
+in a terminal — and the target now has the branch, CommitTree offers
+"Continue finishing hotfix/X", which runs Finish again without asking.
+Finish skips targets that already contain the branch, so running it again —
+from that toast or from the menu — always carries on where it stopped.
+Nothing about the interrupted finish is stored on disk. Aborting the merge
+drops the offer quietly; the branch is under "In progress" only if an
+earlier target already has it (a conflict on the first target leaves
+nothing merged).
 
 Before anything moves, Finish also refuses when the branch, or a target that
 still needs it, is checked out in another worktree ("develop is checked out
