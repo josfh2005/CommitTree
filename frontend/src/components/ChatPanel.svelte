@@ -8,7 +8,7 @@
   import { relativeDate } from '../lib/format'
   import { renderMarkdown } from '../lib/markdown'
   import { chatBlocker } from '../lib/providers'
-  import { aiSettings, chatOpen, chatRunRepo, chatPreparing, jumpTo, selectedRepo, settingsOpen } from '../lib/stores'
+  import { aiSettings, chatOpen, chatPreparing, jumpTo, selectedRepo, settingsOpen } from '../lib/stores'
   import type { AIStatus } from '../lib/types'
   import { copyText, errorMessage, toast } from '../lib/ui'
 
@@ -43,7 +43,6 @@
   // a message typed meanwhile is not refused as busy.
   $: preparing = state.runID === null && !!state.repoID && $chatPreparing.includes(state.repoID)
   $: running = state.runID !== null || preparing
-  $: chatRunRepo.set(running ? state.repoID : '')
   // Settings may have changed the chat provider, a key or the installed
   // models; read the status again once it closes.
   $: if (!$settingsOpen) refreshStatus()

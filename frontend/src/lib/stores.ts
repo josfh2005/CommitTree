@@ -126,7 +126,7 @@ export const busy = writable('')
  *  view can say what it belongs to and committing can offer to continue. */
 export const pendingFinish = writable<PendingFinish | null>(null)
 
-/** The repository an AI run is working on, '' when none (set by ChatPanel),
+/** The repository an AI run is working on, '' when none (tracked from chat events in App),
  *  so the Merge view's buttons wait for it. */
 export const chatRunRepo = writable('')
 export const settingsOpen = writable(false)

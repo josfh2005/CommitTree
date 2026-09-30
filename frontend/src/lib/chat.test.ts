@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { answeredBy, appliedText, applyEvent, parts, isWriteTool, CHAT_EVENTS, confirmResultText, confirmState, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from './chat'
+import { answeredBy, appliedText, applyEvent, nextChatRunRepo, parts, isWriteTool, CHAT_EVENTS, confirmResultText, confirmState, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from './chat'
 import type { AIMessage, ChatConfirmEvent } from './types'
 
 describe('fromMessages', () => {
@@ -358,5 +358,20 @@ describe('parts', () => {
     ] as AIMessage[])
     expect(s.items).toHaveLength(2)
     expect(kinds(parts(s.items[1]))).toEqual(['text:Reading a.', 'tool:read_conflict', 'text:Next I will do b.', 'notice', 'tool:read_conflict', 'text:Done.'])
+  })
+})
+
+describe('nextChatRunRepo', () => {
+  it('follows a run from start to its end, whether or not the panel is open', () => {
+    let repo = ''
+    repo = nextChatRunRepo(repo, 'chat:start', { repoID: 'r1' })
+    expect(repo).toBe('r1')
+    repo = nextChatRunRepo(repo, 'chat:delta', { repoID: 'r1' })
+    expect(repo).toBe('r1')
+    expect(nextChatRunRepo(repo, 'chat:done', { repoID: 'r1' })).toBe('')
+    expect(nextChatRunRepo(repo, 'chat:error', { repoID: 'r1' })).toBe('')
+  })
+  it('ignores the end of another repository’s run', () => {
+    expect(nextChatRunRepo('r1', 'chat:done', { repoID: 'r2' })).toBe('r1')
   })
 })
