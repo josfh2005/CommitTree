@@ -531,11 +531,11 @@ func TestResolveHunkRefusesRepeatedContextAndBrokenBrackets(t *testing.T) {
 		resolved string
 		want     string
 	}{
-		"imports with the lines before": {0, "import { Injectable } from '@angular/core';\nimport { HttpClient } from '@angular/common/http';\nimport { Observable } from 'rxjs';\nimport { retry } from 'rxjs/operators';\n", `"lines before"`},
+		"imports with the lines before":       {0, "import { Injectable } from '@angular/core';\nimport { HttpClient } from '@angular/common/http';\nimport { Observable } from 'rxjs';\nimport { retry } from 'rxjs/operators';\n", `"lines before"`},
 		"method with the closing brace after": {1, "  list(page: number, size = 20): Observable<Order[]> {\n    return this.http.get<Order[]>(url(page, size)).pipe(retry(2));\n  }\n", `"lines after"`},
 		// git leaves each method's closing brace under "lines after", so
 		// closing both inside the region doubles the last one.
-		"methods closing the brace after": {2, "  cancel(id: string) {\n    return this.http.post(id);\n  }\n\n  export(format: string) {\n    return this.http.get(format);\n  }\n", `"lines after"`},
+		"methods closing the brace after":  {2, "  cancel(id: string) {\n    return this.http.post(id);\n  }\n\n  export(format: string) {\n    return this.http.get(format);\n  }\n", `"lines after"`},
 		"method missing its opening brace": {1, "  list(page: number, size = 20): Observable<Order[]>\n    return this.http.get<Order[]>(url(page, size)).pipe(retry(2));\n", "brackets"},
 	}
 	for name, c := range cases {

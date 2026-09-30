@@ -4,6 +4,8 @@
 package merge
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -26,10 +28,16 @@ type Hunk struct {
 	Theirs  string
 	Base    string
 	HasBase bool
-	Before string
-	After  string
+	Before  string
+	After   string
 
-	start, end int // line indices of the marker block; end is exclusive
+	// ID names the region by its content, so the name survives the
+	// renumbering every resolve causes; the AI resolver and the Merge
+	// view's buttons both use it.
+	ID string
+	// Start and End are the line indices of the marker block; End is
+	// exclusive.
+	Start, End int
 }
 
 // Parse returns the conflicted regions of content, in file order.
@@ -40,7 +48,7 @@ func Parse(content string) ([]Hunk, error) {
 		if !marker(lines[i], "<<<<<<<") {
 			continue
 		}
-		h := Hunk{Index: len(hunks), start: i}
+		h := Hunk{Index: len(hunks), Start: i}
 		var ours, base, theirs []string
 		side := &ours
 		closed := false
@@ -55,18 +63,18 @@ func Parse(content string) ([]Hunk, error) {
 			case marker(line, "=======") && side != &theirs:
 				side = &theirs
 			case marker(line, ">>>>>>>") && side == &theirs:
-				h.end = i + 1
+				h.End = i + 1
 				closed = true
 			default:
 				*side = append(*side, line)
 			}
 		}
 		if !closed {
-			return nil, fmt.Errorf("%w: unterminated conflict at line %d", ErrBadConflict, h.start+1)
+			return nil, fmt.Errorf("%w: unterminated conflict at line %d", ErrBadConflict, h.Start+1)
 		}
-		i = h.end - 1
+		i = h.End - 1
 		h.Ours, h.Base, h.Theirs = strings.Join(ours, ""), strings.Join(base, ""), strings.Join(theirs, "")
-		h.Before = strings.Join(lines[max(0, h.start-ContextLines):h.start], "")
+		h.Before = strings.Join(lines[max(0, h.Start-ContextLines):h.Start], "")
 		hunks = append(hunks, h)
 	}
 	// After is filled second: it stops at the next conflict, which isn't
@@ -74,9 +82,20 @@ func Parse(content string) ([]Hunk, error) {
 	for i := range hunks {
 		limit := len(lines)
 		if i+1 < len(hunks) {
-			limit = hunks[i+1].start
+			limit = hunks[i+1].Start
 		}
-		hunks[i].After = strings.Join(lines[hunks[i].end:min(limit, hunks[i].end+ContextLines)], "")
+		hunks[i].After = strings.Join(lines[hunks[i].End:min(limit, hunks[i].End+ContextLines)], "")
+	}
+	seen := map[string]int{}
+	for i := range hunks {
+		h := &hunks[i]
+		sum := sha1.Sum([]byte(h.Ours + "\x00" + h.Base + "\x00" + h.Theirs))
+		id := hex.EncodeToString(sum[:4])
+		seen[id]++
+		if n := seen[id]; n > 1 {
+			id = fmt.Sprintf("%s-%d", id, n)
+		}
+		h.ID = id
 	}
 	return hunks, nil
 }
@@ -141,12 +160,12 @@ func Splice(content string, index int, resolved string) (string, error) {
 	}
 	lines := splitLines(content)
 	h := hunks[index]
-	tail := strings.Join(lines[h.end:], "")
+	tail := strings.Join(lines[h.End:], "")
 	body := resolved
 	// The block replaced whole lines, so the replacement ends a line too —
 	// unless it sits at the end of a file that never had a final newline.
 	if body != "" && !strings.HasSuffix(body, "\n") && (tail != "" || strings.HasSuffix(content, "\n")) {
 		body += "\n"
 	}
-	return strings.Join(lines[:h.start], "") + body + tail, nil
+	return strings.Join(lines[:h.Start], "") + body + tail, nil
 }

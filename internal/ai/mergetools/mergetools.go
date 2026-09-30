@@ -6,9 +6,6 @@ package mergetools
 
 import (
 	"context"
-	"crypto/sha1"
-	"encoding/hex"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -135,7 +132,7 @@ func readConflict(ctx context.Context, dir string, args map[string]any, sides Si
 		theirs = "their side (the branch being merged)"
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s, conflict %d of %d, region id %s\n\n", path, index, len(hunks), regionIDs(hunks)[index])
+	fmt.Fprintf(&b, "%s, conflict %d of %d, region id %s\n\n", path, index, len(hunks), h.ID)
 	fmt.Fprintf(&b, "--- lines before ---\n%s\n", h.Before)
 	switch {
 	case h.HasBase && h.Base == "":
@@ -156,64 +153,32 @@ func resolveHunk(ctx context.Context, dir string, args map[string]any) (string, 
 	if msg != "" {
 		return msg, false
 	}
-	full := filepath.Join(dir, path)
-	data, err := os.ReadFile(full)
+	resolved, _ := args["resolved"].(string)
+	data, err := os.ReadFile(filepath.Join(dir, path))
 	if err != nil {
 		return "Could not read " + path + ": " + err.Error(), false
 	}
-	resolved, _ := args["resolved"].(string)
-	index := argInt(args, "hunk")
-	// A region id names the region the model read, wherever it now sits:
-	// a model resolving several regions in one turn would otherwise hit the
-	// wrong one once the first resolve renumbered the rest.
-	if id, _ := args["region"].(string); id != "" {
-		hunks, _ := merge.Parse(string(data))
-		index = slices.Index(regionIDs(hunks), id)
-		if index < 0 {
-			return fmt.Sprintf("Not applied: %s has no region %s (already resolved, or never there). Call read_conflict for the current regions.", path, id), false
+	hunks, _ := merge.Parse(string(data))
+	id, _ := args["region"].(string)
+	if id == "" {
+		index := argInt(args, "hunk")
+		if index < 0 || index >= len(hunks) {
+			return fmt.Sprintf("There is no region %d. %s", index, regionsLeft(path, len(hunks))), false
 		}
+		id = hunks[index].ID
 	}
-	if hunks, err := merge.Parse(string(data)); err == nil && index >= 0 && index < len(hunks) {
-		if msg := checkResolution(hunks[index], resolved); msg != "" {
-			return msg, false
-		}
+	i := slices.IndexFunc(hunks, func(h merge.Hunk) bool { return h.ID == id })
+	if i < 0 {
+		return fmt.Sprintf("Not applied: %s has no region %s (already resolved, or never there). Call read_conflict for the current regions.", path, id), false
 	}
-	out, err := merge.Splice(string(data), index, resolved)
-	if errors.Is(err, merge.ErrNoSuchHunk) {
-		hunks, _ := merge.Parse(string(data))
-		return fmt.Sprintf("There is no region %d. %s", index, regionsLeft(path, len(hunks))), false
+	if msg := checkResolution(hunks[i], resolved); msg != "" {
+		return msg, false
 	}
+	left, err := merge.ResolveRegion(ctx, dir, path, id, resolved)
 	if err != nil {
 		return "Could not apply the resolution: " + err.Error(), false
 	}
-	info, err := os.Stat(full)
-	if err != nil {
-		return "Could not read the file mode of " + path + ": " + err.Error(), false
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(full), ".git-ui-merge-*")
-	if err != nil {
-		return "Could not write " + path + ": " + err.Error(), false
-	}
-	name := tmp.Name()
-	_, writeErr := tmp.WriteString(out)
-	closeErr := tmp.Close()
-	if writeErr != nil || closeErr != nil {
-		os.Remove(name)
-		return "Could not write " + path + ": " + errors.Join(writeErr, closeErr).Error(), false
-	}
-	if err := os.Chmod(name, info.Mode().Perm()); err != nil {
-		os.Remove(name)
-		return "Could not set the file mode of " + path + ": " + err.Error(), false
-	}
-	if err := os.Rename(name, full); err != nil {
-		os.Remove(name)
-		return "Could not replace " + path + ": " + err.Error(), false
-	}
-	left, err := merge.Parse(out)
-	if err != nil {
-		return "Wrote " + path + ", but it no longer parses: " + err.Error(), true
-	}
-	return "Applied. " + regionsLeft(path, len(left)), true
+	return "Applied. " + regionsLeft(path, left), true
 }
 
 // checkResolution catches the two slips small models make most, before
@@ -259,7 +224,9 @@ func hasText(lines []string) bool {
 	return slices.ContainsFunc(lines, func(l string) bool { return strings.TrimSpace(l) != "" })
 }
 
-func hasPrefix(lines, p []string) bool { return len(lines) >= len(p) && slices.Equal(lines[:len(p)], p) }
+func hasPrefix(lines, p []string) bool {
+	return len(lines) >= len(p) && slices.Equal(lines[:len(p)], p)
+}
 
 func hasSuffix(lines, s []string) bool {
 	return len(lines) >= len(s) && slices.Equal(lines[len(lines)-len(s):], s)
@@ -277,24 +244,6 @@ func bracketDelta(s string) int {
 		}
 	}
 	return d
-}
-
-// regionIDs names each region by its content, so the name survives the
-// renumbering every resolve causes. Identical regions in one file are told
-// apart by order: abcd1234, abcd1234-2.
-func regionIDs(hunks []merge.Hunk) []string {
-	ids := make([]string, len(hunks))
-	seen := map[string]int{}
-	for i, h := range hunks {
-		sum := sha1.Sum([]byte(h.Ours + "\x00" + h.Base + "\x00" + h.Theirs))
-		id := hex.EncodeToString(sum[:4])
-		seen[id]++
-		if n := seen[id]; n > 1 {
-			id = fmt.Sprintf("%s-%d", id, n)
-		}
-		ids[i] = id
-	}
-	return ids
 }
 
 // regionsLeft tells the model where a file's remaining regions are. Regions
