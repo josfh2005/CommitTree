@@ -243,10 +243,66 @@ SCENARIOS = [
 ]
 
 
+# Cases the resolver should leave as cards (propose_options) for the user to
+# choose; with --after-cards the user's pick counts as right.
+CARD_CASES = {"7", "9"}
+
+
+def chats_dir():
+    if sys.platform == "darwin":
+        base = os.path.expanduser("~/Library/Application Support")
+    else:
+        base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+    return os.path.join(base, "git-ui", "chats")
+
+
+def newest_chat():
+    d = chats_dir()
+    files = [os.path.join(d, f) for f in os.listdir(d) if f.endswith(".json")] if os.path.isdir(d) else []
+    if not files:
+        sys.exit("No chat history in %s; pass --chat FILE." % d)
+    return max(files, key=os.path.getmtime)
+
+
+def proposed_paths(chat_file):
+    """Paths the resolver left as cards (propose_options calls) in a chat history."""
+    with open(chat_file, encoding="utf-8") as f:
+        messages = json.load(f)
+    # A call's result is the k-th tool message after its assistant message
+    # for its k-th call; only cards the tool accepted (or that were since
+    # answered) were shown to the user.
+    shown = ("Shown to the user as a card", "The user chose ", "Settled another way")
+    out = set()
+    for i, m in enumerate(messages):
+        for k, c in enumerate(m.get("toolCalls") or []):
+            if c.get("name") != "propose_options":
+                continue
+            j = i + 1 + k
+            if j < len(messages) and messages[j].get("role") == "tool" and messages[j].get("content", "").startswith(shown):
+                out.add((c.get("args") or {}).get("path"))
+    return out
+
+
+def after_cards(verdict, why, rel, proposed):
+    """Re-grades a card case: a card must have been proposed, and then any
+    side the user picked from it is right."""
+    if rel not in proposed:
+        return "FAIL", "no card was proposed for it"
+    if verdict == "PARTIAL":
+        return "PASS", "chosen from a card: " + why
+    if verdict == "PASS":
+        return "UNRESOLVED", "card not answered yet"
+    return verdict, why
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("lab", nargs="?", default=os.path.expanduser("~/playground/conflict-lab"))
     ap.add_argument("--model", default="unnamed", help="label for the results log")
+    ap.add_argument("--after-cards", action="store_true",
+                    help="cases 7 and 9 were left as cards and chosen by you: any side counts as right, "
+                         "provided the chat shows a propose_options call for them")
+    ap.add_argument("--chat", help="chat history file (default: the newest in the app's chats directory)")
     args = ap.parse_args()
     root = os.path.abspath(args.lab)
     if not os.path.exists(os.path.join(root, ".conflict-lab")):
@@ -255,9 +311,14 @@ def main():
         sys.exit("No merge in progress: merge feature/checkout into develop, resolve with AI, then run this before committing.")
 
     lab = Lab(root)
+    proposed = proposed_paths(args.chat or newest_chat()) if args.after_cards else set()
+    if args.after_cards:
+        args.model += " (after cards)"
     rows, total = [], 0.0
     for sid, name, check, rel in SCENARIOS:
         verdict, why = check(lab)
+        if args.after_cards and sid in CARD_CASES:
+            verdict, why = after_cards(verdict, why, rel, proposed)
         points = POINTS[verdict]
         # Resolved (not left for the user) but never staged: git still
         # counts the file as conflicted.

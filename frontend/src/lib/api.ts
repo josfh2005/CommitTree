@@ -93,6 +93,7 @@ export const api = {
   takeMergeSide: (id: string, path: string, side: 'ours' | 'theirs') => call<void>(Go.TakeMergeSide(id, path, side)),
   resolveMergeRegion: (id: string, path: string, region: string, choice: RegionChoice, text: string) => call<RegionResult>(Go.ResolveMergeRegion(id, path, region, choice, text)),
   restartConflictFile: (id: string, path: string) => call<void>(Go.RestartConflictFile(id, path)),
+  chooseRegionOption: (repoID: string, callID: string, option: number, text: string) => call<RegionResult>(Go.ChooseRegionOption(repoID, callID, option, text)),
 
   getWorktreeState: (id: string) => call<WorktreeState>(Go.GetWorktreeState(id)),
   stageFile: (id: string, path: string) => call<void>(Go.StageFile(id, path)),

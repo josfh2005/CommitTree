@@ -52,10 +52,13 @@ type DeltaEvent struct {
 }
 
 type ToolEvent struct {
-	RepoID string         `json:"repoID"`
-	RunID  string         `json:"runID"`
-	Name   string         `json:"name"`
-	Args   map[string]any `json:"args"`
+	RepoID string `json:"repoID"`
+	RunID  string `json:"runID"`
+	// ID is the call's id, unique within the chat's history: a card built
+	// from the call (propose_options) is answered by it.
+	ID   string         `json:"id"`
+	Name string         `json:"name"`
+	Args map[string]any `json:"args"`
 }
 
 type ToolResultEvent struct {
@@ -125,6 +128,12 @@ func Execute(ctx context.Context, r Run, history []ai.Message) ([]ai.Message, er
 		steps = MaxSteps
 	}
 	msgs := append([]ai.Message(nil), history...)
+	used := map[string]bool{}
+	for _, m := range msgs {
+		for _, c := range m.ToolCalls {
+			used[c.ID] = true
+		}
+	}
 	for step := 0; step < steps; step++ {
 		stream, err := r.Provider.Chat(ctx, ai.Request{Model: r.Model, System: r.System, Messages: Trim(msgs), Tools: r.Tools})
 		if err != nil {
@@ -173,7 +182,7 @@ func Execute(ctx context.Context, r Run, history []ai.Message) ([]ai.Message, er
 		if len(calls) == 0 {
 			if recovered, attempted := recoverCalls(text.String(), r.Tools); len(recovered) > 0 {
 				for i := range recovered {
-					recovered[i].ID = fmt.Sprintf("recovered_%d_%d", step, i)
+					recovered[i].ID = fmt.Sprintf("recovered_%s_%d_%d", r.RunID, step, i)
 				}
 				calls = recovered
 				r.Emit(EventNotice, NoticeEvent{RepoID: r.RepoID, RunID: r.RunID, Text: noticeRecovered})
@@ -182,10 +191,14 @@ func Execute(ctx context.Context, r Run, history []ai.Message) ([]ai.Message, er
 			}
 		}
 
+		// Ids must be unique across the whole history (a decision card is
+		// answered by its call's id); a provider may send none, or reuse
+		// one from an earlier run (Ollama's "call_1").
 		for i := range calls {
-			if calls[i].ID == "" {
-				calls[i].ID = fmt.Sprintf("call_%d_%d", step, i)
+			if calls[i].ID == "" || used[calls[i].ID] {
+				calls[i].ID = fmt.Sprintf("call_%s_%d_%d", r.RunID, step, i)
 			}
+			used[calls[i].ID] = true
 		}
 		msgs = append(msgs, ai.Message{Role: ai.RoleAssistant, Content: text.String(), ToolCalls: calls})
 		if len(calls) == 0 {
@@ -200,7 +213,7 @@ func Execute(ctx context.Context, r Run, history []ai.Message) ([]ai.Message, er
 		}
 
 		for _, call := range calls {
-			r.Emit(EventTool, ToolEvent{RepoID: r.RepoID, RunID: r.RunID, Name: call.Name, Args: call.Args})
+			r.Emit(EventTool, ToolEvent{RepoID: r.RepoID, RunID: r.RunID, ID: call.ID, Name: call.Name, Args: call.Args})
 			result := r.RunTool(ctx, call, step)
 			r.Emit(EventToolResult, ToolResultEvent{RepoID: r.RepoID, RunID: r.RunID, Name: call.Name, Summary: summarize(result)})
 			msgs = append(msgs, ai.Message{Role: ai.RoleTool, ToolName: call.Name, Content: result})

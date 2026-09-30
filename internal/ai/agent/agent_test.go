@@ -395,3 +395,61 @@ func TestContinueKeepsTheRunGoing(t *testing.T) {
 		t.Fatalf("events = %v", rec.names)
 	}
 }
+
+// A card built from a tool call is answered by the call's id, so ids must
+// stay unique across every run of one chat history, whether the provider
+// sent none or reused one.
+func TestExecuteGivesToolCallsIDsUniqueAcrossRuns(t *testing.T) {
+	for _, providerID := range []string{"", "call_1"} {
+		history := user
+		var emitted []string
+		for _, runID := range []string{"run-a", "run-b"} {
+			p := &scripted{turns: [][]ai.Chunk{
+				{{ToolCalls: []ai.ToolCall{{ID: providerID, Name: "list_refs"}}}, {Done: true}},
+				{{Delta: "ok"}, {Done: true}},
+			}}
+			rec := &recorder{}
+			r := baseRun(p, rec)
+			r.RunID = runID
+			got, err := agent.Execute(context.Background(), r, history)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, d := range rec.data {
+				if ev, ok := d.(agent.ToolEvent); ok {
+					emitted = append(emitted, ev.ID)
+				}
+			}
+			history = append(got, ai.Message{Role: ai.RoleUser, Content: "again"})
+		}
+		var ids []string
+		for _, m := range history {
+			for _, c := range m.ToolCalls {
+				ids = append(ids, c.ID)
+			}
+		}
+		if len(ids) != 2 || ids[0] == "" || ids[0] == ids[1] {
+			t.Fatalf("provider id %q: ids = %v, want two distinct non-empty ids", providerID, ids)
+		}
+		if !reflect.DeepEqual(emitted, ids) {
+			t.Fatalf("provider id %q: emitted %v, stored %v", providerID, emitted, ids)
+		}
+	}
+}
+
+func TestExecuteKeepsAProviderToolCallID(t *testing.T) {
+	p := &scripted{turns: [][]ai.Chunk{
+		{{ToolCalls: []ai.ToolCall{{ID: "toolu_1", Name: "list_refs"}}}, {Done: true}},
+		{{Delta: "ok"}, {Done: true}},
+	}}
+	rec := &recorder{}
+	got, err := agent.Execute(context.Background(), baseRun(p, rec), user)
+	if err != nil || got[1].ToolCalls[0].ID != "toolu_1" {
+		t.Fatalf("history = %#v, err %v", got, err)
+	}
+	for _, d := range rec.data {
+		if ev, ok := d.(agent.ToolEvent); ok && ev.ID != "toolu_1" {
+			t.Fatalf("emitted id %q", ev.ID)
+		}
+	}
+}

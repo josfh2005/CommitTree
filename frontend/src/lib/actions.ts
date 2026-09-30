@@ -639,6 +639,25 @@ export async function resolveMergeRegion(id: string, path: string, region: strin
   }
 }
 
+/** chooseRegionOption applies a decision card's pick (option, or text
+ *  when option is -1); the card itself updates from chat:choice. Returns
+ *  whether it was applied. */
+export async function chooseRegionOption(repoID: string, callID: string, option: number, text: string, path: string): Promise<boolean> {
+  busy.set('Resolving…')
+  try {
+    const res = await api.chooseRegionOption(repoID, callID, option, text)
+    // Settled another way: nothing was written; the card says so itself.
+    if (!res.settled) toast(res.staged ? `${path} resolved and staged` : 'Region resolved')
+    return true
+  } catch (e) {
+    toast(errorMessage(e), 'error')
+    return false
+  } finally {
+    busy.set('')
+    await refreshRepo()
+  }
+}
+
 export async function restartConflictFile(id: string, path: string) {
   const ok = await confirmDialog({
     title: 'Restart file',

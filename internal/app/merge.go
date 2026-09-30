@@ -48,6 +48,9 @@ type ConflictFile struct {
 type RegionResult struct {
 	Left   int  `json:"left"`
 	Staged bool `json:"staged"`
+	// Settled: a decision card's region was already resolved another way,
+	// so nothing was written.
+	Settled bool `json:"settled"`
 }
 
 // MergeBranch merges branch into the repository's current branch. A
@@ -186,6 +189,13 @@ func (a *App) ResolveMergeRegion(id, path, region, choice, text string) (RegionR
 	if a.aiBusy(id) {
 		return RegionResult{}, fmt.Errorf("%w; wait for it or stop it first", ErrChatBusy)
 	}
+	return a.applyRegion(id, path, region, choice, text)
+}
+
+// applyRegion writes one region (a side, both, or given text) under the
+// merge write lock, staging the file when it was the last region. Callers
+// check the chat slot first.
+func (a *App) applyRegion(id, path, region, choice, text string) (RegionResult, error) {
 	var res RegionResult
 	err := a.writeMerge(id, func(ctx context.Context, dir string) error {
 		content := text
@@ -417,7 +427,9 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 			RunTool: func(ctx context.Context, call ai.ToolCall, step int) string {
 				nudge.saw(call)
 				if isMergeTool(call.Name) {
-					return a.runMergeTool(ctx, repoID, startedFor, sides, call)
+					out := a.runMergeTool(ctx, repoID, startedFor, sides, call)
+					nudge.carded(call, out)
+					return out
 				}
 				return tools.Run(ctx, repo.Path, call)
 			},
@@ -471,6 +483,42 @@ type resolveNudge struct {
 	dir, startedFor string
 	asks            int
 	read            map[string]bool // read_conflict paths since the last nudge
+	cards           map[string]bool // path + "\x00" + region id left as cards
+}
+
+// carded notes a region the model left to the user as a card (a
+// propose_options call the tool accepted).
+func (n *resolveNudge) carded(call ai.ToolCall, result string) {
+	if call.Name != "propose_options" || !strings.HasPrefix(result, shownMark) {
+		return
+	}
+	path, _ := call.Args["path"].(string)
+	region, _ := call.Args["region"].(string)
+	if n.cards == nil {
+		n.cards = map[string]bool{}
+	}
+	n.cards[path+"\x00"+region] = true
+}
+
+// allCarded reports whether every region still open in the conflicted
+// files has a card: the model has nothing left to do.
+func (n *resolveNudge) allCarded(conflicts []string) bool {
+	for _, path := range conflicts {
+		data, err := os.ReadFile(filepath.Join(n.dir, path))
+		if err != nil {
+			return false
+		}
+		hunks, err := merge.Parse(string(data))
+		if err != nil || len(hunks) == 0 {
+			return false
+		}
+		for _, h := range hunks {
+			if !n.cards[path+"\x00"+h.ID] {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // saw notes a tool call of the run (calls and Continue share its goroutine).
@@ -494,6 +542,9 @@ func (n *resolveNudge) next(ctx context.Context) string {
 	if err != nil || !st.Merging || len(st.Conflicts) == 0 {
 		return ""
 	}
+	if n.allCarded(st.Conflicts) {
+		return ""
+	}
 	if n.asks > 0 && !slices.ContainsFunc(st.Conflicts, func(p string) bool { return !n.read[p] }) {
 		return ""
 	}
@@ -502,7 +553,8 @@ func (n *resolveNudge) next(ctx context.Context) string {
 	n.read = nil
 	return "CommitTree: you stopped, but git still reports these files in conflict:\n" + left +
 		"\nCarry on with read_conflict, resolve_hunk and stage_file; a file whose regions are all resolved still needs stage_file. " +
-		"If you are leaving a region for the user on purpose, name it and say why in one line, then stop."
+		"If you are leaving a region for the user on purpose, call propose_options for it (or, if even the options are unclear, name it and say why in one line), then stop. " +
+		"Regions you already left as cards are the user's: do not resolve them or propose them again."
 }
 
 // resolveSummary is what git says is left once a resolve run ends, or ""
@@ -559,4 +611,128 @@ func isMergeTool(name string) bool {
 		}
 	}
 	return false
+}
+
+// EventChatChoice tells the chat a propose_options card was answered: the
+// tool's recorded result, which the card reads its state from.
+const EventChatChoice = "chat:choice"
+
+type ChatChoiceEvent struct {
+	RepoID  string `json:"repoID"`
+	CallID  string `json:"callID"`
+	Summary string `json:"summary"`
+}
+
+const (
+	shownMark   = mergetools.CardShown
+	choseMark   = "The user chose "
+	settledMark = "Settled another way"
+)
+
+// ChooseRegionOption applies the user's pick on a propose_options card:
+// option's text from the stored call, or text itself when option is -1.
+// The choice is recorded on the call's tool result in the history, so the
+// card shows it after a reload and the model sees it in a later chat.
+// The chat slot is held throughout, so no run appends to the history
+// between the load and the save.
+func (a *App) ChooseRegionOption(repoID, callID string, option int, text string) (RegionResult, error) {
+	if a.ai == nil {
+		return RegionResult{}, ErrAIDisabled
+	}
+	a.ai.mu.Lock()
+	if _, busy := a.ai.runs[repoID]; busy {
+		a.ai.mu.Unlock()
+		return RegionResult{}, fmt.Errorf("%w; wait for it or stop it first", ErrChatBusy)
+	}
+	a.ai.runs[repoID] = func() {}
+	a.ai.mu.Unlock()
+	defer func() {
+		a.ai.mu.Lock()
+		delete(a.ai.runs, repoID)
+		a.ai.mu.Unlock()
+	}()
+
+	history, err := a.ai.deps.Chats.Load(repoID)
+	if err != nil {
+		return RegionResult{}, err
+	}
+	call, result := findCall(history, callID)
+	if result < 0 || call.Name != "propose_options" {
+		return RegionResult{}, fmt.Errorf("no such choice %q", callID)
+	}
+	switch c := history[result].Content; {
+	case strings.HasPrefix(c, choseMark) || strings.HasPrefix(c, settledMark):
+		return RegionResult{}, errors.New("this card was already decided")
+	case !strings.HasPrefix(c, shownMark):
+		// The tool refused these options; no card was shown.
+		return RegionResult{}, fmt.Errorf("no such choice %q", callID)
+	}
+	path, _ := call.Args["path"].(string)
+	region, _ := call.Args["region"].(string)
+	label := "their own text"
+	switch {
+	case option >= 0:
+		opts, ok := mergetools.ParseOptions(call.Args)
+		if !ok || option >= len(opts) {
+			return RegionResult{}, fmt.Errorf("the card has no option %d", option)
+		}
+		label, text = opts[option].Label, opts[option].Text
+	case option != -1:
+		return RegionResult{}, fmt.Errorf("the card has no option %d", option)
+	}
+
+	res, err := a.applyRegion(repoID, path, region, "text", text)
+	var summary string
+	switch {
+	case errors.Is(err, merge.ErrNoSuchRegion) || (errors.Is(err, merge.ErrNotInMerge) && a.stillMerging(repoID)):
+		summary = fmt.Sprintf("%s: region %s of %s is no longer in conflict.", settledMark, region, path)
+		res = RegionResult{Settled: true}
+	case err != nil:
+		return RegionResult{}, err
+	default:
+		summary = fmt.Sprintf("%s%q for %s (region %s); it was written.", choseMark, label, path, region)
+		if res.Staged {
+			summary += " The file is resolved and staged."
+		}
+	}
+	history[result].Content = summary
+	if err := a.ai.deps.Chats.Save(repoID, history); err != nil {
+		return res, err
+	}
+	a.emit(EventChatChoice, ChatChoiceEvent{RepoID: repoID, CallID: callID, Summary: summary})
+	a.emit(EventMergeChanged, MergeChangedEvent{RepoID: repoID})
+	return res, nil
+}
+
+// findCall finds the tool call callID in history and the index of its
+// result message: the k-th tool message after the assistant message for
+// its k-th call, the pairing the provider adapters use. result is -1 when
+// the call or its result is missing.
+func findCall(history []ai.Message, callID string) (call ai.ToolCall, result int) {
+	result = -1
+	for i, m := range history {
+		if m.Role != ai.RoleAssistant {
+			continue
+		}
+		for k, c := range m.ToolCalls {
+			if c.ID != callID {
+				continue
+			}
+			j := i + 1 + k
+			if j < len(history) && history[j].Role == ai.RoleTool && history[j].ToolName == c.Name {
+				call, result = c, j
+			}
+		}
+	}
+	return call, result
+}
+
+// stillMerging reports whether repoID has a merge, rebase or cherry-pick in progress.
+func (a *App) stillMerging(repoID string) bool {
+	dir, err := a.dir(repoID)
+	if err != nil {
+		return false
+	}
+	st, err := merge.Status(a.ctx, dir)
+	return err == nil && st.Merging
 }

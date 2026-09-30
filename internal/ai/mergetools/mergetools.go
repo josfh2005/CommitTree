@@ -53,6 +53,23 @@ func Specs() []ai.ToolSpec {
 			}, "path", "resolved"),
 		},
 		{
+			Name:        "propose_options",
+			Description: "Leave one region for the user to decide, as a card of 2 to 4 concrete options. Use it only when the two sides genuinely contradict each other. Each option's text is exactly what would replace the region, like resolve_hunk's resolved. It returns at once; do not resolve that region yourself, carry on with the rest.",
+			Parameters: object(map[string]any{
+				"path":     str("File path."),
+				"region":   str("The region's id, as read_conflict showed it."),
+				"question": str("One line: what the user has to decide and why it is their call."),
+				"options": map[string]any{
+					"type":        "array",
+					"description": "2 to 4 choices, usually each side and, when one makes sense, a combination.",
+					"items": object(map[string]any{
+						"label": str("Short name of the choice, e.g. \"45000 (develop)\"."),
+						"text":  str("The region's replacement, exactly as it would be written. Empty removes the region."),
+					}, "label", "text"),
+				},
+			}, "path", "region", "question", "options"),
+		},
+		{
 			Name:        "stage_file",
 			Description: "Mark a file as resolved once it has no conflicts left. Fails while any marker remains.",
 			Parameters:  object(map[string]any{"path": str("File path.")}, "path"),
@@ -79,6 +96,8 @@ func Run(ctx context.Context, dir string, call ai.ToolCall, sides Sides) (string
 		return resolveHunk(ctx, dir, call.Args)
 	case "stage_file":
 		return stageFile(ctx, dir, call.Args)
+	case "propose_options":
+		return proposeOptions(ctx, dir, call.Args), false
 	}
 	return fmt.Sprintf("Unknown tool %q.", call.Name), false
 }
@@ -254,6 +273,79 @@ func regionsLeft(path string, n int) string {
 		return path + " has no conflicts left; call stage_file."
 	}
 	return fmt.Sprintf("%s has %d conflict(s) left, numbered 0 to %d; regions renumber after each resolve, so the next one is region 0.", path, n, n-1)
+}
+
+// CardShown starts propose_options' result when the card was accepted; the
+// app only lets the user answer a card whose result starts with it.
+const CardShown = "Shown to the user as a card"
+
+// Option is one choice of a propose_options card.
+type Option struct{ Label, Text string }
+
+// ParseOptions reads a propose_options call's options argument. ok is false
+// when it is not a list of {label, text} objects with string fields.
+func ParseOptions(args map[string]any) ([]Option, bool) {
+	list, ok := args["options"].([]any)
+	if !ok {
+		return nil, false
+	}
+	out := make([]Option, 0, len(list))
+	for _, item := range list {
+		m, ok := item.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		label, ok1 := m["label"].(string)
+		text, ok2 := m["text"].(string)
+		if !ok1 || !ok2 {
+			return nil, false
+		}
+		out = append(out, Option{Label: label, Text: text})
+	}
+	return out, true
+}
+
+// proposeOptions validates a card for the user; it writes nothing. The app
+// shows it from the stored call and applies the chosen text later.
+func proposeOptions(ctx context.Context, dir string, args map[string]any) string {
+	path, hunks, msg := open(ctx, dir, args)
+	if msg != "" {
+		return msg
+	}
+	id, _ := args["region"].(string)
+	i := slices.IndexFunc(hunks, func(h merge.Hunk) bool { return h.ID == id })
+	if i < 0 {
+		return fmt.Sprintf("Not shown: %s has no region %s (already resolved, or never there). Call read_conflict for the current regions.", path, id)
+	}
+	if q, _ := args["question"].(string); strings.TrimSpace(q) == "" {
+		return "Not shown: the card needs a question — one line saying what the user has to decide."
+	}
+	opts, ok := ParseOptions(args)
+	if !ok {
+		return "Not shown: options must be a list of {label, text} objects."
+	}
+	if len(opts) < 2 || len(opts) > 4 {
+		return fmt.Sprintf("Not shown: a card has 2 to 4 options, not %d.", len(opts))
+	}
+	labels, texts := map[string]bool{}, map[string]bool{}
+	for _, o := range opts {
+		label := strings.TrimSpace(o.Label)
+		switch {
+		case label == "":
+			return "Not shown: every option needs a label."
+		case labels[label]:
+			return fmt.Sprintf("Not shown: two options have the same label %q.", label)
+		case texts[o.Text]:
+			return fmt.Sprintf("Not shown: option %q has the same text as another option.", label)
+		case merge.HasMarkers(o.Text):
+			return fmt.Sprintf("Not shown: option %q contains conflict markers.", label)
+		}
+		if m := checkResolution(hunks[i], o.Text); m != "" {
+			return fmt.Sprintf("Option %q: %s", label, m)
+		}
+		labels[label], texts[o.Text] = true, true
+	}
+	return fmt.Sprintf(CardShown+" with %d options; they will choose after you finish. Do not resolve this region yourself; carry on with the rest.", len(opts))
 }
 
 func stageFile(ctx context.Context, dir string, args map[string]any) (string, bool) {

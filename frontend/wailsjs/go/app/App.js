@@ -18,16 +18,16 @@ export function ApplyHunkSelection(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['app']['App']['ApplyHunkSelection'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
+export function BranchCounts(arg1, arg2) {
+  return window['go']['app']['App']['BranchCounts'](arg1, arg2);
+}
+
 export function CancelCommand(arg1, arg2) {
   return window['go']['app']['App']['CancelCommand'](arg1, arg2);
 }
 
 export function CancelPull() {
   return window['go']['app']['App']['CancelPull']();
-}
-
-export function BranchCounts(arg1, arg2) {
-  return window['go']['app']['App']['BranchCounts'](arg1, arg2);
 }
 
 export function Checkout(arg1, arg2) {
@@ -44,6 +44,10 @@ export function CheckoutRemote(arg1, arg2, arg3) {
 
 export function CherryPick(arg1, arg2) {
   return window['go']['app']['App']['CherryPick'](arg1, arg2);
+}
+
+export function ChooseRegionOption(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['App']['ChooseRegionOption'](arg1, arg2, arg3, arg4);
 }
 
 export function ClearChat(arg1) {
@@ -258,6 +262,10 @@ export function ListRepos() {
   return window['go']['app']['App']['ListRepos']();
 }
 
+export function Menu() {
+  return window['go']['app']['App']['Menu']();
+}
+
 export function MergeBranch(arg1, arg2) {
   return window['go']['app']['App']['MergeBranch'](arg1, arg2);
 }
@@ -334,6 +342,14 @@ export function ResolveConflicts(arg1, arg2) {
   return window['go']['app']['App']['ResolveConflicts'](arg1, arg2);
 }
 
+export function ResolveMergeRegion(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['app']['App']['ResolveMergeRegion'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function RestartConflictFile(arg1, arg2) {
+  return window['go']['app']['App']['RestartConflictFile'](arg1, arg2);
+}
+
 export function SaveAISettings(arg1) {
   return window['go']['app']['App']['SaveAISettings'](arg1);
 }
@@ -396,14 +412,6 @@ export function SyncSubmodule(arg1, arg2) {
 
 export function TakeMergeSide(arg1, arg2, arg3) {
   return window['go']['app']['App']['TakeMergeSide'](arg1, arg2, arg3);
-}
-
-export function ResolveMergeRegion(arg1, arg2, arg3, arg4, arg5) {
-  return window['go']['app']['App']['ResolveMergeRegion'](arg1, arg2, arg3, arg4, arg5);
-}
-
-export function RestartConflictFile(arg1, arg2) {
-  return window['go']['app']['App']['RestartConflictFile'](arg1, arg2);
 }
 
 export function TerminalClose(arg1) {

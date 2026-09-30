@@ -3,6 +3,7 @@
 import {app} from '../models';
 import {repos} from '../models';
 import {worktree} from '../models';
+import {ops} from '../models';
 import {merge} from '../models';
 import {cmdlog} from '../models';
 import {gitflow} from '../models';
@@ -11,10 +12,10 @@ import {gitlog} from '../models';
 import {ai} from '../models';
 import {gitsettings} from '../models';
 import {refs} from '../models';
-import {ops} from '../models';
 import {stash} from '../models';
 import {submodules} from '../models';
 import {prompts} from '../models';
+import {menu} from '../models';
 import {worktrees} from '../models';
 
 export function AIStatus():Promise<app.AIStatus>;
@@ -25,11 +26,11 @@ export function AddRepo():Promise<repos.Repo>;
 
 export function ApplyHunkSelection(arg1:string,arg2:string,arg3:boolean,arg4:string,arg5:Array<worktree.HunkPick>,arg6:string):Promise<void>;
 
+export function BranchCounts(arg1:string,arg2:string):Promise<ops.AheadBehind>;
+
 export function CancelCommand(arg1:string,arg2:number):Promise<void>;
 
 export function CancelPull():Promise<void>;
-
-export function BranchCounts(arg1:string,arg2:string):Promise<ops.AheadBehind>;
 
 export function Checkout(arg1:string,arg2:string):Promise<void>;
 
@@ -38,6 +39,8 @@ export function CheckoutDetached(arg1:string,arg2:string):Promise<void>;
 export function CheckoutRemote(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function CherryPick(arg1:string,arg2:string):Promise<merge.Result>;
+
+export function ChooseRegionOption(arg1:string,arg2:string,arg3:number,arg4:string):Promise<app.RegionResult>;
 
 export function ClearChat(arg1:string):Promise<void>;
 
@@ -145,6 +148,8 @@ export function ListPrompts():Promise<Array<prompts.Info>>;
 
 export function ListRepos():Promise<Array<app.RepoItem>>;
 
+export function Menu():Promise<menu.Menu>;
+
 export function MergeBranch(arg1:string,arg2:string):Promise<merge.Result>;
 
 export function OpenPromptsFolder():Promise<void>;
@@ -183,6 +188,10 @@ export function ResolveCommit(arg1:string,arg2:string):Promise<string>;
 
 export function ResolveConflicts(arg1:string,arg2:string):Promise<void>;
 
+export function ResolveMergeRegion(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<app.RegionResult>;
+
+export function RestartConflictFile(arg1:string,arg2:string):Promise<void>;
+
 export function SaveAISettings(arg1:settings.Settings):Promise<void>;
 
 export function SaveGitSettings(arg1:gitsettings.Settings):Promise<void>;
@@ -214,10 +223,6 @@ export function StopChat(arg1:string):Promise<void>;
 export function SyncSubmodule(arg1:string,arg2:string):Promise<void>;
 
 export function TakeMergeSide(arg1:string,arg2:string,arg3:string):Promise<void>;
-
-export function ResolveMergeRegion(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<app.RegionResult>;
-
-export function RestartConflictFile(arg1:string,arg2:string):Promise<void>;
 
 export function TerminalClose(arg1:string):Promise<void>;
 
