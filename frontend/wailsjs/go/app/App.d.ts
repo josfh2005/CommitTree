@@ -151,6 +151,8 @@ export function OpenPromptsFolder():Promise<void>;
 
 export function OpenRepoFolder(arg1:string):Promise<void>;
 
+export function OpenRepoTerminal(arg1:string):Promise<void>;
+
 export function OwedStashDrop(arg1:string):Promise<number>;
 
 export function PlanFinish(arg1:string,arg2:string,arg3:Array<string>):Promise<gitflow.Plan>;

@@ -59,6 +59,12 @@ manager is launched and not waited on. It is refused for a missing
 repository. The same mechanism opens the prompts folder from the AI
 settings, on every platform.
 
+Next to it, "Open in Terminal" opens a new window of the system terminal in
+the repository's working tree — the Terminal app on macOS, a Command Prompt
+on Windows, `x-terminal-emulator` elsewhere — also launched and not waited
+on, and refused for a missing repository. It is separate from the embedded
+terminal (see Terminal).
+
 ### Worktrees
 
 Every read of the repository list also asks git, for each present stored

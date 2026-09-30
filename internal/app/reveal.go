@@ -35,3 +35,30 @@ func (a *App) OpenRepoFolder(id string) error {
 	}
 	return openFolder(dir)
 }
+
+// terminalCommand is the command that opens a terminal window in path: the
+// Terminal app on macOS; elsewhere the command runs with path as its working
+// directory, which the new window starts in.
+func terminalCommand(goos, path string) (string, []string) {
+	switch goos {
+	case "darwin":
+		return "open", []string{"-a", "Terminal", path}
+	case "windows":
+		return "cmd", []string{"/c", "start", "cmd"}
+	default:
+		return "x-terminal-emulator", nil
+	}
+}
+
+// OpenRepoTerminal opens a terminal window in the repository's working tree,
+// without waiting for it.
+func (a *App) OpenRepoTerminal(id string) error {
+	dir, err := a.dir(id)
+	if err != nil {
+		return err
+	}
+	name, args := terminalCommand(runtime.GOOS, dir)
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	return cmd.Start()
+}

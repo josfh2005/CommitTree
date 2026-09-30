@@ -10,6 +10,7 @@ export const api = {
   addRepo: () => call<Repo>(Go.AddRepo()),
   relocateRepo: (id: string) => call<Repo>(Go.RelocateRepo(id)),
   openRepoFolder: (id: string) => call<void>(Go.OpenRepoFolder(id)),
+  openRepoTerminal: (id: string) => call<void>(Go.OpenRepoTerminal(id)),
   removeRepo: (id: string) => call<void>(Go.RemoveRepo(id)),
   getWorktreeRemovalInfo: (id: string) => call<WorktreeRemovalInfo>(Go.WorktreeRemovalInfo(id)),
   removeWorktree: (id: string, force: boolean, deleteBranch: boolean) => call<void>(Go.RemoveWorktree(id, force, deleteBranch)),
