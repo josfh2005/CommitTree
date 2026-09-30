@@ -113,7 +113,7 @@
   >
     <Icon name={expanded ? 'chevron-down' : 'chevron-right'} size={12} />
   </button>
-  <button class="select" on:click={() => selectRepo(repo.id)}>
+  <button class="select" title="Double-click to show or hide its branches, tags and stash" on:click={() => selectRepo(repo.id)} on:dblclick={() => !repo.missing && toggleRepoExpanded(repo.id)}>
     {#if child}<span class="child-mark" title="Worktree">↳</span>{/if}
     <span class="name ellipsis" class:selected={active}>{repo.name}</span>
     {#if repo.missing}

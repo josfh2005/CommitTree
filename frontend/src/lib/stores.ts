@@ -481,8 +481,6 @@ export function selectRepo(id: string) {
     identity.set(null)
   }
   selectedRepoId.set(id)
-  // Selecting a folded repo unfolds it; folding it later keeps it selected.
-  expandedRepos.update((ids) => (ids.includes(id) ? ids : [...ids, id]))
   loadRefs()
   loadMergeState()
   loadWorktreeState()
