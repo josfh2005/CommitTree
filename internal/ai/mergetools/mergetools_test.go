@@ -35,12 +35,12 @@ func call(name string, args map[string]any) ai.ToolCall {
 	return ai.ToolCall{ID: "c1", Name: name, Args: args}
 }
 
-func TestSpecsCoverTheFourTools(t *testing.T) {
+func TestSpecsCoverTheTools(t *testing.T) {
 	names := map[string]bool{}
 	for _, s := range mergetools.Specs() {
 		names[s.Name] = true
 	}
-	for _, want := range []string{"list_conflicts", "read_conflict", "resolve_hunk", "stage_file"} {
+	for _, want := range []string{"list_conflicts", "read_conflict", "resolve_hunk", "stage_file", "propose_options"} {
 		if !names[want] {
 			t.Errorf("missing tool %q", want)
 		}
@@ -613,5 +613,96 @@ func TestResolveByAStaleRegionIDWritesNothing(t *testing.T) {
 	}
 	if after, _ := os.ReadFile(filepath.Join(r.Dir, "orders.ts")); string(after) != string(before) {
 		t.Fatal("a stale id changed the file")
+	}
+}
+
+func firstRegionID(t *testing.T, dir, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(dir, path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hunks, err := merge.Parse(string(data))
+	if err != nil || len(hunks) == 0 {
+		t.Fatalf("hunks = %v, %v", hunks, err)
+	}
+	return hunks[0].ID
+}
+
+func opts(pairs ...string) []any {
+	var out []any
+	for i := 0; i+1 < len(pairs); i += 2 {
+		out = append(out, map[string]any{"label": pairs[i], "text": pairs[i+1]})
+	}
+	return out
+}
+
+func propose(r *testrepo.Repo, args map[string]any) (string, bool) {
+	return mergetools.Run(context.Background(), r.Dir, call("propose_options", args), mergetools.Sides{})
+}
+
+func TestProposeOptionsAcceptsValidOptionsAndWritesNothing(t *testing.T) {
+	r := conflicted(t)
+	before, _ := os.ReadFile(filepath.Join(r.Dir, "greeting.txt"))
+	out, changed := propose(r, map[string]any{
+		"path": "greeting.txt", "region": firstRegionID(t, r.Dir, "greeting.txt"),
+		"question": "Which greeting?",
+		"options":  opts("hi (main)", "hi\n", "hola (feature)", "hola\n", "neither", ""),
+	})
+	if changed || !strings.HasPrefix(out, "Shown to the user as a card with 3 options") {
+		t.Fatalf("out = %q, changed = %v", out, changed)
+	}
+	after, _ := os.ReadFile(filepath.Join(r.Dir, "greeting.txt"))
+	if string(after) != string(before) {
+		t.Fatal("the file changed")
+	}
+}
+
+func TestProposeOptionsRefusals(t *testing.T) {
+	r := conflicted(t)
+	id := firstRegionID(t, r.Dir, "greeting.txt")
+	two := opts("a", "hi\n", "b", "hola\n")
+	cases := []struct {
+		name string
+		args map[string]any
+		want string
+	}{
+		{"unknown region", map[string]any{"path": "greeting.txt", "region": "deadbeef", "question": "q", "options": two}, "has no region deadbeef"},
+		{"not conflicted", map[string]any{"path": "nope.txt", "region": id, "question": "q", "options": two}, "is not a conflicted file"},
+		{"no question", map[string]any{"path": "greeting.txt", "region": id, "options": two}, "needs a question"},
+		{"one option", map[string]any{"path": "greeting.txt", "region": id, "question": "q", "options": opts("a", "hi\n")}, "2 to 4 options"},
+		{"five options", map[string]any{"path": "greeting.txt", "region": id, "question": "q", "options": opts("a", "1\n", "b", "2\n", "c", "3\n", "d", "4\n", "e", "5\n")}, "2 to 4 options"},
+		{"empty label", map[string]any{"path": "greeting.txt", "region": id, "question": "q", "options": opts(" ", "hi\n", "b", "hola\n")}, "needs a label"},
+		{"repeated label", map[string]any{"path": "greeting.txt", "region": id, "question": "q", "options": opts("a", "hi\n", "a", "hola\n")}, "same label"},
+		{"repeated text", map[string]any{"path": "greeting.txt", "region": id, "question": "q", "options": opts("a", "hi\n", "b", "hi\n")}, "same text"},
+		{"markers", map[string]any{"path": "greeting.txt", "region": id, "question": "q", "options": opts("a", "<<<<<<< x\nhi\n", "b", "hola\n")}, "conflict markers"},
+		{"malformed", map[string]any{"path": "greeting.txt", "region": id, "question": "q", "options": "hi or hola"}, "list of {label, text}"},
+	}
+	for _, c := range cases {
+		out, changed := propose(r, c.args)
+		if changed || !strings.Contains(out, c.want) {
+			t.Errorf("%s: out = %q, want it to contain %q", c.name, out, c.want)
+		}
+	}
+}
+
+func TestProposeOptionsRefusesAnOptionEchoingContext(t *testing.T) {
+	r := conflictedFile(t, "f.txt", "top\nmid\nend\n", "top\nours\nend\n", "top\ntheirs\nend\n")
+	out, changed := propose(r, map[string]any{
+		"path": "f.txt", "region": firstRegionID(t, r.Dir, "f.txt"), "question": "q",
+		"options": opts("ours", "ours\n", "echo", "top\ntheirs\n"),
+	})
+	if changed || !strings.Contains(out, `Option "echo": Not applied: your resolution starts with`) {
+		t.Fatalf("out = %q", out)
+	}
+}
+
+func TestParseOptions(t *testing.T) {
+	got, ok := mergetools.ParseOptions(map[string]any{"options": opts("a", "x\n", "b", "")})
+	if !ok || len(got) != 2 || got[0] != (mergetools.Option{Label: "a", Text: "x\n"}) || got[1].Text != "" {
+		t.Fatalf("got %+v, %v", got, ok)
+	}
+	if _, ok := mergetools.ParseOptions(map[string]any{"options": []any{map[string]any{"label": 1, "text": ""}}}); ok {
+		t.Fatal("accepted a non-string label")
 	}
 }

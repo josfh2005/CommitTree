@@ -502,7 +502,7 @@ func (n *resolveNudge) next(ctx context.Context) string {
 	n.read = nil
 	return "CommitTree: you stopped, but git still reports these files in conflict:\n" + left +
 		"\nCarry on with read_conflict, resolve_hunk and stage_file; a file whose regions are all resolved still needs stage_file. " +
-		"If you are leaving a region for the user on purpose, name it and say why in one line, then stop."
+		"If you are leaving a region for the user on purpose, call propose_options for it (or, if even the options are unclear, name it and say why in one line), then stop."
 }
 
 // resolveSummary is what git says is left once a resolve run ends, or ""
