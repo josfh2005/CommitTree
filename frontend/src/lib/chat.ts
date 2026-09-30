@@ -4,6 +4,10 @@ import type { AIMessage, ChatConfirmEvent, ChatDeltaEvent, ChatDoneEvent, ChatEr
 export interface ChatToolUse {
   name: string
   args: Record<string, unknown> | null
+  // How much of the answer's text came before this call, and when it came
+  // (seq), so the call is drawn where it happened, not above all the text.
+  at?: number
+  seq?: number
   summary?: string
   confirm?: { id: string; title: string; details: string[]; state: ConfirmState }
 }
@@ -19,7 +23,9 @@ export interface ChatItem {
   tools: ChatToolUse[]
   stopped?: boolean
   error?: { message: string; code: string }
-  notices?: string[]
+  // Asides about the run, each placed like a tool call at the text length
+  // it arrived at.
+  notices?: ChatNotice[]
   // What produced an assistant answer; absent on answers stored before it
   // was recorded.
   provider?: string
@@ -28,6 +34,46 @@ export interface ChatItem {
   // answers stored before it was recorded.
   at?: string
 }
+
+export interface ChatNotice {
+  text: string
+  at: number
+  seq?: number
+}
+
+// seq orders calls and notices that arrive at the same point of the text.
+let seqs = 0
+const nextSeq = () => ++seqs
+
+/** One piece of an assistant answer, in the order it happened. */
+export type ChatPart = { kind: 'text'; text: string } | { kind: 'tool'; tool: ChatToolUse } | { kind: 'notice'; text: string }
+
+/** parts lays an answer out in the order it happened: the text the model
+ *  wrote, cut wherever a tool call or a notice came in between. */
+export function parts(item: ChatItem): ChatPart[] {
+  const marks = [
+    ...item.tools.map((tool) => ({ at: tool.at ?? 0, seq: tool.seq ?? 0, part: { kind: 'tool', tool } as ChatPart })),
+    ...(item.notices ?? []).map((n) => ({ at: n.at, seq: n.seq ?? 0, part: { kind: 'notice', text: n.text } as ChatPart })),
+  ].sort((a, b) => a.at - b.at || a.seq - b.seq)
+  const out: ChatPart[] = []
+  let pos = 0
+  const text = (end: number) => {
+    const t = item.text.slice(pos, end)
+    if (t.trim()) out.push({ kind: 'text', text: t })
+    pos = end
+  }
+  for (const m of marks) {
+    if (m.at > pos) text(Math.min(m.at, item.text.length))
+    out.push(m.part)
+  }
+  text(item.text.length)
+  return out
+}
+
+/** A message the application sent the resolver mid-answer to make it carry
+ *  on (internal/app resolveNudge); shown as a notice, not as the user's. */
+export const NUDGE_PREFIX = 'CommitTree: '
+export const NUDGE_NOTICE = 'The model stopped with work left; CommitTree asked it to carry on.'
 
 export interface ChatState {
   repoID: string
@@ -55,11 +101,15 @@ const firstLine = (s: string) => s.split('\n')[0].slice(0, 120)
 export function fromMessages(repoID: string, messages: AIMessage[]): ChatState {
   const items: ChatItem[] = []
   for (const m of messages) {
+    let last = items[items.length - 1]
     if (m.role === 'user') {
+      if (m.content.startsWith(NUDGE_PREFIX) && last?.role === 'assistant') {
+        last.notices = [...(last.notices ?? []), { text: NUDGE_NOTICE, at: last.text.length, seq: nextSeq() }]
+        continue
+      }
       items.push({ role: 'user', text: m.content, tools: [] })
       continue
     }
-    let last = items[items.length - 1]
     if (m.role === 'tool') {
       const tool = last?.tools.find((t) => t.name === m.toolName && t.summary === undefined)
       if (tool) tool.summary = firstLine(m.content)
@@ -70,13 +120,15 @@ export function fromMessages(repoID: string, messages: AIMessage[]): ChatState {
       last = { role: 'assistant', text: '', tools: [] }
       items.push(last)
     }
+    // One answer spans several messages; keep their texts apart.
+    if (last.text && m.content && !last.text.endsWith('\n')) last.text += '\n\n'
     last.text += m.content
     if (!last.provider && m.provider) {
       last.provider = m.provider
       last.model = m.model
     }
     if (m.at) last.at = m.at
-    for (const call of m.toolCalls ?? []) last.tools.push({ name: call.name, args: call.args })
+    for (const call of m.toolCalls ?? []) last.tools.push({ name: call.name, args: call.args, at: last.text.length, seq: nextSeq() })
     if (m.stopped) last.stopped = true
   }
   return { repoID, runID: null, items }
@@ -125,7 +177,7 @@ export function withPendingConfirm(state: ChatState, ev: ChatConfirmEvent): Chat
   const confirm = { id: ev.confirmID, title: ev.title, details: ev.details ?? [], state: 'pending' as const }
   const i = last.tools.findIndex((t) => t.name === ev.tool && t.summary === undefined && !t.confirm)
   if (i >= 0) last.tools[i] = { ...last.tools[i], confirm }
-  else last.tools.push({ name: ev.tool, args: null, confirm })
+  else last.tools.push({ name: ev.tool, args: null, confirm, at: last.text.length, seq: nextSeq() })
   return { ...state, runID: ev.runID, items }
 }
 
@@ -209,7 +261,7 @@ export function applyEvent(state: ChatState, name: string, payload: Payload): Ch
       return { ...state, items }
     case 'chat:tool': {
       const p = payload as ChatToolEvent
-      last.tools.push({ name: p.name, args: p.args })
+      last.tools.push({ name: p.name, args: p.args, at: last.text.length, seq: nextSeq() })
       return { ...state, items }
     }
     case 'chat:tool_result': {
@@ -223,7 +275,7 @@ export function applyEvent(state: ChatState, name: string, payload: Payload): Ch
     }
     case 'chat:notice': {
       const p = payload as ChatNoticeEvent
-      last.notices = [...(last.notices ?? []), p.text]
+      last.notices = [...(last.notices ?? []), { text: p.text, at: last.text.length, seq: nextSeq() }]
       return { ...state, items }
     }
     case 'chat:done': {
