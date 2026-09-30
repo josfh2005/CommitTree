@@ -745,3 +745,166 @@ func TestResolveMergeRegionRefusedWhileAIRuns(t *testing.T) {
 		t.Fatalf("take err = %v", err)
 	}
 }
+
+// withCard stores a chat history whose resolver answer proposed options for
+// greeting.txt's region, and returns the call id.
+func withCard(t *testing.T, a *App, id string) string {
+	t.Helper()
+	f, err := a.GetConflictFile(id, "greeting.txt")
+	if err != nil || len(f.Regions) != 1 {
+		t.Fatalf("file = %+v, %v", f, err)
+	}
+	callID := "call_run1_0_1"
+	history := []ai.Message{
+		{Role: ai.RoleUser, Content: "resolve"},
+		{Role: ai.RoleAssistant, ToolCalls: []ai.ToolCall{
+			{ID: "call_run1_0_0", Name: "list_conflicts"},
+			{ID: callID, Name: "propose_options", Args: map[string]any{
+				"path": "greeting.txt", "region": f.Regions[0].ID, "question": "Which?",
+				"options": []any{
+					map[string]any{"label": "hi (main)", "text": "hi\n"},
+					map[string]any{"label": "hola (feature)", "text": "hola\n"},
+				},
+			}},
+		}},
+		{Role: ai.RoleTool, ToolName: "list_conflicts", Content: "greeting.txt — 1 conflict(s)"},
+		{Role: ai.RoleTool, ToolName: "propose_options", Content: "Shown to the user as a card with 2 options"},
+		{Role: ai.RoleAssistant, Content: "Left greeting.txt for you."},
+	}
+	if err := a.ai.deps.Chats.Save(id, history); err != nil {
+		t.Fatal(err)
+	}
+	return callID
+}
+
+func storedContent(t *testing.T, a *App, id string, idx int) string {
+	t.Helper()
+	h, err := a.ai.deps.Chats.Load(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return h[idx].Content
+}
+
+func TestChooseRegionOptionWritesStagesAndRecords(t *testing.T) {
+	a, r, id, ev := newAIMergeApp(t, "http://127.0.0.1:0")
+	if _, err := a.MergeBranch(id, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	callID := withCard(t, a, id)
+	res, err := a.ChooseRegionOption(id, callID, 1, "")
+	if err != nil || !res.Staged {
+		t.Fatalf("res = %+v, %v", res, err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(r.Dir, "greeting.txt")); string(data) != "hola\n" {
+		t.Fatalf("file = %q", data)
+	}
+	got := storedContent(t, a, id, 3)
+	if !strings.HasPrefix(got, `The user chose "hola (feature)" for greeting.txt (region `) || !strings.HasSuffix(got, "The file is resolved and staged.") {
+		t.Fatalf("tool message = %q", got)
+	}
+	if other := storedContent(t, a, id, 2); other != "greeting.txt — 1 conflict(s)" {
+		t.Fatalf("the other call's result changed: %q", other)
+	}
+	e := ev.wait(t, EventChatChoice)
+	if c := e.data.(ChatChoiceEvent); c.RepoID != id || c.CallID != callID || c.Summary != got {
+		t.Fatalf("event = %+v", c)
+	}
+	ev.wait(t, EventMergeChanged)
+	if a.aiBusy(id) {
+		t.Fatal("chat slot still held")
+	}
+}
+
+func TestChooseRegionOptionOwnText(t *testing.T) {
+	a, r, id, _ := newAIMergeApp(t, "http://127.0.0.1:0")
+	if _, err := a.MergeBranch(id, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	callID := withCard(t, a, id)
+	if _, err := a.ChooseRegionOption(id, callID, -1, "hey\n"); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(r.Dir, "greeting.txt")); string(data) != "hey\n" {
+		t.Fatalf("file = %q", data)
+	}
+	if got := storedContent(t, a, id, 3); !strings.HasPrefix(got, `The user chose "their own text"`) {
+		t.Fatalf("tool message = %q", got)
+	}
+}
+
+func TestChooseRegionOptionOnASettledRegion(t *testing.T) {
+	a, _, id, ev := newAIMergeApp(t, "http://127.0.0.1:0")
+	if _, err := a.MergeBranch(id, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	callID := withCard(t, a, id)
+	f, _ := a.GetConflictFile(id, "greeting.txt")
+	if _, err := a.ResolveMergeRegion(id, "greeting.txt", f.Regions[0].ID, "ours", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.ChooseRegionOption(id, callID, 1, ""); err != nil {
+		t.Fatalf("err = %v, want nil (settled another way)", err)
+	}
+	if got := storedContent(t, a, id, 3); !strings.HasPrefix(got, "Settled another way") {
+		t.Fatalf("tool message = %q", got)
+	}
+	ev.wait(t, EventChatChoice)
+	if a.aiBusy(id) {
+		t.Fatal("chat slot still held")
+	}
+}
+
+func TestChooseRegionOptionAfterTheMergeEndedIsAnError(t *testing.T) {
+	a, _, id, _ := newAIMergeApp(t, "http://127.0.0.1:0")
+	if _, err := a.MergeBranch(id, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	callID := withCard(t, a, id)
+	if err := a.AbortMerge(id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.ChooseRegionOption(id, callID, 0, ""); err == nil {
+		t.Fatal("chose on an aborted merge")
+	}
+	if got := storedContent(t, a, id, 3); got != "Shown to the user as a card with 2 options" {
+		t.Fatalf("tool message = %q", got)
+	}
+	if a.aiBusy(id) {
+		t.Fatal("chat slot still held")
+	}
+}
+
+func TestChooseRegionOptionRefusals(t *testing.T) {
+	a, _, id, _ := newAIMergeApp(t, "http://127.0.0.1:0")
+	if _, err := a.MergeBranch(id, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	callID := withCard(t, a, id)
+	if _, err := a.ChooseRegionOption(id, "nope", 0, ""); err == nil || !strings.Contains(err.Error(), "no such choice") {
+		t.Errorf("unknown id: %v", err)
+	}
+	if _, err := a.ChooseRegionOption(id, "call_run1_0_0", 0, ""); err == nil || !strings.Contains(err.Error(), "no such choice") {
+		t.Errorf("not a propose_options call: %v", err)
+	}
+	for _, bad := range []int{2, -2} {
+		if _, err := a.ChooseRegionOption(id, callID, bad, ""); err == nil || !strings.Contains(err.Error(), "no option") {
+			t.Errorf("option %d: %v", bad, err)
+		}
+	}
+	a.ai.mu.Lock()
+	a.ai.runs[id] = func() {}
+	a.ai.mu.Unlock()
+	if _, err := a.ChooseRegionOption(id, callID, 0, ""); !errors.Is(err, ErrChatBusy) {
+		t.Errorf("busy: %v", err)
+	}
+	a.ai.mu.Lock()
+	delete(a.ai.runs, id)
+	a.ai.mu.Unlock()
+	if _, err := a.ChooseRegionOption(id, callID, 0, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.ChooseRegionOption(id, callID, 1, ""); err == nil || !strings.Contains(err.Error(), "already decided") {
+		t.Errorf("second choice: %v", err)
+	}
+}

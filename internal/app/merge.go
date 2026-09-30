@@ -186,6 +186,13 @@ func (a *App) ResolveMergeRegion(id, path, region, choice, text string) (RegionR
 	if a.aiBusy(id) {
 		return RegionResult{}, fmt.Errorf("%w; wait for it or stop it first", ErrChatBusy)
 	}
+	return a.applyRegion(id, path, region, choice, text)
+}
+
+// applyRegion writes one region (a side, both, or given text) under the
+// merge write lock, staging the file when it was the last region. Callers
+// check the chat slot first.
+func (a *App) applyRegion(id, path, region, choice, text string) (RegionResult, error) {
 	var res RegionResult
 	err := a.writeMerge(id, func(ctx context.Context, dir string) error {
 		content := text
@@ -559,4 +566,123 @@ func isMergeTool(name string) bool {
 		}
 	}
 	return false
+}
+
+// EventChatChoice tells the chat a propose_options card was answered: the
+// tool's recorded result, which the card reads its state from.
+const EventChatChoice = "chat:choice"
+
+type ChatChoiceEvent struct {
+	RepoID  string `json:"repoID"`
+	CallID  string `json:"callID"`
+	Summary string `json:"summary"`
+}
+
+const (
+	choseMark   = "The user chose "
+	settledMark = "Settled another way"
+)
+
+// ChooseRegionOption applies the user's pick on a propose_options card:
+// option's text from the stored call, or text itself when option is -1.
+// The choice is recorded on the call's tool result in the history, so the
+// card shows it after a reload and the model sees it in a later chat.
+// The chat slot is held throughout, so no run appends to the history
+// between the load and the save.
+func (a *App) ChooseRegionOption(repoID, callID string, option int, text string) (RegionResult, error) {
+	if a.ai == nil {
+		return RegionResult{}, ErrAIDisabled
+	}
+	a.ai.mu.Lock()
+	if _, busy := a.ai.runs[repoID]; busy {
+		a.ai.mu.Unlock()
+		return RegionResult{}, fmt.Errorf("%w; wait for it or stop it first", ErrChatBusy)
+	}
+	a.ai.runs[repoID] = func() {}
+	a.ai.mu.Unlock()
+	defer func() {
+		a.ai.mu.Lock()
+		delete(a.ai.runs, repoID)
+		a.ai.mu.Unlock()
+	}()
+
+	history, err := a.ai.deps.Chats.Load(repoID)
+	if err != nil {
+		return RegionResult{}, err
+	}
+	call, result := findCall(history, callID)
+	if result < 0 || call.Name != "propose_options" {
+		return RegionResult{}, fmt.Errorf("no such choice %q", callID)
+	}
+	if c := history[result].Content; strings.HasPrefix(c, choseMark) || strings.HasPrefix(c, settledMark) {
+		return RegionResult{}, errors.New("this card was already decided")
+	}
+	path, _ := call.Args["path"].(string)
+	region, _ := call.Args["region"].(string)
+	label := "their own text"
+	switch {
+	case option >= 0:
+		opts, ok := mergetools.ParseOptions(call.Args)
+		if !ok || option >= len(opts) {
+			return RegionResult{}, fmt.Errorf("the card has no option %d", option)
+		}
+		label, text = opts[option].Label, opts[option].Text
+	case option != -1:
+		return RegionResult{}, fmt.Errorf("the card has no option %d", option)
+	}
+
+	res, err := a.applyRegion(repoID, path, region, "text", text)
+	var summary string
+	switch {
+	case errors.Is(err, merge.ErrNoSuchRegion) || (errors.Is(err, merge.ErrNotInMerge) && a.stillMerging(repoID)):
+		summary = fmt.Sprintf("%s: region %s of %s is no longer in conflict.", settledMark, region, path)
+		res = RegionResult{}
+	case err != nil:
+		return RegionResult{}, err
+	default:
+		summary = fmt.Sprintf("%s%q for %s (region %s); it was written.", choseMark, label, path, region)
+		if res.Staged {
+			summary += " The file is resolved and staged."
+		}
+	}
+	history[result].Content = summary
+	if err := a.ai.deps.Chats.Save(repoID, history); err != nil {
+		return res, err
+	}
+	a.emit(EventChatChoice, ChatChoiceEvent{RepoID: repoID, CallID: callID, Summary: summary})
+	a.emit(EventMergeChanged, MergeChangedEvent{RepoID: repoID})
+	return res, nil
+}
+
+// findCall finds the tool call callID in history and the index of its
+// result message: the k-th tool message after the assistant message for
+// its k-th call, the pairing the provider adapters use. result is -1 when
+// the call or its result is missing.
+func findCall(history []ai.Message, callID string) (call ai.ToolCall, result int) {
+	result = -1
+	for i, m := range history {
+		if m.Role != ai.RoleAssistant {
+			continue
+		}
+		for k, c := range m.ToolCalls {
+			if c.ID != callID {
+				continue
+			}
+			j := i + 1 + k
+			if j < len(history) && history[j].Role == ai.RoleTool && history[j].ToolName == c.Name {
+				call, result = c, j
+			}
+		}
+	}
+	return call, result
+}
+
+// stillMerging reports whether repoID has a merge, rebase or cherry-pick in progress.
+func (a *App) stillMerging(repoID string) bool {
+	dir, err := a.dir(repoID)
+	if err != nil {
+		return false
+	}
+	st, err := merge.Status(a.ctx, dir)
+	return err == nil && st.Merging
 }
