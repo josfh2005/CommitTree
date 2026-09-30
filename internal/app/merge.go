@@ -216,7 +216,7 @@ type MergeChangedEvent struct {
 
 // MergeMaxSteps is generous because each conflicted file costs several tool
 // rounds; history trimming keeps the context bounded regardless.
-const MergeMaxSteps = 30
+const MergeMaxSteps = 60
 
 // resolvable are the kinds the conflict agent works on. Each has a
 // fingerprint that changes when the operation (or, for a rebase, the step)
@@ -329,13 +329,16 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 
 	a.emit(agent.EventStart, agent.StartEvent{RepoID: repoID, RunID: runID, Text: text, Provider: cfg.ChatProvider, Model: cfg.ChatModel})
 
+	nudge := &resolveNudge{dir: repo.Path, startedFor: startedFor}
 	go func() {
 		run := agent.Run{
 			RepoID: repoID, RunID: runID,
 			Provider: provider, Model: cfg.ChatModel, System: system,
 			Tools:    append(mergetools.Specs(), tools.Specs()...),
 			MaxSteps: MergeMaxSteps,
+			Continue: nudge.next,
 			RunTool: func(ctx context.Context, call ai.ToolCall, step int) string {
+				nudge.saw(call)
 				if isMergeTool(call.Name) {
 					return a.runMergeTool(ctx, repoID, startedFor, sides, call)
 				}
@@ -373,6 +376,56 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 		}
 	}()
 	return nil
+}
+
+// MaxResolveNudges caps how often a resolve run is told to carry on after
+// the model stopped with conflicts left.
+const MaxResolveNudges = 2
+
+// resolveNudge decides whether a resolve run whose model has stopped should
+// be told to carry on, while the operation it was started for still has
+// conflicted files and at most MaxResolveNudges times. The first time it
+// always does: even a strong model leaves a region it could settle with a
+// closer look. After that only when some conflicted file went unread since
+// the last nudge — a model that stopped without looking. One that read
+// every file left and still declined is leaving them on purpose; pressing
+// it again only pushes it to guess.
+type resolveNudge struct {
+	dir, startedFor string
+	asks            int
+	read            map[string]bool // read_conflict paths since the last nudge
+}
+
+// saw notes a tool call of the run (calls and Continue share its goroutine).
+func (n *resolveNudge) saw(call ai.ToolCall) {
+	if call.Name != "read_conflict" {
+		return
+	}
+	if path, _ := call.Args["path"].(string); path != "" {
+		if n.read == nil {
+			n.read = map[string]bool{}
+		}
+		n.read[path] = true
+	}
+}
+
+func (n *resolveNudge) next(ctx context.Context) string {
+	if n.asks >= MaxResolveNudges || merge.Fingerprint(ctx, n.dir) != n.startedFor {
+		return ""
+	}
+	st, err := merge.Status(ctx, n.dir)
+	if err != nil || !st.Merging || len(st.Conflicts) == 0 {
+		return ""
+	}
+	if n.asks > 0 && !slices.ContainsFunc(st.Conflicts, func(p string) bool { return !n.read[p] }) {
+		return ""
+	}
+	left, _ := mergetools.Run(ctx, n.dir, ai.ToolCall{Name: "list_conflicts"}, mergetools.Sides{})
+	n.asks++
+	n.read = nil
+	return "CommitTree: you stopped, but git still reports these files in conflict:\n" + left +
+		"\nCarry on with read_conflict, resolve_hunk and stage_file; a file whose regions are all resolved still needs stage_file. " +
+		"If you are leaving a region for the user on purpose, name it and say why in one line, then stop."
 }
 
 // resolveSummary is what git says is left once a resolve run ends, or ""

@@ -16,13 +16,16 @@ const ContextLines = 6
 // them; refusing is safer than guessing where the sides end.
 var ErrBadConflict = errors.New("merge: malformed conflict markers")
 
-// Hunk is one conflicted region of a file. Base is empty when the file was
-// written in the two-way style, which carries no common ancestor.
+// Hunk is one conflicted region of a file. HasBase is false when the file
+// was written in the two-way style, which carries no common ancestor; with
+// it true, an empty Base means the ancestor had nothing there — both sides
+// added lines at the same place.
 type Hunk struct {
-	Index  int
-	Ours   string
-	Theirs string
-	Base   string
+	Index   int
+	Ours    string
+	Theirs  string
+	Base    string
+	HasBase bool
 	Before string
 	After  string
 
@@ -48,6 +51,7 @@ func Parse(content string) ([]Hunk, error) {
 				return nil, fmt.Errorf("%w: conflict reopened at line %d", ErrBadConflict, i+1)
 			case marker(line, "|||||||") && side == &ours:
 				side = &base
+				h.HasBase = true
 			case marker(line, "=======") && side != &theirs:
 				side = &theirs
 			case marker(line, ">>>>>>>") && side == &theirs:

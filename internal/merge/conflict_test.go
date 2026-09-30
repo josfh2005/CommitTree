@@ -205,3 +205,22 @@ func TestSpliceRejectsAnOutOfRangeHunk(t *testing.T) {
 		t.Fatalf("err = %v, want ErrNoSuchHunk", err)
 	}
 }
+
+// An empty ancestor section is not the same as none: it says both sides
+// added lines at the same place.
+func TestParseTellsAnEmptyAncestorFromNone(t *testing.T) {
+	added, err := Parse("<<<<<<< HEAD\nours\n||||||| base\n=======\ntheirs\n>>>>>>> feature\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !added[0].HasBase || added[0].Base != "" {
+		t.Errorf("empty ancestor: HasBase = %v, Base = %q", added[0].HasBase, added[0].Base)
+	}
+	twoWay, err := Parse("<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> feature\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if twoWay[0].HasBase {
+		t.Error("two-way style: HasBase = true")
+	}
+}

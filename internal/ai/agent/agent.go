@@ -28,6 +28,7 @@ const (
 	EventNotice      = "chat:notice"
 	EventSuggestions = "chat:suggestions"
 
+	noticeContinue    = "The model stopped with work left; CommitTree asked it to carry on."
 	noticeRecovered   = "The model wrote a tool call as text; CommitTree ran it."
 	noticeUnrecovered = "The model wrote a tool call as text that CommitTree could not run. Try a model with reliable tool calling."
 )
@@ -109,6 +110,11 @@ type Run struct {
 	// MaxSteps caps the model/tool rounds for this run; 0 uses MaxSteps.
 	// Resolving a merge takes many more rounds than answering a question.
 	MaxSteps int
+	// Continue, when set, is asked each time the model answers without a
+	// tool call. A non-empty reply is sent back as a user message and the
+	// run goes on: small models announce "next I will…" and stop there.
+	// It decides itself when to give up; "" ends the run.
+	Continue func(ctx context.Context) string
 }
 
 // Execute continues history (which ends with the user's message) and
@@ -183,6 +189,13 @@ func Execute(ctx context.Context, r Run, history []ai.Message) ([]ai.Message, er
 		}
 		msgs = append(msgs, ai.Message{Role: ai.RoleAssistant, Content: text.String(), ToolCalls: calls})
 		if len(calls) == 0 {
+			if r.Continue != nil {
+				if more := r.Continue(ctx); more != "" {
+					r.Emit(EventNotice, NoticeEvent{RepoID: r.RepoID, RunID: r.RunID, Text: noticeContinue})
+					msgs = append(msgs, ai.Message{Role: ai.RoleUser, Content: more})
+					continue
+				}
+			}
 			return msgs, nil
 		}
 

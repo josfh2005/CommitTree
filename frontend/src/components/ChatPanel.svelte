@@ -4,7 +4,7 @@
   import Icon from './Icon.svelte'
   import ModelPicker from './ModelPicker.svelte'
   import { api } from '../lib/api'
-  import { answeredBy, applyEvent, CHAT_EVENTS, isWriteTool, confirmResultText, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from '../lib/chat'
+  import { answeredBy, appliedText, applyEvent, parts, CHAT_EVENTS, isWriteTool, confirmResultText, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from '../lib/chat'
   import { relativeDate } from '../lib/format'
   import { renderMarkdown } from '../lib/markdown'
   import { chatBlocker } from '../lib/providers'
@@ -22,8 +22,11 @@
     EventsOn(name, (payload) => {
       const next = applyEvent(state, name, payload)
       if (next !== state) {
+        // Follow the answer only when already at the bottom, so reading
+        // earlier calls while it runs isn't yanked away by each new one.
+        const follow = atBottom()
         state = next
-        scrollDown()
+        if (follow) scrollDown()
       }
     }),
   )
@@ -139,6 +142,10 @@
     jumpTo.set(link.dataset.hash ?? '')
   }
 
+  function atBottom(): boolean {
+    return !list || list.scrollHeight - list.scrollTop - list.clientHeight < 48
+  }
+
   async function scrollDown() {
     await tick()
     if (list) list.scrollTop = list.scrollHeight
@@ -194,41 +201,52 @@
         <div class="msg user">{item.text}</div>
       {:else}
         <div class="msg assistant">
-          {#each item.tools as tool}
-            {#if tool.confirm}
-              {@const confirm = tool.confirm}
-              <div class="confirm">
-                <div class="confirm-title">{confirm.title}</div>
-                {#each confirm.details as line}<div class="confirm-detail">{line}</div>{/each}
-                {#if confirm.state === 'pending'}
-                  <div class="confirm-actions">
-                    <button class="btn" on:click={() => decide(confirm.id, false)}>Reject</button>
-                    <button class="btn primary" on:click={() => decide(confirm.id, true)}>Approve</button>
-                  </div>
-                {:else if confirm.state === 'approved'}
-                  <div class="confirm-result">Running…</div>
-                {:else if confirm.state === 'rejecting'}
-                  <div class="confirm-result">Rejecting…</div>
-                {:else if confirm.state === 'failed'}
-                  <div class="confirm-result failed">{confirmResultText(tool)}</div>
-                {:else}
-                  <div class="confirm-result">{confirmResultText(tool)}</div>
-                {/if}
-              </div>
+          {#each parts(item) as part}
+            {#if part.kind === 'text'}
+              <div class="md">{@html renderMarkdown(part.text)}</div>
+            {:else if part.kind === 'notice'}
+              <div class="notice">{part.text}</div>
             {:else}
-              <div class="tool" title={JSON.stringify(tool.args ?? {})}>
-                <Icon name={isWriteTool(tool.name) ? 'pencil' : 'search'} size={12} />
-                <span class="ellipsis">{toolLabel(tool)}</span>
-                {#if tool.summary}<span class="summary ellipsis">· {tool.summary}</span>{/if}
-              </div>
+              {@const tool = part.tool}
+              {#if tool.confirm}
+                {@const confirm = tool.confirm}
+                <div class="confirm">
+                  <div class="confirm-title">{confirm.title}</div>
+                  {#each confirm.details as line}<div class="confirm-detail">{line}</div>{/each}
+                  {#if confirm.state === 'pending'}
+                    <div class="confirm-actions">
+                      <button class="btn" on:click={() => decide(confirm.id, false)}>Reject</button>
+                      <button class="btn primary" on:click={() => decide(confirm.id, true)}>Approve</button>
+                    </div>
+                  {:else if confirm.state === 'approved'}
+                    <div class="confirm-result">Running…</div>
+                  {:else if confirm.state === 'rejecting'}
+                    <div class="confirm-result">Rejecting…</div>
+                  {:else if confirm.state === 'failed'}
+                    <div class="confirm-result failed">{confirmResultText(tool)}</div>
+                  {:else}
+                    <div class="confirm-result">{confirmResultText(tool)}</div>
+                  {/if}
+                </div>
+              {:else}
+                <div class="tool" title={JSON.stringify(tool.args ?? {})}>
+                  <Icon name={isWriteTool(tool.name) ? 'pencil' : 'search'} size={12} />
+                  <span class="ellipsis">{toolLabel(tool)}</span>
+                  {#if tool.summary}<span class="summary ellipsis">· {tool.summary}</span>{/if}
+                </div>
+                {@const applied = appliedText(tool)}
+                {#if applied !== null}
+                  <details class="applied" open>
+                    <summary>Written to the file</summary>
+                    <pre>{applied}</pre>
+                  </details>
+                {/if}
+              {/if}
             {/if}
           {/each}
-          {#if item.text}
-            <div class="md">{@html renderMarkdown(item.text)}</div>
-          {:else if running && i === state.items.length - 1 && !item.error}
+          {#if running && i === state.items.length - 1 && !item.error && parts(item).at(-1)?.kind !== 'text'}
             <div class="typing">Thinking…</div>
           {/if}
-          {#each item.notices ?? [] as notice}<div class="notice">{notice}</div>{/each}
           {#if item.stopped}<div class="note">Stopped</div>{/if}
           {#if item.error}<div class="error">{errorText(item.error)}</div>{/if}
           {#if item.text && !(running && i === state.items.length - 1)}
@@ -285,6 +303,9 @@
   .actions { display: flex; gap: 6px; }
   .msg { max-width: 100%; -webkit-user-select: text; user-select: text; line-height: 1.5; }
   .user { align-self: flex-end; max-width: 85%; padding: 8px 12px; border-radius: 12px; background: var(--active); white-space: pre-wrap; }
+  .applied { margin: -2px 0 6px; font-size: 12px; color: var(--muted); }
+  .applied summary { cursor: pointer; padding: 0 8px; }
+  .applied pre { margin: 4px 0 0; padding: 6px 8px; max-height: 240px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 11px; white-space: pre; }
   .tool { display: flex; align-items: center; gap: 6px; max-width: 100%; margin-bottom: 4px; padding: 2px 8px; border-radius: 6px; background: var(--hover); color: var(--muted); font-size: 12px; }
   .summary { color: var(--faint); }
   .confirm { margin-bottom: 6px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }

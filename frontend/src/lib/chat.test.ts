@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { answeredBy, applyEvent, isWriteTool, CHAT_EVENTS, confirmResultText, confirmState, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from './chat'
+import { answeredBy, appliedText, applyEvent, parts, isWriteTool, CHAT_EVENTS, confirmResultText, confirmState, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from './chat'
 import type { AIMessage, ChatConfirmEvent } from './types'
 
 describe('fromMessages', () => {
@@ -12,7 +12,7 @@ describe('fromMessages', () => {
       { role: 'user', content: 'thanks' },
       { role: 'assistant', content: 'Wai', stopped: true },
     ]
-    expect(fromMessages('r1', messages)).toEqual({
+    expect(fromMessages('r1', messages)).toMatchObject({
       repoID: 'r1',
       runID: null,
       items: [
@@ -73,7 +73,7 @@ describe('applyEvent', () => {
     s = applyEvent(s, 'chat:delta', { repoID: 'r1', runID: 'run1', text: 'one.' })
     s = applyEvent(s, 'chat:done', { repoID: 'r1', runID: 'run1' })
     expect(s.runID).toBeNull()
-    expect(s.items[1]).toEqual({
+    expect(s.items[1]).toMatchObject({
       role: 'assistant',
       text: 'Found one.',
       tools: [{ name: 'search_log', args: { text: 'NEXO-1' }, summary: 'a1b2c3d fix' }],
@@ -128,7 +128,7 @@ describe('chat:notice', () => {
   it('appends the text to the running assistant item', () => {
     let s = startRun(emptyChat('r1'), 'hola', 'run1')
     s = applyEvent(s, 'chat:notice', { repoID: 'r1', runID: 'run1', text: 'The model wrote a tool call as text; CommitTree ran it.' })
-    expect(s.items[1].notices).toEqual(['The model wrote a tool call as text; CommitTree ran it.'])
+    expect(s.items[1].notices).toMatchObject([{ text: 'The model wrote a tool call as text; CommitTree ran it.', at: 0 }])
   })
 
   it('ignores a notice for another runID', () => {
@@ -317,5 +317,46 @@ describe('isWriteTool', () => {
     for (const name of ['search_log', 'working_tree_status', 'diff_working_file', 'blame_file']) {
       expect(isWriteTool(name), name).toBe(false)
     }
+  })
+})
+
+describe('appliedText', () => {
+  it('shows exactly what resolve_hunk wrote', () => {
+    expect(appliedText({ name: 'resolve_hunk', args: { path: 'a.html', hunk: 0, resolved: '<menu></menu>\n<form></form>\n' } })).toBe('<menu></menu>\n<form></form>')
+  })
+  it('says when the region was removed', () => {
+    expect(appliedText({ name: 'resolve_hunk', args: { path: 'a.html', hunk: 0, resolved: '' } })).toBe('(region removed: nothing written in its place)')
+  })
+  it('is null for other tools', () => {
+    expect(appliedText({ name: 'read_conflict', args: { path: 'a.html', hunk: 0 } })).toBeNull()
+  })
+})
+
+describe('parts', () => {
+  const kinds = (ps: ReturnType<typeof parts>) => ps.map((p) => (p.kind === 'text' ? `text:${p.text.trim()}` : p.kind === 'tool' ? `tool:${p.tool.name}` : 'notice'))
+
+  it('puts each call where it happened in a live answer', () => {
+    let s = startRun(emptyChat('r1'), 'resolve', 'run1')
+    s = applyEvent(s, 'chat:delta', { repoID: 'r1', runID: 'run1', text: 'Reading a.' })
+    s = applyEvent(s, 'chat:tool', { repoID: 'r1', runID: 'run1', name: 'read_conflict', args: { path: 'a' } })
+    s = applyEvent(s, 'chat:delta', { repoID: 'r1', runID: 'run1', text: 'Now b.' })
+    s = applyEvent(s, 'chat:notice', { repoID: 'r1', runID: 'run1', text: 'carry on' })
+    s = applyEvent(s, 'chat:tool', { repoID: 'r1', runID: 'run1', name: 'read_conflict', args: { path: 'b' } })
+    expect(kinds(parts(s.items[1]))).toEqual(['text:Reading a.', 'tool:read_conflict', 'text:Now b.', 'notice', 'tool:read_conflict'])
+  })
+
+  it('keeps the order when loaded from history, and shows a nudge as a notice', () => {
+    const s = fromMessages('r1', [
+      { role: 'user', content: 'resolve' },
+      { role: 'assistant', content: 'Reading a.', toolCalls: [{ id: '1', name: 'read_conflict', args: { path: 'a' } }] },
+      { role: 'tool', toolName: 'read_conflict', content: 'a, conflict 0 of 1' },
+      { role: 'assistant', content: 'Next I will do b.' },
+      { role: 'user', content: 'CommitTree: you stopped, but git still reports…' },
+      { role: 'assistant', content: '', toolCalls: [{ id: '2', name: 'read_conflict', args: { path: 'b' } }] },
+      { role: 'tool', toolName: 'read_conflict', content: 'b, conflict 0 of 1' },
+      { role: 'assistant', content: 'Done.' },
+    ] as AIMessage[])
+    expect(s.items).toHaveLength(2)
+    expect(kinds(parts(s.items[1]))).toEqual(['text:Reading a.', 'tool:read_conflict', 'text:Next I will do b.', 'notice', 'tool:read_conflict', 'text:Done.'])
   })
 })

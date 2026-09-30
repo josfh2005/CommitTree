@@ -549,10 +549,19 @@ func TestResolveConflictsEndsWithGitsSummary(t *testing.T) {
 	if err := a.ResolveConflicts(id, "run1"); err != nil {
 		t.Fatal(err)
 	}
-	notice := ev.wait(t, agent.EventNotice)
-	n, ok := notice.data.(agent.NoticeEvent)
-	if !ok || n.RunID != "run1" || n.RepoID != id || !strings.Contains(n.Text, "Still conflicted: greeting.txt") {
-		t.Fatalf("notice = %#v", notice.data)
+	// The fake model stops without resolving anything: the run is first
+	// told to carry on, then ends with git's own account.
+	var texts []string
+	for len(texts) == 0 || !strings.Contains(texts[len(texts)-1], "Still conflicted") {
+		notice := ev.wait(t, agent.EventNotice)
+		n, ok := notice.data.(agent.NoticeEvent)
+		if !ok || n.RunID != "run1" || n.RepoID != id {
+			t.Fatalf("notice = %#v", notice.data)
+		}
+		texts = append(texts, n.Text)
+	}
+	if !strings.Contains(texts[0], "carry on") || !strings.Contains(texts[len(texts)-1], "Still conflicted: greeting.txt") {
+		t.Fatalf("notices = %q", texts)
 	}
 	ev.wait(t, agent.EventDone)
 }
@@ -621,5 +630,55 @@ func TestResolveConflictsRefusesOutsideARealMerge(t *testing.T) {
 
 	if err := a.ResolveConflicts(id, "run1"); err == nil {
 		t.Error("want a refusal outside a merge")
+	}
+}
+
+// A stopped resolve run is always told to carry on once; again only when
+// it left a conflicted file unread since, and never beyond the cap.
+func TestResolveNudge(t *testing.T) {
+	r := testrepo.New(t)
+	for _, f := range []string{"a.txt", "b.txt"} {
+		r.WriteFile(f, "base\n")
+	}
+	r.Git("add", ".")
+	r.Git("commit", "-q", "-m", "base")
+	r.Git("switch", "-q", "-c", "feature")
+	r.WriteFile("a.txt", "theirs\n")
+	r.WriteFile("b.txt", "theirs\n")
+	r.Git("commit", "-q", "-am", "theirs")
+	r.Git("switch", "-q", "main")
+	r.WriteFile("a.txt", "ours\n")
+	r.WriteFile("b.txt", "ours\n")
+	r.Git("commit", "-q", "-am", "ours")
+	ctx := context.Background()
+	if _, err := merge.Start(ctx, r.Dir, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	read := func(n *resolveNudge, path string) {
+		n.saw(ai.ToolCall{Name: "read_conflict", Args: map[string]any{"path": path}})
+	}
+
+	// Read everything, declined everything: nudged once, then left alone.
+	n := &resolveNudge{dir: r.Dir, startedFor: merge.Fingerprint(ctx, r.Dir)}
+	read(n, "a.txt")
+	read(n, "b.txt")
+	if first := n.next(ctx); !strings.Contains(first, "a.txt") || !strings.Contains(first, "b.txt") {
+		t.Fatalf("first nudge = %q", first)
+	}
+	read(n, "a.txt")
+	read(n, "b.txt")
+	if again := n.next(ctx); again != "" {
+		t.Fatalf("nudged a model that read every file left: %q", again)
+	}
+
+	// Stopped without reading b.txt: nudged again, but not past the cap.
+	n = &resolveNudge{dir: r.Dir, startedFor: merge.Fingerprint(ctx, r.Dir)}
+	n.next(ctx)
+	read(n, "a.txt")
+	if second := n.next(ctx); !strings.Contains(second, "b.txt") {
+		t.Fatalf("second nudge = %q", second)
+	}
+	if third := n.next(ctx); third != "" {
+		t.Fatalf("nudged past the cap: %q", third)
 	}
 }
