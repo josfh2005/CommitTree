@@ -1,6 +1,7 @@
 <script lang="ts">
   import Icon from './Icon.svelte'
   import { fetchRemote, newBranch, openRepoFolder, pickAndMerge, pull, push, startCommit, stashChanges } from '../lib/actions'
+  import { openFlowMenu } from '../lib/flowActions'
   import { toolbarItems, type ToolbarGroup, type ToolbarId } from '../lib/toolbar'
   import { busy, chatOpen, commandsOpen, mergeState, platform, refs, remoteInfo, stashConflictDismissed, terminalOpen, worktreeState } from '../lib/stores'
 
@@ -9,7 +10,7 @@
   $: items = toolbarItems({ refs: $refs, worktree: $worktreeState, merge: $mergeState, busy: $busy, remote: $remoteInfo, terminalOpen: $terminalOpen, commandsOpen: $commandsOpen, chatOpen: $chatOpen, platform: $platform })
   const GROUPS: ToolbarGroup[] = ['work', 'sync', 'refs', 'tools']
 
-  function act(id: ToolbarId) {
+  function act(id: ToolbarId, event: MouseEvent) {
     switch (id) {
       case 'commit': return startCommit()
       case 'stash': return stashChanges(repoId)
@@ -18,6 +19,7 @@
       case 'push': return push(repoId)
       case 'branch': return newBranch(repoId, $refs?.headHash ?? 'HEAD', $refs?.head ?? 'HEAD')
       case 'merge': return pickAndMerge(repoId)
+      case 'flow': return openFlowMenu(repoId, event)
       case 'terminal': return terminalOpen.update((open) => !open)
       case 'commands': return commandsOpen.update((open) => !open)
       case 'folder': return openRepoFolder(repoId)
@@ -36,7 +38,7 @@
   {#each GROUPS as group, g}
     {#if g > 0}<span class="sep"></span>{/if}
     {#each items.filter((i) => i.group === group) as item (item.id)}
-      <button class="tool" class:toggle={item.group === 'tools' && item.id !== 'folder'} class:active={item.active} aria-pressed={item.group === 'tools' && item.id !== 'folder' ? item.active : undefined} title={item.title} aria-label={item.label} disabled={!item.enabled} on:click={() => act(item.id)}>
+      <button class="tool" class:toggle={item.group === 'tools' && item.id !== 'folder'} class:active={item.active} aria-pressed={item.group === 'tools' && item.id !== 'folder' ? item.active : undefined} title={item.title} aria-label={item.label} disabled={!item.enabled} on:click={(e) => act(item.id, e)}>
         <span class="icon"><Icon name={item.icon} size={20} />{#if item.badge}<span class="badge">{item.badge}</span>{/if}</span>
         <span class="label">{item.label}</span>
       </button>

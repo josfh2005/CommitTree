@@ -380,6 +380,9 @@ The toolbar's Merge button offers the same merge for any local or
 remote-tracking branch through a searchable picker (see
 `05-remote-and-stash.md`, "Merge branch picker").
 
+The toolbar's Flow button, next to Merge, starts and finishes git-flow
+branches; see [git-flow](10-git-flow.md).
+
 A disabled entry that has a reason shows it as a tooltip.
 
 ### Remotes

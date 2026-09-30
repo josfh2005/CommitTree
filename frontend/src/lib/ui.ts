@@ -78,8 +78,32 @@ export interface ChoiceOptions<T extends string = string> {
 /** A searchable list; resolves to the chosen item's key, or null. */
 export interface PickOptions { title: string; placeholder: string; empty: string; submitLabel: string; items: PickItem[] }
 
+export type FormField =
+  | { kind: 'text'; key: string; label: string; value: string; prefix?: string }
+  | { kind: 'select'; key: string; label: string; value: string; options: { value: string; label: string }[] }
+  | { kind: 'checkbox'; key: string; label: string; value: boolean }
+
+export type FormValues = Record<string, string | boolean>
+
+/** Several fields at once; message may follow the values as they change. */
+export interface FormOptions {
+  title: string
+  message?: string | ((values: FormValues) => string)
+  fields: FormField[]
+  submitLabel: string
+}
+
+export function initialFormValues(fields: FormField[]): FormValues {
+  return Object.fromEntries(fields.map((f) => [f.key, f.value]))
+}
+
+export function formMessage(options: FormOptions, values: FormValues): string {
+  return typeof options.message === 'function' ? options.message(values) : (options.message ?? '')
+}
+
 export type Dialog =
   | (ConfirmOptions & { kind: 'confirm'; resolve: (result: ConfirmResult) => void })
+  | (FormOptions & { kind: 'form'; resolve: (values: FormValues | null) => void })
   | (PromptOptions & { kind: 'prompt'; resolve: (result: PromptResult | null) => void })
   | (ChoiceOptions & { kind: 'choice'; resolve: (value: string | null) => void })
   | (PickOptions & { kind: 'pick'; resolve: (key: string | null) => void })
@@ -105,6 +129,9 @@ export const choiceDialog = <T extends string>(options: ChoiceOptions<T>) =>
 
 export const pickDialog = (options: PickOptions) =>
   new Promise<string | null>((resolve) => dialog.set({ ...options, kind: 'pick', resolve }))
+
+export const formDialog = (options: FormOptions) =>
+  new Promise<FormValues | null>((resolve) => dialog.set({ ...options, kind: 'form', resolve }))
 
 export interface MenuItem {
   label: string

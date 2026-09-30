@@ -1,8 +1,10 @@
 <script lang="ts">
   import { tick } from 'svelte'
   import { filterPick } from '../lib/pick'
-  import { dialog } from '../lib/ui'
+  import { dialog, formMessage, initialFormValues } from '../lib/ui'
 
+  // Loosely typed: bind:checked and bind:value share this record.
+  let values: Record<string, any> = {}
   let value = ''
   let second = ''
   let checked = false
@@ -17,6 +19,7 @@
   }
   $: if ($dialog?.kind === 'confirm') checked = $dialog.checked ?? false
   $: if ($dialog?.kind === 'choice') choice = $dialog.value
+  $: if ($dialog?.kind === 'form') values = initialFormValues($dialog.fields)
   $: if ($dialog?.kind === 'pick') {
     query = ''
     index = 0
@@ -28,6 +31,7 @@
   $: submitLabel =
     $dialog?.kind === 'confirm' ? $dialog.confirmLabel : $dialog?.kind === 'choice' ? $dialog.confirmLabel(choice)
       : $dialog?.kind === 'pick' ? $dialog.submitLabel
+      : $dialog?.kind === 'form' ? $dialog.submitLabel
       : ($dialog?.submitLabel ?? 'OK')
 
   function finish(ok: boolean) {
@@ -39,6 +43,7 @@
     if (current.kind === 'confirm') current.resolve({ ok, checked })
     else if (current.kind === 'choice') current.resolve(ok ? choice : null)
     else if (current.kind === 'pick') current.resolve(picked)
+    else if (current.kind === 'form') current.resolve(ok ? values : null)
     else current.resolve(ok ? { value, second, checked } : null)
   }
 
@@ -83,6 +88,28 @@
             <p class="pick-empty">{$dialog.empty}</p>
           {/each}
         </div>
+      {:else if $dialog.kind === 'form'}
+        {#if formMessage($dialog, values)}<p>{formMessage($dialog, values)}</p>{/if}
+        {#each $dialog.fields as field, i (field.key)}
+          {#if field.kind === 'checkbox'}
+            <label class="check"><input type="checkbox" bind:checked={values[field.key]} /> {field.label}</label>
+          {:else if field.kind === 'select'}
+            <label>
+              <span>{field.label}</span>
+              <select bind:value={values[field.key]} use:focus={i === 0}>
+                {#each field.options as option}<option value={option.value}>{option.label}</option>{/each}
+              </select>
+            </label>
+          {:else}
+            <label>
+              <span>{field.label}</span>
+              <span class="prefixed">
+                {#if field.prefix}<span class="prefix">{field.prefix}</span>{/if}
+                <input bind:value={values[field.key]} use:focus={i === 0} />
+              </span>
+            </label>
+          {/if}
+        {/each}
       {:else}
         <label>
           <span>{$dialog.label}</span>
@@ -132,6 +159,9 @@
   label input:not([type='checkbox']), label select { font-size: 13px; }
   .check { flex-direction: row; align-items: center; gap: 6px; color: var(--text); font-size: 13px; }
   .search { font-size: 13px; }
+  .prefixed { display: flex; align-items: center; gap: 4px; }
+  .prefixed input { flex: 1; min-width: 0; }
+  .prefix { color: var(--faint); font-size: 13px; }
   .pick-list { max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 8px; padding: 4px; }
   .pick-group { padding: 6px 8px 2px; font-size: 11px; color: var(--faint); }
   .pick-item { text-align: left; padding: 5px 8px; border-radius: 6px; }

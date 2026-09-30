@@ -118,6 +118,10 @@ export function Fingerprint(arg1) {
   return window['go']['app']['App']['Fingerprint'](arg1);
 }
 
+export function FinishFlow(arg1, arg2, arg3) {
+  return window['go']['app']['App']['FinishFlow'](arg1, arg2, arg3);
+}
+
 export function GenerateCommitMessage(arg1, arg2) {
   return window['go']['app']['App']['GenerateCommitMessage'](arg1, arg2);
 }
@@ -156,6 +160,10 @@ export function GetDetails(arg1, arg2) {
 
 export function GetDiff(arg1, arg2, arg3, arg4) {
   return window['go']['app']['App']['GetDiff'](arg1, arg2, arg3, arg4);
+}
+
+export function GetFlow(arg1) {
+  return window['go']['app']['App']['GetFlow'](arg1);
 }
 
 export function GetGitSettings() {
@@ -222,6 +230,10 @@ export function InitAllSubmodules(arg1) {
   return window['go']['app']['App']['InitAllSubmodules'](arg1);
 }
 
+export function InitFlow(arg1, arg2) {
+  return window['go']['app']['App']['InitFlow'](arg1, arg2);
+}
+
 export function InitSubmodule(arg1, arg2) {
   return window['go']['app']['App']['InitSubmodule'](arg1, arg2);
 }
@@ -260,6 +272,10 @@ export function OpenRepoFolder(arg1) {
 
 export function OwedStashDrop(arg1) {
   return window['go']['app']['App']['OwedStashDrop'](arg1);
+}
+
+export function PlanFinish(arg1, arg2, arg3) {
+  return window['go']['app']['App']['PlanFinish'](arg1, arg2, arg3);
 }
 
 export function Pull(arg1) {
@@ -344,6 +360,10 @@ export function StageFile(arg1, arg2) {
 
 export function StageMergeFile(arg1, arg2) {
   return window['go']['app']['App']['StageMergeFile'](arg1, arg2);
+}
+
+export function StartFlow(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['App']['StartFlow'](arg1, arg2, arg3, arg4);
 }
 
 export function StashApply(arg1, arg2) {

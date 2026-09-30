@@ -12,9 +12,15 @@ const input = (over: Partial<ToolbarInput> = {}): ToolbarInput => ({
 const item = (over: Partial<ToolbarInput>, id: string) => toolbarItems(input(over)).find((i) => i.id === id)!
 
 describe('toolbarItems', () => {
-  it('lists the ten buttons in their groups and order', () => {
+  it('disables Flow while busy or during a conflict', () => {
+    expect(item({}, 'flow')).toMatchObject({ enabled: true, label: 'Flow', title: 'git-flow: start or finish a feature, release, hotfix or warmfix' })
+    expect(item({ busy: 'Pushing…' }, 'flow')).toMatchObject({ enabled: false, title: 'Pushing…' })
+    expect(item({ merge: conflict('merge') }, 'flow')).toMatchObject({ enabled: false, title: 'Resolve the conflict first' })
+  })
+
+  it('lists the twelve buttons in their groups and order', () => {
     expect(toolbarItems(input()).map((i) => `${i.group}:${i.id}`)).toEqual([
-      'work:commit', 'work:stash', 'sync:fetch', 'sync:pull', 'sync:push', 'refs:branch', 'refs:merge', 'tools:terminal', 'tools:commands', 'tools:folder', 'tools:chat',
+      'work:commit', 'work:stash', 'sync:fetch', 'sync:pull', 'sync:push', 'refs:branch', 'refs:merge', 'refs:flow', 'tools:terminal', 'tools:commands', 'tools:folder', 'tools:chat',
     ])
   })
 

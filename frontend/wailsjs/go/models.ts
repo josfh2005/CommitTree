@@ -456,6 +456,213 @@ export namespace cmdlog {
 
 }
 
+export namespace gitflow {
+	
+	export class Prefixes {
+	    feature: string;
+	    release: string;
+	    hotfix: string;
+	    warmfix: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Prefixes(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.feature = source["feature"];
+	        this.release = source["release"];
+	        this.hotfix = source["hotfix"];
+	        this.warmfix = source["warmfix"];
+	    }
+	}
+	export class Config {
+	    master: string;
+	    develop: string;
+	    prefixes: Prefixes;
+	
+	    static createFrom(source: any = {}) {
+	        return new Config(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.master = source["master"];
+	        this.develop = source["develop"];
+	        this.prefixes = this.convertValues(source["prefixes"], Prefixes);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class FinishResult {
+	    outcome: string;
+	    target: string;
+	    conflicts: string[];
+	    merged: string[];
+	    notes: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new FinishResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.outcome = source["outcome"];
+	        this.target = source["target"];
+	        this.conflicts = source["conflicts"];
+	        this.merged = source["merged"];
+	        this.notes = source["notes"];
+	    }
+	}
+	export class FlowBranch {
+	    name: string;
+	    type: string;
+	    short: string;
+	    base: string;
+	    inProgress: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new FlowBranch(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.type = source["type"];
+	        this.short = source["short"];
+	        this.base = source["base"];
+	        this.inProgress = source["inProgress"];
+	    }
+	}
+	export class Flow {
+	    initialized: boolean;
+	    problem: string;
+	    master: string;
+	    develop: string;
+	    prefixes: Prefixes;
+	    current?: FlowBranch;
+	    branches: FlowBranch[];
+	    releases: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Flow(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.initialized = source["initialized"];
+	        this.problem = source["problem"];
+	        this.master = source["master"];
+	        this.develop = source["develop"];
+	        this.prefixes = this.convertValues(source["prefixes"], Prefixes);
+	        this.current = this.convertValues(source["current"], FlowBranch);
+	        this.branches = this.convertValues(source["branches"], FlowBranch);
+	        this.releases = source["releases"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class Step {
+	    target: string;
+	    done: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Step(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.target = source["target"];
+	        this.done = source["done"];
+	    }
+	}
+	export class Plan {
+	    branch: string;
+	    type: string;
+	    steps: Step[];
+	    ending: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Plan(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.branch = source["branch"];
+	        this.type = source["type"];
+	        this.steps = this.convertValues(source["steps"], Step);
+	        this.ending = source["ending"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class StartResult {
+	    branch: string;
+	    notes: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new StartResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.branch = source["branch"];
+	        this.notes = source["notes"];
+	    }
+	}
+
+}
+
 export namespace gitlog {
 	
 	export class BlameBlock {

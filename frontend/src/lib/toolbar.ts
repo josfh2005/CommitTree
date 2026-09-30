@@ -5,7 +5,7 @@ import type { PickItem } from './pick'
 import type { AheadBehind, Branch, MergeState, Refs, WorktreeState } from './types'
 import { uncommittedCount } from './uncommitted'
 
-export type ToolbarId = 'commit' | 'stash' | 'fetch' | 'pull' | 'push' | 'branch' | 'merge' | 'terminal' | 'commands' | 'folder' | 'chat'
+export type ToolbarId = 'commit' | 'stash' | 'fetch' | 'pull' | 'push' | 'branch' | 'merge' | 'flow' | 'terminal' | 'commands' | 'folder' | 'chat'
 export type ToolbarGroup = 'work' | 'sync' | 'refs' | 'tools'
 
 export interface ToolbarInput {
@@ -55,6 +55,7 @@ export function toolbarItems(i: ToolbarInput): ToolbarItem[] {
     item('push', 'Push', 'upload', 'sync', first([!!i.busy, i.busy], [conflict, blocked]), 'Push', { badge: i.remote?.ahead ?? 0 }),
     item('branch', 'Branch', 'branch', 'refs', first([!!i.busy, i.busy]), 'New branch from HEAD'),
     item('merge', 'Merge', 'merge', 'refs', first([!!i.busy, i.busy], [conflict, blocked], [!!i.refs?.detached, 'Check out a branch first'], [mergeCandidates(i.refs).length === 0, 'No other branches']), 'Merge a branch into the current one'),
+    item('flow', 'Flow', 'flow', 'refs', first([!!i.busy, i.busy], [conflict, blocked]), 'git-flow: start or finish a feature, release, hotfix or warmfix'),
     item('terminal', 'Terminal', 'terminal', 'tools', '', `${i.terminalOpen ? 'Hide' : 'Show'} terminal (${shortcut})`, { active: i.terminalOpen }),
     item('commands', 'Commands', 'list', 'tools', '', `${i.commandsOpen ? 'Hide' : 'Show'} git commands (${commandsShortcutLabel(i.platform)})`, { active: i.commandsOpen }),
     item('folder', i.platform === 'darwin' ? 'Finder' : 'Folder', 'folder', 'tools', '', revealLabel(i.platform)),
