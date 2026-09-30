@@ -682,3 +682,63 @@ func TestResolveNudge(t *testing.T) {
 		t.Fatalf("nudged past the cap: %q", third)
 	}
 }
+
+func TestResolveMergeRegionStagesTheLastRegion(t *testing.T) {
+	a, r, id, _ := newAIMergeApp(t, "http://127.0.0.1:0")
+	if _, err := a.MergeBranch(id, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	f, err := a.GetConflictFile(id, "greeting.txt")
+	if err != nil || len(f.Regions) != 1 || !f.Restartable {
+		t.Fatalf("file = %+v, %v", f, err)
+	}
+	lines := strings.SplitAfter(f.Text, "\n")
+	if !strings.HasPrefix(lines[f.Regions[0].Start], "<<<<<<<") {
+		t.Fatalf("region starts at %q", lines[f.Regions[0].Start])
+	}
+	res, err := a.ResolveMergeRegion(id, "greeting.txt", f.Regions[0].ID, "both", "")
+	if err != nil || res.Left != 0 || !res.Staged {
+		t.Fatalf("res = %+v, %v", res, err)
+	}
+	st, _ := merge.Status(context.Background(), r.Dir)
+	if !slices.Contains(st.Staged, "greeting.txt") {
+		t.Fatalf("not staged: %+v", st)
+	}
+	if err := a.RestartConflictFile(id, "greeting.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if st, _ := merge.Status(context.Background(), r.Dir); !slices.Contains(st.Conflicts, "greeting.txt") {
+		t.Fatalf("not conflicted after restart: %+v", st)
+	}
+}
+
+func TestResolveMergeRegionWithEditedText(t *testing.T) {
+	a, r, id, _ := newAIMergeApp(t, "http://127.0.0.1:0")
+	if _, err := a.MergeBranch(id, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	f, _ := a.GetConflictFile(id, "greeting.txt")
+	if _, err := a.ResolveMergeRegion(id, "greeting.txt", f.Regions[0].ID, "text", "hello there\n"); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(r.Dir, "greeting.txt")); string(data) != "hello there\n" {
+		t.Fatalf("file = %q", data)
+	}
+}
+
+func TestResolveMergeRegionRefusedWhileAIRuns(t *testing.T) {
+	a, _, id, _ := newAIMergeApp(t, "http://127.0.0.1:0")
+	if _, err := a.MergeBranch(id, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	f, _ := a.GetConflictFile(id, "greeting.txt")
+	a.ai.mu.Lock()
+	a.ai.runs[id] = func() {}
+	a.ai.mu.Unlock()
+	if _, err := a.ResolveMergeRegion(id, "greeting.txt", f.Regions[0].ID, "ours", ""); !errors.Is(err, ErrChatBusy) {
+		t.Fatalf("err = %v", err)
+	}
+	if err := a.RestartConflictFile(id, "greeting.txt"); !errors.Is(err, ErrChatBusy) {
+		t.Fatalf("restart err = %v", err)
+	}
+}

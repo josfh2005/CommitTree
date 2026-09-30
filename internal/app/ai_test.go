@@ -398,7 +398,7 @@ func TestExplainLinesInChatWritesTheAnswerToTheConversation(t *testing.T) {
 func TestExplainLinesQuestion(t *testing.T) {
 	cases := map[string]string{
 		explainLinesQuestion("abcdef1234", "a.go", 40, 58): "Explain lines 40\u201358 of a.go (at abcdef1)",
-		explainLinesQuestion("", "a.go", 3, 3):              "Explain line 3 of a.go (working tree)",
+		explainLinesQuestion("", "a.go", 3, 3):             "Explain line 3 of a.go (working tree)",
 	}
 	for got, want := range cases {
 		if got != want {

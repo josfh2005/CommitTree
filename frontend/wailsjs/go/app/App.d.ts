@@ -215,6 +215,10 @@ export function SyncSubmodule(arg1:string,arg2:string):Promise<void>;
 
 export function TakeMergeSide(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function ResolveMergeRegion(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<app.RegionResult>;
+
+export function RestartConflictFile(arg1:string,arg2:string):Promise<void>;
+
 export function TerminalClose(arg1:string):Promise<void>;
 
 export function TerminalOpen(arg1:string,arg2:number,arg3:number):Promise<string>;

@@ -398,6 +398,14 @@ export function TakeMergeSide(arg1, arg2, arg3) {
   return window['go']['app']['App']['TakeMergeSide'](arg1, arg2, arg3);
 }
 
+export function ResolveMergeRegion(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['app']['App']['ResolveMergeRegion'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function RestartConflictFile(arg1, arg2) {
+  return window['go']['app']['App']['RestartConflictFile'](arg1, arg2);
+}
+
 export function TerminalClose(arg1) {
   return window['go']['app']['App']['TerminalClose'](arg1);
 }
