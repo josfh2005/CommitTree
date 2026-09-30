@@ -741,4 +741,7 @@ func TestResolveMergeRegionRefusedWhileAIRuns(t *testing.T) {
 	if err := a.RestartConflictFile(id, "greeting.txt"); !errors.Is(err, ErrChatBusy) {
 		t.Fatalf("restart err = %v", err)
 	}
+	if err := a.TakeMergeSide(id, "greeting.txt", "ours"); !errors.Is(err, ErrChatBusy) {
+		t.Fatalf("take err = %v", err)
+	}
 }

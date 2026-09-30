@@ -169,6 +169,9 @@ func (a *App) UnstageMergeFile(id, path string) error {
 // TakeMergeSide settles one of the merge's Manual files with one side's
 // version, "ours" or "theirs", and stages it.
 func (a *App) TakeMergeSide(id, path, side string) error {
+	if a.aiBusy(id) {
+		return fmt.Errorf("%w; wait for it or stop it first", ErrChatBusy)
+	}
 	return a.writeMerge(id, func(ctx context.Context, dir string) error { return merge.Take(ctx, dir, path, merge.Side(side)) })
 }
 
