@@ -108,7 +108,15 @@ func (c *Client) Chat(ctx context.Context, req ai.Request) (<-chan ai.Chunk, err
 				}
 			}
 		}
-		send(ctx, ch, ai.Chunk{Done: true})
+		// Input counts everything the model read: the uncached part plus
+		// what came from or went into the prompt cache.
+		u := message.Usage
+		send(ctx, ch, ai.Chunk{Done: true, Usage: &ai.Usage{
+			Input:      int(u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens),
+			Output:     int(u.OutputTokens),
+			CacheRead:  int(u.CacheReadInputTokens),
+			CacheWrite: int(u.CacheCreationInputTokens),
+		}})
 	}()
 	return ch, nil
 }
