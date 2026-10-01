@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { answeredBy, appliedText, conversationTokens, formatTokens, tokensText, tokensTitle, applyEvent, nextChatRunRepo, parts, isWriteTool, CHAT_EVENTS, confirmResultText, confirmState, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from './chat'
+import { answeredBy, appliedText, pendingCards, trayIndexAfter, type PendingCard, conversationTokens, formatTokens, tokensText, tokensTitle, applyEvent, nextChatRunRepo, parts, isWriteTool, CHAT_EVENTS, confirmResultText, confirmState, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from './chat'
 import type { AIMessage, ChatConfirmEvent } from './types'
 
 describe('fromMessages', () => {
@@ -500,5 +500,60 @@ describe('token counts', () => {
     expect(tokensText(t)).toBe('8.2k in · 640 out')
     expect(tokensTitle(t)).toBe('2 model calls · cache read 512')
     expect(tokensTitle({ ...t, calls: 1, cacheRead: 0 })).toBe('1 model call')
+  })
+})
+
+describe('pending decision cards', () => {
+  const shown = 'Shown to the user as a card with 2 options; the user will choose.'
+  const args = (region: string) => ({ path: 'a.go', region, question: `q${region}`, options: [{ label: 'x', text: 'x' }, { label: 'y', text: '' }] })
+  type Tool = { id?: string; name: string; args: Record<string, unknown>; summary?: string; at: number }
+  const tool = (id: string | undefined, region: string, summary?: string): Tool =>
+    ({ id, name: 'propose_options', args: args(region), summary, at: 0 })
+  const stateWith = (...answers: Tool[][]): ChatState => ({
+    repoID: 'r', runID: null,
+    items: answers.flatMap((tools) => [{ role: 'user' as const, text: 'q', tools: [] }, { role: 'assistant' as const, text: 't', tools }]),
+  })
+
+  it('lists unanswered cards oldest first across answers', () => {
+    const s = stateWith([tool('c1', '1', shown), tool('c2', '2', shown)], [tool('c3', '3', shown)])
+    expect(pendingCards(s).map((p) => p.id)).toEqual(['c1', 'c2', 'c3'])
+    expect(pendingCards(s)[0].card.question).toBe('q1')
+  })
+
+  it('leaves out answered, settled, refused, unfinished and id-less cards and other tools', () => {
+    const s = stateWith([
+      tool('c1', '1', 'The user chose "x" for a.go (region 1); it was written.'),
+      tool('c2', '2', 'Settled another way: region 2 of a.go is no longer in conflict.'),
+      tool('c3', '3', 'Not shown: a card has 2 to 4 options, not 5.'),
+      tool('c4', '4', undefined),
+      tool(undefined, '5', shown),
+      { id: 'c6', name: 'list_conflicts', args: {}, summary: shown, at: 0 },
+      tool('c7', '7', shown),
+    ])
+    expect(pendingCards(s).map((p) => p.id)).toEqual(['c7'])
+  })
+
+  it('drops a card once chat:choice records the answer', () => {
+    const s = stateWith([tool('c1', '1', shown), tool('c2', '2', shown)])
+    const after = applyEvent(s, 'chat:choice', { repoID: 'r', callID: 'c1', summary: 'The user chose "x" for a.go (region 1); it was written.' })
+    expect(pendingCards(after).map((p) => p.id)).toEqual(['c2'])
+  })
+
+  const list = (...ids: string[]): PendingCard[] => ids.map((id) => ({ id, card: { path: 'a.go', region: id, question: id, options: [] } }))
+
+  it('keeps the carousel on a sensible card', () => {
+    // the shown card is still there (a card before it was answered)
+    expect(trayIndexAfter('c', list('a', 'b', 'c'), list('b', 'c'))).toBe(1)
+    // the shown card was answered: the next one takes its place
+    expect(trayIndexAfter('b', list('a', 'b', 'c'), list('a', 'c'))).toBe(1)
+    // it was the last: the previous one
+    expect(trayIndexAfter('c', list('a', 'b', 'c'), list('a', 'b'))).toBe(1)
+    // a new card arrives during the run: stay on the one being read
+    expect(trayIndexAfter('a', list('a', 'b'), list('a', 'b', 'c'))).toBe(0)
+    // nothing left
+    expect(trayIndexAfter('a', list('a'), list())).toBe(-1)
+    // nothing shown yet, or an id from another conversation
+    expect(trayIndexAfter(null, list(), list('a', 'b'))).toBe(0)
+    expect(trayIndexAfter('zz', list('a'), list('b', 'c'))).toBe(0)
   })
 })

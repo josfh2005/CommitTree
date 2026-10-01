@@ -438,6 +438,36 @@ export function choiceState(tool: Pick<ChatToolUse, 'summary'>): ChoiceState | n
   return null
 }
 
+/** A decision card still waiting for an answer: its call id and content. */
+export interface PendingCard { id: string; card: DecisionCard }
+
+/** pendingCards lists the conversation's cards still waiting for an
+ *  answer, oldest first, across every answer. */
+export function pendingCards(state: ChatState): PendingCard[] {
+  const out: PendingCard[] = []
+  for (const item of state.items) {
+    for (const tool of item.tools) {
+      const card = decisionCard(tool)
+      if (card && tool.id && choiceState(tool) === 'pending') out.push({ id: tool.id, card })
+    }
+  }
+  return out
+}
+
+/** trayIndexAfter keeps the carousel on a sensible card when the list
+ *  changes: the same card if it is still there, otherwise the card that
+ *  took its place (the previous one when it was the last); -1 when none
+ *  is left. */
+export function trayIndexAfter(prevID: string | null, prev: PendingCard[], next: PendingCard[]): number {
+  if (next.length === 0) return -1
+  if (prevID === null) return 0
+  const still = next.findIndex((p) => p.id === prevID)
+  if (still >= 0) return still
+  const was = prev.findIndex((p) => p.id === prevID)
+  if (was < 0) return 0
+  return Math.min(was, next.length - 1)
+}
+
 /** Records a card's answer on its tool, found by call id in any item. */
 export function withChoice(state: ChatState, callID: string, summary: string): ChatState {
   for (let i = state.items.length - 1; i >= 0; i--) {
