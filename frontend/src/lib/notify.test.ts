@@ -11,7 +11,7 @@ vi.mock('./stores', async (importOriginal) => {
 })
 
 import { api } from './api'
-import { notify, notifyStashConflicts, openTarget, opError, track, windowFocused } from './notify'
+import { notify, notifyStashConflicts, openTarget, opError, startNotifications, track, windowFocused } from './notify'
 import { chatOpen, mergeState, notifyEnabled, repos, selectedRepoId } from './stores'
 import type { MergeState, Repo } from './types'
 import { toasts } from './ui'
@@ -137,5 +137,36 @@ describe('notifyStashConflicts', () => {
     notifyStashConflicts('a')
     await Promise.resolve()
     expect(api.notify).not.toHaveBeenCalled()
+  })
+})
+
+describe('startNotifications', () => {
+  it('routes notify:open and chat events', async () => {
+    // vitest runs in node: a bare EventTarget stands in for the window.
+    vi.stubGlobal('window', new EventTarget())
+    const handlers: Record<string, (p: unknown) => void> = {}
+    const on = ((name: string, cb: (p: unknown) => void) => {
+      handlers[name] = cb
+      return () => delete handlers[name]
+    }) as any
+    const stop = startNotifications(on)
+    handlers['notify:open']({ repoID: 'b', target: 'repo' })
+    expect(get(selectedRepoId)).toBe('b')
+
+    windowFocused.set(false)
+    handlers['chat:confirm']({ repoID: 'a', runID: 'x', confirmID: 'c', tool: 'push', title: 'Push main', details: [] })
+    await Promise.resolve()
+    expect(vi.mocked(api.notify).mock.calls[0][0]).toMatchObject({ id: 'a:ai', body: 'The AI is waiting for you to confirm: Push main', target: 'chat' })
+
+    window.dispatchEvent(new Event('focus'))
+    expect(get(windowFocused)).toBe(true)
+    window.dispatchEvent(new Event('blur'))
+    expect(get(windowFocused)).toBe(false)
+
+    stop()
+    expect(Object.keys(handlers)).toEqual([])
+    window.dispatchEvent(new Event('focus'))
+    expect(get(windowFocused)).toBe(false)
+    vi.unstubAllGlobals()
   })
 })

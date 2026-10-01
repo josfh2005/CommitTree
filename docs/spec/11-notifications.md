@@ -11,6 +11,10 @@ focused, an in-app toast when it is focused but the event is out of sight.
 | Operations finished | Fetch, Pull, Push, Merge, Rebase, Cherry-pick, Initialise/Update all submodules, git-flow init/start/finish | succeeded and took 10 s or longer |
 | Problems | One of those operations failed | always |
 | | Conflicts left after Merge, Pull, Rebase, Cherry-pick, git-flow finish, Stash apply/pop | always |
+| Operations finished | Chat answer finished | the answer took 10 s or longer and raised no decision card |
+| The AI needs you | A write card waits for confirmation | always |
+| | A new decision card | always |
+| Problems | A chat answer ended with an error | always |
 
 One user operation is one event, however many git commands it runs. An
 operation notifies once: conflicts or a failure replace "finished".
@@ -24,11 +28,12 @@ The title is the repository name; the body one sentence — "Push finished ·
 ## Where it appears
 
 1. Window not focused → an OS notification. Clicking it brings the window
-   forward on that repository.
-2. Window focused, event in the selected repository → nothing new; the
-   screen already shows it.
-3. Window focused, another repository → a toast "<repo>: <body>" with
-   **View**, which selects that repository.
+   forward on that repository (with the chat open for chat events).
+2. Window focused, event in the selected repository — and, for chat
+   events, the chat panel open → nothing new; the screen already shows it.
+3. Window focused, another repository, or the chat closed → a toast
+   "<repo>: <body>" with **View**, which selects that repository (and opens
+   the chat for chat events).
 
 A failed operation keeps its error toast, never a second one; when the
 repository is not the selected one, that toast starts with its name and
@@ -41,3 +46,18 @@ development build on macOS) — the toast is shown instead.
 
 Permission is asked the first time an OS notification is due, never at
 startup, and at most once per run.
+
+A stopped chat answer ends like a finished one; it was stopped from the
+focused window, so it shows nothing.
+
+## Settings
+
+Settings → General → Notifications: **Show notifications** turns them all
+off; **Finished operations (10 s or longer)**, **The AI needs you** and
+**Problems — failures and conflicts** turn off one category each. All on by
+default; kept on this computer, not per repository. Below them a line says
+whether system notifications are allowed, not allowed yet, or unavailable
+(and why) — in the last two cases toasts are used instead.
+
+A failed operation's error toast does not depend on these settings: it is
+shown as it always was.
