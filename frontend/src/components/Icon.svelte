@@ -7,6 +7,7 @@
     refresh: 'M13 8a5 5 0 1 1-1.5-3.5M13 2.5V5h-2.5',
     download: 'M8 2.5v8m0 0L5 7.5m3 3 3-3M3 13.5h10',
     upload: 'M8 13.5v-8m0 0L5 8.5m3-3 3 3M3 2.5h10',
+    'chevron-left': 'M10 4l-4 4 4 4',
     'chevron-right': 'M6 4l4 4-4 4',
     'chevron-down': 'M4 6l4 4 4-4',
     settings: 'M8 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4',

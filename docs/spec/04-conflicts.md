@@ -317,8 +317,12 @@ which still need a human, by name.
 
 When the two sides of a region genuinely contradict each other — two values
 for the same setting, one side deleting what the other edited — the resolver
-does not pick one: it leaves the region as a card in the chat and carries on
-with the rest. The card names the file and the region, asks a one-line
+does not pick one: it leaves the region as a decision card and carries on
+with the rest. Pending cards wait in a tray above the chat's message box,
+one at a time, under "Pending decisions", with ‹ n/N › to move between them;
+in the conversation, at the point where the resolver asked, a line
+("◆ Decision pending: config/settings.json · region 3 — …") shows that card
+in the tray when clicked. The card names the file and the region, asks a one-line
 question, and lists two to four options, each with its label and, under it,
 the exact text that would replace the region; an option that removes the
 region says "(removes the region)". A last option, "Other…", is always
@@ -331,8 +335,14 @@ code as the region buttons, and stages the file when that was its last
 region; a toast says so ("config/settings.json resolved and staged", or
 "Region resolved"), and the Merge view reloads. Nothing is committed. While
 an AI run is working on the repository, or a chat message is on its way
-to starting one, the card is shown but Apply is disabled, with "Available when the AI finishes" — the card is answered after
-the run, not during it.
+to starting one, the card can be read and an option selected — the
+selection, and the "Other…" text, are kept per card — but Apply is disabled,
+with "Available when the AI finishes": the card is answered after the run,
+not during it.
+
+Once a card is answered it leaves the tray, which shows the next pending
+card (the previous one when it was the last) and disappears when none is
+left. A card arriving while you read another does not move the tray.
 
 The card only appears once the tool has accepted the options: options it
 refused (too few or too many, repeated, with conflict markers, or failing
@@ -340,7 +350,7 @@ the resolution checks) show as an ordinary tool row, and cannot be applied.
 When every region still in conflict has a card, the resolver is not told to
 carry on.
 
-Once answered the card shrinks to one line saying what was chosen; if the
+Once answered, the card's place in the conversation says what was chosen; if the
 region was settled some other way first (the region buttons, or the file
 edited outside), Apply turns the card into "Settled another way" instead. One exception:
 when the region had an identical twin in the file and resolving the twin
