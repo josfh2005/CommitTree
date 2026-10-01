@@ -394,6 +394,26 @@ export namespace app {
 		}
 	}
 	
+	export class Notification {
+	    id: string;
+	    title: string;
+	    body: string;
+	    repoID: string;
+	    target: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Notification(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.body = source["body"];
+	        this.repoID = source["repoID"];
+	        this.target = source["target"];
+	    }
+	}
 	
 	
 	

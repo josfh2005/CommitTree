@@ -110,8 +110,9 @@ New file `internal/app/notify.go`:
   yet decided, requests it. Then `runtime.SendNotification` with
   `ID: id` and `Data: {repoID, target}`. Returns the reason on failure
   (denied, unavailable, missing bundle identifier).
-- `NotificationStatus() (string, error)` — `allowed`, `denied`,
-  `undecided` or `unavailable: <reason>`, for the Settings line.
+- `NotificationStatus() (string, error)` — `allowed`, `not allowed`
+  or `unavailable: <reason>` (Wails' check cannot tell undecided from
+  denied), for the Settings line.
 - `Startup`: `InitializeNotifications` (an error is kept as the
   unavailable reason, not fatal) and `OnNotificationResponse`. A click
   shows and unminimises the window and emits `notify:open` with

@@ -274,6 +274,14 @@ export function MergeBranch(arg1, arg2) {
   return window['go']['app']['App']['MergeBranch'](arg1, arg2);
 }
 
+export function NotificationStatus() {
+  return window['go']['app']['App']['NotificationStatus']();
+}
+
+export function Notify(arg1) {
+  return window['go']['app']['App']['Notify'](arg1);
+}
+
 export function OpenPromptsFolder() {
   return window['go']['app']['App']['OpenPromptsFolder']();
 }

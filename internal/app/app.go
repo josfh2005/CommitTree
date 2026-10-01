@@ -108,6 +108,8 @@ type App struct {
 	// read.
 	smMu       sync.Mutex
 	submodules map[string]repos.Repo
+	// notes delivers OS notifications; see notify.go.
+	notes notifyState
 }
 
 func New(store *repos.Store) *App {
@@ -129,6 +131,7 @@ func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 	a.cmdEmit = wailsCommandEmitter(ctx)
 	a.started.Store(true)
+	a.startNotifications(wailsNotifier{ctx})
 }
 
 func (a *App) dir(id string) (string, error) {

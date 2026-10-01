@@ -1,5 +1,6 @@
 import * as Go from '../../wailsjs/go/app/App'
 import type { AIMessage, AISettings, AIStatus, AheadBehind, Blame, ChatConfirmEvent, CommandLogView, CommandOutput, CommitInfo, ConflictFile, Details, Filters, Flow, FlowConfig, FlowFinishResult, FlowPlan, FlowStartResult, FlowType, GitSettings, HunkAction, HunkPick, Identity, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, RegionChoice, RegionResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeDiff, WorktreeRemovalInfo, WorktreeState } from './types'
+import type { NotifyTarget } from './notifyRules'
 
 // The generated bindings use Wails model classes; the JSON is identical to our
 // interfaces, so cast at this single boundary.
@@ -38,6 +39,8 @@ export const api = {
 
   commandLog: (id: string) => call<CommandLogView>(Go.CommandLog(id)),
   commandLogOutput: (id: string, entryId: number) => call<CommandOutput>(Go.CommandLogOutput(id, entryId)),
+  notify: (n: { id: string; title: string; body: string; repoID: string; target: NotifyTarget }) => call<void>(Go.Notify(n as any)),
+  notificationStatus: () => call<string>(Go.NotificationStatus()),
   clearCommandLog: (id: string) => call<void>(Go.ClearCommandLog(id)),
   cancelCommand: (id: string, entryId: number) => call<void>(Go.CancelCommand(id, entryId)),
 
