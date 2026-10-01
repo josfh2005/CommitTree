@@ -62,6 +62,9 @@
         <button class="icon-btn" title="Next decision" disabled={index === cards.length - 1} on:click={() => (index += 1)}><Icon name="chevron-right" size={13} /></button>
       {/if}
     </div>
+    <!-- New inputs per card: reused radios renamed from one card's group to
+         the next would uncheck the new card's default. -->
+    {#key id}
     <div class="tray-body">
       <div class="decision-where">{card.path} · region {card.region}</div>
       <div class="decision-question">{card.question}</div>
@@ -89,6 +92,7 @@
       {#if running}<span class="decision-wait">Available when the AI finishes</span>{/if}
       <button class="btn primary" disabled={running || applying[id]} on:click={() => applyChoice(id, card)}>Apply</button>
     </div>
+    {/key}
   </div>
 {/if}
 
