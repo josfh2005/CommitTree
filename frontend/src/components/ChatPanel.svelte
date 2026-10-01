@@ -4,40 +4,22 @@
   import Icon from './Icon.svelte'
   import ModelPicker from './ModelPicker.svelte'
   import { api } from '../lib/api'
-  import { answeredBy, appliedText, applyEvent, conversationTokens, tokensText, tokensTitle, choiceState, decisionCard, parts, CHAT_EVENTS, isWriteTool, confirmResultText, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState, type DecisionCard } from '../lib/chat'
+  import { answeredBy, appliedText, applyEvent, conversationTokens, tokensText, tokensTitle, choiceState, decisionCard, parts, CHAT_EVENTS, isWriteTool, confirmResultText, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, pendingCards, type ChatState } from '../lib/chat'
   import { relativeDate } from '../lib/format'
   import { renderMarkdown } from '../lib/markdown'
   import { chatBlocker } from '../lib/providers'
   import { aiSettings, chatOpen, chatPreparing, jumpTo, selectedRepo, settingsOpen } from '../lib/stores'
   import type { AIStatus } from '../lib/types'
   import { copyText, errorMessage, toast } from '../lib/ui'
-  import { chooseRegionOption } from '../lib/actions'
-  import { isApplyKey } from '../lib/shortcuts'
+  import DecisionTray from './DecisionTray.svelte'
 
   let state: ChatState = emptyChat('')
   let status: AIStatus | null = null
   let input = ''
   let list: HTMLDivElement
   let loadError = ''
-  // Decision cards, by call id: the selected option (-1 = Other…), the
-  // Other… text, and whether Apply is in flight.
-  let pick: Record<string, number> = {}
-  let own: Record<string, string> = {}
-  let applying: Record<string, boolean> = {}
-
-  function startOwn(id: string, card: DecisionCard) {
-    const from = pick[id] ?? 0
-    if (own[id] === undefined) own = { ...own, [id]: card.options[from >= 0 ? from : 0]?.text ?? '' }
-    pick = { ...pick, [id]: -1 }
-  }
-
-  async function applyChoice(id: string, card: DecisionCard) {
-    if (!state.repoID || running || applying[id]) return
-    const k = pick[id] ?? 0
-    applying = { ...applying, [id]: true }
-    await chooseRegionOption(state.repoID, id, k, k === -1 ? own[id] ?? '' : '', card.path)
-    applying = { ...applying, [id]: false }
-  }
+  // A click on a pending card's line in the conversation; DecisionTray shows it.
+  let focus: { id: string } | null = null
 
   const offs = CHAT_EVENTS.map((name) =>
     EventsOn(name, (payload) => {
@@ -65,6 +47,7 @@
   $: preparing = state.runID === null && !!state.repoID && $chatPreparing.includes(state.repoID)
   $: running = state.runID !== null || preparing
   $: tokens = conversationTokens(state)
+  $: pending = pendingCards(state)
   // Settings may have changed the chat provider, a key or the installed
   // models; read the status again once it closes.
   $: if (!$settingsOpen) refreshStatus()
@@ -234,39 +217,17 @@
               {@const cardState = card && tool.id ? choiceState(tool) : null}
               {#if card && tool.id && cardState}
                 {@const id = tool.id}
-                <div class="confirm decision">
-                  <div class="confirm-title">{card.path} · region {card.region}</div>
-                  <div class="decision-question">{card.question}</div>
-                  {#if cardState === 'pending'}
-                    {#each card.options as opt, k}
-                      <label class="decision-option">
-                        <input type="radio" name={id} checked={(pick[id] ?? 0) === k} on:change={() => (pick = { ...pick, [id]: k })} />
-                        <span>{opt.label}</span>
-                      </label>
-                      <pre class="decision-text" class:empty={opt.text === ''}>{opt.text === '' ? '(removes the region)' : opt.text}</pre>
-                    {/each}
-                    <label class="decision-option">
-                      <input type="radio" name={id} checked={pick[id] === -1} on:change={() => startOwn(id, card)} />
-                      <span>Other…</span>
-                    </label>
-                    {#if pick[id] === -1}
-                      <!-- svelte-ignore a11y_autofocus -->
-                      <textarea class="decision-edit" autofocus bind:value={own[id]}
-                        on:keydown={(e) => {
-                          if (isApplyKey(e)) { e.preventDefault(); applyChoice(id, card) }
-                          if (e.key === 'Escape') pick = { ...pick, [id]: 0 }
-                        }}></textarea>
-                    {/if}
-                    <div class="confirm-actions">
-                      {#if running}<span class="decision-wait">Available when the AI finishes</span>{/if}
-                      <button class="btn primary" disabled={running || applying[id]} on:click={() => applyChoice(id, card)}>Apply</button>
-                    </div>
-                  {:else if cardState === 'chosen'}
-                    <div class="confirm-result">{tool.summary}</div>
-                  {:else}
-                    <div class="confirm-result">Settled another way</div>
-                  {/if}
-                </div>
+                {#if cardState === 'pending'}
+                  <button class="decision-line" title="Show in pending decisions" on:click={() => (focus = { id })}>
+                    ◆ Decision pending: {card.path} · region {card.region} — {card.question}
+                  </button>
+                {:else}
+                  <div class="confirm decision">
+                    <div class="confirm-title">{card.path} · region {card.region}</div>
+                    <div class="decision-question">{card.question}</div>
+                    <div class="confirm-result">{cardState === 'chosen' ? tool.summary : 'Settled another way'}</div>
+                  </div>
+                {/if}
               {:else if tool.confirm}
                 {@const confirm = tool.confirm}
                 <div class="confirm">
@@ -323,6 +284,7 @@
   </div>
 
   <div class="composer">
+    <DecisionTray repoID={state.repoID} cards={pending} {running} {focus} />
     {#if !running && state.suggestions?.length}
       <div class="suggestions">
         {#each state.suggestions as reply}
@@ -378,11 +340,8 @@
   .confirm-result { margin-top: 6px; font-size: 12px; color: var(--muted); }
   .confirm-result.failed { color: var(--danger); }
   .decision-question { margin: 4px 0 2px; }
-  .decision-option { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
-  .decision-text { margin: 2px 0 0 22px; padding: 4px 6px; border-radius: 6px; background: var(--hover); font-family: var(--mono); font-size: 11px; white-space: pre-wrap; color: var(--text); }
-  .decision-text.empty { background: none; color: var(--faint); font-family: inherit; font-style: italic; }
-  .decision-edit { box-sizing: border-box; width: 100%; min-height: 60px; margin-top: 4px; font-family: var(--mono); font-size: 12px; }
-  .decision-wait { margin-right: auto; align-self: center; font-size: 12px; color: var(--faint); }
+  .decision-line { display: block; width: 100%; margin-bottom: 6px; padding: 6px 10px; border: 1px dashed var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font-size: 12px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .decision-line:hover { background: var(--hover); }
   .md :global(p) { margin: 0 0 6px; }
   .md :global(ul) { margin: 4px 0 6px; padding-left: 18px; }
   .md :global(code) { font-family: var(--mono); font-size: 12px; padding: 0 4px; border-radius: 4px; background: var(--hover); }
