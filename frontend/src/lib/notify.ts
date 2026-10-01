@@ -83,6 +83,9 @@ export function notifyStashConflicts(id: string) {
 export function startNotifications(on: typeof EventsOn = EventsOn): () => void {
   const focus = () => windowFocused.set(true)
   const blur = () => windowFocused.set(false)
+  // Read again here, not only at import: the webview may not have reported
+  // focus yet when the module first loaded.
+  windowFocused.set(document.hasFocus())
   window.addEventListener('focus', focus)
   window.addEventListener('blur', blur)
   const offOpen = on('notify:open', (p: { repoID: string; target: NotifyTarget }) => openTarget(p.repoID, p.target === 'chat' ? 'chat' : 'repo'))

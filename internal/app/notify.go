@@ -86,6 +86,9 @@ func (a *App) startNotifications(n notifier) {
 		return
 	}
 	n.OnResponse(func(r runtime.NotificationResult) {
+		// A dismissal is ignored where the platform reports it as such. Wails'
+		// Linux backend reports a notification closed by the user as a click
+		// (DEFAULT_ACTION), so there closing one also opens it.
 		if r.Error != nil || strings.Contains(strings.ToLower(r.Response.ActionIdentifier), "dismiss") {
 			return
 		}

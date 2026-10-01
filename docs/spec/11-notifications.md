@@ -44,6 +44,9 @@ one replaces the older (macOS, Linux; Windows stacks them). When the OS
 notification cannot be shown — not allowed, or not available (an unbundled
 development build on macOS) — the toast is shown instead.
 
+On Linux, closing a notification also brings the window forward: the
+system reports it the same way as a click.
+
 Permission is asked the first time an OS notification is due, never at
 startup, and at most once per run.
 

@@ -144,6 +144,7 @@ describe('startNotifications', () => {
   it('routes notify:open and chat events', async () => {
     // vitest runs in node: a bare EventTarget stands in for the window.
     vi.stubGlobal('window', new EventTarget())
+    vi.stubGlobal('document', { hasFocus: () => true })
     const handlers: Record<string, (p: unknown) => void> = {}
     const on = ((name: string, cb: (p: unknown) => void) => {
       handlers[name] = cb
@@ -167,6 +168,18 @@ describe('startNotifications', () => {
     expect(Object.keys(handlers)).toEqual([])
     window.dispatchEvent(new Event('focus'))
     expect(get(windowFocused)).toBe(false)
+    vi.unstubAllGlobals()
+  })
+})
+
+describe('startNotifications focus', () => {
+  it('reads the focus again when it starts', () => {
+    vi.stubGlobal('window', new EventTarget())
+    vi.stubGlobal('document', { hasFocus: () => true })
+    windowFocused.set(false)
+    const stop = startNotifications((() => () => {}) as any)
+    expect(get(windowFocused)).toBe(true)
+    stop()
     vi.unstubAllGlobals()
   })
 })
