@@ -123,7 +123,7 @@ named after the two sides — "Take develop", "Take feature/checkout" (the
 names the rest of the view uses for this operation) — plus "Both" (ours,
 then theirs) and "Edit…". Hovering a Take button dims the lines it would
 drop. Edit… turns the region into a text box holding both sides, applied
-with Apply or ⌘↵ and dropped with Cancel or Esc. Each writes only that
+with Apply or ⌘↵ (Ctrl+Enter off macOS) and dropped with Cancel or Esc. Each writes only that
 region, found by its content id: if the region changed meanwhile (the AI,
 another click), nothing is written and the file reloads. When a file's
 last region is settled it is staged ("… resolved and staged").
@@ -323,15 +323,15 @@ question, and lists two to four options, each with its label and, under it,
 the exact text that would replace the region; an option that removes the
 region says "(removes the region)". A last option, "Other…", is always
 there: it opens a text box pre-filled with the text of the option selected
-before it (the first by default), where ⌘↵ applies and Esc goes back to the
-options.
+before it (the first by default), where ⌘↵ (Ctrl+Enter off macOS) applies
+and Esc goes back to the options.
 
 Apply writes the selected text in place of the region, through the same
 code as the region buttons, and stages the file when that was its last
 region; a toast says so ("config/settings.json resolved and staged", or
 "Region resolved"), and the Merge view reloads. Nothing is committed. While
-an AI run is working on the repository the card is shown but Apply is
-disabled, with "Available when the AI finishes" — the card is answered after
+an AI run is working on the repository, or a chat message is on its way
+to starting one, the card is shown but Apply is disabled, with "Available when the AI finishes" — the card is answered after
 the run, not during it.
 
 The card only appears once the tool has accepted the options: options it
@@ -342,7 +342,11 @@ carry on.
 
 Once answered the card shrinks to one line saying what was chosen; if the
 region was settled some other way first (the region buttons, or the file
-edited outside), Apply turns the card into "Settled another way" instead.
+edited outside), Apply turns the card into "Settled another way" instead. One exception:
+when the region had an identical twin in the file and resolving the twin
+moved it, Apply says so and points to the Merge view, and the card stays as
+it was. If the region is written but the file cannot be staged, the choice
+is still recorded and the error says the file was not staged.
 The choice is recorded in the chat's history, in place of the tool's
 result, so the card keeps its state after a reload; a later chat with the
 model sees it while that result is still among the recent ones sent back. If

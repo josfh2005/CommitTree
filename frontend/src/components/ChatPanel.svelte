@@ -12,6 +12,7 @@
   import type { AIStatus } from '../lib/types'
   import { copyText, errorMessage, toast } from '../lib/ui'
   import { chooseRegionOption } from '../lib/actions'
+  import { isApplyKey } from '../lib/shortcuts'
 
   let state: ChatState = emptyChat('')
   let status: AIStatus | null = null
@@ -31,7 +32,7 @@
   }
 
   async function applyChoice(id: string, card: DecisionCard) {
-    if (!state.repoID || state.runID !== null || applying[id]) return
+    if (!state.repoID || running || applying[id]) return
     const k = pick[id] ?? 0
     applying = { ...applying, [id]: true }
     await chooseRegionOption(state.repoID, id, k, k === -1 ? own[id] ?? '' : '', card.path)
@@ -251,13 +252,13 @@
                       <!-- svelte-ignore a11y_autofocus -->
                       <textarea class="decision-edit" autofocus bind:value={own[id]}
                         on:keydown={(e) => {
-                          if (e.key === 'Enter' && e.metaKey) { e.preventDefault(); applyChoice(id, card) }
+                          if (isApplyKey(e)) { e.preventDefault(); applyChoice(id, card) }
                           if (e.key === 'Escape') pick = { ...pick, [id]: 0 }
                         }}></textarea>
                     {/if}
                     <div class="confirm-actions">
-                      {#if state.runID !== null}<span class="decision-wait">Available when the AI finishes</span>{/if}
-                      <button class="btn primary" disabled={state.runID !== null || applying[id]} on:click={() => applyChoice(id, card)}>Apply</button>
+                      {#if running}<span class="decision-wait">Available when the AI finishes</span>{/if}
+                      <button class="btn primary" disabled={running || applying[id]} on:click={() => applyChoice(id, card)}>Apply</button>
                     </div>
                   {:else if cardState === 'chosen'}
                     <div class="confirm-result">{tool.summary}</div>

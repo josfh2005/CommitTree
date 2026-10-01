@@ -12,6 +12,7 @@
   import { finishingLine } from '../lib/flow'
   import { errorMessage, openMenu, toast } from '../lib/ui'
   import { onDestroy } from 'svelte'
+  import { isApplyKey } from '../lib/shortcuts'
 
   export let repoId: string
 
@@ -64,7 +65,7 @@
   }
 
   function editKeys(e: KeyboardEvent) {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); applyEdit() }
+    if (isApplyKey(e)) { e.preventDefault(); applyEdit() }
     if (e.key === 'Escape') { e.preventDefault(); editing = null }
   }
 

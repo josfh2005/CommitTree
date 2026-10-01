@@ -7,3 +7,9 @@ export function isSettingsShortcut(e: ToggleKey, platform: string): boolean {
   if (platform === 'darwin') return false
   return e.code === 'Comma' && e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey
 }
+
+/** ⌘↵ (Ctrl+Enter off macOS) applies an inline editor: the Merge view's
+ *  Edit… and a decision card's Other…. */
+export function isApplyKey(e: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey'>): boolean {
+  return e.key === 'Enter' && (e.metaKey || e.ctrlKey)
+}

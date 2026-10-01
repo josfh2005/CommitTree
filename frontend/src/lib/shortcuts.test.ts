@@ -18,3 +18,17 @@ describe('isSettingsShortcut', () => {
     expect(isSettingsShortcut(key('Comma', { ctrlKey: true }), 'darwin')).toBe(false)
   })
 })
+
+import { isApplyKey } from './shortcuts'
+
+describe('isApplyKey', () => {
+  const key = (over: Partial<KeyboardEvent>) => ({ key: 'Enter', metaKey: false, ctrlKey: false, ...over })
+  it('is ⌘↵ on macOS and Ctrl+Enter elsewhere', () => {
+    expect(isApplyKey(key({ metaKey: true }))).toBe(true)
+    expect(isApplyKey(key({ ctrlKey: true }))).toBe(true)
+  })
+  it('is not a plain Enter or another key', () => {
+    expect(isApplyKey(key({}))).toBe(false)
+    expect(isApplyKey(key({ key: 'a', ctrlKey: true }))).toBe(false)
+  })
+})

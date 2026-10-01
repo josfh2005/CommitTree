@@ -215,7 +215,7 @@ func (a *App) applyRegion(id, path, region, choice, text string) (RegionResult, 
 		res.Left = left
 		if left == 0 {
 			if err := merge.Stage(ctx, dir, path); err != nil {
-				return err
+				return fmt.Errorf("%w: %w", errNotStaged, err)
 			}
 			res.Staged = true
 		}
@@ -623,6 +623,9 @@ type ChatChoiceEvent struct {
 	Summary string `json:"summary"`
 }
 
+// errNotStaged: the region was written, but staging the file failed.
+var errNotStaged = errors.New("written, but the file could not be staged")
+
 const (
 	shownMark   = mergetools.CardShown
 	choseMark   = "The user chose "
@@ -684,6 +687,18 @@ func (a *App) ChooseRegionOption(repoID, callID string, option int, text string)
 	res, err := a.applyRegion(repoID, path, region, "text", text)
 	var summary string
 	switch {
+	case errors.Is(err, merge.ErrNoSuchRegion) && a.twinOpen(repoID, path, region):
+		return RegionResult{}, errors.New("that region moved when an identical one was resolved; settle it in the Merge view")
+	case errors.Is(err, errNotStaged):
+		// Written: record the choice, so a later Apply does not call it
+		// settled some other way; still report the staging failure.
+		summary = fmt.Sprintf("%s%q for %s (region %s); it was written, but the file could not be staged.", choseMark, label, path, region)
+		history[result].Content = summary
+		if saveErr := a.ai.deps.Chats.Save(repoID, history); saveErr == nil {
+			a.emit(EventChatChoice, ChatChoiceEvent{RepoID: repoID, CallID: callID, Summary: summary})
+		}
+		a.emit(EventMergeChanged, MergeChangedEvent{RepoID: repoID})
+		return res, err
 	case errors.Is(err, merge.ErrNoSuchRegion) || (errors.Is(err, merge.ErrNotInMerge) && a.stillMerging(repoID)):
 		summary = fmt.Sprintf("%s: region %s of %s is no longer in conflict.", settledMark, region, path)
 		res = RegionResult{Settled: true}
@@ -725,6 +740,31 @@ func findCall(history []ai.Message, callID string) (call ai.ToolCall, result int
 		}
 	}
 	return call, result
+}
+
+// twinOpen reports whether region was one of identical twins (its id
+// carries its line, "hash@line") and a region with the same content is
+// still open in path: the card's region may only have moved.
+func (a *App) twinOpen(repoID, path, region string) bool {
+	hash, _, twin := strings.Cut(region, "@")
+	if !twin {
+		return false
+	}
+	dir, err := a.dir(repoID)
+	if err != nil {
+		return false
+	}
+	data, err := os.ReadFile(filepath.Join(dir, path))
+	if err != nil {
+		return false
+	}
+	hunks, err := merge.Parse(string(data))
+	if err != nil {
+		return false
+	}
+	return slices.ContainsFunc(hunks, func(h merge.Hunk) bool {
+		return h.ID == hash || strings.HasPrefix(h.ID, hash+"@")
+	})
 }
 
 // stillMerging reports whether repoID has a merge, rebase or cherry-pick in progress.
