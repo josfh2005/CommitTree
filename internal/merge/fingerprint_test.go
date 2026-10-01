@@ -50,7 +50,7 @@ func TestFingerprintChangesBetweenRebaseSteps(t *testing.T) {
 	}
 	r.WriteFile("greeting.txt", "resolved one\n")
 	r.Git("add", "greeting.txt")
-	if err := Continue(context.Background(), r.Dir); err != nil {
+	if err := Continue(context.Background(), r.Dir, ""); err != nil {
 		t.Fatal(err)
 	}
 	if st := status(t, r.Dir); st.Kind != KindRebase || st.Step != 2 {

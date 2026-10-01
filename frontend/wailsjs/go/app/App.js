@@ -70,8 +70,8 @@ export function CommitChanges(arg1, arg2, arg3) {
   return window['go']['app']['App']['CommitChanges'](arg1, arg2, arg3);
 }
 
-export function CommitMerge(arg1) {
-  return window['go']['app']['App']['CommitMerge'](arg1);
+export function CommitMerge(arg1, arg2) {
+  return window['go']['app']['App']['CommitMerge'](arg1, arg2);
 }
 
 export function ConfirmChatAction(arg1, arg2, arg3) {
@@ -180,6 +180,10 @@ export function GetIdentity(arg1) {
 
 export function GetLog(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['app']['App']['GetLog'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function GetMergeMessage(arg1) {
+  return window['go']['app']['App']['GetMergeMessage'](arg1);
 }
 
 export function GetMergeState(arg1) {

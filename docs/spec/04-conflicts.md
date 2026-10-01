@@ -187,7 +187,7 @@ Two actions move the operation forward or throw it away, worded per kind:
 
 | Kind | Continue | Abort |
 |---|---|---|
-| Merge | "Commit merge" — closes the merge with git's own generated merge message | "Abort merge" — `git merge --abort`, restoring the branch to before the merge started |
+| Merge | "Commit merge" — opens the merge commit's message to edit, then commits with it | "Abort merge" — `git merge --abort`, restoring the branch to before the merge started |
 | Rebase | "Continue rebase" | "Abort rebase" |
 | Cherry-pick | "Continue cherry-pick" | "Abort cherry-pick" |
 | Revert | "Continue revert" | "Abort revert" |
@@ -199,7 +199,20 @@ conflicted or manual file left); it only becomes available once everything
 is settled, staged or not — though for a merge specifically, committing
 with settled files still unstaged is allowed after a warning, since it
 means the merge commit keeps only the current branch's version of those
-files and silently drops the incoming side's. For every kind but a merge,
+files and silently drops the incoming side's.
+
+For a merge, "Commit merge" does not commit straight away: it opens a text
+box under the header holding the message git prepared ("Merge branch
+'feature'…"), without git's comment lines such as the "# Conflicts:" list,
+with Cancel and Commit. ⌘↵ (Ctrl+Enter off macOS) commits and Esc cancels.
+The commit uses the edited message after git's usual cleanup (comment
+lines and surrounding blank lines removed). Commit is disabled while the
+message is empty and in the same cases as the Commit merge button; an
+empty message is also refused by the backend. The unstaged-files warning
+above appears on Commit. If the commit fails, the box stays open with the
+message.
+
+For every kind but a merge,
 "continue" runs that operation's own `--continue` (with no editor allowed
 to open), which may immediately leave the next commit's conflicts behind
 for this same view to show again — the view simply re-reads the repository

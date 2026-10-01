@@ -82,11 +82,22 @@ func (a *App) AbortMerge(id string) error {
 
 // CommitMerge stops any agent run on the repository first, as AbortMerge
 // does, then advances whatever conflict resolution is in progress: a merge
-// commits, a rebase continues (and may leave the next commit's conflicts
-// for the view to show), a stash conflict does nothing.
-func (a *App) CommitMerge(id string) error {
+// commits with message (an empty one is refused), a rebase continues with
+// its own message (and may leave the next commit's conflicts for the view
+// to show), a stash conflict does nothing.
+func (a *App) CommitMerge(id, message string) error {
 	a.stopRun(id)
-	return a.write(id, func(ctx context.Context, dir string) error { return merge.Continue(ctx, dir) })
+	return a.write(id, func(ctx context.Context, dir string) error { return merge.Continue(ctx, dir, message) })
+}
+
+// GetMergeMessage is the message git prepared for the merge in progress,
+// without its comment lines, to pre-fill the editor before Commit merge.
+func (a *App) GetMergeMessage(id string) (string, error) {
+	dir, err := a.dir(id)
+	if err != nil {
+		return "", err
+	}
+	return merge.Message(a.ctx, dir)
 }
 
 // stopRun cancels the repository's running agent, if any. StopChat's only

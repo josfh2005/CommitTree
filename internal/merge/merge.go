@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -34,6 +36,10 @@ var ErrInvalidRef = errors.New("merge: invalid ref")
 // ErrMergeInProgress reports a merge that was never concluded; git refuses to
 // start another one, and its conflicts are not this merge's.
 var ErrMergeInProgress = errors.New("merge: a merge is already in progress")
+
+// ErrEmptyMessage refuses a merge commit whose message is empty once git's
+// cleanup has removed comment lines and blank space.
+var ErrEmptyMessage = errors.New("the commit message is empty")
 
 // Start merges branch into the current one. It always creates a merge commit
 // (--no-ff) so an integrated branch stays visible in the graph, and asks for
@@ -76,18 +82,18 @@ func Start(ctx context.Context, dir, branch string) (Result, error) {
 }
 
 // Continue moves the conflict resolution in progress one step forward: a
-// merge closes with git's own generated message, exactly as Commit did; a
-// rebase, a cherry-pick, a revert or an `am` run their own --continue and
-// may leave the next commit's conflicts behind — the caller re-reads Status
-// to see. A stash conflict has no "continue" step; this is a no-op so a
-// stray call from the UI never errors.
-func Continue(ctx context.Context, dir string) error {
+// merge closes with message (the user's edit of git's prepared one); a
+// rebase, a cherry-pick, a revert or an `am` ignore message, run their own
+// --continue and may leave the next commit's conflicts behind — the caller
+// re-reads Status to see. A stash conflict has no "continue" step; this is
+// a no-op so a stray call from the UI never errors.
+func Continue(ctx context.Context, dir, message string) error {
 	st, err := Status(ctx, dir)
 	if err != nil {
 		return err
 	}
 	if st.Kind == KindMerge {
-		return Commit(ctx, dir)
+		return commitWithMessage(ctx, dir, message)
 	}
 	cmd, ok := sequencer[st.Kind]
 	if !ok {
@@ -165,6 +171,47 @@ func Abort(ctx context.Context, dir string) error {
 // Commit closes a merge with git's own generated message.
 func Commit(ctx context.Context, dir string) error {
 	_, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "commit", "--no-edit")
+	return err
+}
+
+// Message is the merge message git prepared (MERGE_MSG) without its comment
+// lines, such as the "# Conflicts:" block, ready for the user to edit.
+func Message(ctx context.Context, dir string) (string, error) {
+	path, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--git-path", "MERGE_MSG")
+	if err != nil {
+		return "", err
+	}
+	path = strings.TrimSpace(path)
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(dir, path)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return cleanMessage(string(data)), nil
+}
+
+// cleanMessage applies git's "strip" cleanup: comment lines go, trailing
+// spaces and the blank lines around the message go.
+func cleanMessage(s string) string {
+	var lines []string
+	for _, line := range strings.Split(s, "\n") {
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
+		lines = append(lines, strings.TrimRight(line, " \t\r"))
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+// commitWithMessage closes a merge with message, refusing one that git's
+// cleanup would leave empty.
+func commitWithMessage(ctx context.Context, dir, message string) error {
+	if cleanMessage(message) == "" {
+		return ErrEmptyMessage
+	}
+	_, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "commit", "--cleanup=strip", "-m", message)
 	return err
 }
 

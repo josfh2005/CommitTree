@@ -52,7 +52,7 @@ export function CommandLogOutput(arg1:string,arg2:number):Promise<cmdlog.Output>
 
 export function CommitChanges(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
-export function CommitMerge(arg1:string):Promise<void>;
+export function CommitMerge(arg1:string,arg2:string):Promise<void>;
 
 export function ConfirmChatAction(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
@@ -107,6 +107,8 @@ export function GetGitSettings():Promise<gitsettings.Settings>;
 export function GetIdentity(arg1:string):Promise<app.Identity>;
 
 export function GetLog(arg1:string,arg2:gitlog.Filters,arg3:string,arg4:number,arg5:number):Promise<app.LogPage>;
+
+export function GetMergeMessage(arg1:string):Promise<string>;
 
 export function GetMergeState(arg1:string):Promise<merge.State>;
 
