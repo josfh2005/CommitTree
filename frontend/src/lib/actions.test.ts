@@ -128,6 +128,29 @@ describe('commitMerge', () => {
 
     expect(api.skipStep).not.toHaveBeenCalled()
   })
+
+  it('commits a merge with the edited message and reports success', async () => {
+    mergeState.set(mergeStateOf({ kind: 'merge' }))
+    vi.mocked(api.commitMerge).mockResolvedValue(undefined)
+
+    expect(await commitMerge('repo1', 'Merge feature: keep both')).toBe(true)
+    expect(api.commitMerge).toHaveBeenCalledWith('repo1', 'Merge feature: keep both')
+  })
+
+  it('reports failure so the message editor stays open', async () => {
+    mergeState.set(mergeStateOf({ kind: 'merge' }))
+    vi.mocked(api.commitMerge).mockRejectedValue(new Error('the commit message is empty'))
+
+    expect(await commitMerge('repo1', ' ')).toBe(false)
+  })
+
+  it('reports a cancelled warning as not committed', async () => {
+    mergeState.set(mergeStateOf({ kind: 'merge', unstaged: ['a.txt'] }))
+    vi.mocked(confirmDialog).mockResolvedValue(false)
+
+    expect(await commitMerge('repo1', 'msg')).toBe(false)
+    expect(api.commitMerge).not.toHaveBeenCalled()
+  })
 })
 
 describe('skipStep', () => {

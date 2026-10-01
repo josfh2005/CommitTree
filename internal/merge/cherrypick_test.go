@@ -164,7 +164,7 @@ func TestAnEmptiedRebaseStepCanAlwaysBeLeft(t *testing.T) {
 	}
 	r.WriteFile("greeting.txt", "hi\n") // main's version
 	r.Git("add", "greeting.txt")
-	if err := Continue(context.Background(), r.Dir); err != nil {
+	if err := Continue(context.Background(), r.Dir, ""); err != nil {
 		if err := Skip(context.Background(), r.Dir); err != nil {
 			t.Fatalf("Continue failed and Skip failed too: %v", err)
 		}

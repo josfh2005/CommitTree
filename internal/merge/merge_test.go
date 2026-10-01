@@ -173,7 +173,60 @@ func TestStartDoesNotClaimSomeoneElsesConflicts(t *testing.T) {
 	}
 }
 
-// Continue on a plain merge behaves exactly as Commit did.
+// Message is git's prepared merge message without its comment lines (the
+// "# Conflicts:" block), ready to edit.
+func TestMessageDropsGitComments(t *testing.T) {
+	r := conflicting(t)
+	if _, err := Start(context.Background(), r.Dir, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	r.WriteFile(".git/MERGE_MSG", "Merge branch 'feature'\n\n# Conflicts:\n#\tgreeting.txt\n\n")
+	got, err := Message(context.Background(), r.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "Merge branch 'feature'" {
+		t.Errorf("message = %q", got)
+	}
+}
+
+// Continue closes a merge with the message it is given, git's cleanup
+// applied (comment lines and surrounding blank lines removed).
+func TestContinueCommitsAMergeWithTheGivenMessage(t *testing.T) {
+	r := conflicting(t)
+	if _, err := Start(context.Background(), r.Dir, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	r.WriteFile("greeting.txt", "hi there\n")
+	r.Git("add", "greeting.txt")
+	if err := Continue(context.Background(), r.Dir, "Merge feature: greet warmly\n\nKeeps both greetings.\n# a comment\n"); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.Git("log", "-1", "--format=%B"); strings.TrimSpace(got) != "Merge feature: greet warmly\n\nKeeps both greetings." {
+		t.Errorf("message = %q", got)
+	}
+}
+
+// An empty message (or one made only of comments) is refused and the merge
+// stays open.
+func TestContinueRefusesAnEmptyMergeMessage(t *testing.T) {
+	r := conflicting(t)
+	if _, err := Start(context.Background(), r.Dir, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	r.WriteFile("greeting.txt", "hi there\n")
+	r.Git("add", "greeting.txt")
+	for _, msg := range []string{"", "  \n", "# only a comment\n"} {
+		if err := Continue(context.Background(), r.Dir, msg); !errors.Is(err, ErrEmptyMessage) {
+			t.Fatalf("Continue(%q) = %v, want ErrEmptyMessage", msg, err)
+		}
+	}
+	if st := status(t, r.Dir); !st.Merging {
+		t.Fatalf("state = %+v, want the merge still open", st)
+	}
+}
+
+// Continue on a plain merge closes it as a merge commit.
 func TestContinueClosesAMergeLikeCommit(t *testing.T) {
 	r := conflicting(t)
 	if _, err := Start(context.Background(), r.Dir, "feature"); err != nil {
@@ -181,7 +234,7 @@ func TestContinueClosesAMergeLikeCommit(t *testing.T) {
 	}
 	r.WriteFile("greeting.txt", "hi there\n")
 	r.Git("add", "greeting.txt")
-	if err := Continue(context.Background(), r.Dir); err != nil {
+	if err := Continue(context.Background(), r.Dir, "Merge branch 'feature'"); err != nil {
 		t.Fatal(err)
 	}
 	if st := status(t, r.Dir); st.Merging {
@@ -211,11 +264,15 @@ func TestContinueFinishesARebase(t *testing.T) {
 
 	r.WriteFile("a.txt", "resolved\n")
 	r.Git("add", "a.txt")
-	if err := Continue(context.Background(), r.Dir); err != nil {
+	// A rebase keeps the commit's own message; the one given is for merges.
+	if err := Continue(context.Background(), r.Dir, "ignored"); err != nil {
 		t.Fatal(err)
 	}
 	if st := status(t, r.Dir); st.Merging {
 		t.Fatalf("state = %+v, want the rebase finished", st)
+	}
+	if got := r.Git("log", "-1", "--format=%s"); got != "feature change" {
+		t.Errorf("subject = %q, want the rebased commit's own", got)
 	}
 	if got := r.Git("log", "-1", "--format=%P"); strings.Contains(got, " ") {
 		t.Errorf("HEAD has more than one parent: %q, want a rebase, not a merge commit", got)
@@ -230,7 +287,7 @@ func TestContinueFailsWithAnUnresolvedConflict(t *testing.T) {
 	r.Git("switch", "-q", "feature")
 	r.GitFails("rebase", "main")
 
-	if err := Continue(context.Background(), r.Dir); err == nil {
+	if err := Continue(context.Background(), r.Dir, ""); err == nil {
 		t.Fatal("want an error: the conflict was never resolved")
 	}
 	if st := status(t, r.Dir); !st.Merging || st.Step != 1 {
@@ -284,7 +341,7 @@ func TestContinueCancelledAfterAdvancingReportsCancelNotSuccess(t *testing.T) {
 	t.Cleanup(func() { gitcmd.SetRecorder(nil) })
 
 	started := time.Now()
-	err := Continue(context.Background(), r.Dir)
+	err := Continue(context.Background(), r.Dir, "")
 	if !errors.Is(err, gitcmd.ErrCancelled) {
 		t.Fatalf("got %v, want an error wrapping ErrCancelled", err)
 	}
@@ -353,7 +410,7 @@ func TestContinueAndAbortWorkOnACherryPick(t *testing.T) {
 		// This is the call that hangs forever if the editor is not
 		// overridden through the environment: a cherry-pick --continue
 		// opens one for the commit message.
-		if err := Continue(context.Background(), r.Dir); err != nil {
+		if err := Continue(context.Background(), r.Dir, ""); err != nil {
 			t.Fatal(err)
 		}
 		if st := status(t, r.Dir); st.Merging {
@@ -389,7 +446,7 @@ func TestContinueAndAbortOnAStashConflictAreNoOps(t *testing.T) {
 	r.Git("commit", "-q", "-am", "conflicting")
 	r.GitFails("stash", "pop")
 
-	if err := Continue(context.Background(), r.Dir); err != nil {
+	if err := Continue(context.Background(), r.Dir, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := Abort(context.Background(), r.Dir); err != nil {

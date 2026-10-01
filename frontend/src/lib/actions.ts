@@ -584,26 +584,32 @@ export async function abortMerge(id: string) {
   if (ok) await run(`${warning.title}…`, () => api.abortMerge(id))
 }
 
-export async function commitMerge(id: string) {
+/** commitMerge advances the resolution in progress: a merge commits with
+ *  message (the user's edit of git's prepared one), the other kinds ignore
+ *  it and continue. True once it went through, so the message editor can
+ *  close; false when cancelled or refused. */
+export async function commitMerge(id: string, message = ''): Promise<boolean> {
   const state = get(mergeState)
   const warning = state ? commitWarning(state) : null
   if (warning) {
     const ok = await confirmDialog({ title: 'Commit merge', message: warning, confirmLabel: 'Commit anyway', danger: true })
-    if (!ok) return
+    if (!ok) return false
   }
   const kind = state?.kind
   const label = kind === 'rebase' || kind === 'cherry-pick' ? 'Continuing…' : 'Committing merge…'
   try {
     busy.set(label)
-    await api.commitMerge(id)
+    await api.commitMerge(id, message)
+    return true
   } catch (e) {
-    const message = errorMessage(e)
-    if ((kind === 'rebase' || kind === 'cherry-pick') && isEmptyStepError(message)) {
-      const skip = await confirmDialog({ title: 'Nothing to commit', message: `${message}\n\nSkip this commit instead?`, confirmLabel: 'Skip this commit' })
+    const text = errorMessage(e)
+    if ((kind === 'rebase' || kind === 'cherry-pick') && isEmptyStepError(text)) {
+      const skip = await confirmDialog({ title: 'Nothing to commit', message: `${text}\n\nSkip this commit instead?`, confirmLabel: 'Skip this commit' })
       if (skip) await run('Skipping…', () => api.skipStep(id))
     } else {
-      toast(message, 'error')
+      toast(text, 'error')
     }
+    return false
   } finally {
     busy.set('')
     await refreshRepo()

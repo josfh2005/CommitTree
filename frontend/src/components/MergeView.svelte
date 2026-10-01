@@ -69,6 +69,31 @@
     if (e.key === 'Escape') { e.preventDefault(); editing = null }
   }
 
+  // The merge commit's message while it is being edited; null when the
+  // editor is closed. Commit merge opens it with git's prepared message.
+  let commitMsg: string | null = null
+
+  async function openMessage() {
+    try {
+      commitMsg = await api.getMergeMessage(repoId)
+    } catch (e) {
+      toast(errorMessage(e), 'error')
+    }
+  }
+
+  async function commitWithMessage() {
+    if (commitMsg === null || !commitMsg.trim() || locked || pending > 0) return
+    if (await commitMerge(repoId, commitMsg)) commitMsg = null
+  }
+
+  function messageKeys(e: KeyboardEvent) {
+    if (isApplyKey(e)) { e.preventDefault(); commitWithMessage() }
+    if (e.key === 'Escape') { e.preventDefault(); commitMsg = null }
+  }
+
+  // The editor belongs to the merge it was opened for.
+  $: if ($mergeState?.kind !== 'merge') commitMsg = null
+
   // The pane follows $mergeState (below), so the handler only reloads it.
   const off = EventsOn('merge:changed', (payload: { repoID: string }) => {
     if (payload?.repoID !== repoId) return
@@ -198,7 +223,7 @@
       <button class="btn" disabled={!!$busy} on:click={() => skipStep(repoId)}>Skip this commit</button>
     {/if}
     {#if acts.confirm}
-      <button class="btn primary" disabled={locked || pending > 0} title={$chatRunRepo === repoId ? "The AI is resolving; wait for it or stop it from the chat" : undefined} on:click={() => commitMerge(repoId)}>{acts.confirm}</button>
+      <button class="btn primary" disabled={locked || pending > 0} title={$chatRunRepo === repoId ? "The AI is resolving; wait for it or stop it from the chat" : undefined} on:click={() => ($mergeState?.kind === 'merge' ? openMessage() : commitMerge(repoId))}>{acts.confirm}</button>
     {/if}
     {#if acts.done}
       <!-- A stash conflict has no git-level abort or continue. Drop stash is
@@ -212,6 +237,16 @@
     {/if}
   </header>
   {#if flowLine}<div class="flow-note">{flowLine}</div>{/if}
+  {#if commitMsg !== null}
+    <div class="commit-msg">
+      <!-- svelte-ignore a11y_autofocus -->
+      <textarea rows="4" aria-label="Merge commit message" autofocus bind:value={commitMsg} on:keydown={messageKeys}></textarea>
+      <div class="commit-msg-actions">
+        <button class="btn" on:click={() => (commitMsg = null)}>Cancel</button>
+        <button class="btn primary" title="⌘↵ / Ctrl+Enter" disabled={locked || pending > 0 || !commitMsg.trim()} on:click={commitWithMessage}>Commit</button>
+      </div>
+    </div>
+  {/if}
 
   <div class="body">
     <FileList {sections} {selected} onSelect={(key) => { const f = files.find((ff) => keyOf(ff) === key); if (f) open(f) }} actions={actionsFor} onMenu={manualMenu} {glyph} />
@@ -264,6 +299,9 @@
 <style>
   .merge { display: flex; flex-direction: column; height: 100%; }
   .flow-note { padding: 4px 10px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--border); }
+  .commit-msg { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--border); flex: none; }
+  .commit-msg textarea { box-sizing: border-box; width: 100%; resize: vertical; font-family: var(--mono); font-size: 12px; }
+  .commit-msg-actions { display: flex; justify-content: flex-end; gap: 6px; }
   header { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); flex: none; }
   .title { font-size: 13px; }
   .count { font-size: 12px; color: var(--muted); }

@@ -136,11 +136,21 @@ func TestCommitMergeCreatesTheMergeCommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.Git("add", "greeting.txt")
-	if err := a.CommitMerge(id); err != nil {
+	prepared, err := a.GetMergeMessage(id)
+	if err != nil || !strings.HasPrefix(prepared, "Merge branch 'feature'") || strings.Contains(prepared, "#") {
+		t.Fatalf("prepared message = %q, err = %v", prepared, err)
+	}
+	if err := a.CommitMerge(id, "  "); !errors.Is(err, merge.ErrEmptyMessage) {
+		t.Fatalf("empty message: err = %v, want ErrEmptyMessage", err)
+	}
+	if err := a.CommitMerge(id, "Merge feature: greet in both languages"); err != nil {
 		t.Fatal(err)
 	}
 	if n := len(strings.Fields(r.Git("rev-list", "--parents", "-n", "1", "HEAD"))); n != 3 {
 		t.Errorf("want a merge commit with two parents, got %d fields", n)
+	}
+	if got := r.Git("log", "-1", "--format=%B"); strings.TrimSpace(got) != "Merge feature: greet in both languages" {
+		t.Errorf("message = %q", got)
 	}
 	st, err := a.GetMergeState(id)
 	if err != nil || st.Merging {
@@ -343,7 +353,7 @@ func TestCommitMergeStopsARunningAgent(t *testing.T) {
 	ev.wait(t, agent.EventDelta)
 	r.WriteFile("greeting.txt", "hi / hola\n")
 	r.Git("add", "greeting.txt")
-	if err := a.CommitMerge(id); err != nil {
+	if err := a.CommitMerge(id, "Merge branch 'feature'"); err != nil {
 		t.Fatal(err)
 	}
 	ev.wait(t, agent.EventDone)
@@ -461,7 +471,7 @@ func TestResolveConflictsRefusesTheNextRebaseStep(t *testing.T) {
 	// Step 1 is finished behind the run's back (a terminal), leaving step 2.
 	r.WriteFile("greeting.txt", "step one\n")
 	r.Git("add", "greeting.txt")
-	if err := merge.Continue(context.Background(), r.Dir); err != nil {
+	if err := merge.Continue(context.Background(), r.Dir, ""); err != nil {
 		t.Fatal(err)
 	}
 	close(release)
