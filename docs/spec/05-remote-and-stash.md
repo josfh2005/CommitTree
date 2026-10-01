@@ -99,6 +99,9 @@ confirmation (including the choice offered for a local branch behind its
 upstream), its "already up to date" message, its conflicts and submodule
 warnings are unchanged.
 
+A fetch, pull or push that takes 10 s or longer, fails or leaves conflicts
+notifies — see [Notifications](11-notifications.md).
+
 ### Fetch
 
 Fetch downloads every remote's refs and removes any remote-tracking branch

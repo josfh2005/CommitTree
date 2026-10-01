@@ -1,6 +1,8 @@
 import { get } from 'svelte/store'
 import { api } from './api'
 import { busy, chatOpen, chatRunRepo, collapsedRepoGroups, expandedRepos, filters, focusCommitBox, loadIdentity, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, refs, repoManualSeeded, repos, repoSortOrder, selectRepo, selectUncommitted, selectedHash, selectedRepoId, stashConflictDismissed } from './stores'
+import { notifyStashConflicts, opError, track } from './notify'
+import type { OpKind } from './notifyRules'
 import type { Branch, FileStatus, HunkAction, HunkPick, MergeState, RebasePreview, RegionChoice, Repo, ResetInfo, ResetMode, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
 import { PULL_UP_TO_DATE, UP_TO_DATE } from './types'
 import { abortWarning, commitWarning, isEmptyStepError, skipWarning, staleMergeChoice, takeMessage } from './merge'
@@ -34,6 +36,23 @@ async function run(label: string, fn: () => Promise<unknown>): Promise<boolean> 
     return true
   } catch (e) {
     toast(errorMessage(e), 'error')
+    return false
+  } finally {
+    busy.set('')
+    await refreshRepo()
+  }
+}
+
+// runOp is run for the operations that notify (docs/spec/11-notifications.md):
+// it tracks how the operation ended, and a failure's toast names the
+// repository when it is not the selected one.
+async function runOp(id: string, op: OpKind, label: string, fn: () => Promise<unknown>): Promise<boolean> {
+  busy.set(label)
+  try {
+    await track(id, op, fn)
+    return true
+  } catch (e) {
+    opError(id, e)
     return false
   } finally {
     busy.set('')
@@ -542,11 +561,11 @@ export async function mergeBranch(id: string, branch: Branch, into: string) {
   if (label === null) return
   busy.set('Merging…')
   try {
-    const result = await api.mergeBranch(id, label)
+    const result = await track(id, 'merge', () => api.mergeBranch(id, label), (r) => r.conflicts?.length ?? 0)
     if (result.outcome === UP_TO_DATE) toast(`${into} is already up to date with ${label}.`, 'info')
     await warnMovedSubmodules(id)
   } catch (e) {
-    toast(errorMessage(e), 'error')
+    opError(id, e)
   } finally {
     busy.set('')
     await refreshRepo()
@@ -686,12 +705,12 @@ export async function rebaseOnto(id: string, onto: string, ontoLabel: string, he
   if (!ok) return
   busy.set('Rebasing…')
   try {
-    const result = await api.rebaseOnto(id, onto)
+    const result = await track(id, 'rebase', () => api.rebaseOnto(id, onto), (r) => r.conflicts?.length ?? 0)
     const msg = doneMessage(result.outcome, { op: 'rebase', head, target: ontoLabel, commits: preview.commits })
     if (msg) toast(msg, 'info')
     await warnMovedSubmodules(id)
   } catch (e) {
-    toast(errorMessage(e), 'error')
+    opError(id, e)
   } finally {
     busy.set('')
     await refreshRepo()
@@ -703,12 +722,12 @@ export async function cherryPick(id: string, hash: string, short: string, subjec
   if (!ok) return
   busy.set('Cherry-picking…')
   try {
-    const result = await api.cherryPick(id, hash)
+    const result = await track(id, 'cherry-pick', () => api.cherryPick(id, hash), (r) => r.conflicts?.length ?? 0)
     const msg = doneMessage(result.outcome, { op: 'cherry-pick', head, target: short })
     if (msg) toast(msg, 'info')
     await warnMovedSubmodules(id)
   } catch (e) {
-    toast(errorMessage(e), 'error')
+    opError(id, e)
   } finally {
     busy.set('')
     await refreshRepo()
@@ -739,18 +758,18 @@ export const unstageFile = (id: string, path: string) => run('Unstaging…', () 
 export const commitChanges = (id: string, message: string, amend: boolean) =>
   run(amend ? 'Amending…' : 'Committing…', () => api.commitChanges(id, message, amend))
 
-export const fetchRemote = (id: string) => run('Fetching…', () => api.fetch(id))
+export const fetchRemote = (id: string) => runOp(id, 'fetch', 'Fetching…', () => api.fetch(id))
 
-export const push = (id: string) => run('Pushing…', () => api.push(id))
+export const push = (id: string) => runOp(id, 'push', 'Pushing…', () => api.push(id))
 
 export async function pull(id: string) {
   busy.set('Pulling…')
   try {
-    const result = await api.pull(id)
+    const result = await track(id, 'pull', () => api.pull(id), (r) => r.conflicts?.length ?? 0)
     if (result.outcome === PULL_UP_TO_DATE) toast('Already up to date.', 'info')
     await warnMovedSubmodules(id)
   } catch (e) {
-    toast(errorMessage(e), 'error')
+    opError(id, e)
   } finally {
     busy.set('')
     await refreshRepo()
@@ -776,8 +795,10 @@ export async function stashApply(id: string, index: number) {
     checkboxLabel: 'Delete the stash after applying it',
   })
   if (!result.ok) return
-  if (stashApplyAction(result.checked) === 'pop') await run('Popping stash…', () => api.stashPop(id, index))
-  else await run('Applying stash…', () => api.stashApply(id, index))
+  const ok = stashApplyAction(result.checked) === 'pop'
+    ? await run('Popping stash…', () => api.stashPop(id, index))
+    : await run('Applying stash…', () => api.stashApply(id, index))
+  if (ok) notifyStashConflicts(id)
 }
 
 // The conflict view's "Done" for a stash conflict: the files stay exactly as
@@ -792,7 +813,7 @@ export async function stashPop(id: string, index: number) {
     message: 'Apply this stash and remove it from the list? If it conflicts, it stays until the conflict is resolved.',
     confirmLabel: 'Pop',
   })
-  if (ok) await run('Popping stash…', () => api.stashPop(id, index))
+  if (ok && (await run('Popping stash…', () => api.stashPop(id, index)))) notifyStashConflicts(id)
 }
 
 export async function stashDrop(id: string, index: number) {
@@ -848,7 +869,7 @@ export async function initAllSubmodules(parentId: string, list: Submodule[]) {
     message: `Initialise:\n${targets.map((s) => s.path).join('\n')}`,
     confirmLabel: 'Initialise',
   })
-  if (ok) await run('Initialising…', () => api.initAllSubmodules(parentId))
+  if (ok) await runOp(parentId, 'submodules', 'Initialising…', () => api.initAllSubmodules(parentId))
 }
 
 export async function updateAllSubmodules(parentId: string, list: Submodule[]) {
@@ -859,7 +880,7 @@ export async function updateAllSubmodules(parentId: string, list: Submodule[]) {
     message: `Update to their recorded commit:\n${targets.map((s) => s.path).join('\n')}`,
     confirmLabel: 'Update',
   })
-  if (ok) await run('Updating…', () => api.updateAllSubmodules(parentId))
+  if (ok) await runOp(parentId, 'submodules', 'Updating…', () => api.updateAllSubmodules(parentId))
 }
 
 // Warns after a successful write to a repository that git left submodules

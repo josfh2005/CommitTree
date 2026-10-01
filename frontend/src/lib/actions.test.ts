@@ -17,6 +17,9 @@ vi.mock('./api', () => ({
     setRepoGroup: vi.fn().mockResolvedValue(undefined),
     reorderRepos: vi.fn().mockResolvedValue(undefined),
     chooseRegionOption: vi.fn(),
+    push: vi.fn().mockResolvedValue(undefined),
+    pull: vi.fn(),
+    notify: vi.fn().mockResolvedValue(undefined),
   },
 }))
 
@@ -30,9 +33,10 @@ vi.mock('./ui', async (importOriginal) => {
   }
 })
 
-import { applyHunkSelection, chooseRegionOption, commitMerge, placeRepo, placeRepoGroup, setRepoSortOrder, deleteBranch, deleteTag, removeWorktree, skipStep } from './actions'
+import { applyHunkSelection, chooseRegionOption, commitMerge, mergeBranch, pull, push, placeRepo, placeRepoGroup, setRepoSortOrder, deleteBranch, deleteTag, removeWorktree, skipStep } from './actions'
 import { api } from './api'
-import { filters, mergeState } from './stores'
+import { filters, mergeState, repos, selectedRepoId } from './stores'
+import { windowFocused } from './notify'
 import type { Branch, Filters, MergeState, Repo, WorktreeRemovalInfo } from './types'
 import { confirmDialog, confirmDialogWithCheckbox, toasts } from './ui'
 
@@ -417,5 +421,42 @@ describe('chooseRegionOption', () => {
     vi.mocked(api.chooseRegionOption).mockRejectedValue(new Error('the AI is busy'))
     expect(await chooseRegionOption('r', 'c1', 0, '', 'a.txt')).toBe(false)
     expect(get(toasts).some((t) => t.kind === 'error' && t.message.includes('the AI is busy'))).toBe(true)
+  })
+})
+
+describe('operations notify', () => {
+  beforeEach(() => {
+    toasts.set([])
+    vi.mocked(api.notify).mockClear()
+    repos.set([{ id: 'r1', name: 'alpha', path: '/a', missing: false, branch: 'main' } as Repo, { id: 'r2', name: 'beta', path: '/b', missing: false, branch: 'main' } as Repo])
+    selectedRepoId.set('r1')
+    windowFocused.set(false)
+  })
+
+  it('a slow push notifies finished', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValueOnce(0).mockReturnValueOnce(12_000)
+    await push('r1')
+    now.mockRestore()
+    expect(vi.mocked(api.notify).mock.calls[0][0]).toMatchObject({ id: 'r1:done', body: 'Push finished · 12 s' })
+  })
+
+  it('a failed push on another repository: one error toast with its name, plus the problem notification', async () => {
+    vi.mocked(api.push).mockRejectedValueOnce(new Error('fatal: Authentication failed'))
+    await push('r2')
+    expect(get(toasts).map((t) => [t.message, t.kind])).toEqual([['beta: fatal: Authentication failed', 'error']])
+    expect(vi.mocked(api.notify).mock.calls[0][0]).toMatchObject({ id: 'r2:problem', body: 'Push failed: fatal: Authentication failed' })
+  })
+
+  it('a pull with conflicts notifies the conflicts, not finished', async () => {
+    vi.mocked(api.pull).mockResolvedValueOnce({ outcome: 2, conflicts: ['a.txt'] })
+    await pull('r1')
+    expect(api.notify).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(api.notify).mock.calls[0][0]).toMatchObject({ id: 'r1:problem', body: 'Conflicts in 1 file after the pull' })
+  })
+
+  it('a merge with conflicts notifies the conflicts', async () => {
+    vi.mocked(api.mergeBranch).mockResolvedValueOnce({ outcome: 2, conflicts: ['a', 'b'] })
+    await mergeBranch('r1', { name: 'feature' } as Branch, 'main')
+    expect(vi.mocked(api.notify).mock.calls[0][0]).toMatchObject({ body: 'Conflicts in 2 files after the merge' })
   })
 })
