@@ -154,6 +154,7 @@
         branch={b}
         text={b.name}
         active={isFilterRow(repoId, $selectedRepoId, $filters.branch, branchRef(b))}
+        tint={repoId === $selectedRepoId}
         title={b.upstream ? `${b.name} → ${b.upstream}` : b.name}
         onCheckout={checkout}
         onMenu={branchMenu}
@@ -174,6 +175,7 @@
             text={leafName(b.name, group.name)}
             depth={1}
             active={isFilterRow(repoId, $selectedRepoId, $filters.branch, branchRef(b))}
+            tint={repoId === $selectedRepoId}
             title={b.upstream ? `${b.name} → ${b.upstream}` : b.name}
             onCheckout={checkout}
             onMenu={branchMenu}
@@ -200,6 +202,7 @@
                 text={b.name}
                 depth={1}
                 active={isFilterRow(repoId, $selectedRepoId, $filters.branch, branchRef(b))}
+                tint={repoId === $selectedRepoId}
                 title={branchLabel(b)}
                 onCheckout={checkout}
                 onMenu={branchMenu}
@@ -224,6 +227,7 @@
                     text={leafName(b.name, group.name)}
                     depth={2}
                     active={isFilterRow(repoId, $selectedRepoId, $filters.branch, branchRef(b))}
+                    tint={repoId === $selectedRepoId}
                     title={branchLabel(b)}
                     onCheckout={checkout}
                     onMenu={branchMenu}

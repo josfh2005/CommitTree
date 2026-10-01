@@ -5,6 +5,9 @@
   export let branch: Branch
   export let text: string
   export let active = false
+  // Tint the checked-out branch: only in the selected repository, so an
+  // expanded repository that is not selected never looks active.
+  export let tint = false
   export let depth = 0
   export let title = ''
   export let onSelect: ((b: Branch) => void) | undefined = undefined
@@ -20,6 +23,7 @@
   class="row-item ref"
   class:active
   class:checked-out={branch.current}
+  class:tint
   style="padding-left: calc(var(--row-base-indent) + {depth} * var(--row-indent-step))"
   title={elsewhere || title || text}
   on:click={() => onSelect?.(branch)}
@@ -36,10 +40,12 @@
   .ref { height: 26px; }
   .mark { width: 12px; flex: none; display: inline-grid; place-items: center; color: var(--accent); }
   .current { font-weight: 600; }
-  /* The branch checked out: a soft accent tint so it stands out among its
-     siblings; a row selected as the log filter keeps its own background. */
-  .checked-out:not(.active) { background: color-mix(in srgb, var(--accent) 12%, transparent); }
-  .checked-out:not(.active):hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+  /* The branch checked out in the selected repository: a soft accent tint so
+     it stands out among its siblings; a row selected as the log filter keeps
+     its own background. Other repositories' current branch keeps only the
+     check and the bold name. */
+  .checked-out.tint:not(.active) { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  .checked-out.tint:not(.active):hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
   .filtered { margin-left: auto; flex: none; display: inline-grid; place-items: center; color: var(--muted); }
   .wt + .filtered { margin-left: 6px; }
   .wt { margin-left: auto; flex: none; font-size: 11px; padding: 0 6px; border-radius: 4px; background: var(--hover); color: var(--muted); }
