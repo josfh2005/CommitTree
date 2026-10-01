@@ -155,7 +155,7 @@ func fakeOllama(t *testing.T, onChat func(req map[string]any)) *httptest.Server 
 				writeLines(w, `{"message":{"role":"assistant","content":"","tool_calls":[{"id":"call_1","function":{"name":"list_refs","arguments":{}}}]},"done":false}`, `{"message":{"content":""},"done":true}`)
 				return
 			}
-			writeLines(w, `{"message":{"role":"assistant","content":"Hay "},"done":false}`, `{"message":{"content":"ramas."},"done":false}`, `{"message":{"content":""},"done":true}`)
+			writeLines(w, `{"message":{"role":"assistant","content":"Hay "},"done":false}`, `{"message":{"content":"ramas."},"done":false}`, `{"message":{"content":""},"done":true,"prompt_eval_count":300,"eval_count":12}`)
 		default:
 			http.NotFound(w, r)
 		}
@@ -192,7 +192,7 @@ func TestSendChatRunsToolsStreamsAndSaves(t *testing.T) {
 		t.Fatalf("done.At = %q: %v", done.At, err)
 	}
 	names := strings.Join(ev.names(), ",")
-	if names != "chat:start,chat:tool,chat:tool_result,chat:delta,chat:delta,chat:done" {
+	if names != "chat:start,chat:tool,chat:tool_result,chat:delta,chat:delta,chat:usage,chat:done" {
 		t.Fatalf("events = %s", names)
 	}
 	if !strings.Contains(system, "approves or rejects") || !strings.Contains(system, "main") {
@@ -206,6 +206,10 @@ func TestSendChatRunsToolsStreamsAndSaves(t *testing.T) {
 	if len(history) != 4 || history[0].Content != "¿qué ramas hay?" || history[2].Role != ai.RoleTool ||
 		!strings.Contains(history[2].Content, "Current branch: main") || history[3].Content != "Hay ramas." {
 		t.Fatalf("history = %#v", history)
+	}
+	// Only the call that reported counts carries a usage.
+	if history[1].Usage != nil || history[3].Usage == nil || *history[3].Usage != (ai.Usage{Input: 300, Output: 12}) {
+		t.Fatalf("usages = %#v / %#v", history[1].Usage, history[3].Usage)
 	}
 	// Every assistant message of the answer records what produced it; the
 	// question and the tool result don't.
@@ -298,6 +302,10 @@ func TestExplainInChatWritesTheAnswerToTheConversation(t *testing.T) {
 		start.Provider != "ollama" || start.Model != "qwen2.5:7b" {
 		t.Fatalf("start = %#v", start)
 	}
+	usage := ev.wait(t, agent.EventUsage).data.(agent.UsageEvent)
+	if usage.RunID != "exp-1" || usage.Usage != (ai.Usage{Input: 300, Output: 12}) {
+		t.Fatalf("usage event = %#v", usage)
+	}
 	done := ev.wait(t, agent.EventDone).data.(agent.DoneEvent)
 	if _, err := time.Parse(time.RFC3339, done.At); err != nil {
 		t.Fatalf("done.At = %q: %v", done.At, err)
@@ -319,7 +327,8 @@ func TestExplainInChatWritesTheAnswerToTheConversation(t *testing.T) {
 		t.Fatalf("history = %#v", history)
 	}
 	if history[1].Role != ai.RoleAssistant || history[1].Content != "Hay ramas." ||
-		history[1].Provider != "ollama" || history[1].Model != "qwen2.5:7b" || history[1].At != done.At || history[0].Provider != "" {
+		history[1].Provider != "ollama" || history[1].Model != "qwen2.5:7b" || history[1].At != done.At || history[0].Provider != "" ||
+		history[1].Usage == nil || *history[1].Usage != (ai.Usage{Input: 300, Output: 12}) {
 		t.Fatalf("answer = %#v", history[1])
 	}
 }
