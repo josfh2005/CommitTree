@@ -53,4 +53,7 @@ func (a *App) TerminalClose(tab string) error { return a.term.Close(tab) }
 func (a *App) TerminalShell() string { return a.term.Shell() }
 
 // Shutdown is Wails' OnShutdown hook: no shell outlives the app.
-func (a *App) Shutdown(ctx context.Context) { a.term.CloseAll() }
+func (a *App) Shutdown(ctx context.Context) {
+	a.term.CloseAll()
+	a.stopNotifications()
+}

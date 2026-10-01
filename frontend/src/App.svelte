@@ -14,6 +14,7 @@
   import Toasts from './components/Toasts.svelte'
   import { startFocusRefresh } from './lib/actions'
   import { nextChatRunRepo } from './lib/chat'
+  import { startNotifications } from './lib/notify'
   import { isCommandsToggle } from './lib/cmdlog'
   import { isSettingsShortcut } from './lib/shortcuts'
   import { isTerminalToggle } from './lib/terminal'
@@ -79,6 +80,7 @@
     loadAISettings()
     Environment().then((env) => platform.set(env.platform)).catch(() => {})
     const stopFocus = startFocusRefresh()
+    const stopNotifications = startNotifications()
     // Every view of the working tree follows $worktreeState — the Changes
     // view and the log's "Uncommitted changes" row alike — so one app-wide
     // listener keeps them fresh whether or not a Changes pane is mounted.
@@ -100,6 +102,7 @@
     )
     return () => {
       stopFocus()
+      stopNotifications()
       offWorktree()
       offRepoChanged()
       offSettings()

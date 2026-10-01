@@ -6,7 +6,8 @@
   import { formatBytes, percent } from '../lib/format'
   import { modelForProvider, modelHint, needsKey, processingNotice, PROVIDERS, settingsHaveModels, usesOllama } from '../lib/providers'
   import { SETTINGS_TABS, isSettingsTab, tabUsesAI } from '../lib/settingsTabs'
-  import { highContrast, loadAISettings, loadGitSettings, persisted, settingsOpen, themePref } from '../lib/stores'
+  import { statusText } from '../lib/notifyRules'
+  import { highContrast, loadAISettings, loadGitSettings, notifyAi, notifyDone, notifyEnabled, notifyProblem, persisted, settingsOpen, themePref } from '../lib/stores'
   import type { ThemePref } from '../lib/theme'
 
   const THEMES: { value: ThemePref; label: string }[] = [
@@ -21,6 +22,10 @@
 
   // The tab the dialog opens on: the last one used.
   const tab = persisted('settingsTab', 'general', isSettingsTab)
+
+  // Read again on every open: the user may have changed it in the system settings.
+  let notifyStatus = ''
+  $: if ($settingsOpen) api.notificationStatus().then((s) => (notifyStatus = s)).catch(() => (notifyStatus = ''))
 
   let settings: AISettings | null = null
   // Why the AI settings could not be loaded; the AI tabs show it, General
@@ -257,6 +262,27 @@
             </section>
 
             <section>
+              <h4>Notifications</h4>
+              <label class="row check">
+                <input type="checkbox" bind:checked={$notifyEnabled} />
+                <span>Show notifications</span>
+              </label>
+              <label class="row check sub">
+                <input type="checkbox" bind:checked={$notifyDone} disabled={!$notifyEnabled} />
+                <span>Finished operations (10 s or longer)</span>
+              </label>
+              <label class="row check sub">
+                <input type="checkbox" bind:checked={$notifyAi} disabled={!$notifyEnabled} />
+                <span>The AI needs you</span>
+              </label>
+              <label class="row check sub">
+                <input type="checkbox" bind:checked={$notifyProblem} disabled={!$notifyEnabled} />
+                <span>Problems — failures and conflicts</span>
+              </label>
+              {#if statusText(notifyStatus)}<p class="hint notify-status">{statusText(notifyStatus)}</p>{/if}
+            </section>
+
+            <section>
               <h4>Git</h4>
               <label>
                 <span>Pull strategy</span>
@@ -474,6 +500,8 @@
   .warn { margin: 0; font-size: 12px; color: var(--danger); }
   .hint { font-size: 12px; color: var(--muted); }
   p.hint, p.warn { padding: 14px 0; }
+.check.sub { padding-left: 22px; }
+p.hint.notify-status { padding: 4px 0 0; }
   .pull { display: flex; align-items: center; gap: 8px; }
   .bar { flex: 1; height: 6px; border-radius: 3px; background: var(--hover); overflow: hidden; }
   .bar div { height: 100%; background: var(--accent); }

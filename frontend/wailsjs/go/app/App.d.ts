@@ -154,6 +154,10 @@ export function Menu():Promise<menu.Menu>;
 
 export function MergeBranch(arg1:string,arg2:string):Promise<merge.Result>;
 
+export function NotificationStatus():Promise<string>;
+
+export function Notify(arg1:app.Notification):Promise<void>;
+
 export function OpenPromptsFolder():Promise<void>;
 
 export function OpenRepoFolder(arg1:string):Promise<void>;

@@ -45,6 +45,12 @@ export const detailsHeight = persisted('detailsHeight', 280)
 export const chatOpen = persisted('chatOpen', true)
 /** Settings → Appearance → High contrast; main.ts applies it to the page. */
 export const highContrast = persisted('highContrast', false, (v): v is boolean => typeof v === 'boolean')
+const isBool = (v: unknown): v is boolean => typeof v === 'boolean'
+/** Settings → General → Notifications (docs/spec/11-notifications.md). */
+export const notifyEnabled = persisted('notifyEnabled', true, isBool)
+export const notifyDone = persisted('notifyDone', true, isBool)
+export const notifyAi = persisted('notifyAi', true, isBool)
+export const notifyProblem = persisted('notifyProblem', true, isBool)
 /** Settings → Appearance → Theme. */
 export const themePref = persisted<ThemePref>('theme', 'auto', isThemePref)
 /** Whether the system is in dark mode, kept live (false where there is no

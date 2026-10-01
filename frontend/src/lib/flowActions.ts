@@ -5,15 +5,16 @@ import {
   initConfig, initFields, planReleases, startBase, startFields, startedMessage,
 } from './flow'
 import { busy, mergeState, pendingFinish, refreshRepo, refs, selectedRepoId } from './stores'
+import { opError, track } from './notify'
 import type { Flow, FlowType } from './types'
 import { errorMessage, formDialog, menu, pickDialog, toast, type MenuItem } from './ui'
 
-async function busyDo(label: string, fn: () => Promise<void>) {
+async function busyDo<T>(repoId: string, label: string, fn: () => Promise<T>, conflictsOf?: (r: T) => number) {
   busy.set(label)
   try {
-    await fn()
+    await track(repoId, 'flow', fn, conflictsOf)
   } catch (e) {
-    toast(errorMessage(e), 'error')
+    opError(repoId, e)
   } finally {
     busy.set('')
     await refreshRepo()
@@ -53,7 +54,7 @@ async function initFlow(repoId: string, flow: Flow) {
     submitLabel: 'Initialise',
   })
   if (!values) return
-  await busyDo('Initialising git-flow…', async () => {
+  await busyDo(repoId, 'Initialising git-flow…', async () => {
     await api.initFlow(repoId, initConfig(values))
     toast('git-flow initialised')
   })
@@ -63,7 +64,7 @@ async function startBranch(repoId: string, flow: Flow, type: FlowType) {
   const values = await formDialog({ title: `Start ${type}`, fields: startFields(flow, type), submitLabel: 'Start' })
   if (!values) return
   const base = startBase(flow, type, values)
-  await busyDo(`Starting ${type}…`, async () => {
+  await busyDo(repoId, `Starting ${type}…`, async () => {
     const res = await api.startFlow(repoId, type, String(values.name ?? ''), base)
     toast(startedMessage(res, base))
   })
@@ -100,7 +101,7 @@ async function finishBranch(repoId: string, name: string) {
 /** runFinish finishes without asking: from the Finish dialog, or from the
  *  "Continue finishing" toast after a conflict was committed. */
 export async function runFinish(repoId: string, branch: string, releases: string[]) {
-  await busyDo(`Finishing ${branch}…`, async () => {
+  await busyDo(repoId, `Finishing ${branch}…`, async () => {
     const res = await api.finishFlow(repoId, branch, releases)
     if (res.outcome === 'conflicted') {
       pendingFinish.set({ repoId, branch, releases, target: res.target })
@@ -109,7 +110,8 @@ export async function runFinish(repoId: string, branch: string, releases: string
       pendingFinish.set(null)
       toast(finishedMessage(branch, res))
     }
-  })
+    return res
+  }, (r) => (r.outcome === 'conflicted' ? r.conflicts.length || 1 : 0))
 }
 
 /** settlePendingFinish runs once the interrupted merge is over, however it

@@ -38,6 +38,7 @@ Then take the area documents in any order.
 | [Terminal](08-terminal.md) | The embedded shell: tabs per repository, freshness, safety |
 | [Command log](09-command-log.md) | Every git command the application ran, who asked for it and how it ended |
 | [git-flow](10-git-flow.md) | Starting and finishing feature, release, hotfix and warmfix branches from the Flow button |
+| [Notifications](11-notifications.md) | Which events notify, and when as an OS notification or a toast |
 | [Conventions and constraints](07-conventions-and-constraints.md) | What is true everywhere, plus the git appendix |
 
 ## What this specification is not

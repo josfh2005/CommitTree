@@ -1,7 +1,7 @@
 import { get } from 'svelte/store'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('./api', () => ({ api: { finishFlow: vi.fn(), planFinish: vi.fn() } }))
+vi.mock('./api', () => ({ api: { finishFlow: vi.fn(), planFinish: vi.fn(), notify: vi.fn().mockResolvedValue(undefined) } }))
 
 // refreshRepo reloads everything through the api; these tests only care
 // about the finish itself.
@@ -15,6 +15,7 @@ import { api } from './api'
 import { mergeState, pendingFinish, selectedRepoId } from './stores'
 import type { FlowPlan, MergeState } from './types'
 import { toasts } from './ui'
+import { windowFocused } from './notify'
 
 beforeEach(() => {
   pendingFinish.set(null)
@@ -39,9 +40,17 @@ describe('runFinish', () => {
   })
 
   it('shows an error as an error toast', async () => {
+    selectedRepoId.set('r1')
     vi.mocked(api.finishFlow).mockRejectedValue(new Error('commit or stash your changes first'))
     await runFinish('r1', 'feature/f', [])
     expect(get(toasts).at(-1)).toMatchObject({ kind: 'error', message: 'commit or stash your changes first' })
+  })
+
+  it('a conflicted finish notifies the conflicts', async () => {
+    windowFocused.set(false)
+    vi.mocked(api.finishFlow).mockResolvedValue({ outcome: 'conflicted', target: 'develop', conflicts: ['a', 'b'], merged: [], notes: [] })
+    await runFinish('r1', 'hotfix/h', [])
+    expect(vi.mocked(api.notify).mock.calls.at(-1)?.[0]).toMatchObject({ id: 'r1:problem', body: 'Conflicts in 2 files after the git-flow' })
   })
 })
 
