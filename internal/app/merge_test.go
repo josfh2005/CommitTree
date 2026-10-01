@@ -971,3 +971,101 @@ func TestChooseRegionOptionRefusesACardTheToolRefused(t *testing.T) {
 		t.Fatal("wrote a refused card's option")
 	}
 }
+
+// twinApp is a merge whose greeting.txt has two identical conflict regions
+// (ids carry their line), with a card for the second one.
+func twinApp(t *testing.T) (*App, *testrepo.Repo, string, string) {
+	t.Helper()
+	store, err := repos.Open(filepath.Join(t.TempDir(), "repos.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := testrepo.New(t)
+	r.WriteFile("greeting.txt", "a\nsep1\nsep2\nsep3\nsep4\nsep5\na\n")
+	r.Git("add", "greeting.txt")
+	r.Git("commit", "-q", "-m", "base")
+	r.Git("switch", "-q", "-c", "feature")
+	r.WriteFile("greeting.txt", "c\nsep1\nsep2\nsep3\nsep4\nsep5\nc\n")
+	r.Git("commit", "-q", "-am", "theirs")
+	r.Git("switch", "-q", "main")
+	r.WriteFile("greeting.txt", "b\nsep1\nsep2\nsep3\nsep4\nsep5\nb\n")
+	r.Git("commit", "-q", "-am", "ours")
+	repo, err := store.Add(context.Background(), r.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := New(store)
+	dir := t.TempDir()
+	WithAI(a, AIDeps{
+		SettingsPath: filepath.Join(dir, "ai.json"),
+		Chats:        chatstore.New(filepath.Join(dir, "chats")),
+		Prompts:      prompts.New(filepath.Join(dir, "prompts")),
+		Emit:         newEvents().emit,
+	})
+	id := repo.ID
+	if _, err := a.MergeBranch(id, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	f, err := a.GetConflictFile(id, "greeting.txt")
+	if err != nil || len(f.Regions) != 2 || f.Regions[0].ID == f.Regions[1].ID {
+		t.Fatalf("file = %+v, %v", f, err)
+	}
+	callID := "call_twin"
+	history := []ai.Message{
+		{Role: ai.RoleUser, Content: "resolve"},
+		{Role: ai.RoleAssistant, ToolCalls: []ai.ToolCall{{ID: callID, Name: "propose_options", Args: map[string]any{
+			"path": "greeting.txt", "region": f.Regions[1].ID, "question": "Which?",
+			"options": []any{
+				map[string]any{"label": "b", "text": "b\n"},
+				map[string]any{"label": "c", "text": "c\n"},
+			},
+		}}}},
+		{Role: ai.RoleTool, ToolName: "propose_options", Content: "Shown to the user as a card with 2 options"},
+	}
+	if err := a.ai.deps.Chats.Save(id, history); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.ResolveMergeRegion(id, "greeting.txt", f.Regions[0].ID, "ours", ""); err != nil {
+		t.Fatal(err)
+	}
+	return a, r, id, callID
+}
+
+// The card's twin moved when the other twin was resolved: its id is gone,
+// but an identical region is still open. That is not "settled".
+func TestChooseRegionOptionOnAMovedTwinIsNotSettled(t *testing.T) {
+	a, _, id, callID := twinApp(t)
+	_, err := a.ChooseRegionOption(id, callID, 1, "")
+	if err == nil || !strings.Contains(err.Error(), "Merge view") {
+		t.Fatalf("err = %v, want a pointer to the Merge view", err)
+	}
+	if got := storedContent(t, a, id, 2); got != "Shown to the user as a card with 2 options" {
+		t.Fatalf("tool message = %q", got)
+	}
+}
+
+// Writing worked but staging failed: the choice is still recorded, so the
+// card does not later claim the region was settled some other way.
+func TestChooseRegionOptionRecordsTheChoiceWhenStagingFails(t *testing.T) {
+	a, r, id, _ := newAIMergeApp(t, "http://127.0.0.1:0")
+	if _, err := a.MergeBranch(id, "feature"); err != nil {
+		t.Fatal(err)
+	}
+	callID := withCard(t, a, id)
+	lock := filepath.Join(r.Dir, ".git", "index.lock")
+	if err := os.WriteFile(lock, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := a.ChooseRegionOption(id, callID, 1, "")
+	os.Remove(lock)
+	if err == nil {
+		t.Fatal("staging under a held index.lock succeeded")
+	}
+	if data, _ := os.ReadFile(filepath.Join(r.Dir, "greeting.txt")); string(data) != "hola\n" {
+		t.Fatalf("file = %q", data)
+	}
+	got := storedContent(t, a, id, 3)
+	if !strings.HasPrefix(got, `The user chose "hola (feature)"`) || !strings.Contains(got, "could not be staged") {
+		t.Fatalf("tool message = %q", got)
+	}
+}
