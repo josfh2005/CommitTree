@@ -101,7 +101,6 @@ interface TokenCount {
   input: number; output: number;
   cacheRead: number; cacheWrite: number;
   calls: number;        // model calls with a count
-  missing: boolean;     // some call or stored answer had no count
 }
 ```
 
@@ -109,10 +108,13 @@ interface TokenCount {
 - `applyEvent('chat:usage')` adds the event's usage to the running answer
   (the last assistant item of that run), creating the count if absent.
 - `fromMessages` sums the `usage` of every assistant message folded into an
-  item. An assistant message without usage marks it `missing`. An item with
-  no counted call has no `usage`.
-- `conversationTokens(items)` sums every item's usage. It returns nothing
-  when no item has a count, and `missing` when some answer lacks one.
+  item. An item with no counted call has no `usage`.
+- `conversationTokens(state)` sums every item's usage and returns
+  `{ total, missing }`, or nothing when no item has a count. `missing` is
+  true when a finished answer with text has no usage (an answer stored
+  before counts existed, or a provider that gave none). The answer still
+  running is never counted as missing. Stop and error inside an answer that
+  has other counted calls do not make it missing.
 - `formatTokens(n)`: `<1000` as is, then `1.2k`, then `1.2M` (one decimal,
   trailing `.0` dropped: `12k`, `3M`).
 - Types in `lib/types.ts`: `AIUsage` on `AIMessage`, `ChatUsageEvent`, and
@@ -127,7 +129,7 @@ interface TokenCount {
 - **Composer bar:** a muted `12.4k in · 1.1k out` right after
   `<ModelPicker>`. It updates live while an answer runs and is hidden when
   the conversation has no count. The tooltip reads "This conversation: N
-  model calls", the cache line when non-zero, and "Some earlier answers have
+  model calls", the cache line when non-zero, and "Some answers have
   no count" when `missing`. It is plain text, not a control.
 
 ## Spec (`docs/spec/06-ai.md`)
