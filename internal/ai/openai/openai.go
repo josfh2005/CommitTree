@@ -44,7 +44,8 @@ type pending struct {
 
 // Chat streams one assistant turn. Text arrives as deltas; tool calls are
 // accumulated across chunks (their arguments stream as JSON fragments) and
-// emitted once the stream reports a finish reason.
+// emitted when the stream ends, together with the usage, which OpenAI sends
+// in a last chunk after the finish reason.
 func (c *Client) Chat(ctx context.Context, req ai.Request) (<-chan ai.Chunk, error) {
 	params := sdk.ChatCompletionNewParams{
 		Model:    sdk.ChatModel(req.Model),
@@ -60,6 +61,8 @@ func (c *Client) Chat(ctx context.Context, req ai.Request) (<-chan ai.Chunk, err
 		})
 	}
 
+	params.StreamOptions = sdk.ChatCompletionStreamOptionsParam{IncludeUsage: sdk.Bool(true)}
+
 	stream := c.sdk.Chat.Completions.NewStreaming(ctx, params)
 	ch := make(chan ai.Chunk)
 	go func() {
@@ -68,9 +71,17 @@ func (c *Client) Chat(ctx context.Context, req ai.Request) (<-chan ai.Chunk, err
 		calls := map[int64]*pending{}
 		order := []int64{}
 		finished := false
+		var usage *ai.Usage
 		for stream.Next() {
 			chunk := stream.Current()
-			if len(chunk.Choices) == 0 {
+			if chunk.JSON.Usage.Valid() {
+				usage = &ai.Usage{
+					Input:     int(chunk.Usage.PromptTokens),
+					Output:    int(chunk.Usage.CompletionTokens),
+					CacheRead: int(chunk.Usage.PromptTokensDetails.CachedTokens),
+				}
+			}
+			if len(chunk.Choices) == 0 || finished {
 				continue
 			}
 			delta := chunk.Choices[0].Delta
@@ -95,31 +106,25 @@ func (c *Client) Chat(ctx context.Context, req ai.Request) (<-chan ai.Chunk, err
 				p.args.WriteString(tc.Function.Arguments)
 			}
 			if chunk.Choices[0].FinishReason != "" {
+				// Keep reading: the usage chunk comes after the finish.
 				finished = true
-				for _, call := range finish(calls, order) {
-					if !send(ctx, ch, ai.Chunk{ToolCalls: []ai.ToolCall{call}}) {
-						return
-					}
-				}
-				send(ctx, ch, ai.Chunk{Done: true})
-				return
 			}
 		}
-		if err := stream.Err(); err != nil {
+		// After finish_reason the answer is complete; a failure while
+		// waiting for the usage chunk only loses the count.
+		if err := stream.Err(); err != nil && !finished {
 			send(ctx, ch, ai.Chunk{Err: classify(err)})
 			return
 		}
-		// The stream ended without a finish_reason (dropped connection,
-		// server bug); any tool call the model was in the middle of asking
-		// for would otherwise be silently lost.
-		if !finished {
-			for _, call := range finish(calls, order) {
-				if !send(ctx, ch, ai.Chunk{ToolCalls: []ai.ToolCall{call}}) {
-					return
-				}
+		// Without a finish_reason (dropped connection, server bug) a tool
+		// call the model was in the middle of asking for would otherwise be
+		// silently lost, so pending calls are emitted either way.
+		for _, call := range finish(calls, order) {
+			if !send(ctx, ch, ai.Chunk{ToolCalls: []ai.ToolCall{call}}) {
+				return
 			}
 		}
-		send(ctx, ch, ai.Chunk{Done: true})
+		send(ctx, ch, ai.Chunk{Done: true, Usage: usage})
 	}()
 	return ch, nil
 }

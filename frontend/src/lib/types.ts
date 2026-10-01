@@ -181,7 +181,10 @@ export interface AIMessage {
   provider?: string
   model?: string
   at?: string
+  usage?: AIUsage
 }
+
+export interface AIUsage { input: number; output: number; cacheRead?: number; cacheWrite?: number }
 
 export type ProviderName = 'ollama' | 'openai' | 'anthropic'
 
@@ -250,6 +253,7 @@ export interface ChatToolResultEvent { repoID: string; runID: string; name: stri
 export interface ChatNoticeEvent { repoID: string; runID: string; text: string }
 export interface ChatSuggestionsEvent { repoID: string; runID: string; replies: string[] }
 export interface ChatDoneEvent { repoID: string; runID: string; at?: string }
+export interface ChatUsageEvent { repoID: string; runID: string; usage: AIUsage }
 export interface ChatErrorEvent { repoID: string; runID: string; message: string; code: string }
 export interface ChatConfirmEvent { repoID: string; runID: string; confirmID: string; tool: string; title: string; details: string[] }
 export interface RepoChangedEvent { repoID: string }

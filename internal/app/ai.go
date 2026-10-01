@@ -604,13 +604,13 @@ func (a *App) explainTask(repoID, provider, runID, promptName string, build func
 	a.emit(agent.EventStart, agent.StartEvent{RepoID: repoID, RunID: runID, Text: question, Provider: provider, Model: cfg.TaskModel})
 
 	go func() {
-		answer, runErr := streamIntoString(ctx, a, repoID, runID, responder, instructions, prompt)
+		answer, usage, runErr := streamIntoString(ctx, a, repoID, runID, responder, instructions, prompt)
 		at := answerTime()
 		var saveErr error
 		if answer != "" || runErr == nil {
 			saveErr = a.ai.deps.Chats.Save(repoID, append(history, ai.Message{
 				Role: ai.RoleAssistant, Content: answer, Stopped: runErr != nil && errors.Is(runErr, context.Canceled),
-				Provider: provider, Model: cfg.TaskModel, At: at,
+				Provider: provider, Model: cfg.TaskModel, At: at, Usage: usage,
 			}))
 		}
 		finish()
@@ -644,13 +644,14 @@ func explainQuestion(ctx context.Context, dir, hash string) (string, error) {
 
 // streamIntoString forwards an explanation to the chat as it arrives and
 // returns the full text.
-func streamIntoString(ctx context.Context, a *App, repoID, runID string, r ai.Responder, instructions, prompt string) (string, error) {
+func streamIntoString(ctx context.Context, a *App, repoID, runID string, r ai.Responder, instructions, prompt string) (string, *ai.Usage, error) {
 	stream, err := r.Respond(ctx, instructions, prompt)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	var text strings.Builder
 	var streamErr error
+	var usage *ai.Usage
 	for chunk := range stream {
 		switch {
 		case chunk.Err != nil:
@@ -659,11 +660,15 @@ func streamIntoString(ctx context.Context, a *App, repoID, runID string, r ai.Re
 			text.WriteString(chunk.Delta)
 			a.emit(agent.EventDelta, agent.DeltaEvent{RepoID: repoID, RunID: runID, Text: chunk.Delta})
 		}
+		if chunk.Done && chunk.Usage != nil {
+			usage = chunk.Usage
+			a.emit(agent.EventUsage, agent.UsageEvent{RepoID: repoID, RunID: runID, Usage: *usage})
+		}
 	}
 	if ctx.Err() != nil {
-		return text.String(), ctx.Err()
+		return text.String(), nil, ctx.Err()
 	}
-	return text.String(), streamErr
+	return text.String(), usage, streamErr
 }
 
 func (a *App) ListPrompts() ([]prompts.Info, error) {

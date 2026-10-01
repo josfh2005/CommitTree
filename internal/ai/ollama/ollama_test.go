@@ -214,3 +214,58 @@ func TestResponderUsesInstructionsAsSystem(t *testing.T) {
 		t.Fatalf("chunks = %#v", chunks)
 	}
 }
+
+func TestChatReportsUsageOnTheFinalLine(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, `{"message":{"role":"assistant","content":"hi"},"done":false}`)
+		fmt.Fprintln(w, `{"message":{"content":""},"done":true,"prompt_eval_count":120,"eval_count":7}`)
+	}))
+	defer srv.Close()
+	ch, err := ollama.New(srv.URL).Chat(context.Background(), ai.Request{Model: "m", Messages: []ai.Message{{Role: ai.RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var usage *ai.Usage
+	for c := range ch {
+		if c.Done {
+			usage = c.Usage
+		}
+	}
+	if usage == nil || *usage != (ai.Usage{Input: 120, Output: 7}) {
+		t.Fatalf("usage = %#v", usage)
+	}
+}
+
+func TestChatWithoutCountsReportsNoUsage(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, `{"message":{"role":"assistant","content":"hi"},"done":true}`)
+	}))
+	defer srv.Close()
+	ch, err := ollama.New(srv.URL).Chat(context.Background(), ai.Request{Model: "m", Messages: []ai.Message{{Role: ai.RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for c := range ch {
+		if c.Done && c.Usage != nil {
+			t.Fatalf("usage = %#v, want nil", c.Usage)
+		}
+	}
+}
+
+// Ollama leaves prompt_eval_count out when the whole prompt came from its
+// cache; that is an unknown input, not "0 in".
+func TestChatWithoutAPromptCountReportsNoUsage(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, `{"message":{"role":"assistant","content":"hi"},"done":true,"eval_count":7}`)
+	}))
+	defer srv.Close()
+	ch, err := ollama.New(srv.URL).Chat(context.Background(), ai.Request{Model: "m", Messages: []ai.Message{{Role: ai.RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for c := range ch {
+		if c.Done && c.Usage != nil {
+			t.Fatalf("usage = %#v, want nil", c.Usage)
+		}
+	}
+}

@@ -344,3 +344,93 @@ func TestChatAccumulatesTwoInboundToolCalls(t *testing.T) {
 		t.Errorf("second call = %#v", calls[1])
 	}
 }
+
+// The usage chunk arrives after finish_reason, with no choices.
+func TestChatReportsUsageAfterTheFinishReason(t *testing.T) {
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		chunks(w,
+			`{"id":"1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"list_refs","arguments":"{}"}}]}}]}`,
+			`{"id":"1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}`,
+			`{"id":"1","object":"chat.completion.chunk","choices":[],"usage":{"prompt_tokens":900,"completion_tokens":40,"total_tokens":940,"prompt_tokens_details":{"cached_tokens":512}}}`,
+		)
+	}))
+	defer srv.Close()
+	ch, err := openai.New("sk-test", openai.WithBaseURL(srv.URL)).Chat(context.Background(), ai.Request{
+		Model: "gpt-4.1", Messages: []ai.Message{{Role: ai.RoleUser, Content: "hi"}},
+		Tools: []ai.ToolSpec{{Name: "list_refs", Parameters: map[string]any{"type": "object"}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var calls []ai.ToolCall
+	var usage *ai.Usage
+	done := false
+	for c := range ch {
+		calls = append(calls, c.ToolCalls...)
+		if c.Done {
+			done, usage = true, c.Usage
+		}
+		if c.Err != nil {
+			t.Fatal(c.Err)
+		}
+	}
+	if !done || len(calls) != 1 || calls[0].ID != "call_1" {
+		t.Fatalf("done %v calls %#v", done, calls)
+	}
+	if usage == nil || *usage != (ai.Usage{Input: 900, Output: 40, CacheRead: 512}) {
+		t.Fatalf("usage = %#v", usage)
+	}
+	opts, _ := body["stream_options"].(map[string]any)
+	if opts["include_usage"] != true {
+		t.Fatalf("stream_options = %#v", body["stream_options"])
+	}
+}
+
+// An OpenAI-compatible server may ignore include_usage.
+func TestChatWithoutAUsageChunkReportsNoUsage(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		chunks(w,
+			`{"id":"1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"hi"}}]}`,
+			`{"id":"1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`,
+		)
+	}))
+	defer srv.Close()
+	ch, err := openai.New("sk-test", openai.WithBaseURL(srv.URL)).Chat(context.Background(), ai.Request{Model: "gpt-4.1", Messages: []ai.Message{{Role: ai.RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := false
+	for c := range ch {
+		if c.Done {
+			done = true
+			if c.Usage != nil {
+				t.Fatalf("usage = %#v, want nil", c.Usage)
+			}
+		}
+	}
+	if !done {
+		t.Fatal("no Done chunk")
+	}
+}
+
+// The connection drops after finish_reason, before the usage chunk: the
+// answer is complete, so it still ends Done (without usage), not in error.
+func TestChatErrorAfterTheFinishReasonStillEndsDone(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hi\"}}]}\n\n")
+		fmt.Fprint(w, "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n")
+		fmt.Fprint(w, "data: {not json\n\n")
+	}))
+	defer srv.Close()
+	ch, err := openai.New("sk-test", openai.WithBaseURL(srv.URL)).Chat(context.Background(), ai.Request{Model: "gpt-4.1", Messages: []ai.Message{{Role: ai.RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	text, _, done, err := collect(t, ch)
+	if err != nil || !done || text != "hi" {
+		t.Fatalf("text %q done %v err %v", text, done, err)
+	}
+}

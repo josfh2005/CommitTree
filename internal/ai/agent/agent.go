@@ -27,6 +27,7 @@ const (
 	EventError       = "chat:error"
 	EventNotice      = "chat:notice"
 	EventSuggestions = "chat:suggestions"
+	EventUsage       = "chat:usage"
 
 	noticeContinue    = "The model stopped with work left; CommitTree asked it to carry on."
 	noticeRecovered   = "The model wrote a tool call as text; CommitTree ran it."
@@ -49,6 +50,14 @@ type DeltaEvent struct {
 	RepoID string `json:"repoID"`
 	RunID  string `json:"runID"`
 	Text   string `json:"text"`
+}
+
+// UsageEvent is what one model call of a run consumed; a run with tool
+// rounds sends one per call.
+type UsageEvent struct {
+	RepoID string   `json:"repoID"`
+	RunID  string   `json:"runID"`
+	Usage  ai.Usage `json:"usage"`
 }
 
 type ToolEvent struct {
@@ -146,6 +155,7 @@ func Execute(ctx context.Context, r Run, history []ai.Message) ([]ai.Message, er
 		var text strings.Builder
 		var calls []ai.ToolCall
 		var streamErr error
+		var usage *ai.Usage
 		done := false
 		for chunk := range stream {
 			if chunk.Err != nil {
@@ -159,6 +169,7 @@ func Execute(ctx context.Context, r Run, history []ai.Message) ([]ai.Message, er
 			calls = append(calls, chunk.ToolCalls...)
 			if chunk.Done {
 				done = true
+				usage = chunk.Usage
 			}
 		}
 
@@ -173,6 +184,9 @@ func Execute(ctx context.Context, r Run, history []ai.Message) ([]ai.Message, er
 				msgs = append(msgs, ai.Message{Role: ai.RoleAssistant, Content: text.String()})
 			}
 			return msgs, streamErr
+		}
+		if usage != nil {
+			r.Emit(EventUsage, UsageEvent{RepoID: r.RepoID, RunID: r.RunID, Usage: *usage})
 		}
 
 		// Some models write a tool call into the text instead of returning
@@ -200,7 +214,7 @@ func Execute(ctx context.Context, r Run, history []ai.Message) ([]ai.Message, er
 			}
 			used[calls[i].ID] = true
 		}
-		msgs = append(msgs, ai.Message{Role: ai.RoleAssistant, Content: text.String(), ToolCalls: calls})
+		msgs = append(msgs, ai.Message{Role: ai.RoleAssistant, Content: text.String(), ToolCalls: calls, Usage: usage})
 		if len(calls) == 0 {
 			if r.Continue != nil {
 				if more := r.Continue(ctx); more != "" {

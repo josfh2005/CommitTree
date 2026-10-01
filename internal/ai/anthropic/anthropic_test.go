@@ -468,3 +468,31 @@ func TestChatReportsNoCredit(t *testing.T) {
 		t.Fatalf("err = %v, want the no-credit message", err)
 	}
 }
+
+func TestChatReportsUsageWithCacheInInput(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sse(w,
+			`message_start {"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5","content":[],"stop_reason":null,"usage":{"input_tokens":100,"cache_read_input_tokens":2000,"cache_creation_input_tokens":300,"output_tokens":1}}}`,
+			`content_block_start {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`,
+			`content_block_delta {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hola"}}`,
+			`content_block_stop {"type":"content_block_stop","index":0}`,
+			`message_delta {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":55}}`,
+			`message_stop {"type":"message_stop"}`,
+		)
+	}))
+	defer srv.Close()
+	ch, err := anthropic.New("sk-test", anthropic.WithBaseURL(srv.URL)).Chat(context.Background(), ai.Request{Model: "claude-opus-5", Messages: []ai.Message{{Role: ai.RoleUser, Content: "hola"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var usage *ai.Usage
+	for c := range ch {
+		if c.Done {
+			usage = c.Usage
+		}
+	}
+	want := ai.Usage{Input: 2400, Output: 55, CacheRead: 2000, CacheWrite: 300}
+	if usage == nil || *usage != want {
+		t.Fatalf("usage = %#v, want %#v", usage, want)
+	}
+}

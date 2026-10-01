@@ -1,5 +1,5 @@
 import { providerShortLabel } from './providers'
-import type { AIMessage, ChatChoiceEvent, ChatConfirmEvent, ChatDeltaEvent, ChatDoneEvent, ChatErrorEvent, ChatNoticeEvent, ChatStartEvent, ChatSuggestionsEvent, ChatToolEvent, ChatToolResultEvent } from './types'
+import type { AIMessage, AIUsage, ChatUsageEvent, ChatChoiceEvent, ChatConfirmEvent, ChatDeltaEvent, ChatDoneEvent, ChatErrorEvent, ChatNoticeEvent, ChatStartEvent, ChatSuggestionsEvent, ChatToolEvent, ChatToolResultEvent } from './types'
 
 export interface ChatToolUse {
   // The call's id; a decision card (propose_options) is answered by it.
@@ -35,6 +35,26 @@ export interface ChatItem {
   // When the answer finished (RFC 3339); absent while it runs and on
   // answers stored before it was recorded.
   at?: string
+  // What the answer's model calls consumed; absent when none reported.
+  usage?: TokenCount
+}
+
+// TokenCount is what the model calls of an answer (or a conversation)
+// consumed. Calls without a reported usage are not in it.
+export interface TokenCount { input: number; output: number; cacheRead: number; cacheWrite: number; calls: number }
+
+function addCount(t: TokenCount | undefined, u: TokenCount): TokenCount {
+  return {
+    input: (t?.input ?? 0) + u.input,
+    output: (t?.output ?? 0) + u.output,
+    cacheRead: (t?.cacheRead ?? 0) + u.cacheRead,
+    cacheWrite: (t?.cacheWrite ?? 0) + u.cacheWrite,
+    calls: (t?.calls ?? 0) + u.calls,
+  }
+}
+
+function addUsage(t: TokenCount | undefined, u: AIUsage): TokenCount {
+  return addCount(t, { input: u.input, output: u.output, cacheRead: u.cacheRead ?? 0, cacheWrite: u.cacheWrite ?? 0, calls: 1 })
 }
 
 export interface ChatNotice {
@@ -130,6 +150,7 @@ export function fromMessages(repoID: string, messages: AIMessage[]): ChatState {
       last.model = m.model
     }
     if (m.at) last.at = m.at
+    if (m.usage) last.usage = addUsage(last.usage, m.usage)
     for (const call of m.toolCalls ?? []) last.tools.push({ id: call.id, name: call.name, args: call.args, at: last.text.length, seq: nextSeq() })
     if (m.stopped) last.stopped = true
   }
@@ -151,9 +172,9 @@ export function startRun(state: ChatState, text: string, runID: string): ChatSta
 // CHAT_EVENTS are every event applyEvent understands. The panel subscribes
 // to this list, so a new event added to the reducer reaches the UI instead of
 // being silently dropped.
-export const CHAT_EVENTS = ['chat:start', 'chat:delta', 'chat:tool', 'chat:tool_result', 'chat:confirm', 'chat:notice', 'chat:done', 'chat:error', 'chat:suggestions', 'chat:choice'] as const
+export const CHAT_EVENTS = ['chat:start', 'chat:delta', 'chat:tool', 'chat:tool_result', 'chat:confirm', 'chat:notice', 'chat:done', 'chat:error', 'chat:suggestions', 'chat:choice', 'chat:usage'] as const
 
-type Payload = ChatStartEvent | ChatDeltaEvent | ChatToolEvent | ChatToolResultEvent | ChatConfirmEvent | ChatNoticeEvent | ChatErrorEvent | ChatDoneEvent | ChatSuggestionsEvent | ChatChoiceEvent
+type Payload = ChatStartEvent | ChatDeltaEvent | ChatToolEvent | ChatToolResultEvent | ChatConfirmEvent | ChatNoticeEvent | ChatErrorEvent | ChatDoneEvent | ChatSuggestionsEvent | ChatChoiceEvent | ChatUsageEvent
 
 export function confirmState(summary: string): 'done' | 'rejected' | 'failed' {
   if (summary.startsWith('done')) return 'done'
@@ -285,6 +306,9 @@ export function applyEvent(state: ChatState, name: string, payload: Payload): Ch
       last.notices = [...(last.notices ?? []), { text: p.text, at: last.text.length, seq: nextSeq() }]
       return { ...state, items }
     }
+    case 'chat:usage':
+      last.usage = addUsage(last.usage, (payload as ChatUsageEvent).usage)
+      return { ...state, items }
     case 'chat:done': {
       const at = (payload as ChatDoneEvent).at
       if (at) last.at = at
@@ -319,6 +343,40 @@ export function appliedText(tool: { name: string; args: Record<string, unknown> 
 export function toolLabel(tool: { name: string; args: Record<string, unknown> | null }): string {
   const value = Object.values(tool.args ?? {}).find((v) => v !== '' && v !== null && v !== undefined)
   return value === undefined ? tool.name : `${tool.name}: ${String(value)}`
+}
+
+/** conversationTokens totals the conversation's counted calls, or null when
+ *  none is counted. missing: a finished answer has no count (stored before
+ *  counts existed, or its provider gave none); the running one never is. */
+export function conversationTokens(state: ChatState): { total: TokenCount; missing: boolean } | null {
+  let total: TokenCount | undefined
+  let missing = false
+  state.items.forEach((item, i) => {
+    if (item.role !== 'assistant') return
+    if (item.usage) total = addCount(total, item.usage)
+    else if (item.text && !(state.runID !== null && i === state.items.length - 1)) missing = true
+  })
+  return total ? { total, missing } : null
+}
+
+/** formatTokens: 999, 1.2k, 12k, 1.3M. */
+export function formatTokens(n: number): string {
+  const short = (v: number) => String(Math.round(v * 10) / 10)
+  if (n < 1000) return String(n)
+  // Under 999.95k, so it does not round up to "1000k".
+  if (Math.round(n / 100) < 10_000) return `${short(n / 1000)}k`
+  return `${short(n / 1_000_000)}M`
+}
+
+export function tokensText(t: TokenCount): string {
+  return `${formatTokens(t.input)} in · ${formatTokens(t.output)} out`
+}
+
+export function tokensTitle(t: TokenCount): string {
+  const parts = [`${t.calls} model call${t.calls === 1 ? '' : 's'}`]
+  if (t.cacheRead) parts.push(`cache read ${formatTokens(t.cacheRead)}`)
+  if (t.cacheWrite) parts.push(`cache written ${formatTokens(t.cacheWrite)}`)
+  return parts.join(' · ')
 }
 
 /** answeredBy is the line under an answer naming what produced it,
