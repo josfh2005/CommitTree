@@ -342,9 +342,11 @@ the branch for it — and the tooltip then adds that the directory is gone and
 `git worktree prune` releases it.
 
 Local branches whose name contains no `/` are listed loose. The current
-branch shows a checkmark, its name in bold and a soft accent-tinted
-background (unless it is the branch the log is filtered by, which keeps that
-row's own highlight). The branch or tag the log is filtered by (from the
+branch shows a checkmark and its name in bold; in the selected repository it
+also gets a soft accent-tinted background (unless it is the branch the log is
+filtered by, which keeps that row's own highlight). An expanded repository
+that is not selected shows its current branch without the tint, so only the
+active repository's rows carry an accent background. The branch or tag the log is filtered by (from the
 filter bar, or a tag row's click) is highlighted and carries a funnel icon
 whose tooltip says the log is filtered to it; only the selected
 repository's rows are marked, since the filter belongs to its log. A "+" control next to the section
