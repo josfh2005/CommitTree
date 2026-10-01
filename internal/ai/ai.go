@@ -31,6 +31,10 @@ type Message struct {
 	Model    string `json:"model,omitempty"`
 	// At is when an assistant answer finished, RFC 3339.
 	At string `json:"at,omitempty"`
+	// Usage is what the model call that produced an assistant message
+	// consumed; nil when the provider reported nothing or the message was
+	// stored before it was recorded.
+	Usage *Usage `json:"usage,omitempty"`
 }
 
 // ToolSpec describes a callable tool; Parameters is a JSON Schema object.
@@ -38,6 +42,16 @@ type ToolSpec struct {
 	Name        string         `json:"name"`
 	Description string         `json:"description"`
 	Parameters  map[string]any `json:"parameters"`
+}
+
+// Usage is what one model call consumed, in tokens. Input is everything the
+// model read, cached tokens included; CacheRead and CacheWrite are the parts
+// of Input served from or written to the provider's prompt cache.
+type Usage struct {
+	Input      int `json:"input"`
+	Output     int `json:"output"`
+	CacheRead  int `json:"cacheRead,omitempty"`
+	CacheWrite int `json:"cacheWrite,omitempty"`
 }
 
 type Request struct {
@@ -53,7 +67,9 @@ type Chunk struct {
 	Delta     string
 	ToolCalls []ToolCall
 	Done      bool
-	Err       error
+	// Usage is set on the Done chunk when the provider reported it.
+	Usage *Usage
+	Err   error
 }
 
 // Provider holds multi-turn conversations with tool calling.
