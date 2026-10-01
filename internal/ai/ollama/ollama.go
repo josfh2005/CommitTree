@@ -67,7 +67,9 @@ type chatLine struct {
 	Message wireMessage `json:"message"`
 	Done    bool        `json:"done"`
 	Error   string      `json:"error"`
-	// The final line carries the counts; absent fields mean none reported.
+	// The final line carries the counts. Ollama omits a zero count, and
+	// prompt_eval_count covers only the prompt it had to process: the part
+	// reused from its cache is not in it.
 	PromptEvalCount *int `json:"prompt_eval_count"`
 	EvalCount       *int `json:"eval_count"`
 }
@@ -139,8 +141,9 @@ func (c *Client) Chat(ctx context.Context, req ai.Request) (<-chan ai.Chunk, err
 				return
 			}
 			chunk := ai.Chunk{Delta: line.Message.Content, Done: line.Done}
-			if line.Done && (line.PromptEvalCount != nil || line.EvalCount != nil) {
-				chunk.Usage = &ai.Usage{Input: deref(line.PromptEvalCount), Output: deref(line.EvalCount)}
+			// Without a prompt count the input is unknown, not zero.
+			if line.Done && line.PromptEvalCount != nil {
+				chunk.Usage = &ai.Usage{Input: *line.PromptEvalCount, Output: deref(line.EvalCount)}
 			}
 			for _, tc := range line.Message.ToolCalls {
 				chunk.ToolCalls = append(chunk.ToolCalls, ai.ToolCall{ID: tc.ID, Name: tc.Function.Name, Args: tc.Function.Arguments})

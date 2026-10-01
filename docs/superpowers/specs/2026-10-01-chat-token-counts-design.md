@@ -68,8 +68,11 @@ the tool calls and the usage. If the stream ends without a usage chunk,
 `Usage` stays nil. A stream error after `finish_reason` but before the end
 still delivers the answer, without usage.
 
-For Ollama, a final line that carries the count fields gives a usage, even
-when they are zero. A final line without them gives nil.
+For Ollama, a final line with `prompt_eval_count` gives a usage; without it
+(Ollama omits zero counts, e.g. a fully cached prompt) the usage is nil.
+Ollama reuses the conversation's prefix from its cache, so its "in" is only
+the prompt it processed, not everything the model read — a known
+divergence from the "in" rule above.
 
 ### Agent loop (`internal/ai/agent`)
 
