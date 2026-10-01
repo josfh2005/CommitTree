@@ -4,7 +4,7 @@
   import Icon from './Icon.svelte'
   import ModelPicker from './ModelPicker.svelte'
   import { api } from '../lib/api'
-  import { answeredBy, appliedText, applyEvent, choiceState, decisionCard, parts, CHAT_EVENTS, isWriteTool, confirmResultText, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState, type DecisionCard } from '../lib/chat'
+  import { answeredBy, appliedText, applyEvent, conversationTokens, tokensText, tokensTitle, choiceState, decisionCard, parts, CHAT_EVENTS, isWriteTool, confirmResultText, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState, type DecisionCard } from '../lib/chat'
   import { relativeDate } from '../lib/format'
   import { renderMarkdown } from '../lib/markdown'
   import { chatBlocker } from '../lib/providers'
@@ -64,6 +64,7 @@
   // a message typed meanwhile is not refused as busy.
   $: preparing = state.runID === null && !!state.repoID && $chatPreparing.includes(state.repoID)
   $: running = state.runID !== null || preparing
+  $: tokens = conversationTokens(state)
   // Settings may have changed the chat provider, a key or the installed
   // models; read the status again once it closes.
   $: if (!$settingsOpen) refreshStatus()
@@ -312,6 +313,7 @@
               <button class="icon-btn" title="Copy" on:click={() => copyText(item.text)}><Icon name="copy" size={13} /></button>
               {#if item.at}<span title={new Date(item.at).toLocaleString()}>{relativeDate(item.at, now)}</span>{/if}
               {#if answeredBy(item)}<span class="ellipsis">{answeredBy(item)}</span>{/if}
+              {#if item.usage}<span class="tokens" title={tokensTitle(item.usage)}>{tokensText(item.usage)}</span>{/if}
             </div>
           {/if}
         </div>
@@ -337,6 +339,9 @@
     ></textarea>
     <div class="composer-bar">
       <ModelPicker {status} disabled={running} onChange={refreshStatus} />
+      {#if tokens}
+        <span class="tokens" title={`This conversation: ${tokensTitle(tokens.total)}${tokens.missing ? '\nSome answers have no count' : ''}`}>{tokensText(tokens.total)}</span>
+      {/if}
       <span class="spacer"></span>
       {#if running}
         <button class="icon-btn" title="Stop" on:click={stop}><Icon name="stop" /></button>
@@ -395,5 +400,6 @@
   .suggestion { max-width: 100%; padding: 3px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .suggestion:hover:not(:disabled) { background: var(--hover); }
   .composer-bar { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .tokens { flex: none; font-size: 11px; color: var(--faint); white-space: nowrap; font-variant-numeric: tabular-nums; }
   textarea { resize: none; border: 0; padding: 2px 4px; background: transparent; }
 </style>
