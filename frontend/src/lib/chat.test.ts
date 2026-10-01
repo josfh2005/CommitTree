@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { answeredBy, appliedText, applyEvent, nextChatRunRepo, parts, isWriteTool, CHAT_EVENTS, confirmResultText, confirmState, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from './chat'
+import { answeredBy, appliedText, conversationTokens, formatTokens, tokensText, tokensTitle, applyEvent, nextChatRunRepo, parts, isWriteTool, CHAT_EVENTS, confirmResultText, confirmState, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from './chat'
 import type { AIMessage, ChatConfirmEvent } from './types'
 
 describe('fromMessages', () => {
@@ -437,5 +437,68 @@ describe('chat:choice', () => {
     const s = startRun(emptyChat('r'), 'resolve', 'run1')
     const next = applyEvent(s, 'chat:tool', { repoID: 'r', runID: 'run1', id: 'c9', name: 'propose_options', args: cardArgs })
     expect(next.items[1].tools[0].id).toBe('c9')
+  })
+})
+
+describe('token counts', () => {
+  const u = (input: number, output: number, cacheRead = 0) => ({ input, output, ...(cacheRead ? { cacheRead } : {}) })
+
+  it('sums the usage of every model call folded into an answer', () => {
+    const s = fromMessages('r', [
+      { role: 'user', content: 'q' },
+      { role: 'assistant', content: '', toolCalls: [{ id: 'c1', name: 'list_refs', args: {} }], usage: u(100, 10) },
+      { role: 'tool', content: 'main', toolName: 'list_refs' },
+      { role: 'assistant', content: 'On main.', usage: u(180, 25, 90) },
+    ])
+    expect(s.items[1].usage).toEqual({ input: 280, output: 35, cacheRead: 90, cacheWrite: 0, calls: 2 })
+  })
+
+  it('leaves an answer stored without usage uncounted', () => {
+    const s = fromMessages('r', [{ role: 'user', content: 'q' }, { role: 'assistant', content: 'a' }])
+    expect(s.items[1].usage).toBeUndefined()
+    expect(conversationTokens(s)).toBeNull()
+  })
+
+  it('totals the conversation and flags answers without a count', () => {
+    const s = fromMessages('r', [
+      { role: 'user', content: 'old' },
+      { role: 'assistant', content: 'old answer' },
+      { role: 'user', content: 'q' },
+      { role: 'assistant', content: 'a', usage: u(1000, 50) },
+    ])
+    expect(conversationTokens(s)).toEqual({ total: { input: 1000, output: 50, cacheRead: 0, cacheWrite: 0, calls: 1 }, missing: true })
+  })
+
+  it('adds live usage to the running answer and ignores other runs', () => {
+    let s = startRun(emptyChat('r'), 'q', 'run1')
+    s = applyEvent(s, 'chat:usage', { repoID: 'r', runID: 'run1', usage: u(100, 10) })
+    s = applyEvent(s, 'chat:usage', { repoID: 'r', runID: 'run1', usage: u(150, 20, 100) })
+    s = applyEvent(s, 'chat:usage', { repoID: 'r', runID: 'other', usage: u(9, 9) })
+    s = applyEvent(s, 'chat:usage', { repoID: 'x', runID: 'run1', usage: u(9, 9) })
+    expect(s.items[1].usage).toEqual({ input: 250, output: 30, cacheRead: 100, cacheWrite: 0, calls: 2 })
+  })
+
+  it('does not count the running answer as missing', () => {
+    let s = startRun(emptyChat('r'), 'q', 'run1')
+    s = applyEvent(s, 'chat:usage', { repoID: 'r', runID: 'run1', usage: u(100, 10) })
+    s = { ...s, items: [...s.items, { role: 'user', text: 'q2', tools: [] }, { role: 'assistant', text: 'partial', tools: [] }] }
+    expect(conversationTokens(s)?.missing).toBe(false)
+  })
+
+  it('formats token numbers', () => {
+    expect(formatTokens(0)).toBe('0')
+    expect(formatTokens(999)).toBe('999')
+    expect(formatTokens(1000)).toBe('1k')
+    expect(formatTokens(1234)).toBe('1.2k')
+    expect(formatTokens(12000)).toBe('12k')
+    expect(formatTokens(999_999)).toBe('1M')
+    expect(formatTokens(1_250_000)).toBe('1.3M')
+  })
+
+  it('describes a count', () => {
+    const t = { input: 8200, output: 640, cacheRead: 512, cacheWrite: 0, calls: 2 }
+    expect(tokensText(t)).toBe('8.2k in · 640 out')
+    expect(tokensTitle(t)).toBe('2 model calls · cache read 512')
+    expect(tokensTitle({ ...t, calls: 1, cacheRead: 0 })).toBe('1 model call')
   })
 })
