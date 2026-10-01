@@ -453,3 +453,47 @@ func TestExecuteKeepsAProviderToolCallID(t *testing.T) {
 		}
 	}
 }
+
+func TestEachModelCallKeepsItsUsage(t *testing.T) {
+	u1 := &ai.Usage{Input: 100, Output: 10}
+	u2 := &ai.Usage{Input: 180, Output: 25, CacheRead: 90}
+	p := &scripted{turns: [][]ai.Chunk{
+		{{ToolCalls: []ai.ToolCall{{ID: "c1", Name: "list_refs", Args: map[string]any{}}}}, {Done: true, Usage: u1}},
+		{{Delta: "On main."}, {Done: true, Usage: u2}},
+	}}
+	rec := &recorder{}
+	got, err := agent.Execute(context.Background(), baseRun(p, rec), user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[1].Usage == nil || *got[1].Usage != *u1 || got[3].Usage == nil || *got[3].Usage != *u2 {
+		t.Fatalf("usages = %#v / %#v", got[1].Usage, got[3].Usage)
+	}
+	var usages []agent.UsageEvent
+	for i, n := range rec.names {
+		if n == agent.EventUsage {
+			usages = append(usages, rec.data[i].(agent.UsageEvent))
+		}
+	}
+	want := []agent.UsageEvent{{RepoID: "repo1", RunID: "run1", Usage: *u1}, {RepoID: "repo1", RunID: "run1", Usage: *u2}}
+	if !reflect.DeepEqual(usages, want) {
+		t.Fatalf("usage events = %#v", usages)
+	}
+}
+
+func TestNoUsageEmitsNothing(t *testing.T) {
+	p := &scripted{turns: [][]ai.Chunk{{{Delta: "hi"}, {Done: true}}}}
+	rec := &recorder{}
+	got, err := agent.Execute(context.Background(), baseRun(p, rec), user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[1].Usage != nil {
+		t.Fatalf("usage = %#v", got[1].Usage)
+	}
+	for _, n := range rec.names {
+		if n == agent.EventUsage {
+			t.Fatal("chat:usage emitted without a usage")
+		}
+	}
+}
