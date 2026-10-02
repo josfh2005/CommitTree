@@ -307,8 +307,9 @@ stashes.
    Pull, Push, or a stash action refuses rather than interleaving with
    another already running for the same repository — except a background
    fetch, which is cancelled (as Cancel in the Commands panel would) so the
-   user's operation runs instead. A background fetch itself never waits: it
-   is skipped while another write runs.
+   user's operation runs instead (a second operation started meanwhile is
+   refused as usual). A background fetch itself never waits: it is skipped
+   while another write runs.
 3. Pull refuses outright, without attempting anything, when the repository
    already has an unresolved merge, rebase or stash conflict.
 4. A push with no upstream sets one on the remote named `origin`, using the

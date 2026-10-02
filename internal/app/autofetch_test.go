@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -95,5 +97,81 @@ func TestUserWriteStillRefusedBehindAnotherUserWrite(t *testing.T) {
 	}
 	if err := a.writeAll([]string{id}, func(context.Context) error { return nil }); !errors.Is(err, ErrBusy) {
 		t.Errorf("writeAll = %v, want ErrBusy", err)
+	}
+}
+
+func TestUserWriteCancelsARealBackgroundFetchAsCancelled(t *testing.T) {
+	a, r, id := newPlainApp(t)
+	arrived := make(chan struct{}, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, req *http.Request) {
+		select {
+		case arrived <- struct{}{}:
+		default:
+		}
+		<-req.Context().Done() // a remote that never answers
+	}))
+	defer srv.Close()
+	r.Git("remote", "add", "origin", srv.URL+"/repo.git")
+
+	done := make(chan error, 1)
+	go func() { _, err := a.AutoFetch(id); done <- err }()
+	select {
+	case <-arrived:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the background fetch never reached the remote")
+	}
+	if err := a.write(id, func(context.Context, string) error { return nil }); err != nil {
+		t.Fatalf("write = %v", err)
+	}
+	<-done
+	view, _ := a.CommandLog(id)
+	for _, e := range view.Entries {
+		if len(e.Args) > 0 && e.Args[0] == "fetch" {
+			if e.Outcome != cmdlog.OutcomeCancelled {
+				t.Errorf("fetch outcome = %q, want cancelled", e.Outcome)
+			}
+			return
+		}
+	}
+	t.Error("no fetch in the command log")
+}
+
+func TestOnlyOneUserWriteWaitsForABackgroundFetch(t *testing.T) {
+	a, _, id := newPlainApp(t)
+	mu := a.writeMutex(id)
+	mu.Lock() // a background fetch that takes a while to stop
+	a.autoFetches.Store(id, context.CancelFunc(func() {}))
+
+	first := make(chan error, 1)
+	go func() { first <- a.write(id, func(context.Context, string) error { return nil }) }()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, ok := a.autoFetches.Load(id); !ok {
+			break
+		}
+		if time.Now().After(deadline) {
+			mu.Unlock()
+			t.Fatal("the first write did not claim the background fetch's cancel")
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	second := make(chan error, 1)
+	go func() { second <- a.write(id, func(context.Context, string) error { return nil }) }()
+	select {
+	case err := <-second:
+		if !errors.Is(err, ErrBusy) {
+			t.Errorf("second write = %v, want ErrBusy", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("the second write waited instead of being refused")
+		mu.Unlock()
+		<-second
+		<-first
+		return
+	}
+	mu.Unlock()
+	if err := <-first; err != nil {
+		t.Errorf("first write = %v", err)
 	}
 }

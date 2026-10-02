@@ -497,13 +497,14 @@ func (a *App) writeMutex(id string) *sync.Mutex {
 
 // lockWrite takes id's write lock for a user write. A background fetch
 // holding it is cancelled and waited for (git stops as on Ctrl+C, within
-// gitcmd's WaitDelay); any other holder means ErrBusy.
+// gitcmd's WaitDelay) by the first write to claim it — a later one, like
+// any other holder, means ErrBusy, so writes never queue.
 func (a *App) lockWrite(id string) (*sync.Mutex, error) {
 	mu := a.writeMutex(id)
 	if mu.TryLock() {
 		return mu, nil
 	}
-	c, ok := a.autoFetches.Load(id)
+	c, ok := a.autoFetches.LoadAndDelete(id)
 	if !ok {
 		return nil, ErrBusy
 	}

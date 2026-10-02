@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"git-ui/internal/cmdlog"
+	"git-ui/internal/gitcmd"
 	"git-ui/internal/ops"
 )
 
@@ -20,11 +21,13 @@ func (a *App) AutoFetch(id string) (ops.AutoFetchResult, error) {
 	if !mu.TryLock() {
 		return ops.AutoFetchResult{Skipped: true}, nil
 	}
-	ctx, cancel := context.WithCancel(cmdlog.WithOrigin(a.ctx, cmdlog.OriginAuto))
-	a.autoFetches.Store(id, cancel)
+	// Cancelled with gitcmd.ErrCancelled as the cause, so the Commands
+	// panel shows the stopped fetch as cancelled, not failed.
+	ctx, cancel := context.WithCancelCause(cmdlog.WithOrigin(a.ctx, cmdlog.OriginAuto))
+	a.autoFetches.Store(id, context.CancelFunc(func() { cancel(gitcmd.ErrCancelled) }))
 	defer func() {
 		a.autoFetches.Delete(id)
-		cancel()
+		cancel(nil)
 		mu.Unlock()
 	}()
 	return ops.AutoFetch(ctx, dir)
