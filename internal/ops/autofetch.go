@@ -3,7 +3,6 @@ package ops
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -25,10 +24,6 @@ var NoPromptEnv = []string{
 	"GCM_INTERACTIVE=never",
 }
 
-// ErrAutoFetchAuth wraps a background fetch that failed for want of
-// credentials; the frontend matches its text, "auto-fetch auth".
-var ErrAutoFetchAuth = errors.New("auto-fetch auth")
-
 // AutoFetchResult is what one background fetch brought.
 type AutoFetchResult struct {
 	Skipped     bool   `json:"skipped"`
@@ -36,6 +31,9 @@ type AutoFetchResult struct {
 	Upstream    string `json:"upstream"`
 	NewCommits  int    `json:"newCommits"`
 	RefsChanged bool   `json:"refsChanged"`
+	// AuthFailed names the remotes this fetch could not reach for want of
+	// credentials; the caller pauses them.
+	AuthFailed []string `json:"authFailed"`
 }
 
 var authMarkers = []string{
@@ -63,17 +61,26 @@ func IsAuthError(err error) bool {
 	return false
 }
 
-// AutoFetch fetches every remote without ever prompting and reports the
-// commits the checked-out branch's upstream gained in this fetch that HEAD
-// lacks. Only this fetch's change counts, so commits a manual Fetch already
-// brought are never reported again.
-func AutoFetch(ctx context.Context, dir string) (AutoFetchResult, error) {
+// AutoFetch fetches each remote paused does not report, one at a time,
+// without ever prompting, and reports the commits the checked-out branch's
+// upstream gained in this fetch that HEAD lacks. Only this fetch's change
+// counts, so commits a manual Fetch already brought are never reported
+// again. A remote failing for want of credentials lands in AuthFailed;
+// any other failure of one remote is left to the Commands panel. Both let
+// the next remote run; a cancel stops them all.
+func AutoFetch(ctx context.Context, dir string, paused func(remote string) bool) (AutoFetchResult, error) {
 	var res AutoFetchResult
-	remotes, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "remote")
+	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "remote")
 	if err != nil {
 		return res, err
 	}
-	if strings.TrimSpace(remotes) == "" {
+	var remotes []string
+	for _, r := range strings.Fields(out) {
+		if paused == nil || !paused(r) {
+			remotes = append(remotes, r)
+		}
+	}
+	if len(remotes) == 0 {
 		res.Skipped = true
 		return res, nil
 	}
@@ -90,11 +97,15 @@ func AutoFetch(ctx context.Context, dir string) (AutoFetchResult, error) {
 	if err != nil {
 		return res, err
 	}
-	if _, err := gitcmd.RunEnv(ctx, dir, AutoFetchTimeout, NoPromptEnv, "fetch", "--all", "--prune"); err != nil {
-		if IsAuthError(err) {
-			return res, fmt.Errorf("%w: %v", ErrAutoFetchAuth, err)
+	for _, remote := range remotes {
+		_, err := gitcmd.RunEnv(ctx, dir, AutoFetchTimeout, NoPromptEnv, "fetch", "--prune", remote)
+		switch {
+		case err == nil:
+		case ctx.Err() != nil:
+			return res, err
+		case IsAuthError(err):
+			res.AuthFailed = append(res.AuthFailed, remote)
 		}
-		return res, err
 	}
 	after, err := remoteRefs(ctx, dir)
 	if err != nil {

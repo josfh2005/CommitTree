@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -32,12 +34,12 @@ func TestAutoFetchCountsCommitsTheFetchBrought(t *testing.T) {
 	other.Commit("two")
 	other.Git("push", "-q", "origin", "main")
 
-	res, err := ops.AutoFetch(context.Background(), r.Dir)
+	res, err := ops.AutoFetch(context.Background(), r.Dir, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := ops.AutoFetchResult{Branch: "main", Upstream: "origin/main", NewCommits: 2, RefsChanged: true}
-	if res != want {
+	if !reflect.DeepEqual(res, want) {
 		t.Errorf("res = %+v, want %+v", res, want)
 	}
 }
@@ -48,7 +50,7 @@ func TestAutoFetchAfterAManualFetchReportsNothing(t *testing.T) {
 	other.Git("push", "-q", "origin", "main")
 	r.Git("fetch", "-q", "origin") // the user's manual Fetch
 
-	res, err := ops.AutoFetch(context.Background(), r.Dir)
+	res, err := ops.AutoFetch(context.Background(), r.Dir, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +67,7 @@ func TestAutoFetchIgnoresCommitsHEADAlreadyHas(t *testing.T) {
 	// from another clone of the same work would.
 	r.Git("push", "-q", bare, "main:main")
 
-	res, err := ops.AutoFetch(context.Background(), r.Dir)
+	res, err := ops.AutoFetch(context.Background(), r.Dir, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +82,7 @@ func TestAutoFetchDetachedOrNoUpstream(t *testing.T) {
 	other.Git("push", "-q", "origin", "main")
 	r.Git("switch", "-q", "--detach", "HEAD")
 
-	res, err := ops.AutoFetch(context.Background(), r.Dir)
+	res, err := ops.AutoFetch(context.Background(), r.Dir, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +94,7 @@ func TestAutoFetchDetachedOrNoUpstream(t *testing.T) {
 func TestAutoFetchSkipsARepositoryWithNoRemote(t *testing.T) {
 	r := testrepo.New(t)
 	r.Commit("base")
-	res, err := ops.AutoFetch(context.Background(), r.Dir)
+	res, err := ops.AutoFetch(context.Background(), r.Dir, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,25 +103,54 @@ func TestAutoFetchSkipsARepositoryWithNoRemote(t *testing.T) {
 	}
 }
 
-func TestAutoFetchNeverPromptsForCredentials(t *testing.T) {
+// lockedServer is a remote that always asks for credentials.
+func lockedServer(t *testing.T) string {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("WWW-Authenticate", `Basic realm="x"`)
 		w.WriteHeader(http.StatusUnauthorized)
 	}))
-	defer srv.Close()
-	r := testrepo.New(t)
-	r.Commit("base")
-	r.Git("remote", "add", "origin", srv.URL+"/repo.git")
+	t.Cleanup(srv.Close)
+	return srv.URL + "/repo.git"
+}
+
+// hermetic keeps the developer's credential helpers and URL rewrites out.
+func hermetic(t *testing.T) {
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+}
+
+func TestAutoFetchNeverPromptsAndKeepsFetchingTheOtherRemotes(t *testing.T) {
+	hermetic(t)
+	r, other := tracked(t)
+	r.Git("remote", "add", "locked", lockedServer(t))
+	other.Commit("one")
+	other.Git("push", "-q", "origin", "main")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	start := time.Now()
-	_, err := ops.AutoFetch(ctx, r.Dir)
-	if !errors.Is(err, ops.ErrAutoFetchAuth) {
-		t.Fatalf("err = %v, want ErrAutoFetchAuth", err)
+	res, err := ops.AutoFetch(ctx, r.Dir, nil)
+	if err != nil {
+		t.Fatal(err)
 	}
 	if d := time.Since(start); d > 15*time.Second {
 		t.Errorf("took %v: something waited for input", d)
+	}
+	if !reflect.DeepEqual(res.AuthFailed, []string{"locked"}) {
+		t.Errorf("AuthFailed = %v, want [locked]", res.AuthFailed)
+	}
+	if res.NewCommits != 1 {
+		t.Errorf("NewCommits = %d, want 1 from origin", res.NewCommits)
+	}
+}
+
+func TestAutoFetchSkipsPausedRemotes(t *testing.T) {
+	r, other := tracked(t)
+	other.Commit("one")
+	other.Git("push", "-q", "origin", "main")
+	res, err := ops.AutoFetch(context.Background(), r.Dir, func(remote string) bool { return remote == "origin" })
+	if err != nil || !res.Skipped || res.NewCommits != 0 {
+		t.Errorf("res = %+v, err = %v; want Skipped with nothing fetched", res, err)
 	}
 }
 

@@ -26,5 +26,5 @@ func (a *App) AutoFetch(id string) (ops.AutoFetchResult, error) {
 		return ops.AutoFetchResult{Skipped: true}, nil
 	}
 	defer l.unlock()
-	return ops.AutoFetch(ctx, dir)
+	return ops.AutoFetch(ctx, dir, nil)
 }
