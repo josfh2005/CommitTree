@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -18,12 +19,19 @@ type fakeNotifier struct {
 	respond    func(runtime.NotificationResult)
 	shown      int
 	cleaned    int
+	// asking is closed when RequestAuthorization starts, which then waits
+	// for block: the permission dialog open on screen.
+	asking, block chan struct{}
 }
 
 func (f *fakeNotifier) Init() error               { return f.initErr }
 func (f *fakeNotifier) Authorized() (bool, error) { return f.authorized, nil }
 func (f *fakeNotifier) RequestAuthorization() (bool, error) {
 	f.requests++
+	if f.asking != nil {
+		close(f.asking)
+		<-f.block
+	}
 	f.authorized = f.grant
 	return f.grant, nil
 }
@@ -131,5 +139,38 @@ func TestNotificationClickOpensTheRepo(t *testing.T) {
 	a.stopNotifications()
 	if f.cleaned != 1 {
 		t.Fatalf("cleaned=%d", f.cleaned)
+	}
+}
+
+func TestPermissionDialogDoesNotBlockOtherNotifications(t *testing.T) {
+	a, _ := newTestApp(t)
+	f := &fakeNotifier{grant: true, asking: make(chan struct{}), block: make(chan struct{})}
+	a.startNotifications(f)
+	first := make(chan error, 1)
+	go func() { first <- a.Notify(note) }()
+	<-f.asking
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if err := a.Notify(note); !errors.Is(err, ErrNotificationsDenied) {
+			t.Errorf("second Notify during the dialog: err = %v, want ErrNotificationsDenied", err)
+		}
+		if got := a.NotificationStatus(); got != "not allowed" {
+			t.Errorf("status during the dialog = %q", got)
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Notify or NotificationStatus waited for the permission dialog")
+	}
+
+	close(f.block)
+	if err := <-first; err != nil {
+		t.Fatal(err)
+	}
+	if len(f.sent) != 1 || f.requests != 1 {
+		t.Fatalf("sent=%d requests=%d", len(f.sent), f.requests)
 	}
 }

@@ -109,30 +109,40 @@ func (a *App) stopNotifications() {
 
 // Notify sends an OS notification, asking for permission the first time it
 // is missing. The error says why nothing was shown; the frontend then
-// falls back to an in-app toast.
+// falls back to an in-app toast. The permission dialog waits for the user
+// without the lock held: a notification due meanwhile sees permission
+// missing and already asked for, so it becomes a toast.
 func (a *App) Notify(n Notification) error {
 	a.notes.mu.Lock()
-	defer a.notes.mu.Unlock()
-	if a.notes.n == nil {
+	nt, initErr := a.notes.n, a.notes.initErr
+	if nt == nil {
+		a.notes.mu.Unlock()
 		return errNotificationsNotStarted
 	}
-	if a.notes.initErr != nil {
-		return a.notes.initErr
+	if initErr != nil {
+		a.notes.mu.Unlock()
+		return initErr
 	}
-	ok, err := a.notes.n.Authorized()
+	ok, err := nt.Authorized()
+	ask := err == nil && !ok && !a.notes.asked
+	if ask {
+		a.notes.asked = true
+	}
+	a.notes.mu.Unlock()
 	if err != nil {
 		return err
 	}
-	if !ok && !a.notes.asked {
-		a.notes.asked = true
-		if ok, err = a.notes.n.RequestAuthorization(); err != nil {
+	if ask {
+		if ok, err = nt.RequestAuthorization(); err != nil {
 			return err
 		}
 	}
 	if !ok {
 		return ErrNotificationsDenied
 	}
-	return a.notes.n.Send(runtime.NotificationOptions{
+	a.notes.mu.Lock()
+	defer a.notes.mu.Unlock()
+	return nt.Send(runtime.NotificationOptions{
 		ID:    n.ID,
 		Title: n.Title,
 		Body:  n.Body,
