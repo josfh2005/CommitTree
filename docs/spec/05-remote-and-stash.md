@@ -116,7 +116,9 @@ When Settings → General → **Fetch in the background** is not Off (Every 5,
 <remote>` for each remote of every repository in the sidebar that is not missing, one at a time:
 first 30 s after the app starts, then every interval after the previous
 round ends. A round is skipped while the computer is offline; a repository
-with no remote, or with another write running, is skipped.
+with no remote, or with another write running, is skipped. Turning it Off
+during a round lets the repository being fetched finish and fetches no
+other.
 
 A background fetch never asks for anything: askpass programs and Git
 Credential Manager's dialogs are turned off for it, so a remote that needs a

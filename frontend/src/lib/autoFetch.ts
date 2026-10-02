@@ -49,9 +49,12 @@ const defaultDeps: AutoFetchDeps = {
   notify: (e) => void notify(e),
 }
 
-export async function runRound(d: AutoFetchDeps): Promise<void> {
+/** runRound fetches each repository in turn; keepGoing is asked before
+ *  each one, so Off or stop ends a round between repositories. */
+export async function runRound(d: AutoFetchDeps, keepGoing: () => boolean = () => true): Promise<void> {
   if (!d.online()) return
   for (const repo of d.repos()) {
+    if (!keepGoing()) return
     if (repo.missing) continue
     let r: { result?: AutoFetchResult; error?: unknown }
     try {
@@ -67,24 +70,26 @@ export async function runRound(d: AutoFetchDeps): Promise<void> {
 
 /** startAutoFetch runs rounds: the first FIRST_ROUND_MS after start, each
  *  next one the chosen interval after the previous ends — so rounds never
- *  overlap, even when the interval changes mid-round. Off stops it. */
+ *  overlap, even when the interval changes mid-round. Off, or stop, ends a
+ *  running round before its next repository (the fetch in flight finishes). */
 export function startAutoFetch(over: Partial<AutoFetchDeps> = {}): () => void {
   const d = { ...defaultDeps, ...over }
   let timer: ReturnType<typeof setTimeout> | undefined
   let running = false
   let first = true
+  let stopped = false
   const schedule = () => {
     clearTimeout(timer)
     timer = undefined
     const minutes = get(autoFetchMinutes)
-    if (minutes <= 0 || running) return
+    if (stopped || minutes <= 0 || running) return
     timer = setTimeout(round, first ? FIRST_ROUND_MS : minutes * 60_000)
   }
   const round = async () => {
     first = false
     running = true
     try {
-      await runRound(d)
+      await runRound(d, () => !stopped && get(autoFetchMinutes) > 0)
     } finally {
       running = false
       schedule()
@@ -92,6 +97,7 @@ export function startAutoFetch(over: Partial<AutoFetchDeps> = {}): () => void {
   }
   const unsubscribe = autoFetchMinutes.subscribe(schedule)
   return () => {
+    stopped = true
     unsubscribe()
     clearTimeout(timer)
   }

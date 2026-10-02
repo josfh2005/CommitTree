@@ -65,6 +65,13 @@ describe('runRound', () => {
     expect(d.fetch).not.toHaveBeenCalled()
   })
 
+  it('stops before the next repository once keepGoing turns false', async () => {
+    let go = true
+    const fetch = vi.fn(async () => { go = false; return res() })
+    await runRound(deps({ fetch }), () => go)
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
   it('notifies and refreshes from the results', async () => {
     const d = deps({ fetch: vi.fn().mockResolvedValue(res({ newCommits: 1, refsChanged: true })) })
     await runRound(d)
@@ -88,6 +95,29 @@ describe('startAutoFetch', () => {
     expect(d.fetch).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(15 * 60_000)
     expect(d.fetch).toHaveBeenCalledTimes(4)
+    stop()
+  })
+
+  it('Off or stop mid-round ends the round at the next repository', async () => {
+    let release!: () => void
+    const fetch = vi.fn(() => new Promise<AutoFetchResult>((r) => { release = () => r(res()) }))
+    const d = deps({ fetch }) // repositories a, gone (missing), b
+    const stop = startAutoFetch(d)
+    await vi.advanceTimersByTimeAsync(FIRST_ROUND_MS)
+    expect(fetch).toHaveBeenCalledTimes(1) // a in flight
+    autoFetchMinutes.set(0)
+    release()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fetch).toHaveBeenCalledTimes(1) // b never fetched
+
+    autoFetchMinutes.set(15)
+    const d2 = deps({ fetch: vi.fn(() => new Promise<AutoFetchResult>((r) => { release = () => r(res()) })) })
+    const stop2 = startAutoFetch(d2)
+    await vi.advanceTimersByTimeAsync(FIRST_ROUND_MS)
+    stop2()
+    release()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(d2.fetch).toHaveBeenCalledTimes(1)
     stop()
   })
 
