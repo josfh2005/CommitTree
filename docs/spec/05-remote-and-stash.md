@@ -78,7 +78,8 @@ conflict currently owns the repository, for the same reason a commit is
 refused then: the working tree and index are not in a state either operation
 can safely act on. Both also refuse while any other write operation for the
 repository is in progress — the application allows only one write at a time
-per repository.
+per repository. A background fetch in progress is cancelled instead (see
+"Background fetch").
 
 ### Merge branch picker
 
@@ -107,6 +108,26 @@ notifies — see [Notifications](11-notifications.md).
 Fetch downloads every remote's refs and removes any remote-tracking branch
 whose remote counterpart no longer exists. It reports only success or
 failure; it never reports how much changed.
+
+### Background fetch
+
+When Settings → General → **Fetch in the background** is not Off (Every 5,
+15 — the default —, 30 or 60 min), CommitTree runs `git fetch --all --prune`
+for every repository in the sidebar that is not missing, one at a time:
+first 30 s after the app starts, then every interval after the previous
+round ends. A round is skipped while the computer is offline; a repository
+with no remote, or with another write running, is skipped.
+
+A background fetch never asks for anything: askpass programs and Git
+Credential Manager's dialogs are turned off for it, so a remote that needs a
+password or a passphrase fails instead (helpers that answer on their own,
+such as the macOS keychain or ssh-agent, still work). Such an authentication
+failure stops background fetches of that repository until a manual Fetch or
+Pull of it succeeds or the app restarts. No failure is shown or notified;
+the Commands panel has it. It times out after 60 s, never shows the busy
+label, and when it changes the selected repository's remote branches, the
+log and the ahead/behind badges refresh. New commits it brings to the
+checked-out branch's upstream can notify (see `11-notifications.md`).
 
 ### Push
 
@@ -284,7 +305,10 @@ stashes.
 1. Fetch never refuses because of a conflict; Pull and Push always do.
 2. Only one write operation runs per repository at a time; any of Fetch,
    Pull, Push, or a stash action refuses rather than interleaving with
-   another already running for the same repository.
+   another already running for the same repository — except a background
+   fetch, which is cancelled (as Cancel in the Commands panel would) so the
+   user's operation runs instead. A background fetch itself never waits: it
+   is skipped while another write runs.
 3. Pull refuses outright, without attempting anything, when the repository
    already has an unresolved merge, rebase or stash conflict.
 4. A push with no upstream sets one on the remote named `origin`, using the
