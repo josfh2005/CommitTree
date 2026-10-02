@@ -49,8 +49,9 @@ func (a *App) WorktreeRemovalInfo(id string) (worktrees.RemovalInfo, error) {
 // tool call on the worktree itself, each hold. Taking only the main
 // repository's lock would let one of those run against the worktree while
 // its directory is being deleted out from under it; a.writeAll acquires
-// both with TryLock (never blocking) and fails the whole call with ErrBusy
-// if either is already held, leaving the worktree untouched. force passes
+// both (cancelling a background fetch that holds one) and fails the whole
+// call with ErrBusy if either is held by another write, leaving the worktree
+// untouched. force passes
 // --force, needed when the worktree has uncommitted changes.
 //
 // When deleteBranch is set and the worktree is not detached, its branch is

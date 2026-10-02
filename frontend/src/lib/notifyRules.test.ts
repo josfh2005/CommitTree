@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { conflictsBody, decide, doneBody, failureBody, firstLine, formatSeconds, notificationId, statusText, type NotifyContext, type NotifyEvent } from './notifyRules'
+import { conflictsBody, decide, doneBody, failureBody, firstLine, formatSeconds, notificationId, remoteBody, statusText, type NotifyContext, type NotifyEvent } from './notifyRules'
 
 const ctx = (over: Partial<NotifyContext> = {}): NotifyContext => ({
-  enabled: true, done: true, ai: true, problem: true, focused: false, activeRepoID: 'a', chatOpen: true, ...over,
+  enabled: true, done: true, ai: true, problem: true, remote: true, focused: false, activeRepoID: 'a', chatOpen: true, ...over,
 })
 const ev = (over: Partial<NotifyEvent> = {}): NotifyEvent => ({ category: 'problem', repoID: 'a', body: 'x', target: 'repo', ...over })
 
@@ -63,5 +63,20 @@ describe('texts', () => {
     expect(statusText('not allowed')).toMatch(/not allowed yet/)
     expect(statusText('unavailable: no bundle')).toBe('System notifications are unavailable (no bundle); in-app toasts are used instead.')
     expect(statusText('')).toBe('')
+  })
+})
+
+describe('remote', () => {
+  it('follows its own switch and the usual focus rules', () => {
+    const e = ev({ category: 'remote', repoID: 'b' })
+    expect(decide(e, ctx({ remote: false }))).toBe('none')
+    expect(decide(e, ctx())).toBe('system')
+    expect(decide(e, ctx({ focused: true }))).toBe('toast')
+    expect(decide(ev({ category: 'remote', repoID: 'a' }), ctx({ focused: true }))).toBe('none')
+  })
+
+  it('pluralises the body', () => {
+    expect(remoteBody(1, 'origin/main')).toBe('1 new commit on origin/main')
+    expect(remoteBody(3, 'origin/main')).toBe('3 new commits on origin/main')
   })
 })

@@ -18,6 +18,10 @@ export function ApplyHunkSelection(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['app']['App']['ApplyHunkSelection'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
+export function AutoFetch(arg1) {
+  return window['go']['app']['App']['AutoFetch'](arg1);
+}
+
 export function BranchCounts(arg1, arg2) {
   return window['go']['app']['App']['BranchCounts'](arg1, arg2);
 }

@@ -1,7 +1,7 @@
 import { get, writable } from 'svelte/store'
 import { api } from './api'
 import { conflictsBody, decide, doneBody, failureBody, notificationId, type Delivery, type NotifyEvent, type NotifyTarget, type OpKind } from './notifyRules'
-import { chatOpen, mergeState, notifyAi, notifyDone, notifyEnabled, notifyProblem, repos, selectRepo, selectedRepoId } from './stores'
+import { chatOpen, mergeState, notifyAi, notifyDone, notifyEnabled, notifyProblem, notifyRemote, repos, selectRepo, selectedRepoId } from './stores'
 import { errorMessage, toast } from './ui'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { CHAT_WATCH_EVENTS, emptyWatch, watchChat } from './notifyChat'
@@ -24,7 +24,7 @@ const viewAction = (repoID: string, target: NotifyTarget) => ({ label: 'View', r
  *  (also when the OS one cannot be shown). Resolves to what was decided. */
 export async function notify(e: NotifyEvent): Promise<Delivery> {
   const d = decide(e, {
-    enabled: get(notifyEnabled), done: get(notifyDone), ai: get(notifyAi), problem: get(notifyProblem),
+    enabled: get(notifyEnabled), done: get(notifyDone), ai: get(notifyAi), problem: get(notifyProblem), remote: get(notifyRemote),
     focused: get(windowFocused), activeRepoID: get(selectedRepoId), chatOpen: get(chatOpen),
   })
   if (d === 'system') {

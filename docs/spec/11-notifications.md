@@ -15,11 +15,18 @@ focused, an in-app toast when it is focused but the event is out of sight.
 | The AI needs you | A write card waits for confirmation | always |
 | | A new decision card | always |
 | Problems | A chat answer ended with an error | always |
+| New commits on the remote | A background fetch brought commits to the checked-out branch's upstream that the branch does not have — "3 new commits on origin/main" | always (while Fetch in the background is on) |
 
 One user operation is one event, however many git commands it runs. An
 operation notifies once: conflicts or a failure replace "finished".
 Staging, discarding, reads, terminal commands, creating branches or tags
 never notify.
+
+Only commits that arrived in that background fetch count: commits a manual
+Fetch already brought, or that the branch already contains, are never
+announced, and a restart does not repeat a notice. Other branches, new
+remote branches and background fetch failures never notify (see
+`05-remote-and-stash.md`).
 
 The title is the repository name; the body one sentence — "Push finished ·
 14 s", "Pull failed: <first line of the error, at most 120 characters>",
@@ -56,9 +63,12 @@ focused window, so it shows nothing.
 ## Settings
 
 Settings → General → Notifications: **Show notifications** turns them all
-off; **Finished operations (10 s or longer)**, **The AI needs you** and
-**Problems — failures and conflicts** turn off one category each. All on by
-default; kept on this computer, not per repository. Below them a line says
+off; **Finished operations (10 s or longer)**, **The AI needs you**,
+**Problems — failures and conflicts** and **New commits on the remote** turn
+off one category each. All on by default; kept on this computer, not per
+repository. **New commits on the remote** is disabled, with the hint "Turn on
+Fetch in the background first", while **Fetch in the background** — just
+above, under Fetch: Off, Every 5, 15 (default), 30 or 60 min — is Off. Below them a line says
 whether system notifications are allowed, not allowed yet, or unavailable
 (and why) — in the last two cases toasts are used instead.
 

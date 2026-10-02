@@ -284,6 +284,15 @@ export interface AheadBehind {
   behind: number
 }
 
+/** One background fetch (Go ops.AutoFetchResult). */
+export interface AutoFetchResult {
+  skipped: boolean
+  branch: string
+  upstream: string
+  newCommits: number
+  refsChanged: boolean
+}
+
 export const PULL_UP_TO_DATE = 0
 export const PULL_MERGED = 1
 export const PULL_REBASED = 2

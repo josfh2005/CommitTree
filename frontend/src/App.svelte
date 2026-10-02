@@ -15,6 +15,7 @@
   import { startFocusRefresh } from './lib/actions'
   import { nextChatRunRepo } from './lib/chat'
   import { startNotifications } from './lib/notify'
+  import { startAutoFetch } from './lib/autoFetch'
   import { isCommandsToggle } from './lib/cmdlog'
   import { isSettingsShortcut } from './lib/shortcuts'
   import { isTerminalToggle } from './lib/terminal'
@@ -81,6 +82,7 @@
     Environment().then((env) => platform.set(env.platform)).catch(() => {})
     const stopFocus = startFocusRefresh()
     const stopNotifications = startNotifications()
+    const stopAutoFetch = startAutoFetch()
     // Every view of the working tree follows $worktreeState — the Changes
     // view and the log's "Uncommitted changes" row alike — so one app-wide
     // listener keeps them fresh whether or not a Changes pane is mounted.
@@ -103,6 +105,7 @@
     return () => {
       stopFocus()
       stopNotifications()
+      stopAutoFetch()
       offWorktree()
       offRepoChanged()
       offSettings()

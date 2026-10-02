@@ -1227,6 +1227,26 @@ export namespace ops {
 	        this.behind = source["behind"];
 	    }
 	}
+	export class AutoFetchResult {
+	    skipped: boolean;
+	    branch: string;
+	    upstream: string;
+	    newCommits: number;
+	    refsChanged: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new AutoFetchResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.skipped = source["skipped"];
+	        this.branch = source["branch"];
+	        this.upstream = source["upstream"];
+	        this.newCommits = source["newCommits"];
+	        this.refsChanged = source["refsChanged"];
+	    }
+	}
 	export class ResetInfo {
 	    undone: number;
 	    gained: number;

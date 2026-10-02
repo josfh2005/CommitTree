@@ -26,6 +26,8 @@ export function AddRepo():Promise<repos.Repo>;
 
 export function ApplyHunkSelection(arg1:string,arg2:string,arg3:boolean,arg4:string,arg5:Array<worktree.HunkPick>,arg6:string):Promise<void>;
 
+export function AutoFetch(arg1:string):Promise<ops.AutoFetchResult>;
+
 export function BranchCounts(arg1:string,arg2:string):Promise<ops.AheadBehind>;
 
 export function CancelCommand(arg1:string,arg2:number):Promise<void>;

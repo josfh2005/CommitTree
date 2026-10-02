@@ -77,7 +77,11 @@ type App struct {
 	mu     sync.Mutex
 	logs   map[string]*logState
 	writes sync.Map // repo ID → *sync.Mutex
-	ai     *aiState
+	// autoFetches holds the cancel of the background fetch holding a
+	// repository's write lock (repo ID → context.CancelFunc), so a user
+	// write stops it instead of being refused.
+	autoFetches sync.Map
+	ai          *aiState
 	// cmds is the log behind the Commands panel; aiWrites marks
 	// repositories (by cmdlog.RepoKey) running an approved AI write.
 	cmds     *cmdlog.Log
@@ -486,25 +490,48 @@ func (a *App) Fingerprint(id string) (string, error) {
 
 // ---- Writes ----
 
+func (a *App) writeMutex(id string) *sync.Mutex {
+	m, _ := a.writes.LoadOrStore(id, &sync.Mutex{})
+	return m.(*sync.Mutex)
+}
+
+// lockWrite takes id's write lock for a user write. A background fetch
+// holding it is cancelled and waited for (git stops as on Ctrl+C, within
+// gitcmd's WaitDelay) by the first write to claim it — a later one, like
+// any other holder, means ErrBusy, so writes never queue.
+func (a *App) lockWrite(id string) (*sync.Mutex, error) {
+	mu := a.writeMutex(id)
+	if mu.TryLock() {
+		return mu, nil
+	}
+	c, ok := a.autoFetches.LoadAndDelete(id)
+	if !ok {
+		return nil, ErrBusy
+	}
+	c.(context.CancelFunc)()
+	mu.Lock()
+	return mu, nil
+}
+
 func (a *App) write(id string, fn func(ctx context.Context, dir string) error) error {
 	dir, err := a.dir(id)
 	if err != nil {
 		return err
 	}
-	m, _ := a.writes.LoadOrStore(id, &sync.Mutex{})
-	mu := m.(*sync.Mutex)
-	if !mu.TryLock() {
-		return ErrBusy
+	mu, err := a.lockWrite(id)
+	if err != nil {
+		return err
 	}
 	defer mu.Unlock()
 	return fn(a.ctx, dir)
 }
 
-// writeAll runs fn under every id's write lock at once (TryLock on each, in
-// order), for an operation such as a submodule write that must hold both the
-// parent repository's lock and the lock of each submodule it touches. Any id
-// already busy fails the whole call with ErrBusy and releases whatever locks
-// it had already acquired, so a failed call never leaves a lock held.
+// writeAll runs fn under every id's write lock at once (lockWrite on each,
+// in order), for an operation such as a submodule write that must hold both
+// the parent repository's lock and the lock of each submodule it touches.
+// Any id busy with another user write fails the whole call with ErrBusy and
+// releases whatever locks it had already acquired, so a failed call never
+// leaves a lock held.
 func (a *App) writeAll(ids []string, fn func(ctx context.Context) error) error {
 	var held []*sync.Mutex
 	defer func() {
@@ -513,10 +540,9 @@ func (a *App) writeAll(ids []string, fn func(ctx context.Context) error) error {
 		}
 	}()
 	for _, id := range ids {
-		m, _ := a.writes.LoadOrStore(id, &sync.Mutex{})
-		mu := m.(*sync.Mutex)
-		if !mu.TryLock() {
-			return ErrBusy
+		mu, err := a.lockWrite(id)
+		if err != nil {
+			return err
 		}
 		held = append(held, mu)
 	}

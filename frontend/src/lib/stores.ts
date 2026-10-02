@@ -51,6 +51,14 @@ export const notifyEnabled = persisted('notifyEnabled', true, isBool)
 export const notifyDone = persisted('notifyDone', true, isBool)
 export const notifyAi = persisted('notifyAi', true, isBool)
 export const notifyProblem = persisted('notifyProblem', true, isBool)
+export const notifyRemote = persisted('notifyRemote', true, isBool)
+
+/** Settings → General → Fetch in the background, in minutes; 0 is Off
+ *  (docs/spec/05-remote-and-stash.md). */
+export const AUTO_FETCH_CHOICES = [0, 5, 15, 30, 60] as const
+export const isAutoFetchMinutes = (v: unknown): v is number =>
+  AUTO_FETCH_CHOICES.includes(v as (typeof AUTO_FETCH_CHOICES)[number])
+export const autoFetchMinutes = persisted<number>('autoFetchMinutes', 15, isAutoFetchMinutes)
 /** Settings → Appearance → Theme. */
 export const themePref = persisted<ThemePref>('theme', 'auto', isThemePref)
 /** Whether the system is in dark mode, kept live (false where there is no
