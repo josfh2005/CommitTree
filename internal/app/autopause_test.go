@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"git-ui/internal/cmdlog"
@@ -137,5 +138,28 @@ func TestAFailedPullKeepsThePause(t *testing.T) {
 	}
 	if !a.paused.paused(key, "origin") {
 		t.Error("a failed pull unpaused origin")
+	}
+}
+
+func TestAutoFetchPausedListsTheRepositorysPausedRemotes(t *testing.T) {
+	a, _, id := newPlainApp(t)
+	got, err := a.AutoFetchPaused(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == nil || len(got) != 0 {
+		t.Fatalf("got %#v, want an empty, non-nil list", got)
+	}
+	dir, err := a.dir(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.paused.pause(cmdlog.RepoKey(dir), []string{"upstream", "origin"})
+	a.paused.pause("/somewhere/else", []string{"other"})
+	if got, _ = a.AutoFetchPaused(id); !reflect.DeepEqual(got, []string{"origin", "upstream"}) {
+		t.Fatalf("got %v, want [origin upstream]", got)
+	}
+	if _, err := a.AutoFetchPaused("no-such-id"); err == nil {
+		t.Error("want an error for an unknown repository")
 	}
 }

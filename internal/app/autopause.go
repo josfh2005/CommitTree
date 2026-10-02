@@ -1,6 +1,7 @@
 package app
 
 import (
+	"sort"
 	"sync"
 
 	"git-ui/internal/cmdlog"
@@ -42,6 +43,18 @@ func (p *autoPause) resume(key string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	delete(p.remotes, key)
+}
+
+// list is key's paused remotes, sorted; empty, not nil, when none.
+func (p *autoPause) list(key string) []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	out := []string{}
+	for r := range p.remotes[key] {
+		out = append(out, r)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // noteRemoteUpdate unpauses a repository's background fetches when a fetch

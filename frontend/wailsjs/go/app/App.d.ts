@@ -28,6 +28,8 @@ export function ApplyHunkSelection(arg1:string,arg2:string,arg3:boolean,arg4:str
 
 export function AutoFetch(arg1:string):Promise<ops.AutoFetchResult>;
 
+export function AutoFetchPaused(arg1:string):Promise<Array<string>>;
+
 export function BranchCounts(arg1:string,arg2:string):Promise<ops.AheadBehind>;
 
 export function CancelCommand(arg1:string,arg2:number):Promise<void>;

@@ -22,6 +22,10 @@ export function AutoFetch(arg1) {
   return window['go']['app']['App']['AutoFetch'](arg1);
 }
 
+export function AutoFetchPaused(arg1) {
+  return window['go']['app']['App']['AutoFetchPaused'](arg1);
+}
+
 export function BranchCounts(arg1, arg2) {
   return window['go']['app']['App']['BranchCounts'](arg1, arg2);
 }
