@@ -7,7 +7,7 @@
   import { modelForProvider, modelHint, needsKey, processingNotice, PROVIDERS, settingsHaveModels, usesOllama } from '../lib/providers'
   import { SETTINGS_TABS, isSettingsTab, tabUsesAI } from '../lib/settingsTabs'
   import { statusText } from '../lib/notifyRules'
-  import { highContrast, loadAISettings, loadGitSettings, notifyAi, notifyDone, notifyEnabled, notifyProblem, persisted, settingsOpen, themePref } from '../lib/stores'
+  import { AUTO_FETCH_CHOICES, autoFetchMinutes, highContrast, loadAISettings, loadGitSettings, notifyAi, notifyDone, notifyEnabled, notifyProblem, notifyRemote, persisted, settingsOpen, themePref } from '../lib/stores'
   import type { ThemePref } from '../lib/theme'
 
   const THEMES: { value: ThemePref; label: string }[] = [
@@ -262,6 +262,18 @@
             </section>
 
             <section>
+              <h4>Fetch</h4>
+              <label>
+                <span>Fetch in the background</span>
+                <select bind:value={$autoFetchMinutes}>
+                  {#each AUTO_FETCH_CHOICES as m}
+                    <option value={m}>{m === 0 ? 'Off' : `Every ${m} min`}</option>
+                  {/each}
+                </select>
+              </label>
+            </section>
+
+            <section>
               <h4>Notifications</h4>
               <label class="row check">
                 <input type="checkbox" bind:checked={$notifyEnabled} />
@@ -279,6 +291,11 @@
                 <input type="checkbox" bind:checked={$notifyProblem} disabled={!$notifyEnabled} />
                 <span>Problems — failures and conflicts</span>
               </label>
+              <label class="row check sub">
+                <input type="checkbox" bind:checked={$notifyRemote} disabled={!$notifyEnabled || $autoFetchMinutes === 0} />
+                <span>New commits on the remote</span>
+              </label>
+              {#if $autoFetchMinutes === 0}<p class="hint remote-off">Turn on Fetch in the background first</p>{/if}
               {#if statusText(notifyStatus)}<p class="hint notify-status">{statusText(notifyStatus)}</p>{/if}
             </section>
 
@@ -502,6 +519,7 @@
   p.hint, p.warn { padding: 14px 0; }
 .check.sub { padding-left: 22px; }
 p.hint.notify-status { padding: 4px 0 0; }
+  p.hint.remote-off { padding: 0 0 0 44px; }
   .pull { display: flex; align-items: center; gap: 8px; }
   .bar { flex: 1; height: 6px; border-radius: 3px; background: var(--hover); overflow: hidden; }
   .bar div { height: 100%; background: var(--accent); }
