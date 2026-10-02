@@ -212,7 +212,7 @@
 
   <div class="footer">
     {#if $busy}<div class="note">{$busy}</div>{/if}
-    <button class="row-item" on:click={() => settingsOpen.set(true)}><Icon name="settings" /> Settings</button>
+    <button class="row-item" on:click={() => settingsOpen.set(true)}><Icon name="settings" /> Settings<span class="version">v{__APP_VERSION__}</span></button>
   </div>
 </div>
 
@@ -239,5 +239,6 @@
   .group-header .count { margin-left: auto; font-size: 11px; color: var(--faint); }
   .empty { margin: 0; padding: 6px 10px; color: var(--muted); }
   .footer { flex: none; border-top: 1px solid var(--border); padding-top: 6px; }
+  .version { margin-left: auto; font-size: 11px; color: var(--muted); }
   .note { padding: 4px 10px; font-size: 12px; color: var(--muted); }
 </style>
