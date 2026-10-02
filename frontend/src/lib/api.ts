@@ -1,5 +1,5 @@
 import * as Go from '../../wailsjs/go/app/App'
-import type { AIMessage, AISettings, AIStatus, AheadBehind, AutoFetchResult, Blame, ChatConfirmEvent, CommandLogView, CommandOutput, CommitInfo, ConflictFile, Details, Filters, Flow, FlowConfig, FlowFinishResult, FlowPlan, FlowStartResult, FlowType, GitSettings, HunkAction, HunkPick, Identity, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, RegionChoice, RegionResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeDiff, WorktreeRemovalInfo, WorktreeState } from './types'
+import type { AIMessage, AISettings, AIStatus, AheadBehind, AutoFetchResult, Blame, ChatConfirmEvent, CommandLogView, CommandOutput, CommitInfo, ConflictFile, Details, Filters, Flow, FlowConfig, FlowFinishResult, FlowPlan, FlowStartResult, FlowType, GitSettings, HunkAction, HunkPick, Identity, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, RemoteConfig, RemoteTest, RegionChoice, RegionResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeDiff, WorktreeRemovalInfo, WorktreeState } from './types'
 import type { NotifyTarget } from './notifyRules'
 
 // The generated bindings use Wails model classes; the JSON is identical to our
@@ -53,6 +53,11 @@ export const api = {
   fetch: (id: string) => call<void>(Go.Fetch(id)),
   autoFetch: (id: string) => call<AutoFetchResult>(Go.AutoFetch(id)),
   autoFetchPaused: (id: string) => call<string[]>(Go.AutoFetchPaused(id)),
+  listRemotes: (id: string) => call<RemoteConfig[]>(Go.ListRemotes(id)),
+  addRemote: (id: string, name: string, url: string) => call<void>(Go.AddRemote(id, name, url)),
+  setRemoteURL: (id: string, name: string, url: string) => call<void>(Go.SetRemoteURL(id, name, url)),
+  removeRemote: (id: string, name: string) => call<void>(Go.RemoveRemote(id, name)),
+  testRemote: (id: string, name: string) => call<RemoteTest>(Go.TestRemote(id, name)),
   push: (id: string) => call<void>(Go.Push(id)),
   pull: (id: string) => call<PullResult>(Go.Pull(id)),
   getRemoteInfo: (id: string) => call<AheadBehind>(Go.GetRemoteInfo(id)),

@@ -6,9 +6,10 @@
   import { fetchRemote, moveRepoToGroup, openRepoFolder, openRepoTerminal, pull, push, relocateRepo, removeRepo, removeWorktree } from '../lib/actions'
   import { REPO_DRAG_MIME } from '../lib/repoDrop'
   import { revealLabel } from '../lib/platform'
-  import { busy, expandedRepos, mergeState, platform, selectRepo, selectedRepo, selectedRepoId, toggleRepoExpanded, worktreeState } from '../lib/stores'
+  import { busy, expandedRepos, mergeState, platform, repoSettings, selectRepo, selectedRepo, selectedRepoId, toggleRepoExpanded, worktreeState } from '../lib/stores'
   import type { Repo } from '../lib/types'
-  import { openMenu, openMenuAsync, type MenuItem } from '../lib/ui'
+  import { openMenu, openMenuAsync, SEPARATOR, type MenuEntry, type MenuItem } from '../lib/ui'
+  import { repoMenuGroups, type RepoMenuId } from '../lib/repoMenu'
   import { changedCount } from '../lib/worktree'
 
   export let repo: Repo
@@ -42,12 +43,18 @@
   // same row, per decision 4: a submodule has no row of its own.
   $: openSub = $selectedRepo?.submodule && $selectedRepo.parentId === repo.id ? $selectedRepo : null
 
+  // entries maps the menu's groups (repoMenu.ts) to their items, with a
+  // line between groups; a group's id without an item is left out.
+  function entries(groups: RepoMenuId[][], items: Partial<Record<RepoMenuId, MenuItem>>): MenuEntry[] {
+    return groups.flatMap((g, i) => [...(i ? [SEPARATOR] : []), ...g.flatMap((id) => (items[id] ? [items[id]!] : []))])
+  }
+
   function repoMenu(event: MouseEvent) {
     // A detected worktree is not a list entry: it follows its main
     // repository, so nothing that edits the list applies to it — except
     // removing the worktree itself, whose disabled/locked state needs a
     // backend read first, hence openMenuAsync rather than the plain items
-    // below.
+    // below. Its remotes are its main repository's, so no settings either.
     if (repo.worktree) {
       openMenuAsync(event, async () => {
         let removeItem: MenuItem
@@ -68,27 +75,28 @@
           // the item is left enabled rather than silently dropped.
           removeItem = { label: 'Remove worktree…', action: () => removeWorktree(repo), danger: true, disabled: !!$busy }
         }
-        return [
-          { label: 'Fetch', action: () => fetchRemote(repo.id), disabled: !!$busy },
-          { label: 'Pull', action: () => pull(repo.id), disabled: !!$busy || !!$mergeState?.merging },
-          { label: 'Push', action: () => push(repo.id), disabled: !!$busy || !!$mergeState?.merging },
-          { label: revealLabel($platform), action: () => openRepoFolder(repo.id) },
-          { label: 'Open in Terminal', action: () => openRepoTerminal(repo.id) },
-          removeItem,
-        ]
+        return entries(repoMenuGroups({ missing: false, worktree: true, child: true }), {
+          fetch: { label: 'Fetch', action: () => fetchRemote(repo.id), disabled: !!$busy },
+          pull: { label: 'Pull', action: () => pull(repo.id), disabled: !!$busy || !!$mergeState?.merging },
+          push: { label: 'Push', action: () => push(repo.id), disabled: !!$busy || !!$mergeState?.merging },
+          reveal: { label: revealLabel($platform), action: () => openRepoFolder(repo.id) },
+          terminal: { label: 'Open in Terminal', action: () => openRepoTerminal(repo.id) },
+          'remove-worktree': removeItem,
+        })
       })
       return
     }
-    openMenu(event, [
-      ...(repo.missing ? [{ label: 'Locate…', action: () => relocateRepo(repo.id) }] : []),
-      { label: 'Fetch', action: () => fetchRemote(repo.id), disabled: repo.missing || !!$busy },
-      { label: 'Pull', action: () => pull(repo.id), disabled: repo.missing || !!$busy || !!$mergeState?.merging },
-      { label: 'Push', action: () => push(repo.id), disabled: repo.missing || !!$busy || !!$mergeState?.merging },
-      { label: revealLabel($platform), action: () => openRepoFolder(repo.id), disabled: repo.missing },
-      { label: 'Open in Terminal', action: () => openRepoTerminal(repo.id), disabled: repo.missing },
-      ...(child ? [] : [{ label: 'Move to group…', action: () => moveRepoToGroup(repo) }]),
-      { label: 'Remove from list…', action: () => removeRepo(repo), danger: true },
-    ])
+    openMenu(event, entries(repoMenuGroups({ missing: repo.missing, worktree: false, child }), {
+      locate: { label: 'Locate…', action: () => relocateRepo(repo.id) },
+      fetch: { label: 'Fetch', action: () => fetchRemote(repo.id), disabled: repo.missing || !!$busy },
+      pull: { label: 'Pull', action: () => pull(repo.id), disabled: repo.missing || !!$busy || !!$mergeState?.merging },
+      push: { label: 'Push', action: () => push(repo.id), disabled: repo.missing || !!$busy || !!$mergeState?.merging },
+      reveal: { label: revealLabel($platform), action: () => openRepoFolder(repo.id), disabled: repo.missing },
+      terminal: { label: 'Open in Terminal', action: () => openRepoTerminal(repo.id), disabled: repo.missing },
+      settings: { label: 'Repository settings…', action: () => repoSettings.set({ repoID: repo.id }), disabled: repo.missing, title: "The repository's folder is missing" },
+      move: { label: 'Move to group…', action: () => moveRepoToGroup(repo) },
+      remove: { label: 'Remove from list…', action: () => removeRepo(repo), danger: true },
+    }))
   }
 </script>
 

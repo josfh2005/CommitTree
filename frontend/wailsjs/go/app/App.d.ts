@@ -22,6 +22,8 @@ export function AIStatus():Promise<app.AIStatus>;
 
 export function AbortMerge(arg1:string):Promise<void>;
 
+export function AddRemote(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function AddRepo():Promise<repos.Repo>;
 
 export function ApplyHunkSelection(arg1:string,arg2:string,arg3:boolean,arg4:string,arg5:Array<worktree.HunkPick>,arg6:string):Promise<void>;
@@ -152,6 +154,8 @@ export function ListModels(arg1:string):Promise<Array<string>>;
 
 export function ListPrompts():Promise<Array<prompts.Info>>;
 
+export function ListRemotes(arg1:string):Promise<Array<ops.Remote>>;
+
 export function ListRepos():Promise<Array<app.RepoItem>>;
 
 export function Menu():Promise<menu.Menu>;
@@ -182,6 +186,8 @@ export function RebaseOnto(arg1:string,arg2:string):Promise<merge.Result>;
 
 export function RelocateRepo(arg1:string):Promise<repos.Repo>;
 
+export function RemoveRemote(arg1:string,arg2:string):Promise<void>;
+
 export function RemoveRepo(arg1:string):Promise<void>;
 
 export function RemoveWorktree(arg1:string,arg2:boolean,arg3:boolean):Promise<void>;
@@ -209,6 +215,8 @@ export function SaveGitSettings(arg1:gitsettings.Settings):Promise<void>;
 export function SendChat(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SetProviderKey(arg1:string,arg2:string):Promise<void>;
+
+export function SetRemoteURL(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SetRepoGroup(arg1:string,arg2:string):Promise<void>;
 
@@ -243,6 +251,8 @@ export function TerminalResize(arg1:string,arg2:number,arg3:number):Promise<void
 export function TerminalShell():Promise<string>;
 
 export function TerminalWrite(arg1:string,arg2:string):Promise<void>;
+
+export function TestRemote(arg1:string,arg2:string):Promise<ops.RemoteTest>;
 
 export function UndoDiscard(arg1:string):Promise<void>;
 

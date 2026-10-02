@@ -10,6 +10,10 @@ export function AbortMerge(arg1) {
   return window['go']['app']['App']['AbortMerge'](arg1);
 }
 
+export function AddRemote(arg1, arg2, arg3) {
+  return window['go']['app']['App']['AddRemote'](arg1, arg2, arg3);
+}
+
 export function AddRepo() {
   return window['go']['app']['App']['AddRepo']();
 }
@@ -270,6 +274,10 @@ export function ListPrompts() {
   return window['go']['app']['App']['ListPrompts']();
 }
 
+export function ListRemotes(arg1) {
+  return window['go']['app']['App']['ListRemotes'](arg1);
+}
+
 export function ListRepos() {
   return window['go']['app']['App']['ListRepos']();
 }
@@ -330,6 +338,10 @@ export function RelocateRepo(arg1) {
   return window['go']['app']['App']['RelocateRepo'](arg1);
 }
 
+export function RemoveRemote(arg1, arg2) {
+  return window['go']['app']['App']['RemoveRemote'](arg1, arg2);
+}
+
 export function RemoveRepo(arg1) {
   return window['go']['app']['App']['RemoveRepo'](arg1);
 }
@@ -384,6 +396,10 @@ export function SendChat(arg1, arg2, arg3) {
 
 export function SetProviderKey(arg1, arg2) {
   return window['go']['app']['App']['SetProviderKey'](arg1, arg2);
+}
+
+export function SetRemoteURL(arg1, arg2, arg3) {
+  return window['go']['app']['App']['SetRemoteURL'](arg1, arg2, arg3);
 }
 
 export function SetRepoGroup(arg1, arg2) {
@@ -452,6 +468,10 @@ export function TerminalShell() {
 
 export function TerminalWrite(arg1, arg2) {
   return window['go']['app']['App']['TerminalWrite'](arg1, arg2);
+}
+
+export function TestRemote(arg1, arg2) {
+  return window['go']['app']['App']['TestRemote'](arg1, arg2);
 }
 
 export function UndoDiscard(arg1) {

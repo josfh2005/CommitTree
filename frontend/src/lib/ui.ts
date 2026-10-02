@@ -141,20 +141,38 @@ export interface MenuItem {
   title?: string
 }
 
-export const menu = writable<{ x: number; y: number; items: MenuItem[] } | null>(null)
+/** A line between a menu's groups. */
+export interface MenuSeparator { separator: true }
+export type MenuEntry = MenuItem | MenuSeparator
+export const SEPARATOR: MenuSeparator = { separator: true }
+export const isSeparator = (e: MenuEntry): e is MenuSeparator => 'separator' in e
 
-export function openMenu(event: MouseEvent, items: MenuItem[]) {
+/** Drops separators at either end and runs of them, so menus can build
+ *  their groups conditionally. */
+export function tidySeparators(entries: MenuEntry[]): MenuEntry[] {
+  const out: MenuEntry[] = []
+  for (const e of entries) {
+    if (isSeparator(e) && (out.length === 0 || isSeparator(out[out.length - 1]))) continue
+    out.push(e)
+  }
+  if (out.length && isSeparator(out[out.length - 1])) out.pop()
+  return out
+}
+
+export const menu = writable<{ x: number; y: number; items: MenuEntry[] } | null>(null)
+
+export function openMenu(event: MouseEvent, items: MenuEntry[]) {
   event.preventDefault()
   event.stopPropagation()
-  menu.set({ x: event.clientX, y: event.clientY, items })
+  menu.set({ x: event.clientX, y: event.clientY, items: tidySeparators(items) })
 }
 
 /** openMenuAsync opens a menu whose items need a backend answer first (e.g. whether a commit is already in HEAD). */
-export async function openMenuAsync(event: MouseEvent, build: () => Promise<MenuItem[]>) {
+export async function openMenuAsync(event: MouseEvent, build: () => Promise<MenuEntry[]>) {
   event.preventDefault()
   event.stopPropagation()
   const { clientX: x, clientY: y } = event
-  menu.set({ x, y, items: await build() })
+  menu.set({ x, y, items: tidySeparators(await build()) })
 }
 
 export async function copyText(text: string) {

@@ -45,6 +45,14 @@ func (p *autoPause) resume(key string) {
 	delete(p.remotes, key)
 }
 
+// forget unpauses one remote of key: it was removed or now points
+// elsewhere, so its old credential failure no longer says anything.
+func (p *autoPause) forget(key, remote string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.remotes[key], remote)
+}
+
 // list is key's paused remotes, sorted; empty, not nil, when none.
 func (p *autoPause) list(key string) []string {
 	p.mu.Lock()
