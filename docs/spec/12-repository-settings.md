@@ -29,7 +29,11 @@ while a field is blank; a name with spaces or one already used says why
 under the form; anything else git refuses is shown in the dialog.
 
 Edits, removals and additions are git commands like any other operation:
-they show the busy label, wait for other operations on the repository, and
-appear in the Commands panel. A failure is shown in the dialog, not as a
-toast. Afterwards the sidebar, the log and the toolbar of the selected
+they show the busy label, are refused while another operation runs on the
+repository (a background fetch is cancelled instead), and appear in the
+Commands panel. A failure is shown at the top of the tab, not as a toast,
+and leaves the add or edit form open with what was typed. Results of a Test
+belong to the opening of the dialog that asked for them: one that answers
+after the dialog was closed or moved to another repository is dropped.
+Afterwards the sidebar, the log and the toolbar of the selected
 repository refresh.

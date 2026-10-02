@@ -3,15 +3,20 @@
   import { api } from '../lib/api'
   import { defaultRemoteName, remoteFormError } from '../lib/remoteForm'
   import { busy, refreshRepo, repoSettings, repos, selectedRepoId } from '../lib/stores'
-  import type { RemoteConfig, RemoteTest } from '../lib/types'
-  import { confirmDialog, dialog, errorMessage } from '../lib/ui'
+  import { remotesPanel } from '../lib/remotesPanel'
+  import type { RemoteConfig } from '../lib/types'
+  import { confirmDialog, dialog } from '../lib/ui'
 
-  let remotes: RemoteConfig[] = []
-  let loadError = ''
-  let error = ''                 // the last write's git error, shown at the top of the list
+  const panel = remotesPanel({
+    list: (id) => api.listRemotes(id),
+    test: (id, name) => api.testRemote(id, name),
+    afterWrite: async (id) => {
+      if (id === $selectedRepoId) await refreshRepo()
+    },
+  })
+  const state = panel.state
   let editing = ''               // remote whose URL is being edited
   let editURL = ''
-  let tests: Record<string, RemoteTest | 'running'> = {}
   let adding = false
   let newName = ''
   let newURL = ''
@@ -20,50 +25,29 @@
   $: repo = $repos.find((r) => r.id === repoID)
   // The repository left the list (removed, or a worktree that vanished).
   $: if ($repoSettings && !repo) close()
-  $: if (repoID) load(repoID)
+  // Every opening starts fresh, even for the same repository.
+  $: if ($repoSettings) reset($repoSettings.repoID)
+  $: ({ remotes, loadError, error, tests } = $state)
   $: names = remotes.map((r) => r.name)
   $: formError = remoteFormError(newName, newURL, names)
 
-  async function load(id: string) {
-    editing = ''; adding = false; tests = {}; error = ''
-    try {
-      remotes = await api.listRemotes(id)
-      loadError = ''
-    } catch (e) {
-      remotes = []
-      loadError = errorMessage(e)
-    }
+  function reset(id: string) {
+    editing = ''; adding = false
+    panel.open(id)
   }
 
   async function write(label: string, fn: () => Promise<void>): Promise<boolean> {
-    const id = repoID
     busy.set(label)
-    error = ''
     try {
-      await fn()
-      return true
-    } catch (e) {
-      error = errorMessage(e)
-      return false
+      return await panel.write(fn)
     } finally {
       busy.set('')
-      await load(id)
-      if (id === $selectedRepoId) await refreshRepo()
     }
   }
 
-  async function test(name: string) {
-    tests = { ...tests, [name]: 'running' }
-    let res: RemoteTest
-    try {
-      res = await api.testRemote(repoID, name)
-    } catch (e) {
-      res = { ok: false, message: errorMessage(e) }
-    }
-    tests = { ...tests, [name]: res }
-  }
+  const test = (name: string) => panel.test(name)
 
-  function startEdit(r: RemoteConfig) { editing = r.name; editURL = r.fetchURL; const { [r.name]: _, ...rest } = tests; tests = rest }
+  function startEdit(r: RemoteConfig) { editing = r.name; editURL = r.fetchURL; panel.clearTest(r.name) }
   async function saveEdit() {
     const name = editing
     if (await write('Saving remote…', () => api.setRemoteURL(repoID, name, editURL.trim()))) editing = ''
