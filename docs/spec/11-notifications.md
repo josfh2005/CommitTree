@@ -11,9 +11,9 @@ focused, an in-app toast when it is focused but the event is out of sight.
 | Operations finished | Fetch, Pull, Push, Merge, Rebase, Cherry-pick, Initialise/Update all submodules, git-flow init/start/finish | succeeded and took 10 s or longer |
 | Problems | One of those operations failed | always |
 | | Conflicts left after Merge, Pull, Rebase, Cherry-pick, git-flow finish, Stash apply/pop | always |
-| Operations finished | Chat answer finished | the answer took 10 s or longer and raised no decision card |
+| Operations finished | Chat answer finished | the answer took 10 s or longer and showed no decision card |
 | The AI needs you | A write card waits for confirmation | always |
-| | A new decision card | always |
+| | A decision card shown to you | always; not when the card was refused and the AI retries |
 | Problems | A chat answer ended with an error | always |
 | New commits on the remote | A background fetch brought commits to the checked-out branch's upstream that the branch does not have — "3 new commits on origin/main" | always (while Fetch in the background is on) |
 
