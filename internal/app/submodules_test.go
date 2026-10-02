@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os/exec"
 	"path/filepath"
-	"sync"
 	"testing"
 
 	"git-ui/internal/repos"
@@ -233,26 +232,27 @@ func TestSubmoduleLocks(t *testing.T) {
 	a, id, dir := newNestedSubmoduleApp(t)
 	subID := repos.IDFor(filepath.Join(dir, "vendor", "lib"))
 
-	lockOf := func(lockID string) *sync.Mutex {
-		m, _ := a.writes.LoadOrStore(lockID, &sync.Mutex{})
-		return m.(*sync.Mutex)
-	}
+	lockOf := a.lockFor
 
 	// The submodule's own lock is held elsewhere.
 	subMu := lockOf(subID)
-	subMu.Lock()
+	if err := subMu.lockUser(); err != nil {
+		t.Fatal(err)
+	}
 	if err := a.UpdateSubmodule(id, "vendor/lib"); !errors.Is(err, ErrBusy) {
 		t.Fatalf("UpdateSubmodule with submodule lock held: %v", err)
 	}
-	subMu.Unlock()
+	subMu.unlock()
 
 	// The parent's lock is held elsewhere.
 	topMu := lockOf(id)
-	topMu.Lock()
+	if err := topMu.lockUser(); err != nil {
+		t.Fatal(err)
+	}
 	if err := a.UpdateSubmodule(id, "vendor/lib"); !errors.Is(err, ErrBusy) {
 		t.Fatalf("UpdateSubmodule with top lock held: %v", err)
 	}
-	topMu.Unlock()
+	topMu.unlock()
 
 	// Both locks are free again after either failure: a normal call now
 	// succeeds.
@@ -364,24 +364,25 @@ func TestSubmoduleLocksNested(t *testing.T) {
 	libID := repos.IDFor(filepath.Join(dir, "vendor", "lib"))
 	zlibID := repos.IDFor(filepath.Join(dir, "vendor", "lib", "deps", "zlib"))
 
-	lockOf := func(lockID string) *sync.Mutex {
-		m, _ := a.writes.LoadOrStore(lockID, &sync.Mutex{})
-		return m.(*sync.Mutex)
-	}
+	lockOf := a.lockFor
 
 	libMu := lockOf(libID)
-	libMu.Lock()
+	if err := libMu.lockUser(); err != nil {
+		t.Fatal(err)
+	}
 	if err := a.UpdateSubmodule(id, "vendor/lib/deps/zlib"); !errors.Is(err, ErrBusy) {
 		t.Fatalf("UpdateSubmodule(nested) with direct-parent lock held: %v", err)
 	}
-	libMu.Unlock()
+	libMu.unlock()
 
 	zlibMu := lockOf(zlibID)
-	zlibMu.Lock()
+	if err := zlibMu.lockUser(); err != nil {
+		t.Fatal(err)
+	}
 	if err := a.UpdateSubmodule(id, "vendor/lib/deps/zlib"); !errors.Is(err, ErrBusy) {
 		t.Fatalf("UpdateSubmodule(nested) with submodule lock held: %v", err)
 	}
-	zlibMu.Unlock()
+	zlibMu.unlock()
 
 	if err := a.UpdateSubmodule(id, "vendor/lib/deps/zlib"); err != nil {
 		t.Fatalf("UpdateSubmodule(nested) after releases: %v", err)

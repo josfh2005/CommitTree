@@ -76,12 +76,8 @@ type App struct {
 	store  *repos.Store
 	mu     sync.Mutex
 	logs   map[string]*logState
-	writes sync.Map // repo ID → *sync.Mutex
-	// autoFetches holds the cancel of the background fetch holding a
-	// repository's write lock (repo ID → context.CancelFunc), so a user
-	// write stops it instead of being refused.
-	autoFetches sync.Map
-	ai          *aiState
+	writes sync.Map // repo ID → *writeLock
+	ai     *aiState
 	// cmds is the log behind the Commands panel; aiWrites marks
 	// repositories (by cmdlog.RepoKey) running an approved AI write.
 	cmds     *cmdlog.Log
@@ -490,27 +486,23 @@ func (a *App) Fingerprint(id string) (string, error) {
 
 // ---- Writes ----
 
-func (a *App) writeMutex(id string) *sync.Mutex {
-	m, _ := a.writes.LoadOrStore(id, &sync.Mutex{})
-	return m.(*sync.Mutex)
+// lockFor is id's write lock, made on first use.
+func (a *App) lockFor(id string) *writeLock {
+	l, _ := a.writes.LoadOrStore(id, newWriteLock())
+	return l.(*writeLock)
 }
 
-// lockWrite takes id's write lock for a user write. A background fetch
-// holding it is cancelled and waited for (git stops as on Ctrl+C, within
-// gitcmd's WaitDelay) by the first write to claim it — a later one, like
-// any other holder, means ErrBusy, so writes never queue.
-func (a *App) lockWrite(id string) (*sync.Mutex, error) {
-	mu := a.writeMutex(id)
-	if mu.TryLock() {
-		return mu, nil
+// lockWrite takes id's write lock for a user write (see writeLock) and
+// returns its unlock. A background fetch holding it is cancelled and
+// waited for (git stops as on Ctrl+C, within gitcmd's WaitDelay) by the
+// first write to claim it — a later one, like any other holder, means
+// ErrBusy, so writes never queue.
+func (a *App) lockWrite(id string) (func(), error) {
+	l := a.lockFor(id)
+	if err := l.lockUser(); err != nil {
+		return nil, err
 	}
-	c, ok := a.autoFetches.LoadAndDelete(id)
-	if !ok {
-		return nil, ErrBusy
-	}
-	c.(context.CancelFunc)()
-	mu.Lock()
-	return mu, nil
+	return l.unlock, nil
 }
 
 func (a *App) write(id string, fn func(ctx context.Context, dir string) error) error {
@@ -518,11 +510,11 @@ func (a *App) write(id string, fn func(ctx context.Context, dir string) error) e
 	if err != nil {
 		return err
 	}
-	mu, err := a.lockWrite(id)
+	unlock, err := a.lockWrite(id)
 	if err != nil {
 		return err
 	}
-	defer mu.Unlock()
+	defer unlock()
 	return fn(a.ctx, dir)
 }
 
@@ -533,18 +525,18 @@ func (a *App) write(id string, fn func(ctx context.Context, dir string) error) e
 // releases whatever locks it had already acquired, so a failed call never
 // leaves a lock held.
 func (a *App) writeAll(ids []string, fn func(ctx context.Context) error) error {
-	var held []*sync.Mutex
+	var held []func()
 	defer func() {
-		for _, mu := range held {
-			mu.Unlock()
+		for _, unlock := range held {
+			unlock()
 		}
 	}()
 	for _, id := range ids {
-		mu, err := a.lockWrite(id)
+		unlock, err := a.lockWrite(id)
 		if err != nil {
 			return err
 		}
-		held = append(held, mu)
+		held = append(held, unlock)
 	}
 	return fn(a.ctx)
 }

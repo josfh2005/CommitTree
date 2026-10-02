@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sync"
 	"testing"
 
 	"git-ui/internal/refs"
@@ -186,10 +185,11 @@ func TestRemoveWorktreeRefusesWhileTheWorktreesOwnLockIsHeld(t *testing.T) {
 	WithAI(a, AIDeps{Emit: newEvents().emit})
 	wtID, wtDir := removeTestWorktree(t, a, id, "wtbranch")
 
-	m, _ := a.writes.LoadOrStore(wtID, &sync.Mutex{})
-	mu := m.(*sync.Mutex)
-	mu.Lock()
-	defer mu.Unlock()
+	l := a.lockFor(wtID)
+	if err := l.lockUser(); err != nil {
+		t.Fatal(err)
+	}
+	defer l.unlock()
 
 	if err := a.RemoveWorktree(wtID, false, false); !errors.Is(err, ErrBusy) {
 		t.Fatalf("err = %v, want ErrBusy", err)

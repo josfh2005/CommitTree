@@ -277,6 +277,11 @@ is not affected by another repository's lock; the two run independently.
 (The interface layered on top of this is more conservative: see "Busy
 state and blocking" above.) Read operations are never blocked by the lock.
 
+A background fetch (see Remote and stash) takes the same lock, but only
+when it is free, and gives way: a user write that finds it holding the lock
+cancels it and gets the lock as soon as git has stopped, before any other
+write. A second write arriving meanwhile is busy, as usual.
+
 The embedded terminal (see Terminal) is the one deliberate exception: a
 shell typed into by the user neither takes nor waits on this lock, the same
 way an external terminal open on the same repository never has. Requiring
