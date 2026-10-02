@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	goruntime "runtime"
 	"strings"
 	"sync"
 
@@ -28,6 +29,14 @@ type Notification struct {
 	Target string `json:"target"`
 }
 
+// On Linux the system reports a click on a notification and a close by the
+// user the same way (Wails' DEFAULT_ACTION), so a notification there carries
+// an Open button and only that button opens it.
+const (
+	openCategory = "open"
+	openAction   = "open"
+)
+
 // NotifyOpenEvent is EventNotifyOpen's payload.
 type NotifyOpenEvent struct {
 	RepoID string `json:"repoID"`
@@ -41,6 +50,8 @@ type notifier interface {
 	Authorized() (bool, error)
 	RequestAuthorization() (bool, error)
 	Send(runtime.NotificationOptions) error
+	SendWithActions(runtime.NotificationOptions) error
+	RegisterCategory(runtime.NotificationCategory) error
 	OnResponse(func(runtime.NotificationResult))
 	ShowWindow()
 	Cleanup()
@@ -57,6 +68,12 @@ func (w wailsNotifier) RequestAuthorization() (bool, error) {
 }
 func (w wailsNotifier) Send(o runtime.NotificationOptions) error {
 	return runtime.SendNotification(w.ctx, o)
+}
+func (w wailsNotifier) SendWithActions(o runtime.NotificationOptions) error {
+	return runtime.SendNotificationWithActions(w.ctx, o)
+}
+func (w wailsNotifier) RegisterCategory(c runtime.NotificationCategory) error {
+	return runtime.RegisterNotificationCategory(w.ctx, c)
 }
 func (w wailsNotifier) OnResponse(cb func(runtime.NotificationResult)) {
 	runtime.OnNotificationResponse(w.ctx, cb)
@@ -75,6 +92,7 @@ type notifyState struct {
 	n       notifier
 	initErr error
 	asked   bool
+	goos    string // runtime.GOOS unless a test sets it
 }
 
 func (a *App) startNotifications(n notifier) {
@@ -85,11 +103,21 @@ func (a *App) startNotifications(n notifier) {
 		a.notes.initErr = err
 		return
 	}
+	if a.notes.goos == "" {
+		a.notes.goos = goruntime.GOOS
+	}
+	linux := a.notes.goos == "linux"
+	if linux {
+		// Without the category the notification is plain and opens nothing,
+		// which still beats opening on close.
+		_ = n.RegisterCategory(runtime.NotificationCategory{ID: openCategory, Actions: []runtime.NotificationAction{{ID: openAction, Title: "Open"}}})
+	}
 	n.OnResponse(func(r runtime.NotificationResult) {
-		// A dismissal is ignored where the platform reports it as such. Wails'
-		// Linux backend reports a notification closed by the user as a click
-		// (DEFAULT_ACTION), so there closing one also opens it.
-		if r.Error != nil || strings.Contains(strings.ToLower(r.Response.ActionIdentifier), "dismiss") {
+		if r.Error != nil {
+			return
+		}
+		id := r.Response.ActionIdentifier
+		if linux && id != openAction || !linux && strings.Contains(strings.ToLower(id), "dismiss") {
 			return
 		}
 		repoID, _ := r.Response.UserInfo["repoID"].(string)
@@ -114,7 +142,7 @@ func (a *App) stopNotifications() {
 // missing and already asked for, so it becomes a toast.
 func (a *App) Notify(n Notification) error {
 	a.notes.mu.Lock()
-	nt, initErr := a.notes.n, a.notes.initErr
+	nt, initErr, linux := a.notes.n, a.notes.initErr, a.notes.goos == "linux"
 	if nt == nil {
 		a.notes.mu.Unlock()
 		return errNotificationsNotStarted
@@ -140,14 +168,19 @@ func (a *App) Notify(n Notification) error {
 	if !ok {
 		return ErrNotificationsDenied
 	}
-	a.notes.mu.Lock()
-	defer a.notes.mu.Unlock()
-	return nt.Send(runtime.NotificationOptions{
+	opts := runtime.NotificationOptions{
 		ID:    n.ID,
 		Title: n.Title,
 		Body:  n.Body,
 		Data:  map[string]interface{}{"repoID": n.RepoID, "target": n.Target},
-	})
+	}
+	a.notes.mu.Lock()
+	defer a.notes.mu.Unlock()
+	if linux {
+		opts.CategoryID = openCategory
+		return nt.SendWithActions(opts)
+	}
+	return nt.Send(opts)
 }
 
 // NotificationStatus is "allowed", "not allowed" or "unavailable: <reason>",

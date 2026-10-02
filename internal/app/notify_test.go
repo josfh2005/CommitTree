@@ -22,6 +22,18 @@ type fakeNotifier struct {
 	// asking is closed when RequestAuthorization starts, which then waits
 	// for block: the permission dialog open on screen.
 	asking, block chan struct{}
+
+	categories      []runtime.NotificationCategory
+	sentWithActions []runtime.NotificationOptions
+}
+
+func (f *fakeNotifier) RegisterCategory(c runtime.NotificationCategory) error {
+	f.categories = append(f.categories, c)
+	return nil
+}
+func (f *fakeNotifier) SendWithActions(o runtime.NotificationOptions) error {
+	f.sentWithActions = append(f.sentWithActions, o)
+	return nil
 }
 
 func (f *fakeNotifier) Init() error               { return f.initErr }
@@ -57,6 +69,7 @@ func TestNotifyBeforeStartupFails(t *testing.T) {
 
 func TestNotifyAsksOnceThenSends(t *testing.T) {
 	a, _ := newTestApp(t)
+	a.notes.goos = "darwin"
 	f := &fakeNotifier{grant: true}
 	a.startNotifications(f)
 	if err := a.Notify(note); err != nil {
@@ -121,6 +134,7 @@ func TestNotificationClickOpensTheRepo(t *testing.T) {
 			mu.Unlock()
 		}
 	}})
+	a.notes.goos = "darwin"
 	f := &fakeNotifier{authorized: true}
 	a.startNotifications(f)
 	f.respond(runtime.NotificationResult{Response: runtime.NotificationResponse{
@@ -172,5 +186,52 @@ func TestPermissionDialogDoesNotBlockOtherNotifications(t *testing.T) {
 	}
 	if len(f.sent) != 1 || f.requests != 1 {
 		t.Fatalf("sent=%d requests=%d", len(f.sent), f.requests)
+	}
+}
+
+func TestLinuxNotificationsOpenOnlyFromTheOpenButton(t *testing.T) {
+	a, _ := newTestApp(t)
+	var mu sync.Mutex
+	var got []NotifyOpenEvent
+	WithAI(a, AIDeps{Emit: func(name string, data any) {
+		if name == EventNotifyOpen {
+			mu.Lock()
+			got = append(got, data.(NotifyOpenEvent))
+			mu.Unlock()
+		}
+	}})
+	a.notes.goos = "linux"
+	f := &fakeNotifier{authorized: true}
+	a.startNotifications(f)
+	if len(f.categories) != 1 || f.categories[0].ID != "open" || len(f.categories[0].Actions) != 1 ||
+		f.categories[0].Actions[0].ID != "open" || f.categories[0].Actions[0].Title != "Open" {
+		t.Fatalf("categories = %+v", f.categories)
+	}
+	if err := a.Notify(note); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.sent) != 0 || len(f.sentWithActions) != 1 || f.sentWithActions[0].CategoryID != "open" {
+		t.Fatalf("sent=%d withActions=%+v", len(f.sent), f.sentWithActions)
+	}
+	info := map[string]interface{}{"repoID": "r1", "target": "repo"}
+	f.respond(runtime.NotificationResult{Response: runtime.NotificationResponse{ActionIdentifier: "DEFAULT_ACTION", UserInfo: info}})
+	f.respond(runtime.NotificationResult{Response: runtime.NotificationResponse{ActionIdentifier: "open", UserInfo: info}})
+	mu.Lock()
+	defer mu.Unlock()
+	if f.shown != 1 || len(got) != 1 || got[0] != (NotifyOpenEvent{RepoID: "r1", Target: "repo"}) {
+		t.Fatalf("shown=%d events=%+v", f.shown, got)
+	}
+}
+
+func TestMacNotificationsKeepPlainSend(t *testing.T) {
+	a, _ := newTestApp(t)
+	a.notes.goos = "darwin"
+	f := &fakeNotifier{authorized: true}
+	a.startNotifications(f)
+	if err := a.Notify(note); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.categories) != 0 || len(f.sentWithActions) != 0 || len(f.sent) != 1 {
+		t.Fatalf("categories=%d withActions=%d sent=%d", len(f.categories), len(f.sentWithActions), len(f.sent))
 	}
 }
