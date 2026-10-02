@@ -31,6 +31,7 @@ cd frontend && npm test && npm run check
 ```bash
 make build   # → build/bin/CommitTree.app
 make icon    # re-render build/appicon.png from assets/icon.svg
+             # (macOS 26+ uses assets/CommitTree.icon, compiled by scripts/mac-icon.sh on every build; needs Xcode)
 make build-linux            # Docker → build/bin/CommitTree-linux-amd64.tar.gz
 make build-linux ARCH=arm64 # same for arm64
 ```
