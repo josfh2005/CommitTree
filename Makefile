@@ -20,8 +20,7 @@ dev:
 	$(NODE) ~/go/bin/wails dev
 
 icon:
-	qlmanage -t -s 1024 -o build assets/icon.svg >/dev/null
-	mv build/icon.svg.png build/appicon.png
+	swift scripts/svg2png.swift assets/icon.svg build/appicon.png 1024
 
 icon-previews:
 	mkdir -p build/icon-previews
