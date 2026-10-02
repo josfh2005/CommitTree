@@ -88,7 +88,9 @@ describe('runRound', () => {
 
 describe('startAutoFetch', () => {
   beforeEach(() => { vi.useFakeTimers(); pausedRepos.clear(); autoFetchMinutes.set(15) })
-  afterEach(() => vi.useRealTimers())
+  afterEach(() => {
+    vi.useRealTimers()
+  })
 
   it('runs the first round 30 s after start, then every interval after a round ends', async () => {
     const d = deps()
