@@ -1,15 +1,16 @@
+import { choiceState } from './chat'
 import { firstLine, formatSeconds, type NotifyEvent } from './notifyRules'
-import type { ChatConfirmEvent, ChatErrorEvent, ChatStartEvent, ChatToolEvent } from './types'
+import type { ChatConfirmEvent, ChatErrorEvent, ChatStartEvent, ChatToolResultEvent } from './types'
 
 /** The chat runs being watched for notifications, by run id. A run that
- *  raised a decision card does not also notify that it finished. */
+ *  showed a decision card does not also notify that it finished. */
 export interface ChatWatch {
   runs: Record<string, { repoID: string; start: number; decided: boolean }>
 }
 
 export const emptyWatch = (): ChatWatch => ({ runs: {} })
 
-export const CHAT_WATCH_EVENTS = ['chat:start', 'chat:confirm', 'chat:tool', 'chat:done', 'chat:error'] as const
+export const CHAT_WATCH_EVENTS = ['chat:start', 'chat:confirm', 'chat:tool_result', 'chat:done', 'chat:error'] as const
 
 type Run = { repoID: string; runID: string }
 
@@ -29,9 +30,11 @@ export function watchChat(w: ChatWatch, name: string, payload: unknown, now: num
       const c = payload as ChatConfirmEvent
       return { watch: w, event: { category: 'ai', repoID: c.repoID, target: 'chat', body: `The AI is waiting for you to confirm: ${c.title}` } }
     }
-    case 'chat:tool': {
-      const t = payload as ChatToolEvent
-      if (t.name !== 'propose_options') return { watch: w, event: null }
+    case 'chat:tool_result': {
+      // Only a card the tool accepted is on screen; a refused one is just
+      // a failed call the model will retry.
+      const t = payload as ChatToolResultEvent
+      if (t.name !== 'propose_options' || choiceState(t) !== 'pending') return { watch: w, event: null }
       const run = w.runs[t.runID]
       const watch = run ? { runs: { ...w.runs, [t.runID]: { ...run, decided: true } } } : w
       return { watch, event: { category: 'ai', repoID: t.repoID, target: 'chat', body: 'The AI has a decision for you' } }

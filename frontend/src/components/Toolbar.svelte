@@ -3,11 +3,11 @@
   import { fetchRemote, newBranch, openRepoFolder, pickAndMerge, pull, push, startCommit, stashChanges } from '../lib/actions'
   import { openFlowMenu } from '../lib/flowActions'
   import { toolbarItems, type ToolbarGroup, type ToolbarId } from '../lib/toolbar'
-  import { busy, chatOpen, commandsOpen, mergeState, platform, refs, remoteInfo, stashConflictDismissed, terminalOpen, worktreeState } from '../lib/stores'
+  import { busy, chatOpen, commandsOpen, mergeState, pausedRemotes, platform, refs, remoteInfo, stashConflictDismissed, terminalOpen, worktreeState } from '../lib/stores'
 
   export let repoId: string
 
-  $: items = toolbarItems({ refs: $refs, worktree: $worktreeState, merge: $mergeState, busy: $busy, remote: $remoteInfo, terminalOpen: $terminalOpen, commandsOpen: $commandsOpen, chatOpen: $chatOpen, platform: $platform })
+  $: items = toolbarItems({ refs: $refs, worktree: $worktreeState, merge: $mergeState, busy: $busy, remote: $remoteInfo, terminalOpen: $terminalOpen, commandsOpen: $commandsOpen, chatOpen: $chatOpen, platform: $platform, paused: $pausedRemotes })
   const GROUPS: ToolbarGroup[] = ['work', 'sync', 'refs', 'tools']
 
   function act(id: ToolbarId, event: MouseEvent) {
@@ -39,7 +39,7 @@
     {#if g > 0}<span class="sep"></span>{/if}
     {#each items.filter((i) => i.group === group) as item (item.id)}
       <button class="tool" class:toggle={item.group === 'tools' && item.id !== 'folder'} class:active={item.active} aria-pressed={item.group === 'tools' && item.id !== 'folder' ? item.active : undefined} title={item.title} aria-label={item.label} disabled={!item.enabled} on:click={(e) => act(item.id, e)}>
-        <span class="icon"><Icon name={item.icon} size={20} />{#if item.badge}<span class="badge">{item.badge}</span>{/if}</span>
+        <span class="icon"><Icon name={item.icon} size={20} />{#if item.badge}<span class="badge">{item.badge}</span>{/if}{#if item.dot}<span class="dot" aria-hidden="true"></span>{/if}</span>
         <span class="label">{item.label}</span>
       </button>
     {/each}
@@ -61,6 +61,7 @@
   .tool.toggle.active { background: var(--active); border-color: var(--border); color: var(--text); }
   .icon { position: relative; display: inline-flex; }
   .badge { position: absolute; top: -4px; right: -8px; font-size: 9px; line-height: 1; padding: 1px 3px; border-radius: 6px; background: var(--accent); color: white; }
+  .dot { position: absolute; top: -2px; right: -3px; width: 7px; height: 7px; border-radius: 50%; background: var(--warning); }
   .sep { width: 1px; height: 28px; margin: 0 6px; background: var(--border); }
   /* The header is the container (LogView). Too narrow for labelled buttons:
      icons only, the name stays in the tooltip. */

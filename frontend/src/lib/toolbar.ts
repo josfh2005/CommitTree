@@ -18,12 +18,21 @@ export interface ToolbarInput {
   commandsOpen: boolean
   chatOpen: boolean
   platform: string
+  /** Remotes background fetches skip for want of credentials. */
+  paused: string[]
 }
 
 // title is the tooltip: why the button is disabled, or what it does.
-export interface ToolbarItem { id: ToolbarId; label: string; icon: string; group: ToolbarGroup; enabled: boolean; title: string; active: boolean; badge: number }
+export interface ToolbarItem { id: ToolbarId; label: string; icon: string; group: ToolbarGroup; enabled: boolean; title: string; active: boolean; badge: number; dot: boolean }
 
 const CONFLICT = 'Resolve the conflict first'
+
+/** The toolbar Fetch's tooltip while background fetches skip remotes that
+ *  failed for want of credentials; '' when none is paused. */
+export function pausedTooltip(remotes: string[]): string {
+  if (remotes.length === 0) return ''
+  return `Background fetch paused for ${remotes.join(', ')}: authentication failed. Fetch to retry.`
+}
 
 // What is left to finish once every conflict is resolved; a stash conflict
 // has nothing to finish, only files to resolve.
@@ -45,12 +54,12 @@ export function toolbarItems(i: ToolbarInput): ToolbarItem[] {
   // first returns the first reason that applies, or '' when none does.
   const first = (...rules: [boolean, string][]) => rules.find(([when]) => when)?.[1] ?? ''
   const item = (id: ToolbarId, label: string, icon: string, group: ToolbarGroup, reason: string, title: string, extra: Partial<ToolbarItem> = {}): ToolbarItem =>
-    ({ id, label, icon, group, enabled: reason === '', title: reason || title, active: false, badge: 0, ...extra })
+    ({ id, label, icon, group, enabled: reason === '', title: reason || title, active: false, badge: 0, dot: false, ...extra })
   const shortcut = `${terminalShortcutLabel(i.platform)} or Ctrl+\``
   return [
     item('commit', 'Commit', 'commit', 'work', first([!!i.busy, i.busy], [conflict, blocked], [!changes, 'Nothing to commit']), 'Commit the changes'),
     item('stash', 'Stash', 'stash', 'work', first([!!i.busy, i.busy], [conflict, blocked], [!changes, 'Nothing to stash']), 'Stash the changes'),
-    item('fetch', 'Fetch', 'refresh', 'sync', first([!!i.busy, i.busy]), 'Fetch from all remotes'),
+    item('fetch', 'Fetch', 'refresh', 'sync', first([!!i.busy, i.busy]), pausedTooltip(i.paused) || 'Fetch from all remotes', { dot: i.paused.length > 0 }),
     item('pull', 'Pull', 'download', 'sync', first([!!i.busy, i.busy], [conflict, blocked]), 'Pull', { badge: i.remote?.behind ?? 0 }),
     item('push', 'Push', 'upload', 'sync', first([!!i.busy, i.busy], [conflict, blocked]), 'Push', { badge: i.remote?.ahead ?? 0 }),
     item('branch', 'Branch', 'branch', 'refs', first([!!i.busy, i.busy]), 'New branch from HEAD'),

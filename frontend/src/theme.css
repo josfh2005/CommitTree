@@ -10,6 +10,7 @@
   --faint: #a8a6a1;
   --accent: #c96442;
   --danger: #c0392b;
+  --warning: #d4920a;
   --ok: #4f9d4f;
   --selection: #e8eefb;
   --merge-text: #8a8883;
@@ -75,6 +76,7 @@
   --muted: #9c9a95;
   --faint: #6f6d69;
   --danger: #c0392b;
+  --warning: #e0a526;
   --ok: #5cb85c;
   --selection: #2d3444;
   --merge-text: #8c8a85;

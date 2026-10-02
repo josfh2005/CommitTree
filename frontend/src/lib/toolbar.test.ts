@@ -7,7 +7,7 @@ const clean: WorktreeState = { staged: [], unstaged: [], untracked: [], merging:
 const dirty: WorktreeState = { staged: [], unstaged: [{ path: 'a.txt', status: 'M' }], untracked: [], merging: false }
 const conflict = (kind: MergeState['kind']): MergeState => ({ kind, merging: true, from: 'x', into: 'main', conflicts: ['a.txt'], manual: [], staged: [], unstaged: [] })
 const input = (over: Partial<ToolbarInput> = {}): ToolbarInput => ({
-  refs: refs(), worktree: clean, merge: null, busy: '', remote: null, terminalOpen: false, commandsOpen: false, chatOpen: true, platform: 'darwin', ...over,
+  refs: refs(), worktree: clean, merge: null, busy: '', remote: null, terminalOpen: false, commandsOpen: false, chatOpen: true, platform: 'darwin', paused: [], ...over,
 })
 const item = (over: Partial<ToolbarInput>, id: string) => toolbarItems(input(over)).find((i) => i.id === id)!
 
@@ -16,6 +16,15 @@ describe('toolbarItems', () => {
     expect(item({}, 'flow')).toMatchObject({ enabled: true, label: 'Flow', title: 'git-flow: start or finish a feature, release, hotfix or warmfix' })
     expect(item({ busy: 'Pushing…' }, 'flow')).toMatchObject({ enabled: false, title: 'Pushing…' })
     expect(item({ merge: conflict('merge') }, 'flow')).toMatchObject({ enabled: false, title: 'Resolve the conflict first' })
+  })
+
+  it('marks Fetch with a dot and says why while a remote is paused', () => {
+    expect(item({}, 'fetch')).toMatchObject({ dot: false, title: 'Fetch from all remotes' })
+    expect(item({ paused: ['origin'] }, 'fetch')).toMatchObject({
+      enabled: true, dot: true, title: 'Background fetch paused for origin: authentication failed. Fetch to retry.',
+    })
+    expect(item({ paused: ['origin'], busy: 'Pushing…' }, 'fetch')).toMatchObject({ enabled: false, dot: true, title: 'Pushing…' })
+    expect(item({ paused: ['origin'] }, 'pull').dot).toBe(false)
   })
 
   it('lists the twelve buttons in their groups and order', () => {

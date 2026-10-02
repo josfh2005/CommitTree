@@ -52,6 +52,7 @@ export const api = {
   getResetPreview: (id: string, hash: string) => call<ResetInfo>(Go.GetResetPreview(id, hash)),
   fetch: (id: string) => call<void>(Go.Fetch(id)),
   autoFetch: (id: string) => call<AutoFetchResult>(Go.AutoFetch(id)),
+  autoFetchPaused: (id: string) => call<string[]>(Go.AutoFetchPaused(id)),
   push: (id: string) => call<void>(Go.Push(id)),
   pull: (id: string) => call<PullResult>(Go.Pull(id)),
   getRemoteInfo: (id: string) => call<AheadBehind>(Go.GetRemoteInfo(id)),

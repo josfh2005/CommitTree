@@ -31,3 +31,13 @@ func (a *App) AutoFetch(id string) (ops.AutoFetchResult, error) {
 	a.paused.pause(key, res.AuthFailed)
 	return res, err
 }
+
+// AutoFetchPaused is the remotes of repository id that background fetches
+// skip for want of credentials, for the toolbar's Fetch dot.
+func (a *App) AutoFetchPaused(id string) ([]string, error) {
+	dir, err := a.dir(id)
+	if err != nil {
+		return nil, err
+	}
+	return a.paused.list(cmdlog.RepoKey(dir)), nil
+}

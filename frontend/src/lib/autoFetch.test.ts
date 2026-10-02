@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FIRST_ROUND_MS, outcome, runRound, startAutoFetch, type AutoFetchDeps } from './autoFetch'
+import { pausedTooltip } from './toolbar'
 import { autoFetchMinutes } from './stores'
 import type { AutoFetchResult, Repo } from './types'
 
@@ -20,6 +21,12 @@ describe('outcome', () => {
     expect(outcome('b', { result: res({ refsChanged: true }) }, sel).refresh).toBe(false)
     expect(outcome('a', { result: res({ refsChanged: true }) }, { selectedId: 'a', busy: true }).refresh).toBe(false)
     expect(outcome('a', { result: res() }, sel).refresh).toBe(false)
+  })
+
+  it('refreshes the selected repository when a remote just got paused', () => {
+    expect(outcome('a', { result: res({ authFailed: ['origin'] }) }, sel).refresh).toBe(true)
+    expect(outcome('a', { result: res({ authFailed: [] }) }, sel).refresh).toBe(false)
+    expect(outcome('b', { result: res({ authFailed: ['origin'] }) }, sel).refresh).toBe(false)
   })
 
   it('turns new commits into a remote event', () => {
@@ -139,5 +146,13 @@ describe('startAutoFetch', () => {
     await vi.advanceTimersByTimeAsync(60 * 60_000)
     expect(fetch).toHaveBeenCalledTimes(2)
     stop()
+  })
+})
+
+describe('pausedTooltip', () => {
+  it('is empty with nothing paused and names every paused remote', () => {
+    expect(pausedTooltip([])).toBe('')
+    expect(pausedTooltip(['origin'])).toBe('Background fetch paused for origin: authentication failed. Fetch to retry.')
+    expect(pausedTooltip(['origin', 'upstream'])).toBe('Background fetch paused for origin, upstream: authentication failed. Fetch to retry.')
   })
 })

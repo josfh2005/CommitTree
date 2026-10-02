@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 
+	"git-ui/internal/cmdlog"
 	"git-ui/internal/gitsettings"
 	"git-ui/internal/ops"
 )
@@ -27,6 +28,11 @@ func (a *App) Pull(id string) (ops.Result, error) {
 	err = a.write(id, func(ctx context.Context, dir string) error {
 		var pullErr error
 		result, pullErr = ops.Pull(ctx, dir, cfg.PullStrategy)
+		// A pull that stopped on conflicts exits non-zero, but its fetch
+		// reached the remote: credentials work, so background fetches resume.
+		if pullErr == nil && result.Outcome == ops.Conflicted {
+			a.paused.resume(cmdlog.RepoKey(dir))
+		}
 		return pullErr
 	})
 	return result, err
