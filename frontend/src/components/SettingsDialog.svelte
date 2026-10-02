@@ -67,6 +67,16 @@
   $: if ($settingsOpen) load()
   $: remote = !!settings && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/.test(settings.ollamaURL)
   $: models = status?.ollama.models ?? []
+  // What an installed Ollama model is used for, shown next to it on Providers.
+  $: modelUses = (name: string) =>
+    settings
+      ? [
+          ...(settings.chatProvider === 'ollama' && sameModel(name, settings.chatModel) ? ['chat'] : []),
+          ...(settings.taskProvider === 'ollama' && sameModel(name, settings.taskModel) ? ['explain commit'] : []),
+        ]
+      : []
+  // Ollama reports "qwen2.5:7b" but a model may be chosen as "llama3" for "llama3:latest".
+  const sameModel = (installed: string, chosen: string) => installed === chosen || installed === `${chosen}:latest`
   $: chatHint = (settings && status ? modelHint(settings.chatProvider, status) : '') || (settings ? modelErrors[settings.chatProvider] : '') || ''
   $: taskHint = (settings && status ? modelHint(settings.taskProvider, status) : '') || (settings ? modelErrors[settings.taskProvider] : '') || ''
 
@@ -354,6 +364,17 @@
                 </div>
               </label>
               {#if remote}<p class="warn">Diffs will be sent over the network to this host.</p>{/if}
+              {#if models.length}
+                <ul class="installed" aria-label="Installed models">
+                  {#each models as m}
+                    <li>
+                      <span class="mono">{m.name}</span>
+                      <span class="hint">{formatBytes(m.size)}</span>
+                      {#each modelUses(m.name) as use}<span class="badge">{use}</span>{/each}
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
               {#if pull}
                 <div class="pull">
                   <div class="bar"><div style="width: {percent(pull.completed, pull.total)}%"></div></div>
@@ -505,6 +526,8 @@
   .row input { flex: 1; }
   .row input[type='checkbox'] { flex: none; }
   .status { display: flex; align-items: center; gap: 6px; }
+  .installed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .installed li { display: flex; align-items: center; gap: 8px; }
   .dot { width: 8px; height: 8px; border-radius: 50%; }
   .dot.ok { background: var(--ok); }
   .dot.bad { background: var(--danger); }

@@ -180,7 +180,9 @@ The Settings dialog has a fixed size, with tabs in a column on the left:
 - **General**: Appearance and the Git pull strategy.
 - **Providers**: Anthropic and OpenAI, each with its API key (Save, or the
   stored key's hint and Remove), and Ollama with its status, URL (Test), the
-  warning when the URL is not this machine, and model downloads (the chat
+  warning when the URL is not this machine, the installed models (name, size,
+  and a "chat" or "explain commit" badge on the ones in use), and model
+  downloads (the chat
   model when Ollama is the chat provider and it is not installed, or any
   other model by name, with progress and Cancel).
 - **AI models**: the chat and explain-commit providers and models, the
