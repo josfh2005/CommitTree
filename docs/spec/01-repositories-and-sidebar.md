@@ -51,6 +51,14 @@ by this action. If the removed repository was selected, selection is
 cleared. Any embedded-terminal tabs open on the repository are closed along
 with it, without a separate confirmation (see Terminal).
 
+A repository row's context menu is grouped, with a line between groups:
+Locate… (only while the folder is missing); Fetch, Pull, Push; the
+show-in-file-manager action and Open in Terminal; Repository settings…
+(disabled while the folder is missing; see `12-repository-settings.md`);
+Move to group… and Remove from list…. A linked worktree's menu has Fetch,
+Pull, Push; the same two open actions; and Remove worktree… — no Repository
+settings…, since its remotes are its main repository's.
+
 A repository row's context menu also offers to show the repository's
 working tree in the platform's file manager, labelled in the platform's own
 words: "Show in Finder" on macOS, "Show in Explorer" on Windows, "Open in
@@ -269,7 +277,8 @@ marked "↳", sorted by name the same way. They follow their main repository
 wherever it is, whatever their own group field says, and are visible whether
 or not the main repository is expanded or selected. A worktree row selects
 and expands exactly like a repository row. Its context menu offers only
-Fetch, Pull, Push and the show-in-file-manager action; a stored repository
+Fetch, Pull, Push, the show-in-file-manager action, Open in Terminal and
+Remove worktree…; a stored repository
 shown nested (see Worktrees) keeps "Remove from list" and loses only "Move
 to group…". A worktree row cannot be dragged into a group. A group section is a header row (its name and a count of the
 repositories in it) that toggles the group between expanded and collapsed;

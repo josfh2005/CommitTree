@@ -1,6 +1,6 @@
 import { get } from 'svelte/store'
 import { describe, expect, it } from 'vitest'
-import { dialog, formDialog, formMessage, initialFormValues, type FormField } from './ui'
+import { dialog, formDialog, formMessage, initialFormValues, type FormField, SEPARATOR, tidySeparators, type MenuEntry } from './ui'
 
 const fields: FormField[] = [
   { kind: 'text', key: 'name', label: 'Name', value: 'x', prefix: 'feature/' },
@@ -26,5 +26,17 @@ describe('form dialog', () => {
     expect(d?.kind).toBe('form')
     if (d?.kind === 'form') d.resolve({ name: 'z' })
     await expect(p).resolves.toEqual({ name: 'z' })
+  })
+})
+
+describe('tidySeparators', () => {
+  const a = { label: 'A', action: () => {} }
+  const b = { label: 'B', action: () => {} }
+  it('drops leading, trailing and doubled separators', () => {
+    const entries: MenuEntry[] = [SEPARATOR, a, SEPARATOR, SEPARATOR, b, SEPARATOR]
+    expect(tidySeparators(entries)).toEqual([a, SEPARATOR, b])
+  })
+  it('leaves an empty list empty', () => {
+    expect(tidySeparators([SEPARATOR])).toEqual([])
   })
 })
