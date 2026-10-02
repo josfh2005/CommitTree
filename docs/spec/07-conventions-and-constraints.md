@@ -174,13 +174,19 @@ Settings.
 The Settings dialog has a fixed size, with tabs in a column on the left:
 
 - **General**: Appearance and the Git pull strategy.
-- **AI models**: Ollama, the chat and explain-commit providers and models,
-  and the commit message mode.
-- **API keys**
+- **Providers**: Anthropic and OpenAI, each with its API key (Save, or the
+  stored key's hint and Remove), and Ollama with its status, URL (Test), the
+  warning when the URL is not this machine, and model downloads (the chat
+  model when Ollama is the chat provider and it is not installed, or any
+  other model by name, with progress and Cancel).
+- **AI models**: the chat and explain-commit providers and models, the
+  commit message mode and suggested replies.
 - **Prompts**
 
-It opens on the tab last used. Only the tab's own content scrolls. The note
-on where AI requests are processed shows on the AI models and API keys tabs.
+It opens on the tab last used; a remembered API keys tab, from before
+Providers replaced it, opens on Providers. Only the tab's own content
+scrolls. The note on where AI requests are processed shows on the Providers
+and AI models tabs.
 If the AI settings cannot be loaded, the General tab still works and the AI
 tabs show the error.
 

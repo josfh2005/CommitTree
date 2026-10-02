@@ -4,8 +4,8 @@
   import Icon from './Icon.svelte'
   import { api } from '../lib/api'
   import { formatBytes, percent } from '../lib/format'
-  import { modelForProvider, modelHint, needsKey, processingNotice, PROVIDERS, settingsHaveModels, usesOllama } from '../lib/providers'
-  import { SETTINGS_TABS, isSettingsTab, tabUsesAI } from '../lib/settingsTabs'
+  import { modelForProvider, modelHint, processingNotice, providerShortLabel, PROVIDERS, settingsHaveModels } from '../lib/providers'
+  import { SETTINGS_TABS, isSettingsTab, migrateRememberedTab, tabUsesAI } from '../lib/settingsTabs'
   import { statusText } from '../lib/notifyRules'
   import { AUTO_FETCH_CHOICES, autoFetchMinutes, highContrast, loadAISettings, loadGitSettings, notifyAi, notifyDone, notifyEnabled, notifyProblem, notifyRemote, persisted, settingsOpen, themePref } from '../lib/stores'
   import type { ThemePref } from '../lib/theme'
@@ -21,7 +21,14 @@
   const RECOMMENDED = 'qwen2.5:7b'
 
   // The tab the dialog opens on: the last one used.
+  try {
+    migrateRememberedTab(localStorage, 'settingsTab')
+  } catch {
+    // Storage unavailable: the tab falls back to General.
+  }
   const tab = persisted('settingsTab', 'general', isSettingsTab)
+  // The hosted providers on the Providers tab, each with its API key.
+  const HOSTED: ProviderName[] = ['anthropic', 'openai']
 
   // Read again on every open: the user may have changed it in the system settings.
   let notifyStatus = ''
@@ -59,7 +66,6 @@
 
   $: if ($settingsOpen) load()
   $: remote = !!settings && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/.test(settings.ollamaURL)
-  $: ollamaSelected = !!settings && usesOllama(settings.chatProvider, settings.taskProvider)
   $: models = status?.ollama.models ?? []
   $: chatHint = (settings && status ? modelHint(settings.chatProvider, status) : '') || (settings ? modelErrors[settings.chatProvider] : '') || ''
   $: taskHint = (settings && status ? modelHint(settings.taskProvider, status) : '') || (settings ? modelErrors[settings.taskProvider] : '') || ''
@@ -312,7 +318,25 @@
             </section>
           {:else if tabUsesAI($tab) && !settings}
             <p class={aiError ? 'warn' : 'hint'}>{aiError || 'Loading…'}</p>
-          {:else if settings && $tab === 'models'}
+          {:else if settings && $tab === 'providers'}
+            {#each HOSTED as provider}
+              {@const st = status?.providers.find((s) => s.provider === provider)}
+              <section>
+                <h4>{providerShortLabel(provider)}</h4>
+                <label class="row">
+                  <span class="key-label">API key</span>
+                  {#if st?.hasKey}
+                    <span class="hint">{st.keyHint}</span>
+                    <button class="btn" on:click={() => removeKey(provider)}>Remove</button>
+                  {:else}
+                    <input type="password" placeholder="sk-…" bind:value={keyInput[provider]} />
+                    <button class="btn primary" disabled={!keyInput[provider]} on:click={() => saveKey(provider)}>Save</button>
+                  {/if}
+                </label>
+              </section>
+            {/each}
+            {#if status?.keyStore}<p class="warn">{status.keyStore}</p>{/if}
+
             <section>
               <h4>Ollama</h4>
               <div class="status">
@@ -330,40 +354,29 @@
                 </div>
               </label>
               {#if remote}<p class="warn">Diffs will be sent over the network to this host.</p>{/if}
-              {#if ollamaSelected}
-                <label>
-                  <span>Chat model</span>
-                  <select bind:value={settings.chatModel} on:change={save}>
-                    {#each models as m}
-                      <option value={m.name}>{m.name} · {formatBytes(m.size)}</option>
-                    {/each}
-                    {#if !models.some((m) => m.name === settings?.chatModel)}
-                      <option value={settings.chatModel}>{settings.chatModel} (not installed)</option>
-                    {/if}
-                  </select>
-                </label>
-                {#if pull}
-                  <div class="pull">
-                    <div class="bar"><div style="width: {percent(pull.completed, pull.total)}%"></div></div>
-                    <span class="hint">
-                      {pull.name}: {pull.status}{#if pull.total} · {formatBytes(pull.completed)} / {formatBytes(pull.total)}{/if}
-                    </span>
-                    <button class="btn" on:click={() => api.cancelPull()}>Cancel</button>
-                  </div>
-                {:else if status?.ollama.running}
-                  {#if !status.ollama.chatModelInstalled}
-                    <button class="btn primary" on:click={() => startPull(settings?.chatModel ?? RECOMMENDED)}>
-                      Download {settings.chatModel}{settings.chatModel === RECOMMENDED ? ' (~4.7 GB)' : ''}
-                    </button>
-                  {/if}
-                  <div class="row">
-                    <input placeholder="Other model, e.g. llama3.1:8b" bind:value={otherModel} />
-                    <button class="btn" disabled={!otherModel.trim()} on:click={() => startPull(otherModel)}>Download</button>
-                  </div>
+              {#if pull}
+                <div class="pull">
+                  <div class="bar"><div style="width: {percent(pull.completed, pull.total)}%"></div></div>
+                  <span class="hint">
+                    {pull.name}: {pull.status}{#if pull.total} · {formatBytes(pull.completed)} / {formatBytes(pull.total)}{/if}
+                  </span>
+                  <button class="btn" on:click={() => api.cancelPull()}>Cancel</button>
+                </div>
+              {:else if status?.ollama.running}
+                {#if settings.chatProvider === 'ollama' && !status.ollama.chatModelInstalled}
+                  <button class="btn primary" on:click={() => startPull(settings?.chatModel ?? RECOMMENDED)}>
+                    Download {settings.chatModel}{settings.chatModel === RECOMMENDED ? ' (~4.7 GB)' : ''}
+                  </button>
                 {/if}
+                <div class="row">
+                  <input placeholder="Other model, e.g. llama3.1:8b" bind:value={otherModel} />
+                  <button class="btn" disabled={!otherModel.trim()} on:click={() => startPull(otherModel)}>Download</button>
+                </div>
               {/if}
             </section>
 
+            <p class="notice">{processingNotice(settings.chatProvider, settings.taskProvider, remote)}</p>
+          {:else if settings && $tab === 'models'}
             <section>
               <h4>Chat &amp; agent</h4>
               <label>
@@ -432,25 +445,6 @@
                   <option value="off">Off</option>
                 </select>
               </label>
-            </section>
-
-            <p class="notice">{processingNotice(settings.chatProvider, settings.taskProvider, remote)}</p>
-          {:else if settings && $tab === 'keys'}
-            <section>
-              {#each PROVIDERS.filter((p) => needsKey(p.value)) as p}
-                {@const st = status?.providers.find((s) => s.provider === p.value)}
-                <label class="row">
-                  <span class="key-label">{p.label} API key</span>
-                  {#if st?.hasKey}
-                    <span class="hint">{st.keyHint}</span>
-                    <button class="btn" on:click={() => removeKey(p.value)}>Remove</button>
-                  {:else}
-                    <input type="password" placeholder="sk-…" bind:value={keyInput[p.value]} />
-                    <button class="btn primary" disabled={!keyInput[p.value]} on:click={() => saveKey(p.value)}>Save</button>
-                  {/if}
-                </label>
-              {/each}
-              {#if status?.keyStore}<p class="warn">{status.keyStore}</p>{/if}
             </section>
 
             <p class="notice">{processingNotice(settings.chatProvider, settings.taskProvider, remote)}</p>
