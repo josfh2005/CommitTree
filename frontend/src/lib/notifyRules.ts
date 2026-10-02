@@ -2,7 +2,7 @@
 /** The rules behind notifications (docs/spec/11-notifications.md): pure, so
  *  every combination of settings, focus and what is on screen is testable. */
 
-export type NotifyCategory = 'done' | 'ai' | 'problem'
+export type NotifyCategory = 'done' | 'ai' | 'problem' | 'remote'
 export type NotifyTarget = 'repo' | 'chat'
 export type Delivery = 'none' | 'toast' | 'system'
 
@@ -25,6 +25,7 @@ export interface NotifyContext {
   done: boolean
   ai: boolean
   problem: boolean
+  remote: boolean
   focused: boolean
   activeRepoID: string
   chatOpen: boolean
@@ -60,6 +61,9 @@ export const failureBody = (op: OpKind, message: string) => `${OP_LABEL[op]} fai
 
 export const conflictsBody = (op: OpKind, files: number) =>
   `Conflicts in ${files} file${files === 1 ? '' : 's'} after the ${OP_LABEL[op].toLowerCase()}`
+
+export const remoteBody = (count: number, upstream: string) =>
+  `${count} new commit${count === 1 ? '' : 's'} on ${upstream}`
 
 export const notificationId = (e: NotifyEvent) => `${e.repoID}:${e.category}`
 

@@ -1,5 +1,5 @@
 import * as Go from '../../wailsjs/go/app/App'
-import type { AIMessage, AISettings, AIStatus, AheadBehind, Blame, ChatConfirmEvent, CommandLogView, CommandOutput, CommitInfo, ConflictFile, Details, Filters, Flow, FlowConfig, FlowFinishResult, FlowPlan, FlowStartResult, FlowType, GitSettings, HunkAction, HunkPick, Identity, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, RegionChoice, RegionResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeDiff, WorktreeRemovalInfo, WorktreeState } from './types'
+import type { AIMessage, AISettings, AIStatus, AheadBehind, AutoFetchResult, Blame, ChatConfirmEvent, CommandLogView, CommandOutput, CommitInfo, ConflictFile, Details, Filters, Flow, FlowConfig, FlowFinishResult, FlowPlan, FlowStartResult, FlowType, GitSettings, HunkAction, HunkPick, Identity, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, RegionChoice, RegionResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeDiff, WorktreeRemovalInfo, WorktreeState } from './types'
 import type { NotifyTarget } from './notifyRules'
 
 // The generated bindings use Wails model classes; the JSON is identical to our
@@ -51,6 +51,7 @@ export const api = {
   resetBranch: (id: string, hash: string, mode: ResetMode) => call<void>(Go.ResetBranch(id, hash, mode)),
   getResetPreview: (id: string, hash: string) => call<ResetInfo>(Go.GetResetPreview(id, hash)),
   fetch: (id: string) => call<void>(Go.Fetch(id)),
+  autoFetch: (id: string) => call<AutoFetchResult>(Go.AutoFetch(id)),
   push: (id: string) => call<void>(Go.Push(id)),
   pull: (id: string) => call<PullResult>(Go.Pull(id)),
   getRemoteInfo: (id: string) => call<AheadBehind>(Go.GetRemoteInfo(id)),

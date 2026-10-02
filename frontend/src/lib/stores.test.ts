@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('./api', () => ({ api: {} }))
 
 import { isLogOrder } from './logOrder'
-import { expandedRepos, blameBack, blamePrevious, blameStack, blameTarget, chatPreparing, closeBlame, expandedStashSections, explainIntoChat, expandedTagSections, mainView, openBlame, persisted, selectedHash, selectRepo, selectUncommitted, showCommitInLog, toggleCommit, toggleStashExpanded, toggleTagsExpanded, toggleUncommitted, uncommittedSelected } from './stores'
+import { autoFetchMinutes, expandedRepos, isAutoFetchMinutes, notifyRemote, blameBack, blamePrevious, blameStack, blameTarget, chatPreparing, closeBlame, expandedStashSections, explainIntoChat, expandedTagSections, mainView, openBlame, persisted, selectedHash, selectRepo, selectUncommitted, showCommitInLog, toggleCommit, toggleStashExpanded, toggleTagsExpanded, toggleUncommitted, uncommittedSelected } from './stores'
 
 /** A minimal in-memory Storage, since these tests don't run in a DOM
  *  environment and so have no real localStorage to read from. */
@@ -278,5 +278,23 @@ describe('loadSideRefs', () => {
     repos.set([{ id: 'gone', name: 'gone', path: '/gone', missing: true }] as never)
     await loadSideRefs('gone')
     expect(get(sideRefs).gone).toEqual({ refs: null, stash: [] })
+  })
+})
+
+describe('auto fetch settings', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('defaults to every 15 minutes with the remote notice on', () => {
+    expect(get(autoFetchMinutes)).toBe(15)
+    expect(get(notifyRemote)).toBe(true)
+  })
+
+  it('rejects a stored interval that is not one of the choices', () => {
+    vi.stubGlobal('localStorage', fakeStorage({ autoFetchMinutes: '7' }))
+    expect(get(persisted('autoFetchMinutes', 15, isAutoFetchMinutes))).toBe(15)
+    vi.stubGlobal('localStorage', fakeStorage({ autoFetchMinutes: '30' }))
+    expect(get(persisted('autoFetchMinutes', 15, isAutoFetchMinutes))).toBe(30)
   })
 })

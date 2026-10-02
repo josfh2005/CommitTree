@@ -12,7 +12,7 @@ vi.mock('./stores', async (importOriginal) => {
 
 import { api } from './api'
 import { notify, notifyStashConflicts, openTarget, opError, startNotifications, track, windowFocused } from './notify'
-import { chatOpen, mergeState, notifyEnabled, repos, selectedRepoId } from './stores'
+import { chatOpen, mergeState, notifyEnabled, notifyRemote, repos, selectedRepoId } from './stores'
 import type { MergeState, Repo } from './types'
 import { toasts } from './ui'
 
@@ -25,10 +25,19 @@ beforeEach(() => {
   selectedRepoId.set('a')
   chatOpen.set(true)
   notifyEnabled.set(true)
+  notifyRemote.set(true)
   windowFocused.set(true)
 })
 
 describe('notify', () => {
+  it('honours the New commits on the remote switch', async () => {
+    windowFocused.set(false)
+    notifyRemote.set(false)
+    expect(await notify({ category: 'remote', repoID: 'b', body: '1 new commit on origin/main', target: 'repo' })).toBe('none')
+    notifyRemote.set(true)
+    expect(await notify({ category: 'remote', repoID: 'b', body: '1 new commit on origin/main', target: 'repo' })).toBe('system')
+  })
+
   it('sends a system notification when unfocused', async () => {
     windowFocused.set(false)
     expect(await notify({ category: 'problem', repoID: 'b', body: 'Push failed: x', target: 'repo' })).toBe('system')
