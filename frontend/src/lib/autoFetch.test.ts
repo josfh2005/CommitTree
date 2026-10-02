@@ -1,19 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { FIRST_ROUND_MS, outcome, pausedRepos, resumeAutoFetch, runRound, startAutoFetch, type AutoFetchDeps } from './autoFetch'
+import { FIRST_ROUND_MS, outcome, runRound, startAutoFetch, type AutoFetchDeps } from './autoFetch'
 import { autoFetchMinutes } from './stores'
 import type { AutoFetchResult, Repo } from './types'
 
 const res = (over: Partial<AutoFetchResult> = {}): AutoFetchResult => ({
-  skipped: false, branch: 'main', upstream: 'origin/main', newCommits: 0, refsChanged: false, ...over,
+  skipped: false, branch: 'main', upstream: 'origin/main', newCommits: 0, refsChanged: false, authFailed: null, ...over,
 })
 const repo = (id: string, missing = false) => ({ id, name: id, path: `/x/${id}`, missing, branch: 'main' }) as Repo
 const sel = { selectedId: 'a', busy: false }
 
 describe('outcome', () => {
-  it('pauses on an auth error and ignores any other error', () => {
-    expect(outcome('a', { error: new Error('auto-fetch auth: git fetch: could not read Username') }, sel)).toEqual({ pause: true, refresh: false })
-    expect(outcome('a', { error: new Error('git fetch: timed out') }, sel)).toEqual({ pause: false, refresh: false })
-    expect(outcome('a', { error: 'auto-fetch auth: x' }, sel)).toEqual({ pause: true, refresh: false })
+  it('does nothing on an error', () => {
+    expect(outcome('a', { error: new Error('git fetch: timed out') }, sel)).toEqual({ refresh: false })
+    expect(outcome('a', { error: 'anything' }, sel)).toEqual({ refresh: false })
   })
 
   it('refreshes the selected repository only when refs changed and nothing is busy', () => {
@@ -27,7 +26,7 @@ describe('outcome', () => {
     expect(outcome('b', { result: res({ newCommits: 2, refsChanged: true }) }, sel).event).toEqual({
       category: 'remote', repoID: 'b', target: 'repo', body: '2 new commits on origin/main',
     })
-    expect(outcome('b', { result: res({ skipped: true }) }, sel)).toEqual({ pause: false, refresh: false })
+    expect(outcome('b', { result: res({ skipped: true }) }, sel)).toEqual({ refresh: false })
   })
 })
 
@@ -45,8 +44,6 @@ function deps(over: Partial<AutoFetchDeps> = {}): AutoFetchDeps {
 }
 
 describe('runRound', () => {
-  beforeEach(() => pausedRepos.clear())
-
   it('fetches present, unpaused repositories one at a time, in order', async () => {
     const order: string[] = []
     let inFlight = 0
@@ -68,14 +65,11 @@ describe('runRound', () => {
     expect(d.fetch).not.toHaveBeenCalled()
   })
 
-  it('pauses a repository on an auth failure until resumed', async () => {
-    const d = deps({ fetch: vi.fn(async (id: string) => { if (id === 'a') throw new Error('auto-fetch auth: no'); return res() }) })
-    await runRound(d)
-    expect(pausedRepos.has('a')).toBe(true)
-    await runRound(d)
-    expect(vi.mocked(d.fetch).mock.calls.filter(([id]) => id === 'a')).toHaveLength(1)
-    resumeAutoFetch('a')
-    expect(pausedRepos.has('a')).toBe(false)
+  it('stops before the next repository once keepGoing turns false', async () => {
+    let go = true
+    const fetch = vi.fn(async () => { go = false; return res() })
+    await runRound(deps({ fetch }), () => go)
+    expect(fetch).toHaveBeenCalledTimes(1)
   })
 
   it('notifies and refreshes from the results', async () => {
@@ -87,7 +81,7 @@ describe('runRound', () => {
 })
 
 describe('startAutoFetch', () => {
-  beforeEach(() => { vi.useFakeTimers(); pausedRepos.clear(); autoFetchMinutes.set(15) })
+  beforeEach(() => { vi.useFakeTimers(); autoFetchMinutes.set(15) })
   afterEach(() => {
     vi.useRealTimers()
   })
@@ -101,6 +95,29 @@ describe('startAutoFetch', () => {
     expect(d.fetch).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(15 * 60_000)
     expect(d.fetch).toHaveBeenCalledTimes(4)
+    stop()
+  })
+
+  it('Off or stop mid-round ends the round at the next repository', async () => {
+    let release!: () => void
+    const fetch = vi.fn(() => new Promise<AutoFetchResult>((r) => { release = () => r(res()) }))
+    const d = deps({ fetch }) // repositories a, gone (missing), b
+    const stop = startAutoFetch(d)
+    await vi.advanceTimersByTimeAsync(FIRST_ROUND_MS)
+    expect(fetch).toHaveBeenCalledTimes(1) // a in flight
+    autoFetchMinutes.set(0)
+    release()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fetch).toHaveBeenCalledTimes(1) // b never fetched
+
+    autoFetchMinutes.set(15)
+    const d2 = deps({ fetch: vi.fn(() => new Promise<AutoFetchResult>((r) => { release = () => r(res()) })) })
+    const stop2 = startAutoFetch(d2)
+    await vi.advanceTimersByTimeAsync(FIRST_ROUND_MS)
+    stop2()
+    release()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(d2.fetch).toHaveBeenCalledTimes(1)
     stop()
   })
 

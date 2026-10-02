@@ -137,3 +137,17 @@ func prefixed(rest []string, prefix string) bool {
 	}
 	return false
 }
+
+// UpdatesFromRemote reports whether args is a pull, or a fetch from a
+// remote — not `fetch .`, which only moves local branches (git-flow).
+func UpdatesFromRemote(args []string) bool {
+	sub, rest := subcommand(args)
+	switch sub {
+	case "pull":
+		return true
+	case "fetch":
+		pos := positional(rest)
+		return len(pos) == 0 || pos[0] != "."
+	}
+	return false
+}

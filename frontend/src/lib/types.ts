@@ -291,6 +291,7 @@ export interface AutoFetchResult {
   upstream: string
   newCommits: number
   refsChanged: boolean
+  authFailed: string[] | null
 }
 
 export const PULL_UP_TO_DATE = 0

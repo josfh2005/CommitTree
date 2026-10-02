@@ -29,6 +29,7 @@ func (a *App) beginGit(s gitcmd.Start) int64 {
 // in the log, and once the window is up, in the panel.
 func (a *App) recordGit(r gitcmd.Record) {
 	r.Ctx = a.originContext(r.Ctx, r.Dir, r.Args)
+	a.noteRemoteUpdate(r)
 	a.emitCommandSafe(a.cmds.Add(r))
 }
 

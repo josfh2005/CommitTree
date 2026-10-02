@@ -7,6 +7,7 @@ import { nextSelection } from './submodules'
 import { emptyFilters, type AISettings, type AheadBehind, type Filters, type GitSettings, type Identity, type LogOrder, type MergeState, type Refs, type Repo, type StashEntry, type WorktreeState } from './types'
 import { isLogOrder } from './logOrder'
 import { isRepoSortOrder, type RepoSortOrder } from './repoGroups'
+import { coalesce } from './coalesce'
 import type { RepoRefsData } from './repoRefs'
 import { removeRepoTabs, terminalState } from './terminal'
 import { isThemePref, resolveTheme, type ThemePref } from './theme'
@@ -472,7 +473,10 @@ export async function loadAISettings() {
   }
 }
 
-export async function refreshRepo() {
+/** Reloads everything the selected repository shows. Coalesced: a call
+ *  while one runs waits for one more run instead of racing it (a background
+ *  fetch's refresh and an operation's, say). */
+export const refreshRepo = coalesce(async () => {
   await loadRepos()
   await loadRefs()
   await loadMergeState()
@@ -481,7 +485,7 @@ export async function refreshRepo() {
   await loadStashEntries()
   await loadOwedStashDrop()
   logVersion.update((v) => v + 1)
-}
+})
 
 export function selectRepo(id: string) {
   if (get(selectedRepoId) !== id) {

@@ -9,10 +9,13 @@ import (
 	"syscall"
 )
 
-// startInGroup starts git in a process group of its own, so interrupt
-// reaches the hooks and helpers it runs too, as Ctrl+C in a terminal does.
+// startInGroup starts git in a session of its own: a new process group, so
+// interrupt reaches the hooks and helpers it runs too, as Ctrl+C in a
+// terminal does, and no controlling terminal, so neither git nor ssh can
+// ask for a passphrase or a host key on the terminal the app was started
+// from (make dev); they fail instead, as in the bundled app.
 func startInGroup(cmd *exec.Cmd) {
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 }
 
 // interrupt sends SIGINT to git's process group.

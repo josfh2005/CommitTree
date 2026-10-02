@@ -56,3 +56,21 @@ func TestOriginFromContext(t *testing.T) {
 		t.Fatalf("got %q %v", o, ok)
 	}
 }
+
+func TestUpdatesFromRemote(t *testing.T) {
+	for _, c := range []struct {
+		args []string
+		want bool
+	}{
+		{[]string{"fetch", "--all", "--prune"}, true},
+		{[]string{"fetch", "--prune", "origin"}, true},
+		{[]string{"-c", "x=y", "pull", "--"}, true},
+		{[]string{"fetch", ".", "origin/main:refs/heads/main"}, false},
+		{[]string{"push"}, false},
+		{[]string{"status"}, false},
+	} {
+		if got := UpdatesFromRemote(c.args); got != c.want {
+			t.Errorf("UpdatesFromRemote(%v) = %v, want %v", c.args, got, c.want)
+		}
+	}
+}

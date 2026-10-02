@@ -112,18 +112,24 @@ failure; it never reports how much changed.
 ### Background fetch
 
 When Settings → General → **Fetch in the background** is not Off (Every 5,
-15 — the default —, 30 or 60 min), CommitTree runs `git fetch --all --prune`
-for every repository in the sidebar that is not missing, one at a time:
+15 — the default —, 30 or 60 min), CommitTree runs `git fetch --prune
+<remote>` for each remote of every repository in the sidebar that is not missing, one at a time:
 first 30 s after the app starts, then every interval after the previous
 round ends. A round is skipped while the computer is offline; a repository
-with no remote, or with another write running, is skipped.
+with no remote, or with another write running, is skipped. Turning it Off
+during a round lets the repository being fetched finish and fetches no
+other.
 
 A background fetch never asks for anything: askpass programs and Git
 Credential Manager's dialogs are turned off for it, so a remote that needs a
 password or a passphrase fails instead (helpers that answer on their own,
 such as the macOS keychain or ssh-agent, still work). Such an authentication
-failure stops background fetches of that repository until a manual Fetch or
-Pull of it succeeds or the app restarts. No failure is shown or notified;
+failure stops background fetches of that remote — the repository's other
+remotes are still fetched — until any fetch or pull of the repository
+succeeds, whether from the toolbar, the AI chat or a git-flow action, or the
+app restarts. A repository whose remotes are all stopped this way is
+skipped. The macOS keychain may ask once for access to a stored credential;
+"Always Allow" ends that. No failure is shown or notified;
 the Commands panel has it. It times out after 60 s, never shows the busy
 label, and when it changes the selected repository's remote branches, the
 log and the ahead/behind badges refresh. New commits it brings to the

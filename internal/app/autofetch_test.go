@@ -41,17 +41,19 @@ func TestAutoFetchThroughTheAppLayerIsAuto(t *testing.T) {
 	if !found {
 		t.Error("the background fetch is not in the command log")
 	}
-	if _, ok := a.autoFetches.Load(id); ok {
-		t.Error("the cancel is still registered after the fetch")
+	if h, _ := a.lockFor(id).state(); h != holderFree {
+		t.Errorf("lock holder = %v after the fetch, want free", h)
 	}
 }
 
 func TestAutoFetchSkipsWhileAUserWriteRuns(t *testing.T) {
 	a, r, id := newPlainApp(t)
 	r.Git("remote", "add", "origin", testrepo.NewBareFrom(t, r))
-	mu := a.writeMutex(id)
-	mu.Lock()
-	defer mu.Unlock()
+	l := a.lockFor(id)
+	if err := l.lockUser(); err != nil {
+		t.Fatal(err)
+	}
+	defer l.unlock()
 
 	res, err := a.AutoFetch(id)
 	if err != nil || !res.Skipped {
@@ -61,17 +63,15 @@ func TestAutoFetchSkipsWhileAUserWriteRuns(t *testing.T) {
 
 func TestUserWriteCancelsABackgroundFetch(t *testing.T) {
 	a, _, id := newPlainApp(t)
-	mu := a.writeMutex(id)
-	mu.Lock() // the background fetch holds the lock …
+	l := a.lockFor(id)
 	cancelled := make(chan struct{})
-	a.autoFetches.Store(id, context.CancelFunc(func() {
+	l.tryLockAuto(func() { // the background fetch holds the lock …
 		close(cancelled)
 		go func() { // … and lets go once git has stopped.
 			time.Sleep(20 * time.Millisecond)
-			a.autoFetches.Delete(id)
-			mu.Unlock()
+			l.unlock()
 		}()
-	}))
+	})
 
 	ran := false
 	if err := a.write(id, func(context.Context, string) error { ran = true; return nil }); err != nil {
@@ -89,9 +89,11 @@ func TestUserWriteCancelsABackgroundFetch(t *testing.T) {
 
 func TestUserWriteStillRefusedBehindAnotherUserWrite(t *testing.T) {
 	a, _, id := newPlainApp(t)
-	mu := a.writeMutex(id)
-	mu.Lock()
-	defer mu.Unlock()
+	l := a.lockFor(id)
+	if err := l.lockUser(); err != nil {
+		t.Fatal(err)
+	}
+	defer l.unlock()
 	if err := a.write(id, func(context.Context, string) error { return nil }); !errors.Is(err, ErrBusy) {
 		t.Errorf("write = %v, want ErrBusy", err)
 	}
@@ -138,24 +140,21 @@ func TestUserWriteCancelsARealBackgroundFetchAsCancelled(t *testing.T) {
 
 func TestOnlyOneUserWriteWaitsForABackgroundFetch(t *testing.T) {
 	a, _, id := newPlainApp(t)
-	mu := a.writeMutex(id)
-	mu.Lock() // a background fetch that takes a while to stop
-	a.autoFetches.Store(id, context.CancelFunc(func() {}))
-
+	l := a.lockFor(id)
+	l.tryLockAuto(func() {}) // a background fetch that takes a while to stop
 	first := make(chan error, 1)
 	go func() { first <- a.write(id, func(context.Context, string) error { return nil }) }()
 	deadline := time.Now().Add(2 * time.Second)
 	for {
-		if _, ok := a.autoFetches.Load(id); !ok {
+		if _, w := l.state(); w {
 			break
 		}
 		if time.Now().After(deadline) {
-			mu.Unlock()
-			t.Fatal("the first write did not claim the background fetch's cancel")
+			l.unlock()
+			t.Fatal("the first write did not start waiting for the background fetch")
 		}
 		time.Sleep(time.Millisecond)
 	}
-
 	second := make(chan error, 1)
 	go func() { second <- a.write(id, func(context.Context, string) error { return nil }) }()
 	select {
@@ -165,12 +164,8 @@ func TestOnlyOneUserWriteWaitsForABackgroundFetch(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Error("the second write waited instead of being refused")
-		mu.Unlock()
-		<-second
-		<-first
-		return
 	}
-	mu.Unlock()
+	l.unlock()
 	if err := <-first; err != nil {
 		t.Errorf("first write = %v", err)
 	}
