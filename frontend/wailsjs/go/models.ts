@@ -1249,6 +1249,36 @@ export namespace ops {
 	        this.authFailed = source["authFailed"];
 	    }
 	}
+	export class Remote {
+	    name: string;
+	    fetchURL: string;
+	    pushURL: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Remote(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.fetchURL = source["fetchURL"];
+	        this.pushURL = source["pushURL"];
+	    }
+	}
+	export class RemoteTest {
+	    ok: boolean;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RemoteTest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.message = source["message"];
+	    }
+	}
 	export class ResetInfo {
 	    undone: number;
 	    gained: number;
