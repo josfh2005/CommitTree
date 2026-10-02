@@ -5,10 +5,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"git-ui/internal/cmdlog"
 	"git-ui/internal/gitcmd"
+	"git-ui/internal/ops"
 	"git-ui/internal/testrepo"
 )
 
@@ -73,5 +75,67 @@ func TestOnlyASuccessfulNonAutoRemoteUpdateUnpauses(t *testing.T) {
 	a.noteRemoteUpdate(rec(context.Background(), 0, "pull", "--"))
 	if a.paused.paused(key, "origin") {
 		t.Error("a successful pull did not unpause")
+	}
+}
+
+// conflictingClone sets up r with origin, and pushes a commit to origin that
+// conflicts with a local commit of r on the same file.
+func conflictingClone(t *testing.T, r *testrepo.Repo) {
+	t.Helper()
+	bare := testrepo.NewBareFrom(t, r)
+	r.Git("remote", "add", "origin", bare)
+	r.Git("push", "-q", "-u", "origin", "main")
+	clone := testrepo.Clone(t, bare)
+	clone.WriteFile("same.txt", "theirs\n")
+	clone.Git("add", "same.txt")
+	clone.Git("commit", "-q", "-m", "theirs")
+	clone.Git("push", "-q", "origin", "main")
+	r.WriteFile("same.txt", "ours\n")
+	r.Git("add", "same.txt")
+	r.Git("commit", "-q", "-m", "ours")
+	// The default "auto" strategy runs a plain pull; without this, git
+	// refuses divergent branches before merging and there is no conflict.
+	r.Git("config", "pull.rebase", "false")
+}
+
+func TestAConflictedPullUnpauses(t *testing.T) {
+	a, r, id := newPlainApp(t)
+	conflictingClone(t, r)
+	dir, err := a.dir(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := cmdlog.RepoKey(dir)
+	a.paused.pause(key, []string{"origin"})
+
+	res, err := a.Pull(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Outcome != ops.Conflicted {
+		t.Fatalf("outcome = %v, want Conflicted", res.Outcome)
+	}
+	if a.paused.paused(key, "origin") {
+		t.Error("a pull that reached the remote and stopped on conflicts left origin paused")
+	}
+}
+
+func TestAFailedPullKeepsThePause(t *testing.T) {
+	a, r, id := newPlainApp(t)
+	r.Git("remote", "add", "origin", filepath.Join(t.TempDir(), "missing.git"))
+	r.Git("config", "branch.main.remote", "origin")
+	r.Git("config", "branch.main.merge", "refs/heads/main")
+	dir, err := a.dir(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := cmdlog.RepoKey(dir)
+	a.paused.pause(key, []string{"origin"})
+
+	if _, err := a.Pull(id); err == nil {
+		t.Fatal("want the pull to fail")
+	}
+	if !a.paused.paused(key, "origin") {
+		t.Error("a failed pull unpaused origin")
 	}
 }

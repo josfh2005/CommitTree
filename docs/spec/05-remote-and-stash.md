@@ -126,12 +126,13 @@ password or a passphrase fails instead (helpers that answer on their own,
 such as the macOS keychain or ssh-agent, still work). Such an authentication
 failure stops background fetches of that remote — the repository's other
 remotes are still fetched — until any fetch or pull of the repository
-succeeds, whether from the toolbar, the AI chat or a git-flow action, or the
+succeeds — a pull that stops on conflicts counts, since it reached the
+remote — whether from the toolbar, the AI chat or a git-flow action, or the
 app restarts. A repository whose remotes are all stopped this way is
 skipped. The macOS keychain may ask once for access to a stored credential;
 "Always Allow" ends that. No failure is shown or notified;
-the Commands panel has it. It times out after 60 s, never shows the busy
-label, and when it changes the selected repository's remote branches, the
+the Commands panel has it. Each remote's fetch times out after 60 s. A
+background fetch never shows the busy label, and when it changes the selected repository's remote branches, the
 log and the ahead/behind badges refresh. New commits it brings to the
 checked-out branch's upstream can notify (see `11-notifications.md`).
 
