@@ -164,6 +164,10 @@ another window is the only moment external changes are checked for.
 
 ### Application menu and opening Settings
 
+The sidebar's Settings row shows the app's version (for example v0.2.0) on
+its right, muted; the version comes from `wails.json` (`info.productVersion`),
+which also stamps the macOS bundle.
+
 Settings opens from the sidebar's Settings row and, following each system's
 convention, from the keyboard. On macOS the menu bar's CommitTree menu has
 Settings… (⌘,), Hide CommitTree (⌘H) and Quit CommitTree (⌘Q), followed by
