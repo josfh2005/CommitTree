@@ -1233,6 +1233,7 @@ export namespace ops {
 	    upstream: string;
 	    newCommits: number;
 	    refsChanged: boolean;
+	    authFailed: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new AutoFetchResult(source);
@@ -1245,6 +1246,7 @@ export namespace ops {
 	        this.upstream = source["upstream"];
 	        this.newCommits = source["newCommits"];
 	        this.refsChanged = source["refsChanged"];
+	        this.authFailed = source["authFailed"];
 	    }
 	}
 	export class ResetInfo {
