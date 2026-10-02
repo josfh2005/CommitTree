@@ -260,6 +260,9 @@ export function toggleUncommitted() {
 export const selectedStash = writable<SelectedStash | null>(null)
 
 export const remoteInfo = writable<AheadBehind | null>(null)
+/** The selected repository's remotes that background fetches skip for want
+ *  of credentials (Go's autoPause); the toolbar's Fetch shows a dot. */
+export const pausedRemotes = writable<string[]>([])
 export const stashEntries = writable<StashEntry[]>([])
 /** Refs and stash of every expanded repository other than the selected one,
  *  by repository id, so each shows its own branches (see refsView). */
@@ -414,6 +417,21 @@ export async function loadRemoteInfo() {
   }
 }
 
+export async function loadPausedRemotes() {
+  const repo = get(selectedRepo)
+  if (!repo || repo.missing) {
+    pausedRemotes.set([])
+    return
+  }
+  try {
+    const list = await api.autoFetchPaused(repo.id)
+    if (get(selectedRepoId) !== repo.id) return
+    pausedRemotes.set(list ?? [])
+  } catch {
+    pausedRemotes.set([])
+  }
+}
+
 export async function loadOwedStashDrop() {
   const repo = get(selectedRepo)
   if (!repo || repo.missing) {
@@ -482,6 +500,7 @@ export const refreshRepo = coalesce(async () => {
   await loadMergeState()
   await loadWorktreeState()
   await loadRemoteInfo()
+  await loadPausedRemotes()
   await loadStashEntries()
   await loadOwedStashDrop()
   logVersion.update((v) => v + 1)
@@ -497,6 +516,7 @@ export function selectRepo(id: string) {
     selectedStash.set(null)
     worktreeState.set(null)
     identity.set(null)
+    pausedRemotes.set([])
   }
   selectedRepoId.set(id)
   loadRefs()
@@ -504,6 +524,7 @@ export function selectRepo(id: string) {
   loadWorktreeState()
   loadIdentity()
   loadRemoteInfo()
+  loadPausedRemotes()
   loadStashEntries()
   loadOwedStashDrop()
 }

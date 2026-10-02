@@ -42,16 +42,16 @@ Test (`internal/app`): pause a remote of a repository, pull into a conflict,
 - Go: `func (a *App) AutoFetchPaused(id string) ([]string, error)` returns
   the repository's paused remotes, sorted; empty (not nil) when none. Backed
   by a new `autoPause.list(key) []string`.
-- Frontend: `refreshRepo` also loads it into a per-repository store
-  (`pausedRemotes`, `Record<repoID, string[]>`). `refreshRepo` already runs
+- Frontend: `refreshRepo` also loads it into a store for the selected
+  repository (`pausedRemotes: string[]`, like `remoteInfo`). `refreshRepo` already runs
   after every operation and after a background fetch that changed refs; it
   must also run after a background fetch that returned a non-empty
   `authFailed` (that fetch changed no refs). Resumes from the AI or git-flow
   are picked up by the refresh their operation already triggers.
 - Toolbar: when the selected repository has paused remotes and Fetch is
   enabled, the Fetch button shows a small amber dot in its top-right
-  corner (new colour token `--warning`, defined for light, dark and both
-  high-contrast themes next to `--danger`) and its tooltip is
+  corner (new colour token `--warning`, defined for light and dark next to
+  `--danger`; high contrast inherits it, as it does `--danger`) and its tooltip is
   "Background fetch paused for origin: authentication failed. Fetch to
   retry." — several remotes joined with ", ". A disabled Fetch keeps its
   busy tooltip; the dot stays.

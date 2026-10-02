@@ -24,7 +24,9 @@ export function outcome(
   if (r.error !== undefined) return { refresh: false }
   const res = r.result
   if (!res || res.skipped) return { refresh: false }
-  const action: AutoFetchAction = { refresh: res.refsChanged && id === s.selectedId && !s.busy }
+  // A newly paused remote changed no refs but must show on the toolbar.
+  const changed = res.refsChanged || (res.authFailed?.length ?? 0) > 0
+  const action: AutoFetchAction = { refresh: changed && id === s.selectedId && !s.busy }
   if (res.newCommits > 0) action.event = { category: 'remote', repoID: id, target: 'repo', body: remoteBody(res.newCommits, res.upstream) }
   return action
 }

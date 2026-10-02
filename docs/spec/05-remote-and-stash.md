@@ -43,7 +43,7 @@ why it is disabled; an enabled one's says what it does.
 |---|---|---|
 | Commit | Selects the "Uncommitted changes" row, which opens the Changes view, and puts the cursor in the commit message box | another operation is running (the busy label, e.g. "Pushing…"); a merge, rebase or stash conflict is in progress ("Resolve the conflict first"); nothing is uncommitted ("Nothing to commit") |
 | Stash | The "Stash changes" dialog | busy; a conflict is in progress; nothing is uncommitted ("Nothing to stash") |
-| Fetch | Fetch, below | busy |
+| Fetch | Fetch, below; an amber dot while background fetches skip a remote that needs credentials, with the tooltip "Background fetch paused for <remotes>: authentication failed. Fetch to retry." | busy |
 | Pull | Pull, below; the behind count as a badge | busy; a conflict is in progress |
 | Push | Push, below; the ahead count as a badge | same as Pull |
 | Branch | The "New branch" dialog, from HEAD (a detached HEAD's commit included) | busy |
@@ -129,8 +129,9 @@ remotes are still fetched — until any fetch or pull of the repository
 succeeds — a pull that stops on conflicts counts, since it reached the
 remote — whether from the toolbar, the AI chat or a git-flow action, or the
 app restarts. A repository whose remotes are all stopped this way is
-skipped. The macOS keychain may ask once for access to a stored credential;
-"Always Allow" ends that. No failure is shown or notified;
+skipped. Meanwhile the toolbar's Fetch shows an amber dot and names the
+stopped remotes in its tooltip. The macOS keychain may ask once for access to a stored credential;
+"Always Allow" ends that. No failure is notified;
 the Commands panel has it. Each remote's fetch times out after 60 s. A
 background fetch never shows the busy label, and when it changes the selected repository's remote branches, the
 log and the ahead/behind badges refresh. New commits it brings to the
