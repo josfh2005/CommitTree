@@ -8,6 +8,7 @@
   import DialogHost from './components/DialogHost.svelte'
   import LogView from './components/LogView.svelte'
   import SettingsDialog from './components/SettingsDialog.svelte'
+  import RepoSettingsDialog from './components/RepoSettingsDialog.svelte'
   import Sidebar from './components/Sidebar.svelte'
   import Splitter from './components/Splitter.svelte'
   import StashView from './components/StashView.svelte'
@@ -154,6 +155,8 @@
 </div>
 
 <ContextMenu />
+<!-- Before DialogHost: a confirm opened from it must stack on top. -->
+<RepoSettingsDialog />
 <DialogHost />
 <Toasts />
 <SettingsDialog />

@@ -285,6 +285,11 @@ export interface AheadBehind {
 }
 
 /** One background fetch (Go ops.AutoFetchResult). */
+/** A configured remote (Go ops.Remote); Remote is the refs' remote with its branches. */
+export interface RemoteConfig { name: string; fetchURL: string; pushURL: string }
+/** How a connection test ended (Go ops.RemoteTest). */
+export interface RemoteTest { ok: boolean; message: string }
+
 export interface AutoFetchResult {
   skipped: boolean
   branch: string
