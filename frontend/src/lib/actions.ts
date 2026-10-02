@@ -1,7 +1,6 @@
 import { get } from 'svelte/store'
 import { api } from './api'
 import { busy, chatOpen, chatRunRepo, collapsedRepoGroups, expandedRepos, filters, focusCommitBox, loadIdentity, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, refs, repoManualSeeded, repos, repoSortOrder, selectRepo, selectUncommitted, selectedHash, selectedRepoId, stashConflictDismissed } from './stores'
-import { resumeAutoFetch } from './autoFetch'
 import { notifyStashConflicts, opError, track } from './notify'
 import type { OpKind } from './notifyRules'
 import type { Branch, FileStatus, HunkAction, HunkPick, MergeState, RebasePreview, RegionChoice, Repo, ResetInfo, ResetMode, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
@@ -760,7 +759,7 @@ export const commitChanges = (id: string, message: string, amend: boolean) =>
   run(amend ? 'Amending…' : 'Committing…', () => api.commitChanges(id, message, amend))
 
 export async function fetchRemote(id: string) {
-  if (await runOp(id, 'fetch', 'Fetching…', () => api.fetch(id))) resumeAutoFetch(id)
+  await runOp(id, 'fetch', 'Fetching…', () => api.fetch(id))
 }
 
 export const push = (id: string) => runOp(id, 'push', 'Pushing…', () => api.push(id))
@@ -769,7 +768,6 @@ export async function pull(id: string) {
   busy.set('Pulling…')
   try {
     const result = await track(id, 'pull', () => api.pull(id), (r) => r.conflicts?.length ?? 0)
-    resumeAutoFetch(id)
     if (result.outcome === PULL_UP_TO_DATE) toast('Already up to date.', 'info')
     await warnMovedSubmodules(id)
   } catch (e) {

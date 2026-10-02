@@ -30,8 +30,8 @@ The selected repository's commands, newest first. Each row shows:
   tool call of the chat, including the changes the user approved), or
   **Auto** (a read the application made on its own, such as a refresh —
   reads made because of a click count as Auto too; background fetches, see
-  `05-remote-and-stash.md`, are Auto too — the fetch and the reads around
-  it; one cancelled because the user started a write shows as cancelled);
+  `05-remote-and-stash.md`, are Auto too — the fetches and the reads around
+  them; one cancelled because the user started a write shows as cancelled);
 - the time it started (HH:MM:SS) and how long it took — while it runs, the
   seconds elapsed so far.
 

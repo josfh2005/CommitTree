@@ -26,5 +26,8 @@ func (a *App) AutoFetch(id string) (ops.AutoFetchResult, error) {
 		return ops.AutoFetchResult{Skipped: true}, nil
 	}
 	defer l.unlock()
-	return ops.AutoFetch(ctx, dir, nil)
+	key := cmdlog.RepoKey(dir)
+	res, err := ops.AutoFetch(ctx, dir, func(remote string) bool { return a.paused.paused(key, remote) })
+	a.paused.pause(key, res.AuthFailed)
+	return res, err
 }

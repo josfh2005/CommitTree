@@ -4,38 +4,30 @@ import { notify } from './notify'
 import { remoteBody, type NotifyEvent } from './notifyRules'
 import { autoFetchMinutes, busy, refreshRepo, repos, selectedRepoId } from './stores'
 import type { AutoFetchResult, Repo } from './types'
-import { errorMessage } from './ui'
 
 /** Background fetch (docs/spec/05-remote-and-stash.md): rounds over every
- *  repository, one at a time; what a result means is `outcome`'s, pure. */
+ *  repository, one at a time; what a result means is `outcome`'s, pure.
+ *  Remotes that need credentials are paused in Go (internal/app/autopause.go). */
 
 export const FIRST_ROUND_MS = 30_000
 
 export interface AutoFetchAction {
-  pause: boolean
   refresh: boolean
   event?: NotifyEvent
 }
-
-const isAuth = (e: unknown) => (typeof e === 'string' ? e : errorMessage(e)).includes('auto-fetch auth')
 
 export function outcome(
   id: string,
   r: { result?: AutoFetchResult; error?: unknown },
   s: { selectedId: string; busy: boolean },
 ): AutoFetchAction {
-  if (r.error !== undefined) return { pause: isAuth(r.error), refresh: false }
+  if (r.error !== undefined) return { refresh: false }
   const res = r.result
-  if (!res || res.skipped) return { pause: false, refresh: false }
-  const action: AutoFetchAction = { pause: false, refresh: res.refsChanged && id === s.selectedId && !s.busy }
+  if (!res || res.skipped) return { refresh: false }
+  const action: AutoFetchAction = { refresh: res.refsChanged && id === s.selectedId && !s.busy }
   if (res.newCommits > 0) action.event = { category: 'remote', repoID: id, target: 'repo', body: remoteBody(res.newCommits, res.upstream) }
   return action
 }
-
-/** Repositories whose background fetch failed for want of credentials;
- *  a manual Fetch or Pull that succeeds takes one out. In memory only. */
-export const pausedRepos = new Set<string>()
-export const resumeAutoFetch = (id: string) => void pausedRepos.delete(id)
 
 export interface AutoFetchDeps {
   repos: () => Repo[]
@@ -60,7 +52,7 @@ const defaultDeps: AutoFetchDeps = {
 export async function runRound(d: AutoFetchDeps): Promise<void> {
   if (!d.online()) return
   for (const repo of d.repos()) {
-    if (repo.missing || pausedRepos.has(repo.id)) continue
+    if (repo.missing) continue
     let r: { result?: AutoFetchResult; error?: unknown }
     try {
       r = { result: await d.fetch(repo.id) }
@@ -68,7 +60,6 @@ export async function runRound(d: AutoFetchDeps): Promise<void> {
       r = { error }
     }
     const a = outcome(repo.id, r, { selectedId: d.selectedId(), busy: d.busy() })
-    if (a.pause) pausedRepos.add(repo.id)
     if (a.event) d.notify(a.event)
     if (a.refresh) await d.refresh()
   }

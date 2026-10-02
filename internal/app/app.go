@@ -77,6 +77,8 @@ type App struct {
 	mu     sync.Mutex
 	logs   map[string]*logState
 	writes sync.Map // repo ID → *writeLock
+	// paused is the remotes background fetches skip (see autoPause).
+	paused autoPause
 	ai     *aiState
 	// cmds is the log behind the Commands panel; aiWrites marks
 	// repositories (by cmdlog.RepoKey) running an approved AI write.
