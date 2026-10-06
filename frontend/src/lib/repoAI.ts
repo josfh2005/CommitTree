@@ -40,6 +40,10 @@ export const stateText = (s: RepoAIState) => STATES[s]
 
 export const usesRepoChatModel = (info: Pick<RepoAIInfo, 'overrides'> | null) => !!info?.overrides.chatProvider
 
+/** showsInstructionsStrip: the chat shows its "review the repository's
+ *  instructions" strip while shared instructions wait for an approval. */
+export const showsInstructionsStrip = (info: Pick<RepoAIInfo, 'state'> | null) => info?.state === 'pending' || info?.state === 'changed'
+
 export interface ModeOption { value: string; label: string }
 
 // The same wording as Settings → AI models, minus its "(default)" suffix:

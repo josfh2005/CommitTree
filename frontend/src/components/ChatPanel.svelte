@@ -8,7 +8,8 @@
   import { relativeDate } from '../lib/format'
   import { renderMarkdown } from '../lib/markdown'
   import { chatBlocker } from '../lib/providers'
-  import { aiSettings, chatOpen, chatPreparing, jumpTo, selectedRepo, settingsOpen } from '../lib/stores'
+  import { aiOff, aiSettings, chatOpen, chatPreparing, jumpTo, repoAI, repoSettings, selectedRepo, settingsOpen } from '../lib/stores'
+  import { showsInstructionsStrip } from '../lib/repoAI'
   import type { AIStatus } from '../lib/types'
   import { copyText, errorMessage, toast } from '../lib/ui'
   import DecisionTray from './DecisionTray.svelte'
@@ -170,6 +171,12 @@
   <div class="messages" bind:this={list} on:click={onClick} role="presentation">
     {#if !$selectedRepo}
       <div class="empty"><Icon name="sparkle" size={22} /><p>Select a repository to chat about it.</p></div>
+    {:else if $aiOff}
+      <div class="notice">
+        <strong>AI is off for this repository</strong>
+        {#if $repoAI?.error}<p>{$repoAI.error}</p>{/if}
+        <div class="actions"><button class="btn" on:click={() => repoSettings.set({ repoID: $selectedRepo.id, tab: 'ai' })}>Repository settings</button></div>
+      </div>
     {:else if blocker?.kind === 'ollama_down'}
       <div class="notice">
         <strong>Ollama is not running</strong>
@@ -201,6 +208,7 @@
       </div>
     {/if}
 
+    {#if !$aiOff}
     {#each state.items as item, i}
       {#if item.role === 'user'}
         <div class="msg user">{item.text}</div>
@@ -281,8 +289,10 @@
       {/if}
     {/each}
     {#if preparing}<div class="typing">Preparing the explanation…</div>{/if}
+    {/if}
   </div>
 
+  {#if !$aiOff}
   <div class="composer">
     <DecisionTray repoID={state.repoID} cards={pending} {running} {focus} />
     {#if !running && state.suggestions?.length}
@@ -290,6 +300,12 @@
         {#each state.suggestions as reply}
           <button class="suggestion" title="Send “{reply}”" disabled={!ready} on:click={() => sendText(reply)}>{reply}</button>
         {/each}
+      </div>
+    {/if}
+    {#if showsInstructionsStrip($repoAI) && $selectedRepo}
+      <div class="strip">
+        This repository has instructions for the AI.
+        <button class="link" on:click={() => repoSettings.set({ repoID: $selectedRepo.id, tab: 'ai' })}>Review</button>
       </div>
     {/if}
     <textarea
@@ -312,6 +328,7 @@
       {/if}
     </div>
   </div>
+  {/if}
 </div>
 
 <style>
@@ -355,6 +372,9 @@
   .answer-actions { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 2px; font-size: 11px; color: var(--faint); }
   .answer-actions .icon-btn { width: 22px; height: 22px; margin-left: -4px; }
   .composer { display: flex; flex-direction: column; gap: 4px; margin: 12px; padding: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+  .strip { padding: 6px; border-radius: 6px; background: var(--hover); font-size: 12px; color: var(--muted); }
+  .link { padding: 0; color: var(--accent); font-size: inherit; }
+  .link:hover { text-decoration: underline; }
   .suggestions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 0 4px; }
   .suggestion { max-width: 100%; padding: 3px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg); font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .suggestion:hover:not(:disabled) { background: var(--hover); }

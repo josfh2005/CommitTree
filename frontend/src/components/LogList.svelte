@@ -10,7 +10,7 @@
   import { badgeLaneColor, isCurrentBranchRef } from '../lib/refBadge'
   import { cherryPickBlocker, rebaseBlocker } from '../lib/rebase'
   import { isMine } from '../lib/identity'
-  import { busy, chatOpen, explainIntoChat, filters, identity, jumpTo, logOrder, logVersion, mergeState, refs, selectedHash, toggleCommit, toggleUncommitted, uncommittedSelected, worktreeState } from '../lib/stores'
+  import { aiOff, busy, chatOpen, explainIntoChat, filters, identity, jumpTo, logOrder, logVersion, mergeState, refs, selectedHash, toggleCommit, toggleUncommitted, uncommittedSelected, worktreeState } from '../lib/stores'
   import type { LogRow } from '../lib/types'
   import { copyText, errorMessage, openMenuAsync, toast } from '../lib/ui'
   import { cleanTreeSelection, followHead, uncommittedCount, uncommittedMarker } from '../lib/uncommitted'
@@ -299,7 +299,7 @@
         title: c.worktree ? `Checked out in another worktree: ${c.worktree}` : undefined,
       }))
       return [
-        { label: '✨ Explain in chat', action: () => explain(row) },
+        ...($aiOff ? [] : [{ label: '✨ Explain in chat', action: () => explain(row) }]),
         ...branches,
         { label: 'Check out (detached)…', action: () => checkoutCommit(repoId, row.hash) },
         { label: 'New branch here…', action: () => newBranch(repoId, row.hash, row.short) },

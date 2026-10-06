@@ -6,7 +6,7 @@
   import { commitChanges, stashChanges } from '../lib/actions'
   import { amendWarning, canCommit, shouldAutoGenerate } from '../lib/worktree'
   import type { CommitDeltaEvent, CommitDoneEvent, CommitInfo, WorktreeChangedEvent } from '../lib/types'
-  import { aiSettings, busy, focusCommitBox, worktreeState } from '../lib/stores'
+  import { aiOff, aiSettings, busy, focusCommitBox, worktreeState } from '../lib/stores'
   import { confirmDialog, errorMessage, toast } from '../lib/ui'
 
   export let repoId: string
@@ -95,7 +95,7 @@
     // ErrNothingStaged, and the shipped defaults (taskProvider "ollama",
     // commitMessage "auto-local") would otherwise fire on every clean open
     // and after every commit — see shouldAutoGenerate's own guard too.
-    if (!info || count <= 0 || !$aiSettings) return
+    if (!info || count <= 0 || !$aiSettings || $aiOff) return
     if (shouldAutoGenerate($aiSettings.commitMessage, $aiSettings.taskProvider, message, touched, count)) generate()
   }
 
@@ -214,7 +214,7 @@
     <span class="spacer"></span>
     {#if runID}
       <button class="btn" on:click={stopGenerating}><Icon name="stop" /><span>Stop</span></button>
-    {:else}
+    {:else if !$aiOff}
       <button class="btn" disabled={!repoId} on:click={generate}><Icon name="sparkle" /><span>Write with AI</span></button>
     {/if}
     <button class="btn" disabled={!repoId || !!$busy || !hasChanges} on:click={() => stashChanges(repoId)}>Stash…</button>

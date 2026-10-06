@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ACTIONS, COMMIT_MODES, REPLY_MODES, actionLabel, chooseProvider, globalLabel, globalModeLabel, mergeDrafts, providerModels, stateText, usesRepoChatModel, withOverride } from './repoAI'
+import { ACTIONS, COMMIT_MODES, REPLY_MODES, actionLabel, chooseProvider, globalLabel, globalModeLabel, mergeDrafts, providerModels, showsInstructionsStrip, stateText, usesRepoChatModel, withOverride } from './repoAI'
 import type { AIStatus } from './types'
 
 describe('repoAI helpers', () => {
@@ -29,6 +29,11 @@ describe('repoAI helpers', () => {
     expect(usesRepoChatModel({ overrides: { chatProvider: 'ollama', chatModel: 'x' } } as any)).toBe(true)
     expect(usesRepoChatModel({ overrides: {} } as any)).toBe(false)
     expect(usesRepoChatModel(null)).toBe(false)
+  })
+  it('shows the instructions strip only while approval is owed', () => {
+    for (const state of ['pending', 'changed'] as const) expect(showsInstructionsStrip({ state })).toBe(true)
+    for (const state of ['none', 'approved', 'ignored'] as const) expect(showsInstructionsStrip({ state })).toBe(false)
+    expect(showsInstructionsStrip(null)).toBe(false)
   })
 })
 
