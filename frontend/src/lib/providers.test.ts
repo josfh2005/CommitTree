@@ -121,6 +121,7 @@ describe('chatBlocker', () => {
     expect(chatBlocker('ollama', s, 'qwen2.5:7b')).toEqual({ kind: 'model_missing', model: 'qwen2.5:7b' })
     expect(chatBlocker('ollama', s, 'qwen3')).toEqual({ kind: 'model_missing', model: 'qwen3' })
     expect(chatBlocker('ollama', s, 'qwen3:14b')).toBeNull()
+    expect(chatBlocker('ollama', s, '')).toBeNull()
   })
 
   it('asks for the key of a hosted provider that has none', () => {

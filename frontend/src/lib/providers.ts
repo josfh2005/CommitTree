@@ -85,7 +85,7 @@ export type ChatBlocker = { kind: 'ollama_down' } | { kind: 'model_missing'; mod
 export function chatBlocker(chatProvider: ProviderName, status: AIStatus, chatModel?: string): ChatBlocker | null {
   if (!needsKey(chatProvider)) {
     if (!status.ollama.running) return { kind: 'ollama_down' }
-    if (chatModel === undefined) {
+    if (!chatModel) {
       if (!status.ollama.chatModelInstalled) return { kind: 'model_missing', model: status.ollama.chatModel }
       return null
     }

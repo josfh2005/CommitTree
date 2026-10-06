@@ -80,6 +80,8 @@
   onMount(() => {
     loadRepos().then(loadRefs)
     const offSelected = selectedRepoId.subscribe(() => loadAISettings())
+    // The payload is ignored on purpose: a worktree and its main repository share
+    // their AI settings, so the event may name a repo other than the selected one.
     const offRepoAI = EventsOn('repo-ai:changed', () => loadAISettings())
     Environment().then((env) => platform.set(env.platform)).catch(() => {})
     const stopFocus = startFocusRefresh()

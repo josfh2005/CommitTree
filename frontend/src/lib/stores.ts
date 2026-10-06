@@ -491,21 +491,40 @@ export async function loadGitSettings() {
  *  its overrides) when one is selected, the global ones otherwise. */
 export async function loadAISettings() {
   const id = get(selectedRepoId)
+  const seq = ++aiLoadSeq
+  // Another repository's settings must never be acted on while this one's
+  // load is in flight, so a changed selection clears them first. Reloading
+  // the same repository (after a save) keeps what is shown until the answer.
+  if (id !== aiLoadedFor) {
+    repoAI.set(null)
+    aiSettings.set(null)
+  }
+  aiLoadedFor = id
   try {
     if (id) {
       const info = await api.getRepoAISettings(id)
-      if (get(selectedRepoId) !== id) return
+      if (seq !== aiLoadSeq) return
       repoAI.set(info)
       aiSettings.set(info.effective)
     } else {
+      const global = await api.getAISettings()
+      if (seq !== aiLoadSeq) return
       repoAI.set(null)
-      aiSettings.set(await api.getAISettings())
+      aiSettings.set(global)
     }
   } catch {
-    // Left as whatever was last loaded (or null) — the commit box treats a
-    // null store as "don't auto-generate" rather than erroring.
+    if (seq !== aiLoadSeq) return
+    // Unreadable: show nothing rather than another repository's (or stale)
+    // settings — the commit box treats a null store as "don't auto-generate".
+    repoAI.set(null)
+    aiSettings.set(null)
   }
 }
+
+// A sequence number, so a load that resolves after a newer one is dropped,
+// and the id of the repository the stores currently describe.
+let aiLoadSeq = 0
+let aiLoadedFor: string | null = null
 
 /** Reloads everything the selected repository shows. Coalesced: a call
  *  while one runs waits for one more run instead of racing it (a background
