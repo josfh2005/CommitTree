@@ -99,3 +99,129 @@ func repoNote(err error, overridden bool) error {
 	}
 	return fmt.Errorf("%w (set in this repository's settings)", err)
 }
+
+// EventRepoAIChanged tells the frontend a repository's AI settings or the
+// approval of its instructions changed.
+const EventRepoAIChanged = "repo-ai:changed"
+
+type RepoAIChangedEvent struct {
+	RepoID string `json:"repoID"`
+}
+
+var ErrInstructionsChanged = errors.New("the repository's instructions changed; review them again")
+
+type RepoAIInfo struct {
+	Effective        settings.Settings             `json:"effective"`
+	Global           settings.Settings             `json:"global"`
+	Overrides        reposettings.Override         `json:"overrides"`
+	AIOff            bool                          `json:"aiOff"`
+	RepoInstructions reposettings.RepoInstructions `json:"repoInstructions"`
+	State            string                        `json:"state"`
+	Error            string                        `json:"error,omitempty"`
+}
+
+// GetRepoAISettings is what the AI tab and the per-repository stores show.
+// An unreadable repo-ai.json is reported in Error with AIOff set, so the
+// interface hides the AI rather than offer actions that will be refused.
+func (a *App) GetRepoAISettings(repoID string) (RepoAIInfo, error) {
+	if a.ai == nil {
+		return RepoAIInfo{}, ErrAIDisabled
+	}
+	repo, ok := a.repo(repoID)
+	if !ok {
+		return RepoAIInfo{}, repos.ErrUnknownRepo
+	}
+	g, err := settings.Load(a.ai.deps.SettingsPath)
+	if err != nil {
+		return RepoAIInfo{}, err
+	}
+	info := RepoAIInfo{Global: g, Effective: g, RepoInstructions: reposettings.ReadRepo(repo.Path)}
+	o, err := a.repoAIStore().Get(a.settingsKey(repoID))
+	if err != nil {
+		info.AIOff, info.Error = true, err.Error()
+		info.State = reposettings.StateNone
+		return info, nil
+	}
+	if o.Instructions == nil {
+		o.Instructions = map[string]string{}
+	}
+	info.Overrides, info.AIOff = o, o.AIOff
+	info.Effective = reposettings.Merge(g, o)
+	info.State = reposettings.StateOf(o.Approval, info.RepoInstructions.Hash)
+	return info, nil
+}
+
+// SaveRepoAISettings replaces the repository's overrides. Turning the AI
+// off stops what is running there.
+func (a *App) SaveRepoAISettings(repoID string, o reposettings.Override) error {
+	if a.ai == nil {
+		return ErrAIDisabled
+	}
+	if _, ok := a.repo(repoID); !ok {
+		return repos.ErrUnknownRepo
+	}
+	if err := a.repoAIStore().Set(a.settingsKey(repoID), o); err != nil {
+		return err
+	}
+	if o.AIOff {
+		a.stopRepoAI(repoID)
+	}
+	a.emit(EventRepoAIChanged, RepoAIChangedEvent{RepoID: repoID})
+	return nil
+}
+
+func (a *App) ApproveRepoInstructions(repoID, hash string) error {
+	return a.setApproval(repoID, hash, hash)
+}
+
+func (a *App) IgnoreRepoInstructions(repoID, hash string) error {
+	return a.setApproval(repoID, hash, reposettings.IgnoredPrefix+hash)
+}
+
+// setApproval stores value only if the files still hash to seen, the hash
+// the user was shown: an edit while the tab was open is never approved.
+func (a *App) setApproval(repoID, seen, value string) error {
+	if a.ai == nil {
+		return ErrAIDisabled
+	}
+	repo, ok := a.repo(repoID)
+	if !ok {
+		return repos.ErrUnknownRepo
+	}
+	if seen == "" || reposettings.ReadRepo(repo.Path).Hash != seen {
+		return ErrInstructionsChanged
+	}
+	if err := a.repoAIStore().SetApproval(a.settingsKey(repoID), value); err != nil {
+		return err
+	}
+	a.emit(EventRepoAIChanged, RepoAIChangedEvent{RepoID: repoID})
+	return nil
+}
+
+// stopRepoAI cancels the chat answer, explanation or conflict resolution
+// (they all hold the chat slot), the commit message and the pending
+// suggestions of the repository whose settings repoID uses, and of every
+// linked worktree sharing them.
+func (a *App) stopRepoAI(repoID string) {
+	key := a.settingsKey(repoID)
+	ids := []string{key}
+	a.wtMu.Lock()
+	for wt, parent := range a.settingsParent {
+		if parent == key {
+			ids = append(ids, wt)
+		}
+	}
+	a.wtMu.Unlock()
+	if repoID != key {
+		ids = append(ids, repoID)
+	}
+	for _, id := range ids {
+		_ = a.StopChat(id)
+		a.cancelSuggestions(id)
+		a.ai.mu.Lock()
+		if run, ok := a.ai.commits[id]; ok {
+			run.cancel()
+		}
+		a.ai.mu.Unlock()
+	}
+}

@@ -16,6 +16,7 @@ import {stash} from '../models';
 import {submodules} from '../models';
 import {prompts} from '../models';
 import {menu} from '../models';
+import {reposettings} from '../models';
 import {worktrees} from '../models';
 
 export function AIStatus():Promise<app.AIStatus>;
@@ -27,6 +28,8 @@ export function AddRemote(arg1:string,arg2:string,arg3:string):Promise<void>;
 export function AddRepo():Promise<repos.Repo>;
 
 export function ApplyHunkSelection(arg1:string,arg2:string,arg3:boolean,arg4:string,arg5:Array<worktree.HunkPick>,arg6:string):Promise<void>;
+
+export function ApproveRepoInstructions(arg1:string,arg2:string):Promise<void>;
 
 export function AutoFetch(arg1:string):Promise<ops.AutoFetchResult>;
 
@@ -124,6 +127,8 @@ export function GetRefs(arg1:string):Promise<refs.Refs>;
 
 export function GetRemoteInfo(arg1:string):Promise<ops.AheadBehind>;
 
+export function GetRepoAISettings(arg1:string):Promise<app.RepoAIInfo>;
+
 export function GetResetPreview(arg1:string,arg2:string):Promise<ops.ResetInfo>;
 
 export function GetStashDiff(arg1:string,arg2:number):Promise<string>;
@@ -139,6 +144,8 @@ export function GetSubmodules(arg1:string):Promise<Array<submodules.Submodule>>;
 export function GetWorktreeDiff(arg1:string,arg2:string,arg3:boolean):Promise<app.WorktreeDiff>;
 
 export function GetWorktreeState(arg1:string):Promise<worktree.State>;
+
+export function IgnoreRepoInstructions(arg1:string,arg2:string):Promise<void>;
 
 export function InitAllSubmodules(arg1:string):Promise<void>;
 
@@ -211,6 +218,8 @@ export function RestartConflictFile(arg1:string,arg2:string):Promise<void>;
 export function SaveAISettings(arg1:settings.Settings):Promise<void>;
 
 export function SaveGitSettings(arg1:gitsettings.Settings):Promise<void>;
+
+export function SaveRepoAISettings(arg1:string,arg2:reposettings.Override):Promise<void>;
 
 export function SendChat(arg1:string,arg2:string,arg3:string):Promise<void>;
 

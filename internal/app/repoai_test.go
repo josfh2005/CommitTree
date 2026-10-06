@@ -3,12 +3,16 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 
+	"git-ui/internal/ai/agent"
 	"git-ui/internal/ai/keys"
 	"git-ui/internal/ai/reposettings"
 	"git-ui/internal/ai/settings"
@@ -172,5 +176,139 @@ func TestAddedWorktreeUsesMainRepoSettings(t *testing.T) {
 	setRepoAI(t, a, id, reposettings.Override{AIOff: true})
 	if _, _, err := a.aiSettingsFor(added.ID); !errors.Is(err, ErrAIOff) {
 		t.Fatalf("added worktree: %v", err)
+	}
+}
+
+func TestGetRepoAISettings(t *testing.T) {
+	a, id, _ := newAIApp(t, "http://127.0.0.1:1")
+	repo, _ := a.repo(id)
+	_ = os.MkdirAll(filepath.Join(repo.Path, ".committree"), 0o755)
+	_ = os.WriteFile(filepath.Join(repo.Path, ".committree", "instructions.md"), []byte("Rule."), 0o644)
+	if err := a.SaveRepoAISettings(id, reposettings.Override{SuggestReplies: settings.SuggestAuto}); err != nil {
+		t.Fatal(err)
+	}
+	info, err := a.GetRepoAISettings(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Effective.SuggestReplies != settings.SuggestAuto || info.Global.SuggestReplies != settings.SuggestOff ||
+		info.State != reposettings.StatePending || len(info.RepoInstructions.Files) != 1 || info.AIOff {
+		t.Fatalf("got %+v", info)
+	}
+}
+
+func TestGetRepoAISettingsCorruptIsOffWithError(t *testing.T) {
+	a, id, _ := newAIApp(t, "http://127.0.0.1:1")
+	_ = os.WriteFile(reposettings.PathNextTo(a.ai.deps.SettingsPath), []byte("{oops"), 0o644)
+	info, err := a.GetRepoAISettings(id)
+	if err != nil || !info.AIOff || !strings.HasPrefix(info.Error, "Per-repository AI settings can't be read") {
+		t.Fatalf("got %+v, %v", info, err)
+	}
+}
+
+func TestApproveAndIgnore(t *testing.T) {
+	a, id, ev := newAIApp(t, "http://127.0.0.1:1")
+	repo, _ := a.repo(id)
+	_ = os.MkdirAll(filepath.Join(repo.Path, ".committree"), 0o755)
+	_ = os.WriteFile(filepath.Join(repo.Path, ".committree", "instructions.md"), []byte("Rule."), 0o644)
+	info, _ := a.GetRepoAISettings(id)
+	if err := a.IgnoreRepoInstructions(id, info.RepoInstructions.Hash); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := a.GetRepoAISettings(id); got.State != reposettings.StateIgnored {
+		t.Fatalf("state %s", got.State)
+	}
+	if err := a.ApproveRepoInstructions(id, info.RepoInstructions.Hash); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := a.GetRepoAISettings(id); got.State != reposettings.StateApproved {
+		t.Fatalf("state %s", got.State)
+	}
+	ev.wait(t, EventRepoAIChanged)
+}
+
+func TestApproveRefusesStaleHash(t *testing.T) {
+	a, id, _ := newAIApp(t, "http://127.0.0.1:1")
+	repo, _ := a.repo(id)
+	_ = os.MkdirAll(filepath.Join(repo.Path, ".committree"), 0o755)
+	p := filepath.Join(repo.Path, ".committree", "instructions.md")
+	_ = os.WriteFile(p, []byte("Seen."), 0o644)
+	seen, _ := a.GetRepoAISettings(id)
+	_ = os.WriteFile(p, []byte("Changed after."), 0o644)
+	if err := a.ApproveRepoInstructions(id, seen.RepoInstructions.Hash); !errors.Is(err, ErrInstructionsChanged) {
+		t.Fatalf("got %v", err)
+	}
+	if got, _ := a.GetRepoAISettings(id); got.State != reposettings.StatePending {
+		t.Fatalf("state %s", got.State)
+	}
+}
+
+func TestSaveRepoAISettingsRejectsInvalid(t *testing.T) {
+	a, id, _ := newAIApp(t, "http://127.0.0.1:1")
+	if err := a.SaveRepoAISettings(id, reposettings.Override{ChatProvider: settings.ProviderOllama}); !errors.Is(err, reposettings.ErrInvalid) {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestTurningAIOffCancelsRunning(t *testing.T) {
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/tags" {
+			fmt.Fprint(w, `{"models":[{"name":"qwen2.5:7b"}]}`)
+			return
+		}
+		writeLines(w, `{"message":{"role":"assistant","content":"partial"},"done":false}`)
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+	}))
+	defer srv.Close()
+	defer close(release)
+	a, id, ev := newAIApp(t, srv.URL)
+	if err := a.SendChat(id, "hi", "run1"); err != nil {
+		t.Fatal(err)
+	}
+	ev.wait(t, agent.EventDelta)
+	if err := a.SaveRepoAISettings(id, reposettings.Override{AIOff: true}); err != nil {
+		t.Fatal(err)
+	}
+	ev.wait(t, agent.EventDone) // a stopped answer ends with done (context.Canceled)
+	if a.aiBusy(id) {
+		t.Fatal("chat still running")
+	}
+}
+
+// Turning a main repository off also stops the commit message and the
+// pending suggestions of its linked worktrees, detected or added to the list.
+func TestTurningAIOffStopsLinkedWorktrees(t *testing.T) {
+	a, id, _ := newAIApp(t, "http://127.0.0.1:1")
+	_, wt := withWorktree(t, a, id)
+	added, err := a.store.Add(context.Background(), wt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.ListRepos()
+	wtCtx, wtCancel := context.WithCancel(context.Background())
+	defer wtCancel()
+	sugCtx, sugCancel := context.WithCancel(context.Background())
+	defer sugCancel()
+	run := &commitRun{cancel: wtCancel}
+	a.ai.mu.Lock()
+	a.ai.commits[added.ID] = run
+	a.ai.suggestions[added.ID] = &pendingSuggestion{cancel: sugCancel}
+	a.ai.mu.Unlock()
+
+	if err := a.SaveRepoAISettings(id, reposettings.Override{AIOff: true}); err != nil {
+		t.Fatal(err)
+	}
+	if wtCtx.Err() == nil {
+		t.Error("the worktree's commit message was not cancelled")
+	}
+	if sugCtx.Err() == nil {
+		t.Error("the worktree's suggestions were not cancelled")
+	}
+	if got := run.cancelMessage(); got != ErrAIOff.Error() {
+		t.Errorf("cancel message %q", got)
 	}
 }

@@ -433,6 +433,48 @@ export namespace app {
 	        this.settled = source["settled"];
 	    }
 	}
+	export class RepoAIInfo {
+	    effective: settings.Settings;
+	    global: settings.Settings;
+	    overrides: reposettings.Override;
+	    aiOff: boolean;
+	    repoInstructions: reposettings.RepoInstructions;
+	    state: string;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RepoAIInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.effective = this.convertValues(source["effective"], settings.Settings);
+	        this.global = this.convertValues(source["global"], settings.Settings);
+	        this.overrides = this.convertValues(source["overrides"], reposettings.Override);
+	        this.aiOff = source["aiOff"];
+	        this.repoInstructions = this.convertValues(source["repoInstructions"], reposettings.RepoInstructions);
+	        this.state = source["state"];
+	        this.error = source["error"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class RepoItem {
 	    id: string;
 	    name: string;
@@ -1470,6 +1512,89 @@ export namespace repos {
 	        this.missing = source["missing"];
 	        this.group = source["group"];
 	    }
+	}
+
+}
+
+export namespace reposettings {
+	
+	export class Override {
+	    aiOff?: boolean;
+	    chatProvider?: string;
+	    chatModel?: string;
+	    taskProvider?: string;
+	    taskModel?: string;
+	    commitMessage?: string;
+	    suggestReplies?: string;
+	    instructions?: Record<string, string>;
+	    approvedRepoInstructions?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Override(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.aiOff = source["aiOff"];
+	        this.chatProvider = source["chatProvider"];
+	        this.chatModel = source["chatModel"];
+	        this.taskProvider = source["taskProvider"];
+	        this.taskModel = source["taskModel"];
+	        this.commitMessage = source["commitMessage"];
+	        this.suggestReplies = source["suggestReplies"];
+	        this.instructions = source["instructions"];
+	        this.approvedRepoInstructions = source["approvedRepoInstructions"];
+	    }
+	}
+	export class RepoFile {
+	    name: string;
+	    text: string;
+	    ignored?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RepoFile(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.text = source["text"];
+	        this.ignored = source["ignored"];
+	    }
+	}
+	export class RepoInstructions {
+	    files: RepoFile[];
+	    hash: string;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RepoInstructions(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.files = this.convertValues(source["files"], RepoFile);
+	        this.hash = source["hash"];
+	        this.error = source["error"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }
