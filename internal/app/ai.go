@@ -57,6 +57,10 @@ type aiState struct {
 	repoAI *reposettings.Store
 	// commits holds, per repo ID, the running commit message generation.
 	commits map[string]*commitRun
+	// afterSettings, set only by tests, runs once aiSettingsFor has read
+	// the settings: the window in which the AI can be turned off before
+	// a run registers itself.
+	afterSettings func(repoID string)
 }
 
 type OllamaStatus struct {
@@ -348,6 +352,10 @@ func (a *App) SendChat(repoID, text, runID string) error {
 		a.ai.mu.Unlock()
 		cancel()
 	}
+	if err := a.stillOn(repoID); err != nil {
+		finish()
+		return err
+	}
 
 	history, err := a.ai.deps.Chats.Load(repoID)
 	if err == nil {
@@ -583,6 +591,10 @@ func (a *App) explainTask(repoID, provider, runID, promptName string, build func
 		delete(a.ai.runs, repoID)
 		a.ai.mu.Unlock()
 		cancel()
+	}
+	if err := a.stillOn(repoID); err != nil {
+		finish()
+		return err
 	}
 
 	question, prompt, err := build(ctx, repo.Path)

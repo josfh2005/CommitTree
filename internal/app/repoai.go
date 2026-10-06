@@ -70,10 +70,30 @@ func (a *App) aiSettingsFor(repoID string) (settings.Settings, reposettings.Over
 	if err != nil {
 		return settings.Settings{}, reposettings.Override{}, err
 	}
+	if h := a.ai.afterSettings; h != nil {
+		h(repoID)
+	}
 	if o.AIOff {
 		return settings.Settings{}, o, ErrAIOff
 	}
 	return reposettings.Merge(g, o), o, nil
+}
+
+// stillOn is checked right after a run registers itself (in the chat slot or
+// as a commit message run). The AI may have been turned off between the
+// aiSettingsFor that allowed the run and its registration; stopRepoAI then
+// found nothing to cancel. Registration comes first and the off-save stores
+// before it cancels, so either this sees the repository off or stopRepoAI
+// sees the run.
+func (a *App) stillOn(repoID string) error {
+	o, err := a.repoAIStore().Get(a.settingsKey(repoID))
+	if err != nil {
+		return err
+	}
+	if o.AIOff {
+		return ErrAIOff
+	}
+	return nil
 }
 
 // systemPrompt is the named prompt with extra (e.g. merge-kind guidance)
@@ -108,7 +128,10 @@ type RepoAIChangedEvent struct {
 	RepoID string `json:"repoID"`
 }
 
-var ErrInstructionsChanged = errors.New("the repository's instructions changed; review them again")
+var (
+	ErrInstructionsChanged = errors.New("the repository's instructions changed; review them again")
+	ErrNoInstructions      = errors.New("this repository has no instructions to approve")
+)
 
 type RepoAIInfo struct {
 	Effective        settings.Settings             `json:"effective"`
@@ -188,7 +211,13 @@ func (a *App) setApproval(repoID, seen, value string) error {
 	if !ok {
 		return repos.ErrUnknownRepo
 	}
-	if seen == "" || reposettings.ReadRepo(repo.Path).Hash != seen {
+	current := reposettings.ReadRepo(repo.Path).Hash
+	if seen == "" || current == "" {
+		return ErrNoInstructions
+	}
+	if current != seen {
+		// Open views still show the old content: have them reload.
+		a.emit(EventRepoAIChanged, RepoAIChangedEvent{RepoID: repoID})
 		return ErrInstructionsChanged
 	}
 	if err := a.repoAIStore().SetApproval(a.settingsKey(repoID), value); err != nil {
@@ -212,9 +241,6 @@ func (a *App) stopRepoAI(repoID string) {
 		}
 	}
 	a.wtMu.Unlock()
-	if repoID != key {
-		ids = append(ids, repoID)
-	}
 	for _, id := range ids {
 		_ = a.StopChat(id)
 		a.cancelSuggestions(id)

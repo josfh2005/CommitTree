@@ -312,3 +312,67 @@ func TestTurningAIOffStopsLinkedWorktrees(t *testing.T) {
 		t.Errorf("cancel message %q", got)
 	}
 }
+
+func TestApproveAndIgnoreWithoutInstructions(t *testing.T) {
+	a, id, _ := newAIApp(t, "http://127.0.0.1:1")
+	if err := a.ApproveRepoInstructions(id, ""); !errors.Is(err, ErrNoInstructions) {
+		t.Fatalf("approve: %v", err)
+	}
+	if err := a.IgnoreRepoInstructions(id, "abc"); !errors.Is(err, ErrNoInstructions) {
+		t.Fatalf("ignore with no files: %v", err)
+	}
+}
+
+func TestIgnoreRefusesStaleHashAndTellsViews(t *testing.T) {
+	a, id, ev := newAIApp(t, "http://127.0.0.1:1")
+	repo, _ := a.repo(id)
+	_ = os.MkdirAll(filepath.Join(repo.Path, ".committree"), 0o755)
+	p := filepath.Join(repo.Path, ".committree", "instructions.md")
+	_ = os.WriteFile(p, []byte("Seen."), 0o644)
+	seen, _ := a.GetRepoAISettings(id)
+	_ = os.WriteFile(p, []byte("Changed after."), 0o644)
+	if err := a.IgnoreRepoInstructions(id, seen.RepoInstructions.Hash); !errors.Is(err, ErrInstructionsChanged) {
+		t.Fatalf("got %v", err)
+	}
+	if got, _ := a.GetRepoAISettings(id); got.State != reposettings.StatePending {
+		t.Fatalf("state %s", got.State)
+	}
+	// The refusal tells open views to reload the new content.
+	ev.wait(t, EventRepoAIChanged)
+}
+
+// The AI can be turned off after a run's settings were read and before it
+// registers itself; stopRepoAI then finds nothing to cancel, so the run must
+// notice by itself and not stream.
+func TestChatNotStartedWhenTurnedOffBeforeItRegisters(t *testing.T) {
+	var mu sync.Mutex
+	chatCalls := 0
+	srv := fakeOllama(t, func(map[string]any) {
+		mu.Lock()
+		chatCalls++
+		mu.Unlock()
+	})
+	a, id, ev := newAIApp(t, srv.URL)
+	a.ai.afterSettings = func(string) {
+		a.ai.afterSettings = nil
+		if err := a.SaveRepoAISettings(id, reposettings.Override{AIOff: true}); err != nil {
+			t.Error(err)
+		}
+	}
+	if err := a.SendChat(id, "hi", "run1"); !errors.Is(err, ErrAIOff) {
+		t.Fatalf("got %v", err)
+	}
+	if a.aiBusy(id) {
+		t.Fatal("the chat slot was left taken")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if chatCalls != 0 {
+		t.Fatalf("the model was called %d times", chatCalls)
+	}
+	for _, n := range ev.names() {
+		if n == agent.EventStart || n == agent.EventDelta {
+			t.Fatalf("the run started: %v", ev.names())
+		}
+	}
+}

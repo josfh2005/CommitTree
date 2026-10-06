@@ -405,6 +405,10 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 		a.ai.mu.Unlock()
 		cancel()
 	}
+	if err := a.stillOn(repoID); err != nil {
+		finish()
+		return err
+	}
 
 	text := resolveRequest(st)
 	history, err := a.ai.deps.Chats.Load(repoID)

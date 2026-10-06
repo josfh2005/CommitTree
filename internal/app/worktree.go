@@ -207,6 +207,15 @@ func (a *App) GenerateCommitMessage(id, runID string) error {
 	}
 	a.ai.commits[id] = run
 	a.ai.mu.Unlock()
+	if err := a.stillOn(id); err != nil {
+		a.ai.mu.Lock()
+		if a.ai.commits[id] == run {
+			delete(a.ai.commits, id)
+		}
+		a.ai.mu.Unlock()
+		cancel()
+		return err
+	}
 	go func() {
 		defer func() {
 			a.ai.mu.Lock()
