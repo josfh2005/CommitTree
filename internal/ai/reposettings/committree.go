@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -75,22 +76,21 @@ func ReadRepo(dir string) RepoInstructions {
 		}
 		f := RepoFile{Name: name}
 		switch {
+		case name != SharedFile && !isAction(strings.TrimSuffix(name, ".md")):
+			// Never opened: an unknown name is "not used" whatever it holds.
+			f.Ignored = "not used"
 		case e.Type()&os.ModeSymlink != 0:
 			f.Ignored = "a symbolic link"
 		case !e.Type().IsRegular():
 			f.Ignored = "not a regular file"
 		}
 		if f.Ignored == "" {
-			data, err := os.ReadFile(filepath.Join(root, name))
+			data, reason := readCapped(filepath.Join(root, name))
 			switch {
-			case err != nil:
-				f.Ignored = err.Error()
-			case len(data) > MaxFile:
-				f.Ignored = "larger than 16 KB"
+			case reason != "":
+				f.Ignored = reason
 			case !utf8.Valid(data):
 				f.Ignored = "not UTF-8 text"
-			case name != SharedFile && !isAction(strings.TrimSuffix(name, ".md")):
-				f.Ignored = "not used"
 			case total+len(data) > MaxTotal:
 				f.Ignored = "past the 32 KB total"
 			default:
@@ -106,6 +106,44 @@ func ReadRepo(dir string) RepoInstructions {
 		ri.Hash = "sha256:" + hex.EncodeToString(h.Sum(nil))
 	}
 	return ri
+}
+
+// readCapped reads a regular file of at most MaxFile bytes without ever
+// reading more than MaxFile+1: a larger file comes back as the reason
+// "larger than 16 KB". The path is checked as a regular file right before
+// opening and the opened file must be that same file, so a link swapped in
+// after the directory was listed is not followed.
+func readCapped(path string) ([]byte, string) {
+	before, err := os.Lstat(path)
+	if err != nil {
+		return nil, err.Error()
+	}
+	if !before.Mode().IsRegular() {
+		return nil, "not a regular file"
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err.Error()
+	}
+	defer f.Close()
+	opened, err := f.Stat()
+	if err != nil {
+		return nil, err.Error()
+	}
+	if !os.SameFile(before, opened) {
+		return nil, "changed while reading"
+	}
+	if opened.Size() > MaxFile {
+		return nil, "larger than 16 KB"
+	}
+	data, err := io.ReadAll(io.LimitReader(f, MaxFile+1))
+	if err != nil {
+		return nil, err.Error()
+	}
+	if len(data) > MaxFile {
+		return nil, "larger than 16 KB"
+	}
+	return data, ""
 }
 
 // Text returns the used texts for action: instructions.md, then

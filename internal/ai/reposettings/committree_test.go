@@ -40,8 +40,8 @@ func TestReadRepoUsedAndIgnoredFiles(t *testing.T) {
 	write(t, dir, "commit-message.md", "Conventional Commits.")
 	write(t, dir, "deploy.md", "x")
 	write(t, dir, "notes.txt", "x")
-	write(t, dir, "big.md", strings.Repeat("a", MaxFile+1))
-	write(t, dir, "bad.md", "\xff\xfe")
+	write(t, dir, "explain-lines.md", strings.Repeat("a", MaxFile+1))
+	write(t, dir, "resolve-conflicts.md", "\xff\xfe")
 	ri := ReadRepo(dir)
 	if f := file(ri, "instructions.md"); f.Ignored != "" || f.Text != "We use Go." {
 		t.Fatalf("instructions.md: %+v", f)
@@ -49,11 +49,11 @@ func TestReadRepoUsedAndIgnoredFiles(t *testing.T) {
 	if f := file(ri, "deploy.md"); f.Ignored != "not used" {
 		t.Fatalf("deploy.md: %+v", f)
 	}
-	if f := file(ri, "big.md"); !strings.Contains(f.Ignored, "16 KB") {
-		t.Fatalf("big.md: %+v", f)
+	if f := file(ri, "explain-lines.md"); !strings.Contains(f.Ignored, "16 KB") {
+		t.Fatalf("explain-lines.md: %+v", f)
 	}
-	if f := file(ri, "bad.md"); f.Ignored != "not UTF-8 text" {
-		t.Fatalf("bad.md: %+v", f)
+	if f := file(ri, "resolve-conflicts.md"); f.Ignored != "not UTF-8 text" {
+		t.Fatalf("resolve-conflicts.md: %+v", f)
 	}
 	if f := file(ri, "notes.txt"); f.Name != "<missing>" {
 		t.Fatalf("non-.md files are not listed: %+v", f)
@@ -66,6 +66,51 @@ func TestReadRepoUsedAndIgnoredFiles(t *testing.T) {
 	}
 	if got := ri.Text("chat"); len(got) != 1 {
 		t.Fatalf("Text(chat): %q", got)
+	}
+}
+
+func TestReadRepoUnknownNameIsNotUsedAndNeverRead(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "deploy.md", strings.Repeat("a", MaxFile+1))
+	write(t, dir, "notes.md", "\xff\xfe")
+	// Unreadable on purpose: reading it would give another reason.
+	write(t, dir, "secret.md", "x")
+	if err := os.Chmod(filepath.Join(dir, Dir, "secret.md"), 0); err != nil {
+		t.Fatal(err)
+	}
+	ri := ReadRepo(dir)
+	for _, name := range []string{"deploy.md", "notes.md", "secret.md"} {
+		if f := file(ri, name); f.Ignored != "not used" {
+			t.Fatalf("%s: %+v", name, f)
+		}
+	}
+	if ri.Hash != "" {
+		t.Fatalf("nothing is used, hash %q", ri.Hash)
+	}
+}
+
+func TestReadRepoOversizeKnownFileIsIgnoredWithoutBeingRead(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "chat.md", strings.Repeat("a", MaxFile+1))
+	write(t, dir, "instructions.md", strings.Repeat("a", MaxFile))
+	ri := ReadRepo(dir)
+	if f := file(ri, "chat.md"); f.Ignored != "larger than 16 KB" || f.Text != "" {
+		t.Fatalf("chat.md: %+v", f)
+	}
+	if f := file(ri, "instructions.md"); f.Ignored != "" || len(f.Text) != MaxFile {
+		t.Fatalf("a file of exactly the limit is used: %+v", f.Ignored)
+	}
+}
+
+func TestReadCappedRefusesALargeFile(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "big.md")
+	if err := os.WriteFile(p, []byte(strings.Repeat("a", MaxFile*4)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	data, reason := readCapped(p)
+	if data != nil || reason != "larger than 16 KB" {
+		t.Fatalf("got %d bytes, %q", len(data), reason)
 	}
 }
 
