@@ -102,3 +102,14 @@ prompts folder**; **Restore default** undoes your changes.
 
 - [Specification](docs/spec/README.md) — what every part of the app does, area by area
 - [Development](docs/development.md) — building, testing and releasing CommitTree
+
+## Contributing
+
+Bug reports, ideas and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md)
+and the [code of conduct](CODE_OF_CONDUCT.md). Report security problems privately as
+described in [SECURITY.md](SECURITY.md); accessibility is covered in
+[ACCESSIBILITY.md](ACCESSIBILITY.md).
+
+## License
+
+CommitTree is free software under the [GNU General Public License v3.0](LICENSE).
