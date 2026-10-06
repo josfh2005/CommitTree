@@ -35,9 +35,11 @@ on remote-tracking branches or on collapsed branch folders.
 
 `refs.List` already runs one `for-each-ref`; its format gains
 `%(upstream:track,nobracket)`, which git fills from the last fetch with
-`ahead N`, `behind M`, `ahead N, behind M`, `gone` or nothing. `refs.Branch`
-gains `Ahead int`, `Behind int` and `UpstreamGone bool` (JSON `ahead`,
-`behind`, `upstreamGone`, omitted when zero/false). No extra git command runs,
+`ahead N`, `behind M`, `ahead N, behind M`, `gone` or nothing. It also gains `%(upstream:remotename)`, `.` for a branch that tracks
+another local branch. `refs.Branch` gains `Ahead int`, `Behind int`,
+`UpstreamGone bool` and `UpstreamLocal bool` (JSON `ahead`, `behind`,
+`upstreamGone`, `upstreamLocal`, omitted when zero/false); the frontend uses
+`upstreamLocal` to leave such branches out of the "All branches (N)" count. No extra git command runs,
 so the counts refresh whenever the refs do: after a fetch (toolbar or
 background), a pull, a push, a commit, a checkout, and so on.
 
@@ -72,10 +74,12 @@ pull strategy. Settings → General shows it under the pull strategy as
 
 The set is computed in Go when the push runs, from a fresh `for-each-ref`:
 
-1. **The current branch**, always (when HEAD is not detached), exactly as a
-   plain Push treats it: with no upstream it is published to `origin` under
-   its own name with `-u`. It is included even when it is not ahead, so its
-   outcome can read "up to date".
+1. **The current branch**, always (when HEAD is not detached and it does
+   not track another local branch): with no upstream it is published to
+   `origin` under its own name with `-u`, as a plain Push does; otherwise it
+   goes to its upstream, even a gone one (as a plain Push would recreate
+   it). It is included even when it is not ahead, so its outcome can read
+   "up to date".
 2. **Every other local branch** whose upstream is set, is not gone, lives on
    a remote (`%(upstream:remotename)` is not `.`, i.e. it does not track
    another local branch), and is ahead of it according to the last fetch.
@@ -116,15 +120,18 @@ branch the command named (should not happen) gives `failed` with "No result
 from git".
 
 The Go call returns `[]BranchPushResult{Branch, Target, Status, Reason}`,
-`Target` being `<remote>/<remote branch>`, in the order the branches were
-pushed. It returns an error only when nothing could start: the repository is
-missing, another write holds it, a conflict owns it.
+`Target` being `<remote>/<remote branch>`, current branch first, then the
+others by name. An empty set returns no results and no error (the frontend
+says "Nothing to push"). It returns an error only when nothing could start:
+the repository is missing or another write holds it. A command cancelled
+from the Commands panel marks its branches `failed` with "Cancelled".
 
 ## The Push flow
 
 `App.Push(id)` stays as it is (the current branch). A new
-`App.PushAll(id) ([]BranchPushResult, error)` takes the same write lock and
-the same conflict guard. The frontend decides which one to call:
+`App.PushAll(id) ([]BranchPushResult, error)` takes the same write lock. Like
+Push, it has no conflict check of its own in Go: the toolbar button and both
+menu items are disabled while a conflict owns the repository. The frontend decides which one to call:
 
 - Toolbar Push and the repo row menu's **Push** follow the setting:
   - *Current branch only*: `push`, unchanged.
@@ -157,8 +164,9 @@ the same conflict guard. The frontend decides which one to call:
   closes it. Rows keep the push order.
 
 For notifications (`11-notifications.md`) a push of all branches with any
-`rejected` or `failed` row counts as a failed push; its text reads "Push:
-N of M branches failed in `<repo>`". The 10 s rule is unchanged. The
+`rejected` or `failed` row counts as a failed push; its body reads "Push failed:
+N of M branches were not pushed" (the existing failure body around the
+message "N of M branches were not pushed"). The 10 s rule is unchanged. The
 Commands panel shows each `git push` as it does today.
 
 After the push the refs reload, so the sidebar badges and the toolbar's
@@ -168,7 +176,8 @@ counts show the new state.
 
 | Situation | Outcome |
 |---|---|
-| Another write running, conflict in progress, repository missing | Refused before anything runs (error toast), as Push today |
+| Another write running, repository missing | Refused before anything runs (error toast), as Push today |
+| Conflict in progress | Push and Push all branches are disabled, as Push today |
 | Detached HEAD, no other branch ahead | "Nothing to push" (Push All) / refusal as today (Push) |
 | One branch rejected, others fine | Others pushed; results dialog; failed notification |
 | Remote unreachable / auth failed | Its branches `failed` with git's message; other remotes still pushed |
@@ -197,8 +206,8 @@ Vitest:
 - the result summary: toast text vs dialog, notification text;
 - the badge text and tooltip, including zero parts left out.
 
-App-level (`internal/app`): `PushAll` honours the write lock and the
-conflict guard.
+App-level (`internal/app`): `PushAll` pushes through the app layer and
+honours the write lock.
 
 Manual pass: a demo repository with three branches ahead, one diverged and
 one without upstream; check the badges, each setting value, the dialog, the
