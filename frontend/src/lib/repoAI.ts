@@ -1,5 +1,5 @@
 import { modelHint, providerShortLabel } from './providers'
-import type { AIStatus, ProviderName, RepoAIInfo, RepoAIOverride, RepoAIState } from './types'
+import type { AIStatus, ProviderName, Repo, RepoAIInfo, RepoAIOverride, RepoAIState } from './types'
 
 export const ACTIONS = ['chat', 'commit-message', 'resolve-conflicts', 'explain-commit', 'explain-lines', 'suggest-replies'] as const
 export type Action = (typeof ACTIONS)[number]
@@ -43,6 +43,12 @@ export const usesRepoChatModel = (info: Pick<RepoAIInfo, 'overrides'> | null) =>
 /** showsInstructionsStrip: the chat shows its "review the repository's
  *  instructions" strip while shared instructions wait for an approval. */
 export const showsInstructionsStrip = (info: Pick<RepoAIInfo, 'state'> | null) => info?.state === 'pending' || info?.state === 'changed'
+
+/** settingsRepoID is the repository whose Repository settings apply to repo:
+ *  a linked worktree has none of its own and shares its main repository's
+ *  (the backend maps it the same way). A submodule keeps its own. */
+export const settingsRepoID = (repo: Pick<Repo, 'id' | 'parentId' | 'submodule'>) =>
+  repo.parentId && !repo.submodule ? repo.parentId : repo.id
 
 export interface ModeOption { value: string; label: string }
 

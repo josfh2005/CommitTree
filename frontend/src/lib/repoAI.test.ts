@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ACTIONS, COMMIT_MODES, REPLY_MODES, actionLabel, chooseProvider, globalLabel, globalModeLabel, instructionsToSave, mergeDrafts, providerModels, showsInstructionsStrip, stateText, usesRepoChatModel, withOverride } from './repoAI'
+import { ACTIONS, COMMIT_MODES, REPLY_MODES, actionLabel, chooseProvider, globalLabel, globalModeLabel, instructionsToSave, mergeDrafts, settingsRepoID, providerModels, showsInstructionsStrip, stateText, usesRepoChatModel, withOverride } from './repoAI'
 import type { AIStatus } from './types'
 
 describe('repoAI helpers', () => {
@@ -111,5 +111,17 @@ describe('instructionsToSave', () => {
   })
   it('returns the map with an empty text when a stored box was cleared', () => {
     expect(instructionsToSave('chat', { chat: '' }, { chat: 'old' })).toEqual({ chat: '' })
+  })
+})
+
+describe('settingsRepoID', () => {
+  it('is the repository itself for a main repository', () => {
+    expect(settingsRepoID({ id: 'a' })).toBe('a')
+  })
+  it('is the main repository for a linked worktree, detected or added', () => {
+    expect(settingsRepoID({ id: 'wt', parentId: 'main' })).toBe('main')
+  })
+  it('keeps a submodule on its own entry', () => {
+    expect(settingsRepoID({ id: 'sub', parentId: 'main', submodule: true })).toBe('sub')
   })
 })

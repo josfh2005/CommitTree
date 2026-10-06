@@ -9,7 +9,7 @@
   import { renderMarkdown } from '../lib/markdown'
   import { chatBlocker } from '../lib/providers'
   import { aiOff, aiSettings, chatOpen, chatPreparing, jumpTo, repoAI, repoSettings, selectedRepo, settingsOpen } from '../lib/stores'
-  import { showsInstructionsStrip } from '../lib/repoAI'
+  import { settingsRepoID, showsInstructionsStrip } from '../lib/repoAI'
   import type { AIStatus } from '../lib/types'
   import { copyText, errorMessage, toast } from '../lib/ui'
   import DecisionTray from './DecisionTray.svelte'
@@ -175,7 +175,7 @@
       <div class="notice">
         <strong>AI is off for this repository</strong>
         {#if $repoAI?.error}<p>{$repoAI.error}</p>{/if}
-        <div class="actions"><button class="btn" on:click={() => repoSettings.set({ repoID: $selectedRepo.id, tab: 'ai' })}>Repository settings</button></div>
+        <div class="actions"><button class="btn" on:click={() => repoSettings.set({ repoID: settingsRepoID($selectedRepo), tab: 'ai' })}>Repository settings</button></div>
       </div>
     {:else if blocker?.kind === 'ollama_down'}
       <div class="notice">
@@ -305,7 +305,7 @@
     {#if showsInstructionsStrip($repoAI) && $selectedRepo}
       <div class="strip">
         This repository has instructions for the AI.
-        <button class="link" on:click={() => repoSettings.set({ repoID: $selectedRepo.id, tab: 'ai' })}>Review</button>
+        <button class="link" on:click={() => repoSettings.set({ repoID: settingsRepoID($selectedRepo), tab: 'ai' })}>Review</button>
       </div>
     {/if}
     <textarea
