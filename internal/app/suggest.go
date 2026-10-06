@@ -85,6 +85,11 @@ func (a *App) suggestReplies(repoID, runID string, cfg settings.Settings, o repo
 		case <-ctx.Done():
 			return
 		}
+		// AI may have been turned off while waiting, after the answer's run
+		// was gone (so nothing was there to cancel): send nothing then.
+		if a.stillOn(repoID) != nil {
+			return
+		}
 		replies, err := a.generateReplies(ctx, repoID, cfg, o)
 		if err != nil || ctx.Err() != nil {
 			return // no suggestions is the whole failure mode
