@@ -292,6 +292,13 @@ export async function loadRepos() {
   const prevId = get(selectedRepoId)
   const list = await api.listRepos()
   repos.set(list)
+  // The backend only knows a detected worktree or submodule, and which main
+  // repository an added worktree belongs to, once ListRepos has run. A load
+  // that raced it (the persisted selection at launch) was refused or answered
+  // from the wrong repository, so load again now that the list is known. A
+  // selection change below loads once more; the sequence number drops the
+  // older answer.
+  void loadAISettings()
   // A detected worktree or submodule can vanish between two reads (removed
   // in a terminal, deinitialised, or by the tool that created it). Whatever
   // is no longer listed loses its terminal tabs, and a selection pointing at

@@ -1,10 +1,10 @@
 import { get } from 'svelte/store'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('./api', () => ({ api: { getRepoAISettings: vi.fn(), getAISettings: vi.fn() } }))
+vi.mock('./api', () => ({ api: { getRepoAISettings: vi.fn(), getAISettings: vi.fn(), listRepos: vi.fn() } }))
 
 import { api } from './api'
-import { aiOff, aiSettings, loadAISettings, repoAI, selectedRepoId } from './stores'
+import { aiOff, aiSettings, loadAISettings, loadRepos, repoAI, selectedRepoId } from './stores'
 import type { AISettings, RepoAIInfo } from './types'
 
 const settings = (model: string) => ({ chatProvider: 'ollama', chatModel: model }) as unknown as AISettings
@@ -19,6 +19,7 @@ function deferred<T>() {
 beforeEach(() => {
   vi.mocked(api.getRepoAISettings).mockReset()
   vi.mocked(api.getAISettings).mockReset()
+  vi.mocked(api.listRepos).mockReset()
   selectedRepoId.set('')
   repoAI.set(null)
   aiSettings.set(null)
@@ -95,5 +96,22 @@ describe('loadAISettings', () => {
     expect(get(repoAI)).toBeNull()
     expect(get(aiSettings)).toBeNull()
     expect(get(aiOff)).toBe(false)
+  })
+})
+
+describe('loadAISettings at launch', () => {
+  it('loads again once the repository list is known, after a first load the backend refused', async () => {
+    // The persisted selection loads the settings while ListRepos still runs:
+    // a detected worktree is not known to the backend yet.
+    vi.mocked(api.getRepoAISettings).mockRejectedValueOnce(new Error('unknown repository'))
+    selectedRepoId.set('wt')
+    await loadAISettings()
+    expect(get(aiSettings)).toBeNull()
+
+    vi.mocked(api.listRepos).mockResolvedValue([{ id: 'wt', parentId: 'main' }] as never)
+    vi.mocked(api.getRepoAISettings).mockResolvedValue(info('main-model'))
+    await loadRepos()
+    await vi.waitFor(() => expect(get(aiSettings)?.chatModel).toBe('main-model'))
+    expect(get(repoAI)).not.toBeNull()
   })
 })
