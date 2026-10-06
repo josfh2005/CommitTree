@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -155,5 +156,21 @@ func TestWorktreeUsesMainRepoSettings(t *testing.T) {
 	setRepoAI(t, a, id, reposettings.Override{AIOff: true})
 	if _, _, err := a.aiSettingsFor(wtID); !errors.Is(err, ErrAIOff) {
 		t.Fatalf("worktree: %v", err)
+	}
+}
+
+// A linked worktree the user also added to the list is still matched by
+// path rather than detected, but uses its main repository's settings.
+func TestAddedWorktreeUsesMainRepoSettings(t *testing.T) {
+	a, id, _ := newAIApp(t, "http://127.0.0.1:1")
+	_, wt := withWorktree(t, a, id)
+	added, err := a.store.Add(context.Background(), wt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.ListRepos()
+	setRepoAI(t, a, id, reposettings.Override{AIOff: true})
+	if _, _, err := a.aiSettingsFor(added.ID); !errors.Is(err, ErrAIOff) {
+		t.Fatalf("added worktree: %v", err)
 	}
 }

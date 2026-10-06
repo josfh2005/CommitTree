@@ -133,3 +133,14 @@ func TestIsEmptyIgnoresBlankInstructions(t *testing.T) {
 		t.Fatal("an approval is not empty")
 	}
 }
+
+func TestRemoveOfUnknownIDWritesNothing(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "repo-ai.json")
+	s := New(path)
+	if err := s.Remove("nope"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("file created: %v", err)
+	}
+}

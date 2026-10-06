@@ -105,6 +105,10 @@ type App struct {
 	// lets a worktree removal run `git worktree remove` from the main
 	// repository's directory rather than the worktree's own.
 	wtParent map[string]string
+	// settingsParent is wtParent plus the linked worktrees the user also
+	// added to the list: every linked worktree's main repository, which is
+	// whose per-repository AI settings apply to it.
+	settingsParent map[string]string
 	// submodules are the initialised submodules the last ListRepos
 	// detected, by id. Like worktrees, they are not list entries: nothing
 	// about them is stored, and the map is replaced wholesale on every list
@@ -185,6 +189,7 @@ func (a *App) ListRepos() []RepoItem {
 	// nested under its main repository instead, when that one is listed.
 	found := map[string]repos.Repo{}
 	foundParent := map[string]string{}
+	foundSettings := map[string]string{}
 	for _, r := range list {
 		if r.Missing {
 			continue
@@ -202,6 +207,7 @@ func (a *App) ListRepos() []RepoItem {
 			}
 			if i, ok := byPath[canonical(wt.Path)]; ok {
 				items[i].ParentID = r.ID
+				foundSettings[items[i].ID] = r.ID
 				continue
 			}
 			label := wt.Branch
@@ -212,6 +218,7 @@ func (a *App) ListRepos() []RepoItem {
 			items = append(items, RepoItem{Repo: repo, Branch: label, ParentID: r.ID, Worktree: true})
 			found[repo.ID] = repo
 			foundParent[repo.ID] = r.ID
+			foundSettings[repo.ID] = r.ID
 		}
 	}
 	a.wtMu.Lock()
@@ -223,6 +230,7 @@ func (a *App) ListRepos() []RepoItem {
 	}
 	a.worktrees = found
 	a.wtParent = foundParent
+	a.settingsParent = foundSettings
 	a.wtMu.Unlock()
 	// A worktree that disappeared takes its shells and log paging with it,
 	// the same as removing a repository from the list.

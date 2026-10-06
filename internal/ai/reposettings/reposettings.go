@@ -144,8 +144,12 @@ func (s *Store) update(id string, fn func(Override) Override) error {
 	if err != nil {
 		return err
 	}
-	next := fn(all[id])
+	cur, had := all[id]
+	next := fn(cur)
 	if next.IsEmpty() {
+		if !had {
+			return nil // nothing to remove: don't create or rewrite the file
+		}
 		delete(all, id)
 	} else {
 		all[id] = next

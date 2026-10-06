@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 
 	"git-ui/internal/ai/prompts"
 	"git-ui/internal/ai/reposettings"
@@ -16,7 +17,21 @@ var ErrAIOff = errors.New("AI is off for this repository")
 
 // commitRun is a running commit message generation. A run removes only its
 // own entry when it ends, as a newer generation may have replaced it.
-type commitRun struct{ cancel context.CancelFunc }
+type commitRun struct {
+	cancel context.CancelFunc
+	// superseded is set when a newer generation replaced this one, so its
+	// cancellation is not reported as the AI having been turned off.
+	superseded atomic.Bool
+}
+
+// cancelMessage is what a cancelled generation reports: the AI being turned
+// off, unless a newer generation replaced it.
+func (r *commitRun) cancelMessage() string {
+	if r.superseded.Load() {
+		return context.Canceled.Error()
+	}
+	return ErrAIOff.Error()
+}
 
 func (a *App) repoAIStore() *reposettings.Store {
 	a.ai.mu.Lock()
@@ -28,11 +43,12 @@ func (a *App) repoAIStore() *reposettings.Store {
 }
 
 // settingsKey is the repository whose private AI settings apply to id: a
-// linked worktree uses its main repository's.
+// linked worktree, detected or added to the list, uses its main
+// repository's (as of the last ListRepos).
 func (a *App) settingsKey(id string) string {
 	a.wtMu.Lock()
 	defer a.wtMu.Unlock()
-	if parent, ok := a.wtParent[id]; ok {
+	if parent, ok := a.settingsParent[id]; ok {
 		return parent
 	}
 	return id

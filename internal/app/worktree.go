@@ -202,6 +202,7 @@ func (a *App) GenerateCommitMessage(id, runID string) error {
 	run := &commitRun{cancel: cancel}
 	a.ai.mu.Lock()
 	if old, ok := a.ai.commits[id]; ok {
+		old.superseded.Store(true)
 		old.cancel()
 	}
 	a.ai.commits[id] = run
@@ -219,7 +220,7 @@ func (a *App) GenerateCommitMessage(id, runID string) error {
 		if err != nil {
 			msg := err.Error()
 			if ctx.Err() != nil {
-				msg = ErrAIOff.Error()
+				msg = run.cancelMessage()
 			}
 			a.emit(EventCommitDone, CommitDoneEvent{RepoID: id, RunID: runID, Error: msg})
 			return
@@ -233,10 +234,10 @@ func (a *App) GenerateCommitMessage(id, runID string) error {
 				a.emit(EventCommitDelta, CommitDeltaEvent{RepoID: id, RunID: runID, Text: chunk.Delta})
 			}
 		}
-		// Only the AI being turned off cancels a generation (or a newer one
-		// replacing it, whose events carry another run id).
+		// Only the AI being turned off, or a newer generation replacing this
+		// one, cancels a generation.
 		if ctx.Err() != nil {
-			done.Error = ErrAIOff.Error()
+			done.Error = run.cancelMessage()
 		}
 		a.emit(EventCommitDone, done)
 	}()
