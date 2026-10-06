@@ -1,5 +1,5 @@
 import * as Go from '../../wailsjs/go/app/App'
-import type { AIMessage, AISettings, AIStatus, AheadBehind, AutoFetchResult, Blame, ChatConfirmEvent, CommandLogView, CommandOutput, CommitInfo, ConflictFile, Details, Filters, Flow, FlowConfig, FlowFinishResult, FlowPlan, FlowStartResult, FlowType, GitSettings, HunkAction, HunkPick, Identity, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, RemoteConfig, RemoteTest, RegionChoice, RegionResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeDiff, WorktreeRemovalInfo, WorktreeState } from './types'
+import type { RepoAIInfo, RepoAIOverride, AIMessage, AISettings, AIStatus, AheadBehind, AutoFetchResult, Blame, ChatConfirmEvent, CommandLogView, CommandOutput, CommitInfo, ConflictFile, Details, Filters, Flow, FlowConfig, FlowFinishResult, FlowPlan, FlowStartResult, FlowType, GitSettings, HunkAction, HunkPick, Identity, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, RemoteConfig, RemoteTest, RegionChoice, RegionResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeDiff, WorktreeRemovalInfo, WorktreeState } from './types'
 import type { NotifyTarget } from './notifyRules'
 
 // The generated bindings use Wails model classes; the JSON is identical to our
@@ -121,6 +121,10 @@ export const api = {
   aiStatus: () => call<AIStatus>(Go.AIStatus()),
   getAISettings: () => call<AISettings>(Go.GetAISettings()),
   saveAISettings: (s: AISettings) => call<void>(Go.SaveAISettings(s as any)),
+  getRepoAISettings: (id: string) => call<RepoAIInfo>(Go.GetRepoAISettings(id)),
+  saveRepoAISettings: (id: string, o: RepoAIOverride) => call<void>(Go.SaveRepoAISettings(id, o as any)),
+  approveRepoInstructions: (id: string, hash: string) => call<void>(Go.ApproveRepoInstructions(id, hash)),
+  ignoreRepoInstructions: (id: string, hash: string) => call<void>(Go.IgnoreRepoInstructions(id, hash)),
   pullModel: (name: string) => call<void>(Go.PullModel(name)),
   cancelPull: () => call<void>(Go.CancelPull()),
   listModels: (provider: string) => call<string[]>(Go.ListModels(provider)),

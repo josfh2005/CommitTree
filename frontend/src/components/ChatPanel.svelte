@@ -52,7 +52,7 @@
   // models; read the status again once it closes.
   $: if (!$settingsOpen) refreshStatus()
   // Before the settings load, assume the default provider, Ollama.
-  $: blocker = status ? chatBlocker($aiSettings?.chatProvider ?? 'ollama', status) : null
+  $: blocker = status ? chatBlocker($aiSettings?.chatProvider ?? 'ollama', status, $aiSettings?.chatModel) : null
   $: ready = !!status && !blocker
 
   async function load(repoID: string) {
