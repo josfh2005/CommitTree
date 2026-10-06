@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { ACTIONS, actionLabel, globalLabel, stateText, usesRepoChatModel, withOverride } from './repoAI'
+import { ACTIONS, COMMIT_MODES, REPLY_MODES, actionLabel, chooseProvider, globalLabel, globalModeLabel, mergeDrafts, providerModels, stateText, usesRepoChatModel, withOverride } from './repoAI'
+import type { AIStatus } from './types'
 
 describe('repoAI helpers', () => {
   it('lists the six actions with labels', () => {
@@ -28,5 +29,68 @@ describe('repoAI helpers', () => {
     expect(usesRepoChatModel({ overrides: { chatProvider: 'ollama', chatModel: 'x' } } as any)).toBe(true)
     expect(usesRepoChatModel({ overrides: {} } as any)).toBe(false)
     expect(usesRepoChatModel(null)).toBe(false)
+  })
+})
+
+const status = (over: Partial<AIStatus['ollama']> = {}, providers: AIStatus['providers'] = []): AIStatus =>
+  ({ ollama: { running: true, url: '', chatModel: '', models: [{ name: 'qwen2.5:7b' }], chatModelInstalled: true, ...over }, providers }) as AIStatus
+
+describe('Global (…) options', () => {
+  it('shows the global mode with the label the select uses', () => {
+    expect(globalModeLabel(COMMIT_MODES, 'manual')).toBe('Global (Only when I ask)')
+    expect(globalModeLabel(REPLY_MODES, 'auto-local')).toBe('Global (Automatic for local models)')
+    expect(globalModeLabel(REPLY_MODES, undefined)).toBe('Global ()')
+  })
+  it('passes an unknown mode through', () => {
+    expect(globalModeLabel(COMMIT_MODES, 'later')).toBe('Global (later)')
+  })
+})
+
+describe('override round trip', () => {
+  it('picks the first model of the chosen provider', () => {
+    expect(chooseProvider('chat', 'anthropic', ['claude-opus-5', 'claude-sonnet-5'])).toEqual({ chatProvider: 'anthropic', chatModel: 'claude-opus-5' })
+    expect(chooseProvider('task', 'ollama', ['a'])).toEqual({ taskProvider: 'ollama', taskModel: 'a' })
+  })
+  it('refuses a provider that lists no model', () => {
+    expect(chooseProvider('chat', 'openai', [])).toBeNull()
+  })
+  it('goes back to Global with the model cleared', () => {
+    const patch = chooseProvider('task', '', [])
+    expect(patch).toEqual({ taskProvider: '', taskModel: '' })
+    expect(withOverride({ taskProvider: 'ollama', taskModel: 'a', aiOff: true }, patch!)).toEqual({ taskProvider: '', taskModel: '', aiOff: true })
+  })
+  it('keeps the other fields when one is overridden', () => {
+    const o = withOverride({ commitMessage: 'manual' }, chooseProvider('chat', 'ollama', ['m'])!)
+    expect(o).toEqual({ commitMessage: 'manual', chatProvider: 'ollama', chatModel: 'm' })
+  })
+})
+
+describe('providerModels', () => {
+  it('lists the installed Ollama models', () => {
+    expect(providerModels('ollama', status(), {})).toEqual({ models: ['qwen2.5:7b'], hint: '' })
+  })
+  it('explains an Ollama that is stopped or empty', () => {
+    expect(providerModels('ollama', status({ running: false }), {}).hint).toBe('Ollama is not running')
+    expect(providerModels('ollama', status({ models: [] }), {}).hint).toBe('No models installed in Ollama')
+  })
+  it('asks for a key before listing a hosted provider', () => {
+    expect(providerModels('openai', status(), {})).toEqual({ models: [], hint: 'Add a key to see the models' })
+  })
+  it('lists a hosted provider that has a key, and reports a failed listing', () => {
+    const s = status({}, [{ provider: 'openai', hasKey: true }] as AIStatus['providers'])
+    expect(providerModels('openai', s, { openai: ['gpt-x'] })).toEqual({ models: ['gpt-x'], hint: '' })
+    expect(providerModels('openai', s, {}, { openai: 'bad key' })).toEqual({ models: [], hint: 'bad key' })
+  })
+})
+
+describe('mergeDrafts', () => {
+  it('takes the saved texts', () => {
+    expect(mergeDrafts({ all: 'a' }, { all: 'old', chat: 'x' }, '')).toEqual({ all: 'a' })
+  })
+  it('keeps the draft of the box being typed in', () => {
+    expect(mergeDrafts({ all: 'saved', chat: 'c' }, { all: 'typing…' }, 'all')).toEqual({ all: 'typing…', chat: 'c' })
+  })
+  it('ignores a focused box without a draft', () => {
+    expect(mergeDrafts(undefined, {}, 'chat')).toEqual({})
   })
 })

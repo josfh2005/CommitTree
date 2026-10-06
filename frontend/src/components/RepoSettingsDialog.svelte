@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from './Icon.svelte'
+  import RepoAITab from './RepoAITab.svelte'
   import { api } from '../lib/api'
   import { defaultRemoteName, remoteFormError } from '../lib/remoteForm'
   import { busy, refreshRepo, repoSettings, repos, selectedRepoId } from '../lib/stores'
@@ -22,14 +23,28 @@
   let newURL = ''
 
   $: repoID = $repoSettings?.repoID ?? ''
+  $: tab = $repoSettings?.tab ?? 'remotes'
+  // Switching tabs rewrites the store but is not a new opening: it must not
+  // reset the Remotes pane (an edit or add form in progress).
+  let switching = false
+  const setTab = (t: 'remotes' | 'ai') => {
+    switching = true
+    repoSettings.update((s) => (s ? { ...s, tab: t } : s))
+  }
   $: repo = $repos.find((r) => r.id === repoID)
   // The repository left the list (removed, or a worktree that vanished).
   $: if ($repoSettings && !repo) close()
   // Every opening starts fresh, even for the same repository.
-  $: if ($repoSettings) reset($repoSettings.repoID)
+  $: if ($repoSettings) opened($repoSettings.repoID)
   $: ({ remotes, loadError, error, tests } = $state)
   $: names = remotes.map((r) => r.name)
   $: formError = remoteFormError(newName, newURL, names)
+
+  // Read inside a function so `switching` is not a dependency of the statement above.
+  function opened(id: string) {
+    if (switching) switching = false
+    else reset(id)
+  }
 
   function reset(id: string) {
     editing = ''; adding = false
@@ -79,14 +94,18 @@
     <div class="dialog" role="dialog" aria-label="{repo.name} settings">
       <nav class="tabs" aria-label="Repository settings sections">
         <h3 class="ellipsis" title={repo.name}>{repo.name} settings</h3>
-        <button class="tab active" aria-current="page">Remotes</button>
+        <button class="tab" class:active={tab === 'remotes'} aria-current={tab === 'remotes' ? 'page' : undefined} on:click={() => setTab('remotes')}>Remotes</button>
+        <button class="tab" class:active={tab === 'ai'} aria-current={tab === 'ai' ? 'page' : undefined} on:click={() => setTab('ai')}>AI</button>
       </nav>
       <div class="pane">
         <header>
-          <h3>Remotes</h3>
+          <h3>{tab === 'ai' ? 'AI' : 'Remotes'}</h3>
           <button class="icon-btn" title="Close" on:click={close}><Icon name="x" /></button>
         </header>
         <div class="content">
+          {#if tab === 'ai'}
+            <RepoAITab {repoID} />
+          {:else}
           {#if loadError}<p class="warn">{loadError}</p>{/if}
           {#if error}<p class="warn">{error}</p>{/if}
           {#if remotes.length === 0 && !loadError}<p class="hint">No remotes yet.</p>{/if}
@@ -125,6 +144,7 @@
           {:else}
             <div><button class="btn" disabled={!!loadError} on:click={startAdd}>Add remote</button></div>
           {/if}
+          {/if}
         </div>
       </div>
     </div>
@@ -146,6 +166,7 @@
   .tabs { flex: none; width: 168px; display: flex; flex-direction: column; gap: 2px; padding: 16px 10px; background: var(--sidebar); border-right: 1px solid var(--border); }
   .tabs h3 { padding: 0 8px 10px; }
   .tab { height: 28px; padding: 0 10px; border-radius: 7px; text-align: left; }
+  .tab:hover { background: var(--hover); }
   .tab.active { background: var(--active); font-weight: 500; }
   .pane { flex: 1; min-width: 0; display: flex; flex-direction: column; }
   header { flex: none; display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 6px 20px; }
