@@ -18,6 +18,7 @@ import (
 	"git-ui/internal/ai/ollama"
 	"git-ui/internal/ai/openai"
 	"git-ui/internal/ai/prompts"
+	"git-ui/internal/ai/reposettings"
 	"git-ui/internal/ai/settings"
 	"git-ui/internal/ai/tasks"
 	"git-ui/internal/ai/tools"
@@ -52,6 +53,10 @@ type aiState struct {
 	// suggestions holds, per repo ID, the suggested replies waiting or
 	// being generated.
 	suggestions map[string]*pendingSuggestion
+	// repoAI is the per-repository settings store, created on first use.
+	repoAI *reposettings.Store
+	// commits holds, per repo ID, the running commit message generation.
+	commits map[string]*commitRun
 }
 
 type OllamaStatus struct {
@@ -94,7 +99,7 @@ type ModelDone struct {
 // once during wiring in main.go, not exposed as a Wails binding, so the
 // renderer cannot invoke it with empty or arbitrary deps.
 func WithAI(a *App, d AIDeps) {
-	a.ai = &aiState{deps: d, runs: map[string]context.CancelFunc{}, confirms: map[string]*pendingConfirm{}, suggestions: map[string]*pendingSuggestion{}}
+	a.ai = &aiState{deps: d, runs: map[string]context.CancelFunc{}, confirms: map[string]*pendingConfirm{}, suggestions: map[string]*pendingSuggestion{}, commits: map[string]*commitRun{}}
 }
 
 func (a *App) emit(name string, data any) {
@@ -319,13 +324,13 @@ func (a *App) SendChat(repoID, text, runID string) error {
 	if !ok {
 		return fmt.Errorf("unknown repository %q", repoID)
 	}
-	cfg, err := a.aiSettings()
+	cfg, o, err := a.aiSettingsFor(repoID)
 	if err != nil {
 		return err
 	}
 	provider, err := a.chatProvider(cfg)
 	if err != nil {
-		return err
+		return repoNote(err, o.ChatProvider != "")
 	}
 
 	a.ai.mu.Lock()
@@ -351,9 +356,9 @@ func (a *App) SendChat(repoID, text, runID string) error {
 	}
 	var system string
 	if err == nil {
-		system, err = a.ai.deps.Prompts.Get(prompts.Chat, prompts.Vars{
+		system, err = a.systemPrompt(repo, o, prompts.Chat, prompts.Vars{
 			Repo: repo.Name, Path: repo.Path, Branch: refs.CurrentLabel(ctx, repo.Path), Date: time.Now().Format("2006-01-02"),
-		})
+		}, "")
 	}
 	if err != nil {
 		finish()
@@ -406,7 +411,7 @@ func (a *App) SendChat(repoID, text, runID string) error {
 			a.emit(agent.EventDone, agent.DoneEvent{RepoID: repoID, RunID: runID, At: at})
 			// A stopped answer also ends here, with context.Canceled.
 			if runErr == nil {
-				a.suggestReplies(repoID, runID, cfg)
+				a.suggestReplies(repoID, runID, cfg, o)
 			}
 		}
 	}()
@@ -545,7 +550,7 @@ func (a *App) explainTask(repoID, provider, runID, promptName string, build func
 	if !ok {
 		return fmt.Errorf("unknown repository %q", repoID)
 	}
-	cfg, err := a.aiSettings()
+	cfg, o, err := a.aiSettingsFor(repoID)
 	if err != nil {
 		return err
 	}
@@ -554,11 +559,11 @@ func (a *App) explainTask(repoID, provider, runID, promptName string, build func
 	}
 	responder, err := a.responderFor(provider, cfg.TaskModel, cfg)
 	if err != nil {
-		return err
+		return repoNote(err, o.TaskProvider != "")
 	}
-	instructions, err := a.ai.deps.Prompts.Get(promptName, prompts.Vars{
+	instructions, err := a.systemPrompt(repo, o, promptName, prompts.Vars{
 		Repo: repo.Name, Path: repo.Path, Branch: refs.CurrentLabel(a.ctx, repo.Path), Date: time.Now().Format("2006-01-02"),
-	})
+	}, "")
 	if err != nil {
 		return err
 	}
@@ -623,7 +628,7 @@ func (a *App) explainTask(repoID, provider, runID, promptName string, build func
 			a.emit(agent.EventDone, agent.DoneEvent{RepoID: repoID, RunID: runID, At: at})
 			// A stopped answer also ends here, with context.Canceled.
 			if runErr == nil {
-				a.suggestReplies(repoID, runID, cfg)
+				a.suggestReplies(repoID, runID, cfg, o)
 			}
 		}
 	}()

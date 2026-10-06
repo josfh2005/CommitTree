@@ -13,6 +13,7 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"git-ui/internal/ai/reposettings"
 	"git-ui/internal/cmdlog"
 	"git-ui/internal/gitcmd"
 	"git-ui/internal/gitlog"
@@ -323,6 +324,13 @@ func (a *App) RemoveRepo(id string) error {
 	}
 	a.forgetLog(id)
 	a.term.CloseRepo(id)
+	if a.ai != nil {
+		// An unreadable file is left for the user to see in the AI tab; the
+		// repository is still removed.
+		if err := a.repoAIStore().Remove(id); err != nil && !errors.Is(err, reposettings.ErrUnreadable) {
+			return err
+		}
+	}
 	return a.store.Remove(id)
 }
 

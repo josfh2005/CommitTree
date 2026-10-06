@@ -168,6 +168,11 @@ func (a *App) GenerateCommitMessage(id, runID string) error {
 	// a.dir already confirmed id exists, so the repo's name is available
 	// with no further error to check.
 	repo, _ := a.repo(id)
+	// Before the staged check: an off repository answers ErrAIOff first.
+	cfg, o, err := a.aiSettingsFor(id)
+	if err != nil {
+		return err
+	}
 	st, err := worktree.Status(a.ctx, dir)
 	if err != nil {
 		return err
@@ -175,17 +180,13 @@ func (a *App) GenerateCommitMessage(id, runID string) error {
 	if len(st.Staged) == 0 {
 		return worktree.ErrNothingStaged
 	}
-	cfg, err := a.aiSettings()
-	if err != nil {
-		return err
-	}
 	responder, err := a.responderFor(cfg.TaskProvider, cfg.TaskModel, cfg)
 	if err != nil {
-		return err
+		return repoNote(err, o.TaskProvider != "")
 	}
-	instructions, err := a.ai.deps.Prompts.Get(prompts.CommitMessage, prompts.Vars{
+	instructions, err := a.systemPrompt(repo, o, prompts.CommitMessage, prompts.Vars{
 		Repo: repo.Name, Path: dir, Branch: refs.CurrentLabel(a.ctx, dir), Date: time.Now().Format("2006-01-02"),
-	})
+	}, "")
 	if err != nil {
 		return err
 	}
@@ -194,10 +195,33 @@ func (a *App) GenerateCommitMessage(id, runID string) error {
 		return err
 	}
 
+	// The run is cancellable so turning the AI off stops it. A newer
+	// generation replaces and cancels this one; each run removes only its
+	// own entry when it ends.
+	ctx, cancel := context.WithCancel(a.ctx)
+	run := &commitRun{cancel: cancel}
+	a.ai.mu.Lock()
+	if old, ok := a.ai.commits[id]; ok {
+		old.cancel()
+	}
+	a.ai.commits[id] = run
+	a.ai.mu.Unlock()
 	go func() {
-		stream, err := responder.Respond(a.ctx, instructions, prompt)
+		defer func() {
+			a.ai.mu.Lock()
+			if a.ai.commits[id] == run {
+				delete(a.ai.commits, id)
+			}
+			a.ai.mu.Unlock()
+			cancel()
+		}()
+		stream, err := responder.Respond(ctx, instructions, prompt)
 		if err != nil {
-			a.emit(EventCommitDone, CommitDoneEvent{RepoID: id, RunID: runID, Error: err.Error()})
+			msg := err.Error()
+			if ctx.Err() != nil {
+				msg = ErrAIOff.Error()
+			}
+			a.emit(EventCommitDone, CommitDoneEvent{RepoID: id, RunID: runID, Error: msg})
 			return
 		}
 		done := CommitDoneEvent{RepoID: id, RunID: runID}
@@ -208,6 +232,11 @@ func (a *App) GenerateCommitMessage(id, runID string) error {
 			case chunk.Delta != "":
 				a.emit(EventCommitDelta, CommitDeltaEvent{RepoID: id, RunID: runID, Text: chunk.Delta})
 			}
+		}
+		// Only the AI being turned off cancels a generation (or a newer one
+		// replacing it, whose events carry another run id).
+		if ctx.Err() != nil {
+			done.Error = ErrAIOff.Error()
 		}
 		a.emit(EventCommitDone, done)
 	}()

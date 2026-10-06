@@ -363,6 +363,11 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 	if !ok {
 		return fmt.Errorf("unknown repository %q", repoID)
 	}
+	// Before the merge checks: an off repository answers ErrAIOff first.
+	cfg, o, err := a.aiSettingsFor(repoID)
+	if err != nil {
+		return err
+	}
 	st, err := merge.Status(a.ctx, repo.Path)
 	if err != nil {
 		return err
@@ -380,13 +385,9 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 		return errors.New("this repository is not merging")
 	}
 	sides := mergetools.Sides{Ours: st.OursDescription, Theirs: st.TheirsDescription}
-	cfg, err := a.aiSettings()
-	if err != nil {
-		return err
-	}
 	provider, err := a.chatProvider(cfg)
 	if err != nil {
-		return err
+		return repoNote(err, o.ChatProvider != "")
 	}
 
 	a.ai.mu.Lock()
@@ -413,12 +414,9 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 	}
 	var system string
 	if err == nil {
-		system, err = a.ai.deps.Prompts.Get(prompts.ResolveConflicts, prompts.Vars{
+		system, err = a.systemPrompt(repo, o, prompts.ResolveConflicts, prompts.Vars{
 			Repo: repo.Name, Path: repo.Path, Branch: st.Into, Date: time.Now().Format("2006-01-02"),
-		})
-		if err == nil {
-			system += "\n\n" + kindGuidance(st.Kind)
-		}
+		}, kindGuidance(st.Kind))
 	}
 	if err != nil {
 		finish()
@@ -471,7 +469,7 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 			a.emit(agent.EventDone, agent.DoneEvent{RepoID: repoID, RunID: runID, At: at})
 			// A stopped answer also ends here, with context.Canceled.
 			if runErr == nil {
-				a.suggestReplies(repoID, runID, cfg)
+				a.suggestReplies(repoID, runID, cfg, o)
 			}
 		}
 	}()
