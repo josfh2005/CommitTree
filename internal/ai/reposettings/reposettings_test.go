@@ -95,12 +95,12 @@ func TestLoadRejectsInvalidEntry(t *testing.T) {
 
 func TestValidate(t *testing.T) {
 	bad := []Override{
-		{ChatProvider: settings.ProviderOllama},             // provider without model
-		{ChatModel: "qwen2.5:7b"},                          // model without provider
-		{TaskProvider: "bogus", TaskModel: "x"},            // unknown provider
-		{CommitMessage: "sometimes"},                       // unknown mode
-		{SuggestReplies: "maybe"},                          // unknown mode
-		{Instructions: map[string]string{"deploy": "x"}},   // unknown action
+		{ChatProvider: settings.ProviderOllama},          // provider without model
+		{ChatModel: "qwen2.5:7b"},                        // model without provider
+		{TaskProvider: "bogus", TaskModel: "x"},          // unknown provider
+		{CommitMessage: "sometimes"},                     // unknown mode
+		{SuggestReplies: "maybe"},                        // unknown mode
+		{Instructions: map[string]string{"deploy": "x"}}, // unknown action
 	}
 	for i, o := range bad {
 		if err := Validate(o); !errors.Is(err, ErrInvalid) {
