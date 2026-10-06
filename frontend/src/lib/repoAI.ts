@@ -100,6 +100,21 @@ export function chooseProvider(role: 'chat' | 'task', provider: ProviderName | '
 }
 
 /**
+ * instructionsToSave is the instructions map to store when the box `key`
+ * stops being edited (blur, or the dialog closing under it), or null when
+ * its text is what is already stored.
+ */
+export function instructionsToSave(
+  key: string,
+  drafts: Record<string, string>,
+  saved: Record<string, string> | undefined,
+): Record<string, string> | null {
+  const text = drafts[key] ?? ''
+  if (text === (saved?.[key] ?? '')) return null
+  return { ...(saved ?? {}), [key]: text }
+}
+
+/**
  * mergeDrafts is the text of the instruction boxes after a reload: what the
  * saved overrides say, except the box being typed in (focused), which keeps
  * its draft so a reload never wipes it.

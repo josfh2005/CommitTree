@@ -4,7 +4,7 @@
   import { api } from '../lib/api'
   import {
     ACTIONS, COMMIT_MODES, REPLY_MODES, actionLabel, chooseProvider, globalLabel, globalModeLabel,
-    mergeDrafts, providerModels, stateText, withOverride,
+    instructionsToSave, mergeDrafts, providerModels, stateText, withOverride,
   } from '../lib/repoAI'
   import { PROVIDERS, needsKey } from '../lib/providers'
   import type { AIStatus, ProviderName, RepoAIInfo, RepoAIOverride } from '../lib/types'
@@ -70,17 +70,26 @@
     }
   }
 
-  async function save(patch: Partial<RepoAIOverride>) {
-    if (!info) return
+  // Resolves to whether the settings were stored.
+  async function save(patch: Partial<RepoAIOverride>): Promise<boolean> {
+    if (!info) return false
     const next = withOverride(o, patch)
     try {
       await api.saveRepoAISettings(repoID, next)
       error = ''
       await load(repoID)
+      return true
     } catch (e) {
       error = errorMessage(e)
       info = { ...info, overrides: next } // keep what was entered
+      return false
     }
+  }
+
+  // A refused change must not leave the box looking switched: it shows what
+  // is stored (aiOff comes from the stored settings, not from the entry kept above).
+  async function toggleAI(el: HTMLInputElement) {
+    if (!(await save({ aiOff: !el.checked }))) el.checked = !aiOff
   }
 
   function setProvider(role: Role, el: HTMLSelectElement) {
@@ -99,9 +108,8 @@
 
   function commitInstruction(key: string) {
     focused = ''
-    const text = drafts[key] ?? ''
-    if (text === (o.instructions?.[key] ?? '')) return
-    save({ instructions: { ...(o.instructions ?? {}), [key]: text } })
+    const instructions = instructionsToSave(key, drafts, o.instructions)
+    if (instructions) save({ instructions })
   }
   function addAction() {
     if (!adding) return
@@ -132,13 +140,18 @@
   // The payload is ignored on purpose: a worktree and its main repository share
   // their AI settings, so the event may name another repository's id.
   onMount(() => { off = EventsOn('repo-ai:changed', () => load(repoID)) })
-  onDestroy(() => off?.())
+  // Closing the dialog (Escape, ✕, a click outside) with a box still focused
+  // fires no blur, so the text typed there would be lost: save it now.
+  onDestroy(() => {
+    off?.()
+    if (focused) commitInstruction(focused)
+  })
 </script>
 
 {#if error}<p class="warn">{error}</p>{/if}
 {#if info}
   <label class="check">
-    <input type="checkbox" checked={!aiOff} disabled={!!info.error} on:change={(e) => save({ aiOff: !e.currentTarget.checked })} />
+    <input type="checkbox" checked={!aiOff} disabled={!!info.error} on:change={(e) => toggleAI(e.currentTarget)} />
     <span>Use AI in this repository</span>
   </label>
 

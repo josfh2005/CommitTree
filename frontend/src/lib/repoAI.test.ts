@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ACTIONS, COMMIT_MODES, REPLY_MODES, actionLabel, chooseProvider, globalLabel, globalModeLabel, mergeDrafts, providerModels, showsInstructionsStrip, stateText, usesRepoChatModel, withOverride } from './repoAI'
+import { ACTIONS, COMMIT_MODES, REPLY_MODES, actionLabel, chooseProvider, globalLabel, globalModeLabel, instructionsToSave, mergeDrafts, providerModels, showsInstructionsStrip, stateText, usesRepoChatModel, withOverride } from './repoAI'
 import type { AIStatus } from './types'
 
 describe('repoAI helpers', () => {
@@ -97,5 +97,19 @@ describe('mergeDrafts', () => {
   })
   it('ignores a focused box without a draft', () => {
     expect(mergeDrafts(undefined, {}, 'chat')).toEqual({})
+  })
+})
+
+describe('instructionsToSave', () => {
+  it('returns the stored map with the box changed, keeping the other boxes', () => {
+    expect(instructionsToSave('chat', { chat: 'new' }, { all: 'a', chat: 'old' })).toEqual({ all: 'a', chat: 'new' })
+    expect(instructionsToSave('all', { all: 'typed' }, undefined)).toEqual({ all: 'typed' })
+  })
+  it('returns null when the text is what is already stored', () => {
+    expect(instructionsToSave('chat', { chat: 'same' }, { chat: 'same' })).toBeNull()
+    expect(instructionsToSave('chat', {}, undefined)).toBeNull()
+  })
+  it('returns the map with an empty text when a stored box was cleared', () => {
+    expect(instructionsToSave('chat', { chat: '' }, { chat: 'old' })).toEqual({ chat: '' })
   })
 })
