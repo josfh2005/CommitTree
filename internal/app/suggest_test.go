@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"git-ui/internal/ai/agent"
+	"git-ui/internal/ai/reposettings"
 	"git-ui/internal/ai/settings"
 )
 
@@ -148,6 +149,23 @@ func TestANewMessageCancelsPendingSuggestions(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 	if n := countEvents(ev, agent.EventSuggestions); n != 1 || count.Load() != 1 {
 		t.Fatalf("events = %d, requests = %d; want the first one cancelled before its call", n, count.Load())
+	}
+}
+
+func TestSuggestionsSkippedWhenAIIsTurnedOffDuringTheDelay(t *testing.T) {
+	srv, count, _ := suggestServer(t, false)
+	a, id, ev := newSuggestApp(t, srv.URL, settings.SuggestAuto, settings.ProviderOllama, 300*time.Millisecond)
+
+	if err := a.SendChat(id, "hola", "run-1"); err != nil {
+		t.Fatal(err)
+	}
+	ev.wait(t, agent.EventDone)
+	// Written to the store directly, as a save landing after the answer's run
+	// ended would be: no run is left for the save to cancel.
+	setRepoAI(t, a, id, reposettings.Override{AIOff: true})
+	time.Sleep(600 * time.Millisecond)
+	if n := countEvents(ev, agent.EventSuggestions); n != 0 || count.Load() != 0 {
+		t.Fatalf("events = %d, requests = %d; want none once AI is off", n, count.Load())
 	}
 }
 

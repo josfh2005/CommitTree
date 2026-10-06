@@ -483,3 +483,26 @@ export interface FlowFinishResult {
   merged: string[]
   notes: string[]
 }
+
+export interface RepoAIOverride {
+  aiOff?: boolean
+  chatProvider?: ProviderName | ''
+  chatModel?: string
+  taskProvider?: ProviderName | ''
+  taskModel?: string
+  commitMessage?: string
+  suggestReplies?: string
+  instructions?: Record<string, string>
+}
+export interface RepoInstructionFile { name: string; text: string; ignored?: string }
+export interface RepoInstructions { files: RepoInstructionFile[]; hash: string; error?: string }
+export type RepoAIState = 'none' | 'approved' | 'pending' | 'ignored' | 'changed'
+export interface RepoAIInfo {
+  effective: AISettings
+  global: AISettings
+  overrides: RepoAIOverride
+  aiOff: boolean
+  repoInstructions: RepoInstructions
+  state: RepoAIState
+  error?: string
+}

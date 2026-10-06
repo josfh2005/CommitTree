@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"git-ui/internal/ai/reposettings"
 	"git-ui/internal/repos"
 	"git-ui/internal/testrepo"
 	"git-ui/internal/worktree"
@@ -346,5 +347,36 @@ func TestGetWorktreeDiffReadsTheStatusOnce(t *testing.T) {
 	}
 	if n := statuses() - before; n != 1 {
 		t.Errorf("git status ran %d times, want 1", n)
+	}
+}
+
+// Turning the AI off while a commit message is being prepared (after the
+// settings were read, before the run registers) must stop it from streaming.
+func TestGenerateCommitMessageNotStartedWhenTurnedOffBeforeItRegisters(t *testing.T) {
+	srv := fakeOllama(t, nil)
+	a, r, id, ev := newAIMergeApp(t, srv.URL)
+	r.WriteFile("a.txt", "changed\n")
+	if err := a.StageFile(id, "a.txt"); err != nil {
+		t.Fatal(err)
+	}
+	a.ai.afterSettings = func(string) {
+		a.ai.afterSettings = nil
+		if err := a.SaveRepoAISettings(id, reposettings.Override{AIOff: true}); err != nil {
+			t.Error(err)
+		}
+	}
+	if err := a.GenerateCommitMessage(id, "run1"); !errors.Is(err, ErrAIOff) {
+		t.Fatalf("got %v", err)
+	}
+	a.ai.mu.Lock()
+	left := len(a.ai.commits)
+	a.ai.mu.Unlock()
+	if left != 0 {
+		t.Fatalf("%d commit runs left registered", left)
+	}
+	for _, n := range ev.names() {
+		if n == EventCommitDelta || n == EventCommitDone {
+			t.Fatalf("the generation started: %v", ev.names())
+		}
 	}
 }

@@ -7,7 +7,7 @@
   import { conflictActions, conflictHeader, keptEdit, layoutLines, mergeSections, regionSides, takeLabels, withLineEndings, type MergeFile } from '../lib/merge'
   import { lineClass } from '../lib/diff'
   import { nextSelection, type SelectionKey } from '../lib/worktree'
-  import { busy, chatRunRepo, loadMergeState, mergeState, owedStashDrop, pendingFinish } from '../lib/stores'
+  import { aiOff, busy, chatRunRepo, loadMergeState, mergeState, owedStashDrop, pendingFinish } from '../lib/stores'
   import type { Region } from '../lib/types'
   import { finishingLine } from '../lib/flow'
   import { errorMessage, openMenu, toast } from '../lib/ui'
@@ -211,7 +211,7 @@
     {/if}
     <span class="count">{pending} left</span>
     <span class="spacer"></span>
-    {#if acts.ai}
+    {#if acts.ai && !$aiOff}
       <button class="btn" disabled={locked || pending === 0} title={$chatRunRepo === repoId ? "The AI is resolving; stop it from the chat" : undefined} on:click={() => resolveConflicts(repoId)}>
         <Icon name="sparkle" size={14} /><span>Resolve with AI</span>
       </button>

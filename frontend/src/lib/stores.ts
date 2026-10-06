@@ -4,7 +4,7 @@ import type { BlameTarget } from './blame'
 import type { PendingFinish } from './flow'
 import { validSelectedStash, type SelectedStash } from './stash'
 import { nextSelection } from './submodules'
-import { emptyFilters, type AISettings, type AheadBehind, type Filters, type GitSettings, type Identity, type LogOrder, type MergeState, type Refs, type Repo, type StashEntry, type WorktreeState } from './types'
+import { emptyFilters, type AISettings, type AheadBehind, type Filters, type GitSettings, type Identity, type LogOrder, type MergeState, type RepoAIInfo, type Refs, type Repo, type StashEntry, type WorktreeState } from './types'
 import { isLogOrder } from './logOrder'
 import { isRepoSortOrder, type RepoSortOrder } from './repoGroups'
 import { coalesce } from './coalesce'
@@ -146,7 +146,7 @@ export const pendingFinish = writable<PendingFinish | null>(null)
 export const chatRunRepo = writable('')
 export const settingsOpen = writable(false)
 /** The repository whose Repository settings dialog is open. */
-export const repoSettings = writable<{ repoID: string } | null>(null)
+export const repoSettings = writable<{ repoID: string; tab?: 'remotes' | 'ai' } | null>(null)
 /** Wails' Environment().platform, read once at startup (App.svelte). */
 export const platform = writable('')
 export const mergeState = writable<MergeState | null>(null)
@@ -155,6 +155,9 @@ export const worktreeState = writable<WorktreeState | null>(null)
  *  provider) without hitting the API on every render. Loaded at startup and
  *  refreshed after Settings saves — see SettingsDialog's save(). */
 export const aiSettings = writable<AISettings | null>(null)
+export const repoAI = writable<RepoAIInfo | null>(null)
+/** The selected repository has the AI off (or its settings can't be read). */
+export const aiOff = derived(repoAI, (r) => !!r?.aiOff)
 /** Which view the main pane shows: the log (with commit details / the merge
  *  view below it), the Changes view, a stash preview, or a file's blame. A
  *  merge in progress always wins over either — see conflictOwnsScreen in
@@ -289,6 +292,13 @@ export async function loadRepos() {
   const prevId = get(selectedRepoId)
   const list = await api.listRepos()
   repos.set(list)
+  // The backend only knows a detected worktree or submodule, and which main
+  // repository an added worktree belongs to, once ListRepos has run. A load
+  // that raced it (the persisted selection at launch) was refused or answered
+  // from the wrong repository, so load again now that the list is known. A
+  // selection change below loads once more; the sequence number drops the
+  // older answer.
+  void loadAISettings()
   // A detected worktree or submodule can vanish between two reads (removed
   // in a terminal, deinitialised, or by the tool that created it). Whatever
   // is no longer listed loses its terminal tabs, and a selection pointing at
@@ -484,14 +494,44 @@ export async function loadGitSettings() {
   }
 }
 
+/** Loads the AI settings in effect: the selected repository's (global with
+ *  its overrides) when one is selected, the global ones otherwise. */
 export async function loadAISettings() {
+  const id = get(selectedRepoId)
+  const seq = ++aiLoadSeq
+  // Another repository's settings must never be acted on while this one's
+  // load is in flight, so a changed selection clears them first. Reloading
+  // the same repository (after a save) keeps what is shown until the answer.
+  if (id !== aiLoadedFor) {
+    repoAI.set(null)
+    aiSettings.set(null)
+  }
+  aiLoadedFor = id
   try {
-    aiSettings.set(await api.getAISettings())
+    if (id) {
+      const info = await api.getRepoAISettings(id)
+      if (seq !== aiLoadSeq) return
+      repoAI.set(info)
+      aiSettings.set(info.effective)
+    } else {
+      const global = await api.getAISettings()
+      if (seq !== aiLoadSeq) return
+      repoAI.set(null)
+      aiSettings.set(global)
+    }
   } catch {
-    // Left as whatever was last loaded (or null) — the commit box treats a
-    // null store as "don't auto-generate" rather than erroring.
+    if (seq !== aiLoadSeq) return
+    // Unreadable: show nothing rather than another repository's (or stale)
+    // settings — the commit box treats a null store as "don't auto-generate".
+    repoAI.set(null)
+    aiSettings.set(null)
   }
 }
+
+// A sequence number, so a load that resolves after a newer one is dropped,
+// and the id of the repository the stores currently describe.
+let aiLoadSeq = 0
+let aiLoadedFor: string | null = null
 
 /** Reloads everything the selected repository shows. Coalesced: a call
  *  while one runs waits for one more run instead of racing it (a background

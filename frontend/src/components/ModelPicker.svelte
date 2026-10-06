@@ -2,7 +2,8 @@
   import Icon from './Icon.svelte'
   import { api } from '../lib/api'
   import { chatModelOptions, needsKey, providerShortLabel, PROVIDERS } from '../lib/providers'
-  import { aiSettings, loadAISettings, settingsOpen } from '../lib/stores'
+  import { aiSettings, loadAISettings, repoAI, selectedRepoId, settingsOpen } from '../lib/stores'
+  import { usesRepoChatModel, withOverride } from '../lib/repoAI'
   import type { AIStatus, ProviderName } from '../lib/types'
   import { errorMessage, toast } from '../lib/ui'
 
@@ -18,6 +19,8 @@
   // kept while the panel lives; a provider whose list fails is left out.
   let hostedModels: Partial<Record<ProviderName, string[]>> = {}
 
+  // The repository sets its own chat model: the picker then edits that, not the global one.
+  $: repoModel = usesRepoChatModel($repoAI)
   $: provider = $aiSettings?.chatProvider ?? 'ollama'
   $: model = $aiSettings?.chatModel ?? ''
   $: options = status ? chatModelOptions(status, hostedModels) : []
@@ -39,8 +42,12 @@
     if (p === provider && m === model) return
     saving = true
     try {
-      const settings = await api.getAISettings()
-      await api.saveAISettings({ ...settings, chatProvider: p, chatModel: m })
+      if (repoModel && $repoAI && $selectedRepoId) {
+        await api.saveRepoAISettings($selectedRepoId, withOverride($repoAI.overrides, { chatProvider: p, chatModel: m }))
+      } else {
+        const settings = await api.getAISettings()
+        await api.saveAISettings({ ...settings, chatProvider: p, chatModel: m })
+      }
       await loadAISettings()
       onChange()
     } catch (e) {
@@ -61,11 +68,11 @@
 <div class="picker">
   <button
     class="current"
-    title="{providerShortLabel(provider)} · {model} — change the chat model"
+    title="{providerShortLabel(provider)} · {model} — change the chat model{repoModel ? ' — set for this repository' : ''}"
     disabled={disabled || saving || !$aiSettings}
     on:click|stopPropagation={toggle}
   >
-    <span class="ellipsis">{model || 'Choose a model'}</span>
+    <span class="ellipsis">{model || 'Choose a model'}{repoModel ? ' · this repo' : ''}</span>
     <Icon name="chevron-down" size={12} />
   </button>
   {#if open}

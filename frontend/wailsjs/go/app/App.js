@@ -22,6 +22,10 @@ export function ApplyHunkSelection(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['app']['App']['ApplyHunkSelection'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
+export function ApproveRepoInstructions(arg1, arg2) {
+  return window['go']['app']['App']['ApproveRepoInstructions'](arg1, arg2);
+}
+
 export function AutoFetch(arg1) {
   return window['go']['app']['App']['AutoFetch'](arg1);
 }
@@ -214,6 +218,10 @@ export function GetRemoteInfo(arg1) {
   return window['go']['app']['App']['GetRemoteInfo'](arg1);
 }
 
+export function GetRepoAISettings(arg1) {
+  return window['go']['app']['App']['GetRepoAISettings'](arg1);
+}
+
 export function GetResetPreview(arg1, arg2) {
   return window['go']['app']['App']['GetResetPreview'](arg1, arg2);
 }
@@ -244,6 +252,10 @@ export function GetWorktreeDiff(arg1, arg2, arg3) {
 
 export function GetWorktreeState(arg1) {
   return window['go']['app']['App']['GetWorktreeState'](arg1);
+}
+
+export function IgnoreRepoInstructions(arg1, arg2) {
+  return window['go']['app']['App']['IgnoreRepoInstructions'](arg1, arg2);
 }
 
 export function InitAllSubmodules(arg1) {
@@ -388,6 +400,10 @@ export function SaveAISettings(arg1) {
 
 export function SaveGitSettings(arg1) {
   return window['go']['app']['App']['SaveGitSettings'](arg1);
+}
+
+export function SaveRepoAISettings(arg1, arg2) {
+  return window['go']['app']['App']['SaveRepoAISettings'](arg1, arg2);
 }
 
 export function SendChat(arg1, arg2, arg3) {

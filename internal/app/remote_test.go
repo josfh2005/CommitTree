@@ -33,7 +33,7 @@ func newPlainApp(t *testing.T) (a *App, r *testrepo.Repo, id string) {
 		t.Fatal(err)
 	}
 	a = New(store)
-	WithAI(a, AIDeps{Emit: newEvents().emit})
+	WithAI(a, AIDeps{Emit: newEvents().emit, SettingsPath: filepath.Join(dir, "ai.json")})
 	a.gitSettingsPath = filepath.Join(dir, "git.json")
 	r = testrepo.New(t)
 	r.Commit("base")

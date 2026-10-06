@@ -481,6 +481,7 @@
                 </div>
               {/each}
               <div><button class="btn" on:click={openFolder}>Open prompts folder</button></div>
+              <p class="hint">Repositories can add their own instructions in Repository settings → AI.</p>
             </section>
           {/if}
         </div>

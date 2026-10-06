@@ -2,7 +2,7 @@
   import { api } from '../lib/api'
   import { blocksIn, lineBlocks, previousBlocker, rangeAt, revLabel, selectLine, singleCommit, type LineRange } from '../lib/blame'
   import { relativeDate } from '../lib/format'
-  import { blameBack, blameIgnoreWhitespace, blamePrevious, blameTarget, chatOpen, explainIntoChat, showCommitInLog, worktreeState } from '../lib/stores'
+  import { aiOff, blameBack, blameIgnoreWhitespace, blamePrevious, blameTarget, chatOpen, explainIntoChat, showCommitInLog, worktreeState } from '../lib/stores'
   import type { Blame, BlameBlock } from '../lib/types'
   import { copyText, errorMessage, openMenu, toast } from '../lib/ui'
 
@@ -101,7 +101,7 @@
     const commit = singleCommit(blocks)
     const prevWhy = previousBlocker(blocks)
     openMenu(event, [
-      { label: '✨ Explain these lines in chat', action: () => explain(range) },
+      ...($aiOff ? [] : [{ label: '✨ Explain these lines in chat', action: () => explain(range) }]),
       {
         label: 'Blame previous revision',
         action: () => commit?.previous && blamePrevious(commit.prevPath || commit.filename, commit.previous),
