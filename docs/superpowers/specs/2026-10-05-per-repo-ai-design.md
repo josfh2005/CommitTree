@@ -67,8 +67,11 @@ by a new package `internal/ai/reposettings`:
   value".
 - The file is absent until the first override is saved. Saving an entry
   whose fields are all empty removes the entry; removing a repository from
-  the list removes its entry. Re-adding a repository gives it a new ID, so it
-  starts again from the global settings (documented in the spec).
+  the list removes its entry. A repository's ID is derived from its path
+  (`repos.IDFor`), so re-adding it gives the same ID; it starts again from the
+  global settings only because removing it deleted the entry (documented in
+  the spec). If `repo-ai.json` was unreadable at that moment the delete is
+  skipped, and the old overrides apply again once the file is fixed.
 - Writes are atomic (temp file + rename), like `ai.json`.
 - A provider and its model are saved together: setting a provider without a
   model is refused with the same validation as the global settings. Setting
@@ -184,7 +187,7 @@ Repository settings, as today).
   `SaveRepoAISettings(repoID, overrides)`,
   `ApproveRepoInstructions(repoID, hash)` and
   `IgnoreRepoInstructions(repoID, hash)`. An event
-  `repo-ai-settings-changed` (repoID) refreshes open views. Approve and
+  `repo-ai:changed` (repoID) refreshes open views. Approve and
   Ignore take the hash the user saw, and are refused if the files changed
   since, so a file edited while the tab was open is never approved unseen.
 

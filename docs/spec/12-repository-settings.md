@@ -49,7 +49,7 @@ Choosing a provider picks its first model; a provider that lists no model
 (no key, Ollama stopped) is not chosen and the tab says why. **Your
 instructions** — one box for every action and one per action added with
 "Add instructions for…" — are saved when a box loses focus and stay on this
-computer.
+computer, and also when the dialog closes (Escape, ✕) with a box still being typed in.
 
 **Repository instructions** lists the `.md` files in the repository's
 `.committree/` folder, each foldable to read it and with the reason when it
@@ -60,5 +60,8 @@ since the tab read them. With no files the tab says how to add one.
 
 The tab reloads when the repository's AI settings or approval change
 elsewhere (`repo-ai:changed`); a box being typed in keeps its text. A failed
-save is shown at the top of the tab and keeps what was entered. If the
+save is shown at the top of the tab and keeps what was entered; the
+**Use AI** switch goes back to the stored state. From a linked worktree the
+chat's "Repository settings" and "Review" buttons open this dialog for its
+main repository, whose settings the worktree shares. If the
 overrides file can't be read, its error is shown and the switch is disabled.
