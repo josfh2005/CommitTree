@@ -142,7 +142,7 @@ checked-out branch's upstream can notify (see `11-notifications.md`).
 Settings → General → **Push** says what a click on Push (toolbar or the
 repository row's menu) does: *Ask each time* (the default), *Current branch
 only* or *All branches*. The toolbar button's tooltip follows it: "Push
-`<branch>`", "Push all branches" or "Push — asks current or all branches";
+`<branch>`" (just "Push" with a detached HEAD), "Push all branches" or "Push — asks current or all branches";
 its badge always counts the current branch.
 
 With *Ask each time*, Push pushes the current branch without asking when no

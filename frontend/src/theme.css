@@ -92,10 +92,12 @@
   color-scheme: dark;
 }
 
-/* High contrast (Settings → Appearance), for light and dark alike. Only the
-   text colours change; backgrounds, borders, hover, selection, accent,
-   graph, badge and diff colours stay as they are. Every text token stays at
-   least 4.5:1 on the backgrounds it sits on (theme.test.ts checks both).
+/* High contrast (Settings → Appearance), for light and dark alike. Only text
+   colours change (--text, --muted, --faint, --merge-text and the sidebar's
+   --ahead/--behind badge text); backgrounds, borders, hover, selection,
+   accent, graph, ref badge and diff colours stay as they are. Every text
+   token stays at least 4.5:1 on the backgrounds it sits on (theme.test.ts
+   checks both).
    The light block ties the dark palette on specificity and comes after it,
    so the dark block below must redefine every token the light one sets. */
 :root[data-contrast='high'] {

@@ -179,6 +179,7 @@
   .pick-empty { padding: 8px; font-size: 12px; }
   .results { list-style: none; margin: 0; padding: 0; max-height: 50vh; overflow: auto; display: grid; gap: 8px; }
   .results li { display: grid; grid-template-columns: 16px 1fr; column-gap: 8px; }
+  .results .label { min-width: 0; overflow-wrap: anywhere; }
   .results .detail { grid-column: 2; font-size: 12px; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
   .results .error .mark, .results .error .detail { color: var(--danger); }
   .results .ok .mark { color: var(--accent); }
