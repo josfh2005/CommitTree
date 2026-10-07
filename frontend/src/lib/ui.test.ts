@@ -1,6 +1,6 @@
 import { get } from 'svelte/store'
 import { describe, expect, it } from 'vitest'
-import { dialog, formDialog, formMessage, initialFormValues, type FormField, SEPARATOR, tidySeparators, type MenuEntry } from './ui'
+import { dialog, formDialog, formMessage, initialFormValues, type FormField, SEPARATOR, tidySeparators, type MenuEntry, resultsDialog } from './ui'
 
 const fields: FormField[] = [
   { kind: 'text', key: 'name', label: 'Name', value: 'x', prefix: 'feature/' },
@@ -26,6 +26,20 @@ describe('form dialog', () => {
     expect(d?.kind).toBe('form')
     if (d?.kind === 'form') d.resolve({ name: 'z' })
     await expect(p).resolves.toEqual({ name: 'z' })
+  })
+})
+
+describe('resultsDialog', () => {
+  it('shows the rows and resolves once closed', async () => {
+    const rows = [{ mark: '✓', label: 'a → origin/a', detail: 'Pushed', tone: 'ok' as const }]
+    let done = false
+    const p = resultsDialog({ title: 'Push results — alpha', rows }).then(() => (done = true))
+    const d = get(dialog)
+    expect(d).toMatchObject({ kind: 'results', title: 'Push results — alpha', rows })
+    if (d?.kind !== 'results') throw new Error('not a results dialog')
+    d.resolve()
+    await p
+    expect(done).toBe(true)
   })
 })
 
