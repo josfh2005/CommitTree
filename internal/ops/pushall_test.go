@@ -182,6 +182,26 @@ func TestPushAllWithADetachedHeadPushesOnlyTheOthers(t *testing.T) {
 	}
 }
 
+func TestPushAllNeverPushesACurrentBranchTrackingALocalBranch(t *testing.T) {
+	a, _ := aheadClone(t)
+	a.Git("branch", "--track", "child", "main")
+	a.Git("switch", "-q", "child")
+	a.Commit("child") // ahead of local main; checked out, but its upstream is "."
+	mainBefore := a.Git("rev-parse", "main")
+
+	got := pushAll(t, a)
+	want := []ops.BranchPushResult{
+		{Branch: "feature", Target: "origin/feature", Status: ops.PushPushed},
+		{Branch: "main", Target: "origin/main", Status: ops.PushPushed},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+	if a.Git("rev-parse", "main") != mainBefore {
+		t.Error("main moved: the local upstream was pushed to")
+	}
+}
+
 func TestPushAllWithNothingToPushReturnsNoResults(t *testing.T) {
 	src := testrepo.New(t)
 	src.Commit("base")
