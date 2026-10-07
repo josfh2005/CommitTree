@@ -350,6 +350,19 @@ directory has been deleted but that git has not pruned yet — git still holds
 the branch for it — and the tooltip then adds that the directory is gone and
 `git worktree prune` releases it.
 
+A local branch with an upstream shows how far apart they are, as of the
+last fetch, at the right of its row (before the "worktree" badge and the
+funnel icon): `↑N` in red for commits the branch has that the upstream
+lacks, `↓M` in blue for commits the upstream has that the branch lacks,
+both when they have diverged. Nothing shows when both are zero, without an
+upstream, or when the upstream is gone. The tooltip reads "N commits to push
+to <upstream> · M commits to pull, as of the last fetch", leaving out a zero
+part. The counts come with the branch list, so they refresh whenever it
+does (after a fetch — background ones included —, pull, push, commit,
+checkout…), in every expanded repository. Remote-tracking branches and
+collapsed folders show none. The two colours keep a 4.5:1 contrast on the
+sidebar in light, dark and both high-contrast themes.
+
 Local branches whose name contains no `/` are listed loose. The current
 branch shows a checkmark and its name in bold; in the selected repository it
 also gets a soft accent-tinted background (unless it is the branch the log is
