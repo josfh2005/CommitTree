@@ -32,6 +32,7 @@
     $dialog?.kind === 'confirm' ? $dialog.confirmLabel : $dialog?.kind === 'choice' ? $dialog.confirmLabel(choice)
       : $dialog?.kind === 'pick' ? $dialog.submitLabel
       : $dialog?.kind === 'form' ? $dialog.submitLabel
+      : $dialog?.kind === 'results' ? 'OK'
       : ($dialog?.submitLabel ?? 'OK')
 
   function finish(ok: boolean) {
@@ -44,6 +45,7 @@
     else if (current.kind === 'choice') current.resolve(ok ? choice : null)
     else if (current.kind === 'pick') current.resolve(picked)
     else if (current.kind === 'form') current.resolve(ok ? values : null)
+    else if (current.kind === 'results') current.resolve()
     else current.resolve(ok ? { value, second, checked } : null)
   }
 
@@ -110,6 +112,13 @@
             </label>
           {/if}
         {/each}
+      {:else if $dialog.kind === 'results'}
+        {#if $dialog.message}<p>{$dialog.message}</p>{/if}
+        <ul class="results">
+          {#each $dialog.rows as row}
+            <li class={row.tone}><span class="mark">{row.mark}</span><span class="label">{row.label}</span><span class="detail">{row.detail}</span></li>
+          {/each}
+        </ul>
       {:else}
         <label>
           <span>{$dialog.label}</span>
@@ -126,11 +135,11 @@
         {/if}
       {/if}
       <div class="buttons">
-        <button type="button" class="btn" on:click={() => finish(false)}>Cancel</button>
+        {#if $dialog.kind !== 'results'}<button type="button" class="btn" on:click={() => finish(false)}>Cancel</button>{/if}
         <button
           type="submit"
           class="btn {danger ? 'danger' : 'primary'}"
-          use:focus={$dialog.kind === 'confirm'}
+          use:focus={$dialog.kind === 'confirm' || $dialog.kind === 'results'}
           disabled={$dialog.kind === 'pick' && shown.length === 0}
         >
           {submitLabel}
@@ -168,5 +177,12 @@
   .pick-item:hover { background: var(--hover); }
   .pick-item.selected { background: var(--active); }
   .pick-empty { padding: 8px; font-size: 12px; }
+  .results { list-style: none; margin: 0; padding: 0; max-height: 50vh; overflow: auto; display: grid; gap: 8px; }
+  .results li { display: grid; grid-template-columns: 16px 1fr; column-gap: 8px; }
+  .results .label { min-width: 0; overflow-wrap: anywhere; }
+  .results .detail { grid-column: 2; font-size: 12px; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .results .error .mark, .results .error .detail { color: var(--danger); }
+  .results .ok .mark { color: var(--accent); }
+  .results .muted .mark { color: var(--muted); }
   .buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 </style>

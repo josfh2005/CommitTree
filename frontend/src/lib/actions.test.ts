@@ -18,6 +18,7 @@ vi.mock('./api', () => ({
     reorderRepos: vi.fn().mockResolvedValue(undefined),
     chooseRegionOption: vi.fn(),
     push: vi.fn().mockResolvedValue(undefined),
+    pushAll: vi.fn().mockResolvedValue([]),
     pull: vi.fn(),
     notify: vi.fn().mockResolvedValue(undefined),
   },
@@ -30,15 +31,17 @@ vi.mock('./ui', async (importOriginal) => {
     confirmDialog: vi.fn().mockResolvedValue(true),
     confirmDialogWithCheckbox: vi.fn().mockResolvedValue({ ok: true, checked: false }),
     pickDialog: vi.fn().mockResolvedValue(null),
+    choiceDialog: vi.fn().mockResolvedValue(null),
+    resultsDialog: vi.fn().mockResolvedValue(undefined),
   }
 })
 
-import { applyHunkSelection, chooseRegionOption, commitMerge, mergeBranch, pull, push, placeRepo, placeRepoGroup, setRepoSortOrder, deleteBranch, deleteTag, removeWorktree, skipStep } from './actions'
+import { applyHunkSelection, chooseRegionOption, commitMerge, mergeBranch, pull, push, pushAll, placeRepo, placeRepoGroup, setRepoSortOrder, deleteBranch, deleteTag, removeWorktree, skipStep } from './actions'
 import { api } from './api'
-import { filters, mergeState, repos, selectedRepoId } from './stores'
+import { filters, gitSettings, mergeState, repos, selectedRepoId } from './stores'
 import { windowFocused } from './notify'
-import type { Branch, Filters, MergeState, Repo, WorktreeRemovalInfo } from './types'
-import { confirmDialog, confirmDialogWithCheckbox, toasts } from './ui'
+import type { Branch, Filters, MergeState, Refs, Repo, WorktreeRemovalInfo } from './types'
+import { choiceDialog, confirmDialog, confirmDialogWithCheckbox, resultsDialog, toasts } from './ui'
 
 function mergeStateOf(over: Partial<MergeState>): MergeState {
   return { kind: 'rebase', merging: true, from: 'feature', into: 'main', conflicts: [], manual: [], staged: [], unstaged: [], ...over }
@@ -458,5 +461,96 @@ describe('operations notify', () => {
     vi.mocked(api.mergeBranch).mockResolvedValueOnce({ outcome: 2, conflicts: ['a', 'b'] })
     await mergeBranch('r1', { name: 'feature' } as Branch, 'main')
     expect(vi.mocked(api.notify).mock.calls[0][0]).toMatchObject({ body: 'Conflicts in 2 files after the merge' })
+  })
+})
+
+describe('push follows the push scope', () => {
+  const ahead = (over: Partial<Refs> = {}): Refs => ({
+    head: 'main', headHash: 'h', detached: false, remotes: [], tags: [],
+    local: [
+      { name: 'main', remote: '', hash: 'h', current: true, upstream: 'origin/main' },
+      { name: 'feature', remote: '', hash: 'h', current: false, upstream: 'origin/feature', ahead: 2 },
+    ],
+    ...over,
+  })
+  beforeEach(() => {
+    toasts.set([])
+    vi.mocked(api.push).mockClear()
+    vi.mocked(api.pushAll).mockReset().mockResolvedValue([])
+    vi.mocked(api.getRefs).mockReset().mockResolvedValue(null as unknown as Refs)
+    vi.mocked(choiceDialog).mockReset().mockResolvedValue(null)
+    vi.mocked(resultsDialog).mockClear()
+    repos.set([{ id: 'r1', name: 'alpha', path: '/a', missing: false, branch: 'main' } as Repo, { id: 'r2', name: 'beta', path: '/b', missing: false, branch: 'main' } as Repo])
+    selectedRepoId.set('r1')
+    gitSettings.set({ pullStrategy: 'auto', pushScope: 'ask' })
+  })
+
+  it('pushes the current branch without asking when no other branch is ahead', async () => {
+    await push('r1')
+    expect(choiceDialog).not.toHaveBeenCalled()
+    expect(api.push).toHaveBeenCalledWith('r1')
+  })
+
+  it('asks with the other repository\'s refs and names it', async () => {
+    vi.mocked(api.getRefs).mockResolvedValue(ahead())
+    await push('r2')
+    expect(api.getRefs).toHaveBeenCalledWith('r2')
+    expect(vi.mocked(choiceDialog).mock.calls[0][0]).toMatchObject({ title: 'Push beta' })
+    expect(api.push).not.toHaveBeenCalled() // cancelled
+    expect(api.pushAll).not.toHaveBeenCalled()
+  })
+
+  it('runs the branch chosen in the dialog', async () => {
+    vi.mocked(api.getRefs).mockResolvedValue(ahead())
+    vi.mocked(choiceDialog).mockResolvedValue('all')
+    await push('r1')
+    expect(api.pushAll).toHaveBeenCalledWith('r1')
+  })
+
+  it('a fixed setting never asks', async () => {
+    vi.mocked(api.getRefs).mockResolvedValue(ahead())
+    gitSettings.set({ pullStrategy: 'auto', pushScope: 'current' })
+    await push('r1')
+    gitSettings.set({ pullStrategy: 'auto', pushScope: 'all' })
+    await push('r1')
+    expect(choiceDialog).not.toHaveBeenCalled()
+    expect(api.push).toHaveBeenCalledTimes(1)
+    expect(api.pushAll).toHaveBeenCalledTimes(1)
+  })
+
+  it('toasts a push of all branches in which nothing failed', async () => {
+    vi.mocked(api.pushAll).mockResolvedValue([
+      { branch: 'main', target: 'origin/main', status: 'upToDate' },
+      { branch: 'feature', target: 'origin/feature', status: 'pushed' },
+    ])
+    expect(await pushAll('r1')).toBe(true)
+    expect(get(toasts).map((t) => [t.message, t.kind])).toEqual([['Pushed feature, 1 already up to date', 'info']])
+    expect(resultsDialog).not.toHaveBeenCalled()
+  })
+
+  it('names another repository in the toast', async () => {
+    await pushAll('r2')
+    expect(get(toasts).map((t) => t.message)).toEqual(['beta: Nothing to push'])
+  })
+
+  it('shows the results dialog after a partial failure, not an error toast', async () => {
+    windowFocused.set(false)
+    vi.mocked(api.notify).mockClear()
+    vi.mocked(api.pushAll).mockResolvedValue([
+      { branch: 'main', target: 'origin/main', status: 'rejected', reason: "The remote has commits you don't have — pull main first" },
+      { branch: 'feature', target: 'origin/feature', status: 'pushed' },
+    ])
+    expect(await pushAll('r1')).toBe(false)
+    expect(get(toasts)).toEqual([])
+    expect(vi.mocked(resultsDialog).mock.calls[0][0]).toMatchObject({ title: 'Push results — alpha' })
+    expect(vi.mocked(resultsDialog).mock.calls[0][0].rows).toHaveLength(2)
+    expect(vi.mocked(api.notify).mock.calls[0][0]).toMatchObject({ id: 'r1:problem', body: 'Push failed: 1 of 2 branches were not pushed' })
+  })
+
+  it('a push of all branches that cannot start shows the error toast', async () => {
+    vi.mocked(api.pushAll).mockRejectedValue(new Error('another operation is running'))
+    expect(await pushAll('r1')).toBe(false)
+    expect(get(toasts).map((t) => t.kind)).toEqual(['error'])
+    expect(resultsDialog).not.toHaveBeenCalled()
   })
 })

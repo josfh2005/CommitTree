@@ -1,9 +1,9 @@
 import { get } from 'svelte/store'
 import { api } from './api'
-import { busy, chatOpen, chatRunRepo, collapsedRepoGroups, expandedRepos, filters, focusCommitBox, loadIdentity, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, refs, repoManualSeeded, repos, repoSortOrder, selectRepo, selectUncommitted, selectedHash, selectedRepoId, stashConflictDismissed } from './stores'
+import { busy, chatOpen, chatRunRepo, collapsedRepoGroups, expandedRepos, filters, focusCommitBox, gitSettings, loadIdentity, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, refs, repoManualSeeded, repos, repoSortOrder, selectRepo, selectUncommitted, selectedHash, selectedRepoId, stashConflictDismissed } from './stores'
 import { notifyStashConflicts, opError, track } from './notify'
 import type { OpKind } from './notifyRules'
-import type { Branch, FileStatus, HunkAction, HunkPick, MergeState, RebasePreview, RegionChoice, Repo, ResetInfo, ResetMode, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
+import type { Branch, BranchPushResult, FileStatus, HunkAction, HunkPick, MergeState, RebasePreview, RegionChoice, Refs, Repo, ResetInfo, ResetMode, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
 import { PULL_UP_TO_DATE, UP_TO_DATE } from './types'
 import { abortWarning, commitWarning, isEmptyStepError, skipWarning, staleMergeChoice, takeMessage } from './merge'
 import { doneMessage, rebaseMessage } from './rebase'
@@ -11,7 +11,8 @@ import { checkoutNotice } from './checkout'
 import { resetMessage } from './reset'
 import { discardMessage, neverCommitted } from './worktree'
 import { stashApplyAction } from './stash'
-import { choiceDialog, confirmDialog, confirmDialogWithCheckbox, dismissToast, errorMessage, pickDialog, promptDialog, toast } from './ui'
+import { choiceDialog, confirmDialog, confirmDialogWithCheckbox, dismissToast, errorMessage, pickDialog, promptDialog, resultsDialog, toast } from './ui'
+import { PartialPushError, pushChoiceOptions, pushDecision, pushedMessage, pushFailed, pushResultRows } from './push'
 import { mergeCandidates } from './toolbar'
 import { resolveRepoDrop } from './repoDrop'
 import { moveGroup, moveRepo, nameOrder, type RepoPlace, type RepoSortOrder } from './repoGroups'
@@ -762,7 +763,60 @@ export async function fetchRemote(id: string) {
   await runOp(id, 'fetch', 'Fetching…', () => api.fetch(id))
 }
 
-export const push = (id: string) => runOp(id, 'push', 'Pushing…', () => api.push(id))
+const repoLabel = (id: string) => get(repos).find((r) => r.id === id)?.name ?? 'repository'
+
+// refsOf reads a repository's refs fresh — the row menu can push a
+// repository that is not the selected one; unreadable refs ask nothing.
+async function refsOf(id: string): Promise<Refs | null> {
+  try {
+    return await api.getRefs(id)
+  } catch {
+    return null
+  }
+}
+
+// push follows Settings → General → Push: the current branch, all branches,
+// or — the default — a choice, asked only when another branch has commits
+// to push (docs/spec/05-remote-and-stash.md).
+export async function push(id: string): Promise<boolean> {
+  const scope = get(gitSettings)?.pushScope ?? 'ask'
+  const current = scope === 'ask' ? await refsOf(id) : null
+  let choice = pushDecision(scope, current)
+  if (choice === 'ask') {
+    const picked = await choiceDialog(pushChoiceOptions(repoLabel(id), current))
+    if (!picked) return false
+    choice = picked
+  }
+  return choice === 'all' ? pushAll(id) : runOp(id, 'push', 'Pushing…', () => api.push(id))
+}
+
+// pushAll pushes every branch with something to push. A toast sums up a
+// push in which nothing failed; otherwise a dialog lists every branch —
+// opened once the busy label is gone and the refs reloaded — and the push
+// notifies as failed.
+export async function pushAll(id: string): Promise<boolean> {
+  const name = repoLabel(id)
+  busy.set('Pushing branches…')
+  let partial: BranchPushResult[] | null = null
+  try {
+    const results = await track(id, 'push', async () => {
+      const res = (await api.pushAll(id)) ?? []
+      if (res.some(pushFailed)) throw new PartialPushError(res)
+      return res
+    })
+    const message = pushedMessage(results)
+    toast(id === get(selectedRepoId) ? message : `${name}: ${message}`, 'info')
+    return true
+  } catch (e) {
+    if (e instanceof PartialPushError) partial = e.results
+    else opError(id, e)
+    return false
+  } finally {
+    busy.set('')
+    await refreshRepo()
+    if (partial) void resultsDialog({ title: `Push results — ${name}`, rows: pushResultRows(partial) })
+  }
+}
 
 export async function pull(id: string) {
   busy.set('Pulling…')

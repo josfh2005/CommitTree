@@ -84,6 +84,14 @@ export interface Branch {
   hash: string
   current: boolean
   upstream: string
+  /** Commits the branch has that its upstream lacks, as of the last fetch. */
+  ahead?: number
+  /** Commits the upstream has that the branch lacks, as of the last fetch. */
+  behind?: number
+  /** The upstream is configured but its remote branch no longer exists. */
+  upstreamGone?: boolean
+  /** The upstream is another local branch, not a remote one. */
+  upstreamLocal?: boolean
   /** Path of another worktree that has this branch checked out. */
   worktree?: string
   /** That worktree's directory is gone but git has not pruned it yet. */
@@ -309,8 +317,20 @@ export interface PullResult {
   conflicts: string[]
 }
 
+export type PushScope = 'ask' | 'current' | 'all'
+
 export interface GitSettings {
   pullStrategy: 'auto' | 'merge' | 'rebase'
+  pushScope: PushScope
+}
+
+/** One branch's outcome of a push of all branches (Go's ops.BranchPushResult). */
+export interface BranchPushResult {
+  branch: string
+  /** <remote>/<branch> */
+  target: string
+  status: 'pushed' | 'upToDate' | 'rejected' | 'failed'
+  reason?: string
 }
 
 export interface StashEntry {

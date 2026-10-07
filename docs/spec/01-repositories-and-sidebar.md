@@ -52,11 +52,11 @@ cleared. Any embedded-terminal tabs open on the repository are closed along
 with it, without a separate confirmation (see Terminal).
 
 A repository row's context menu is grouped, with a line between groups:
-Locate… (only while the folder is missing); Fetch, Pull, Push; the
+Locate… (only while the folder is missing); Fetch, Pull, Push, Push all branches; the
 show-in-file-manager action and Open in Terminal; Repository settings…
 (disabled while the folder is missing; see `12-repository-settings.md`);
 Move to group… and Remove from list…. A linked worktree's menu has Fetch,
-Pull, Push; the same two open actions; and Remove worktree… — no Repository
+Pull, Push, Push all branches; the same two open actions; and Remove worktree… — no Repository
 settings…, since its remotes are its main repository's.
 
 A repository row's context menu also offers to show the repository's
@@ -196,7 +196,7 @@ the underlying directory reappears or vanishes. A missing repository:
   control is disabled and greyed out);
 - offers a "Locate…" action, in addition to the entry's other actions, that
   is not offered on a present repository;
-- has every other row action (fetch, pull, push) refused;
+- has every other row action (fetch, pull, push, push all branches) refused;
 - is skipped when the sidebar loads per-repository state (refs, merge
   state, worktree state, remote info, stash) for the selection — that state
   is simply cleared instead.
@@ -277,7 +277,7 @@ marked "↳", sorted by name the same way. They follow their main repository
 wherever it is, whatever their own group field says, and are visible whether
 or not the main repository is expanded or selected. A worktree row selects
 and expands exactly like a repository row. Its context menu offers only
-Fetch, Pull, Push, the show-in-file-manager action, Open in Terminal and
+Fetch, Pull, Push, Push all branches, the show-in-file-manager action, Open in Terminal and
 Remove worktree…; a stored repository
 shown nested (see Worktrees) keeps "Remove from list" and loses only "Move
 to group…". A worktree row cannot be dragged into a group. A group section is a header row (its name and a count of the
@@ -349,6 +349,19 @@ it are disabled, since git would refuse both. That includes a worktree whose
 directory has been deleted but that git has not pruned yet — git still holds
 the branch for it — and the tooltip then adds that the directory is gone and
 `git worktree prune` releases it.
+
+A local branch with an upstream shows how far apart they are, as of the
+last fetch, at the right of its row (before the "worktree" badge and the
+funnel icon): `↑N` in red for commits the branch has that the upstream
+lacks, `↓M` in blue for commits the upstream has that the branch lacks,
+both when they have diverged. Nothing shows when both are zero, without an
+upstream, or when the upstream is gone. The tooltip reads "N commits to push
+to <upstream> · M commits to pull, as of the last fetch", leaving out a zero
+part. The counts come with the branch list, so they refresh whenever it
+does (after a fetch — background ones included —, pull, push, commit,
+checkout…), in every expanded repository. Remote-tracking branches and
+collapsed folders show none. The two colours keep a 4.5:1 contrast on the
+sidebar in light, dark and both high-contrast themes.
 
 Local branches whose name contains no `/` are listed loose. The current
 branch shows a checkmark and its name in bold; in the selected repository it

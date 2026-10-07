@@ -38,7 +38,7 @@
   // Why the AI settings could not be loaded; the AI tabs show it, General
   // still works.
   let aiError = ''
-  let git: GitSettings = { pullStrategy: 'auto' }
+  let git: GitSettings = { pullStrategy: 'auto', pushScope: 'ask' }
   let status: AIStatus | null = null
   let prompts: PromptInfo[] = []
   let pull: ModelProgress | null = null
@@ -323,6 +323,14 @@
                   <option value="auto">Auto — follow this repository's git config</option>
                   <option value="merge">Always merge</option>
                   <option value="rebase">Always rebase</option>
+                </select>
+              </label>
+              <label>
+                <span>Push</span>
+                <select bind:value={git.pushScope} on:change={saveGit}>
+                  <option value="ask">Ask each time</option>
+                  <option value="current">Current branch only</option>
+                  <option value="all">All branches</option>
                 </select>
               </label>
             </section>

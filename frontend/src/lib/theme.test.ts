@@ -76,7 +76,7 @@ describe('high contrast palettes in theme.css', () => {
   })
   const light = { ...lightBase, ...lightHigh }
   const dark = { ...lightBase, ...darkBase, ...darkHigh }
-  const textTokens = ['--text', '--muted', '--faint', '--merge-text']
+  const textTokens = ['--text', '--muted', '--faint', '--merge-text', '--ahead', '--behind']
 
   it('changes only text colours, never backgrounds or borders', () => {
     expect(Object.keys(lightHigh).sort()).toEqual([...textTokens].sort())
@@ -93,6 +93,10 @@ describe('high contrast palettes in theme.css', () => {
       }
       for (const bg of ['--bg', '--surface', '--sidebar']) {
         expect(contrastRatio(palette['--faint'], palette[bg]), `--faint on ${bg}`).toBeGreaterThanOrEqual(4.5)
+      }
+      // Badge colours stay at least 4.5:1 on the sidebar
+      for (const fg of ['--ahead', '--behind']) {
+        expect(contrastRatio(palette[fg], palette['--sidebar']), `${fg} on --sidebar`).toBeGreaterThanOrEqual(4.5)
       }
     })
   }

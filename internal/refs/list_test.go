@@ -98,3 +98,64 @@ func TestFingerprintAndLabel(t *testing.T) {
 		t.Fatal("fingerprint did not change after switching branch")
 	}
 }
+
+func TestParseTrack(t *testing.T) {
+	cases := []struct {
+		in            string
+		ahead, behind int
+		gone          bool
+	}{
+		{"", 0, 0, false},
+		{"ahead 2", 2, 0, false},
+		{"behind 3", 0, 3, false},
+		{"ahead 2, behind 3", 2, 3, false},
+		{"gone", 0, 0, true},
+	}
+	for _, c := range cases {
+		a, b, g := refs.ParseTrack(c.in)
+		if a != c.ahead || b != c.behind || g != c.gone {
+			t.Errorf("ParseTrack(%q) = %d, %d, %v; want %d, %d, %v", c.in, a, b, g, c.ahead, c.behind, c.gone)
+		}
+	}
+}
+
+func TestListCountsAheadBehindGoneAndLocalUpstreams(t *testing.T) {
+	src := testrepo.New(t)
+	src.Commit("first")
+	src.Git("branch", "feature")
+	src.Git("branch", "doomed")
+	bare := testrepo.NewBareFrom(t, src)
+	r := testrepo.Clone(t, bare)
+	r.Git("branch", "--track", "feature", "origin/feature")
+	r.Git("branch", "--track", "doomed", "origin/doomed")
+	r.Git("branch", "--track", "child", "main")
+	r.Commit("local on main")
+
+	other := testrepo.Clone(t, bare)
+	other.Git("switch", "-q", "feature")
+	other.Commit("remote on feature")
+	other.Git("push", "-q", "origin", "feature")
+	other.Git("push", "-q", "origin", "--delete", "doomed")
+	r.Git("fetch", "-q", "--prune")
+
+	got, err := refs.List(ctx, r.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	by := map[string]refs.Branch{}
+	for _, b := range got.Local {
+		by[b.Name] = b
+	}
+	if b := by["main"]; b.Ahead != 1 || b.Behind != 0 || b.UpstreamGone || b.UpstreamLocal {
+		t.Errorf("main = %+v, want 1 ahead", b)
+	}
+	if b := by["feature"]; b.Ahead != 0 || b.Behind != 1 {
+		t.Errorf("feature = %+v, want 1 behind", b)
+	}
+	if b := by["doomed"]; !b.UpstreamGone || b.Ahead != 0 || b.Behind != 0 {
+		t.Errorf("doomed = %+v, want upstream gone", b)
+	}
+	if b := by["child"]; !b.UpstreamLocal || b.Behind != 1 {
+		t.Errorf("child = %+v, want a local upstream 1 behind", b)
+	}
+}

@@ -342,6 +342,10 @@ export function Push(arg1) {
   return window['go']['app']['App']['Push'](arg1);
 }
 
+export function PushAll(arg1) {
+  return window['go']['app']['App']['PushAll'](arg1);
+}
+
 export function RebaseOnto(arg1, arg2) {
   return window['go']['app']['App']['RebaseOnto'](arg1, arg2);
 }

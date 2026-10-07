@@ -1,6 +1,7 @@
 import { writable } from 'svelte/store'
 import { ClipboardSetText } from '../../wailsjs/runtime/runtime'
 import type { PickItem } from './pick'
+import type { ResultRow } from './push'
 
 export interface Toast {
   id: number
@@ -93,6 +94,10 @@ export interface FormOptions {
   submitLabel: string
 }
 
+/** A list of outcomes with a single OK, e.g. a push of all branches in
+ *  which some branches were not pushed. */
+export interface ResultsOptions { title: string; message?: string; rows: ResultRow[] }
+
 export function initialFormValues(fields: FormField[]): FormValues {
   return Object.fromEntries(fields.map((f) => [f.key, f.value]))
 }
@@ -107,6 +112,7 @@ export type Dialog =
   | (PromptOptions & { kind: 'prompt'; resolve: (result: PromptResult | null) => void })
   | (ChoiceOptions & { kind: 'choice'; resolve: (value: string | null) => void })
   | (PickOptions & { kind: 'pick'; resolve: (key: string | null) => void })
+  | (ResultsOptions & { kind: 'results'; resolve: () => void })
 
 export const dialog = writable<Dialog | null>(null)
 
@@ -132,6 +138,9 @@ export const pickDialog = (options: PickOptions) =>
 
 export const formDialog = (options: FormOptions) =>
   new Promise<FormValues | null>((resolve) => dialog.set({ ...options, kind: 'form', resolve }))
+
+export const resultsDialog = (options: ResultsOptions) =>
+  new Promise<void>((resolve) => dialog.set({ ...options, kind: 'results', resolve }))
 
 export interface MenuItem {
   label: string
