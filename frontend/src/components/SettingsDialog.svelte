@@ -325,6 +325,14 @@
                   <option value="rebase">Always rebase</option>
                 </select>
               </label>
+              <label>
+                <span>Push</span>
+                <select bind:value={git.pushScope} on:change={saveGit}>
+                  <option value="ask">Ask each time</option>
+                  <option value="current">Current branch only</option>
+                  <option value="all">All branches</option>
+                </select>
+              </label>
             </section>
           {:else if tabUsesAI($tab) && !settings}
             <p class={aiError ? 'warn' : 'hint'}>{aiError || 'Loading…'}</p>

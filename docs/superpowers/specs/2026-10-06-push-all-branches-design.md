@@ -181,7 +181,7 @@ counts show the new state.
 | Detached HEAD, no other branch ahead | "Nothing to push" (Push All) / refusal as today (Push) |
 | One branch rejected, others fine | Others pushed; results dialog; failed notification |
 | Remote unreachable / auth failed | Its branches `failed` with git's message; other remotes still pushed |
-| Upstream gone | Not in the set, no badge |
+| Upstream gone | Not in the set unless it is the current branch; no badge |
 | Branch tracking a local branch | Not in the set; its badge still shows counts against that branch |
 
 ## Testing

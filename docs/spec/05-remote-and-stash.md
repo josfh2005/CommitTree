@@ -45,7 +45,7 @@ why it is disabled; an enabled one's says what it does.
 | Stash | The "Stash changes" dialog | busy; a conflict is in progress; nothing is uncommitted ("Nothing to stash") |
 | Fetch | Fetch, below; an amber dot while background fetches skip a remote that needs credentials, with the tooltip "Background fetch paused for <remotes>: authentication failed. Fetch to retry." | busy |
 | Pull | Pull, below; the behind count as a badge | busy; a conflict is in progress |
-| Push | Push, below; the ahead count as a badge | same as Pull |
+| Push | Push, below (following Settings → General → Push); the current branch's ahead count as a badge | same as Pull |
 | Branch | The "New branch" dialog, from HEAD (a detached HEAD's commit included) | busy |
 | Merge | The branch picker below, then the usual merge confirmation | busy; a conflict is in progress; detached HEAD ("Check out a branch first"); no branch other than the current one, local or remote ("No other branches") |
 | Terminal | A toggle: shows or hides the terminal panel, and looks pressed (soft background and border, no colour) while it is open | never |
@@ -139,7 +139,23 @@ checked-out branch's upstream can notify (see `11-notifications.md`).
 
 ### Push
 
-Pushing publishes the current branch:
+Settings → General → **Push** says what a click on Push (toolbar or the
+repository row's menu) does: *Ask each time* (the default), *Current branch
+only* or *All branches*. The toolbar button's tooltip follows it: "Push
+`<branch>`", "Push all branches" or "Push — asks current or all branches";
+its badge always counts the current branch.
+
+With *Ask each time*, Push pushes the current branch without asking when no
+other local branch is ahead of its upstream (counted from the last fetch).
+Otherwise a dialog "Push `<repository>`" offers *Current branch (`<name>`)*
+(selected) and *All branches (N)* — N counts the current branch plus the
+others ahead — with "Change the default in Settings → General." under it;
+confirming reads "Push" or "Push N branches" ("Push 1 branch" for one),
+Cancel pushes nothing. With a detached HEAD it offers only *All branches
+(N)*. The repository row's menu also has **Push all branches**, which pushes
+all branches whatever the setting says.
+
+**Current branch** publishes the checked-out branch:
 
 - If the branch already has an upstream, Push pushes to it as-is.
 - If the branch has no upstream yet, Push sets one on the remote named
@@ -148,6 +164,37 @@ Pushing publishes the current branch:
   this to the usual remote," and asking every time would slow down the
   common case.
 - A detached HEAD has nothing to publish; Push refuses.
+
+**All branches** is `App.PushAll`. It pushes the current branch (as above;
+to its upstream even when that is gone, and up to date counts) plus every
+other local branch whose upstream is on a remote, still exists, and is
+ahead of it according to the last fetch. A branch that tracks another local
+branch, or has no upstream, is never pushed this way; with a detached HEAD
+only the other branches go. Each branch goes to its upstream by name
+(`branch.<name>.pushRemote` and `push.default` are not consulted), with one
+`git push --porcelain` per remote, remotes in name order. Nothing is forced,
+no tag is pushed, and the push is not atomic: a branch the remote rejects
+does not stop the others. Like Push it takes the repository's write lock and
+has no conflict check of its own; the toolbar button and both menu items are
+disabled while a conflict is in progress. The busy label reads "Pushing
+branches…".
+
+When nothing failed, a toast sums it up: "Pushed `<branch>`" or "Pushed N
+branches", plus ", M already up to date" when some were; "Everything up to
+date" when none moved; "Nothing to push" when no branch qualified. A push of
+a repository that is not the selected one (from its row menu) prefixes the
+toast with its name: "beta: Nothing to push". When any branch was not
+pushed, a results dialog "Push results — `<repository>`" lists every branch
+with its target, one row each, closed by a single OK: ✓ pushed, — up to
+date, ✗ and the reason. It opens once the busy label is gone and the refs
+have reloaded, so the toolbar is usable behind it. A branch the remote has
+moved on from reads "The remote has commits you don't have — pull
+`<branch>` first"; any other rejection shows git's reason. A remote that
+cannot be reached (network, authentication, a missing remote) fails all of
+its branches with git's message, and the other remotes are still pushed; a
+push cancelled from the Commands panel reads "Cancelled". If the push cannot
+start at all (the repository is missing or another write is running), an
+error toast shows instead of the dialog.
 
 ### Pull
 

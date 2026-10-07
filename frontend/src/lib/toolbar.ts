@@ -2,7 +2,8 @@ import { commandsShortcutLabel } from './cmdlog'
 import { revealLabel } from './platform'
 import { terminalShortcutLabel } from './terminal'
 import type { PickItem } from './pick'
-import type { AheadBehind, Branch, MergeState, Refs, WorktreeState } from './types'
+import { pushTitle } from './push'
+import type { AheadBehind, Branch, MergeState, PushScope, Refs, WorktreeState } from './types'
 import { uncommittedCount } from './uncommitted'
 
 export type ToolbarId = 'commit' | 'stash' | 'fetch' | 'pull' | 'push' | 'branch' | 'merge' | 'flow' | 'terminal' | 'commands' | 'folder' | 'chat'
@@ -20,6 +21,8 @@ export interface ToolbarInput {
   platform: string
   /** Remotes background fetches skip for want of credentials. */
   paused: string[]
+  /** Settings → General → Push; the Push tooltip says what a click does. */
+  pushScope?: PushScope
 }
 
 // title is the tooltip: why the button is disabled, or what it does.
@@ -61,7 +64,7 @@ export function toolbarItems(i: ToolbarInput): ToolbarItem[] {
     item('stash', 'Stash', 'stash', 'work', first([!!i.busy, i.busy], [conflict, blocked], [!changes, 'Nothing to stash']), 'Stash the changes'),
     item('fetch', 'Fetch', 'refresh', 'sync', first([!!i.busy, i.busy]), pausedTooltip(i.paused) || 'Fetch from all remotes', { dot: i.paused.length > 0 }),
     item('pull', 'Pull', 'download', 'sync', first([!!i.busy, i.busy], [conflict, blocked]), 'Pull', { badge: i.remote?.behind ?? 0 }),
-    item('push', 'Push', 'upload', 'sync', first([!!i.busy, i.busy], [conflict, blocked]), 'Push', { badge: i.remote?.ahead ?? 0 }),
+    item('push', 'Push', 'upload', 'sync', first([!!i.busy, i.busy], [conflict, blocked]), pushTitle(i.pushScope ?? 'ask', i.refs), { badge: i.remote?.ahead ?? 0 }),
     item('branch', 'Branch', 'branch', 'refs', first([!!i.busy, i.busy]), 'New branch from HEAD'),
     item('merge', 'Merge', 'merge', 'refs', first([!!i.busy, i.busy], [conflict, blocked], [!!i.refs?.detached, 'Check out a branch first'], [mergeCandidates(i.refs).length === 0, 'No other branches']), 'Merge a branch into the current one'),
     item('flow', 'Flow', 'flow', 'refs', first([!!i.busy, i.busy], [conflict, blocked]), 'git-flow: start or finish a feature, release, hotfix or warmfix'),

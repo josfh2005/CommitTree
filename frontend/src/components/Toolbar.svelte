@@ -3,11 +3,11 @@
   import { fetchRemote, newBranch, openRepoFolder, pickAndMerge, pull, push, startCommit, stashChanges } from '../lib/actions'
   import { openFlowMenu } from '../lib/flowActions'
   import { toolbarItems, type ToolbarGroup, type ToolbarId } from '../lib/toolbar'
-  import { busy, chatOpen, commandsOpen, mergeState, pausedRemotes, platform, refs, remoteInfo, stashConflictDismissed, terminalOpen, worktreeState } from '../lib/stores'
+  import { busy, chatOpen, commandsOpen, gitSettings, mergeState, pausedRemotes, platform, refs, remoteInfo, stashConflictDismissed, terminalOpen, worktreeState } from '../lib/stores'
 
   export let repoId: string
 
-  $: items = toolbarItems({ refs: $refs, worktree: $worktreeState, merge: $mergeState, busy: $busy, remote: $remoteInfo, terminalOpen: $terminalOpen, commandsOpen: $commandsOpen, chatOpen: $chatOpen, platform: $platform, paused: $pausedRemotes })
+  $: items = toolbarItems({ refs: $refs, worktree: $worktreeState, merge: $mergeState, busy: $busy, remote: $remoteInfo, terminalOpen: $terminalOpen, commandsOpen: $commandsOpen, chatOpen: $chatOpen, platform: $platform, paused: $pausedRemotes, pushScope: $gitSettings?.pushScope ?? 'ask' })
   const GROUPS: ToolbarGroup[] = ['work', 'sync', 'refs', 'tools']
 
   function act(id: ToolbarId, event: MouseEvent) {

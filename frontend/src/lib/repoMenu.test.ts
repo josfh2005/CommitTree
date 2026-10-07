@@ -4,7 +4,7 @@ import { repoMenuGroups } from './repoMenu'
 describe('repoMenuGroups', () => {
   it('groups a main repository', () => {
     expect(repoMenuGroups({ missing: false, worktree: false, child: false })).toEqual([
-      ['fetch', 'pull', 'push'], ['reveal', 'terminal'], ['settings'], ['move', 'remove'],
+      ['fetch', 'pull', 'push', 'push-all'], ['reveal', 'terminal'], ['settings'], ['move', 'remove'],
     ])
   })
   it('puts Locate first when the folder is missing', () => {
@@ -15,7 +15,7 @@ describe('repoMenuGroups', () => {
   })
   it('a linked worktree has no settings and removes the worktree', () => {
     expect(repoMenuGroups({ missing: false, worktree: true, child: true })).toEqual([
-      ['fetch', 'pull', 'push'], ['reveal', 'terminal'], ['remove-worktree'],
+      ['fetch', 'pull', 'push', 'push-all'], ['reveal', 'terminal'], ['remove-worktree'],
     ])
   })
 })

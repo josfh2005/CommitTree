@@ -21,7 +21,7 @@
   import { isSettingsShortcut } from './lib/shortcuts'
   import { isTerminalToggle } from './lib/terminal'
   import { conflictOwnsScreen } from './lib/remote'
-  import { blameTarget, chatOpen, chatRunRepo, chatWidth, closeBlame, commandsOpen, dockHeight, loadAISettings, loadRefs, loadRepos, loadWorktreeState, mainView, mergeState, platform, refreshRepo, selectedHash, selectedRepo, selectedRepoId, selectedStash, settingsOpen, sidebarWidth, stashConflictDismissed, stashEntries, terminalOpen, uncommittedSelected } from './lib/stores'
+  import { blameTarget, chatOpen, chatRunRepo, chatWidth, closeBlame, commandsOpen, dockHeight, loadAISettings, loadGitSettings, loadRefs, loadRepos, loadWorktreeState, mainView, mergeState, platform, refreshRepo, selectedHash, selectedRepo, selectedRepoId, selectedStash, settingsOpen, sidebarWidth, stashConflictDismissed, stashEntries, terminalOpen, uncommittedSelected } from './lib/stores'
   import type { RepoChangedEvent, WorktreeChangedEvent } from './lib/types'
   import { Environment, EventsOn } from '../wailsjs/runtime/runtime'
 
@@ -79,6 +79,7 @@
 
   onMount(() => {
     loadRepos().then(loadRefs)
+    loadGitSettings()
     const offSelected = selectedRepoId.subscribe(() => loadAISettings())
     // The payload is ignored on purpose: a worktree and its main repository share
     // their AI settings, so the event may name a repo other than the selected one.
