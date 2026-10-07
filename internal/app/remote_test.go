@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 
@@ -108,5 +109,34 @@ func TestGitSettingsDefaultAndSaveRoundTrip(t *testing.T) {
 	}
 	if got.PullStrategy != gitsettings.PullRebase {
 		t.Errorf("after save = %+v, want rebase", got)
+	}
+}
+
+func TestPushAllThroughTheAppLayer(t *testing.T) {
+	a, r, id := newPlainApp(t)
+	bare := testrepo.NewBareFrom(t, r)
+	r.Git("remote", "add", "origin", bare)
+	r.Git("push", "-q", "-u", "origin", "main")
+	r.Git("switch", "-q", "-c", "topic")
+	r.Commit("on topic")
+
+	results, err := a.PushAll(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 || results[0] != (ops.BranchPushResult{Branch: "topic", Target: "origin/topic", Status: ops.PushPushed}) {
+		t.Fatalf("results = %+v", results)
+	}
+}
+
+func TestPushAllRefusesWhileAnotherWriteRuns(t *testing.T) {
+	a, _, id := newPlainApp(t)
+	unlock, err := a.lockWrite(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unlock()
+	if _, err := a.PushAll(id); !errors.Is(err, ErrBusy) {
+		t.Fatalf("err = %v, want ErrBusy", err)
 	}
 }

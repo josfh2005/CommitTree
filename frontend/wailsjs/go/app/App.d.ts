@@ -189,6 +189,8 @@ export function PullModel(arg1:string):Promise<void>;
 
 export function Push(arg1:string):Promise<void>;
 
+export function PushAll(arg1:string):Promise<Array<ops.BranchPushResult>>;
+
 export function RebaseOnto(arg1:string,arg2:string):Promise<merge.Result>;
 
 export function RelocateRepo(arg1:string):Promise<repos.Repo>;

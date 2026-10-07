@@ -1,5 +1,5 @@
-// Package gitsettings stores app-level git-behaviour preferences — today
-// just the pull strategy. Kept apart from internal/ai/settings, which is AI
+// Package gitsettings stores app-level git-behaviour preferences — the pull
+// strategy and the push scope. Kept apart from internal/ai/settings, which is AI
 // configuration only, in its own file so the two never collide.
 package gitsettings
 
@@ -18,14 +18,21 @@ const (
 	PullRebase = "rebase"
 )
 
+const (
+	PushAsk     = "ask"
+	PushCurrent = "current"
+	PushAll     = "all"
+)
+
 var ErrInvalid = errors.New("gitsettings: invalid settings")
 
 type Settings struct {
 	PullStrategy string `json:"pullStrategy"`
+	PushScope    string `json:"pushScope"`
 }
 
 func Defaults() Settings {
-	return Settings{PullStrategy: PullAuto}
+	return Settings{PullStrategy: PullAuto, PushScope: PushAsk}
 }
 
 func DefaultPath() (string, error) {
@@ -37,7 +44,7 @@ func DefaultPath() (string, error) {
 }
 
 // Load reads the settings file, returning defaults when it doesn't exist,
-// and filling in a strategy a file from before this setting existed lacks.
+// and filling in a setting a file from before it existed lacks.
 func Load(path string) (Settings, error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -53,10 +60,17 @@ func Load(path string) (Settings, error) {
 	if s.PullStrategy == "" {
 		s.PullStrategy = PullAuto
 	}
+	if s.PushScope == "" {
+		s.PushScope = PushAsk
+	}
 	return s, nil
 }
 
 func Save(path string, s Settings) error {
+	// A caller from before the push scope existed saves without one.
+	if s.PushScope == "" {
+		s.PushScope = PushAsk
+	}
 	if err := validate(s); err != nil {
 		return err
 	}
@@ -77,8 +91,13 @@ func Save(path string, s Settings) error {
 func validate(s Settings) error {
 	switch s.PullStrategy {
 	case PullAuto, PullMerge, PullRebase:
-		return nil
 	default:
 		return fmt.Errorf("%w: unknown pull strategy %q", ErrInvalid, s.PullStrategy)
+	}
+	switch s.PushScope {
+	case PushAsk, PushCurrent, PushAll:
+		return nil
+	default:
+		return fmt.Errorf("%w: unknown push scope %q", ErrInvalid, s.PushScope)
 	}
 }

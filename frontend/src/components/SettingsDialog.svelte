@@ -38,7 +38,7 @@
   // Why the AI settings could not be loaded; the AI tabs show it, General
   // still works.
   let aiError = ''
-  let git: GitSettings = { pullStrategy: 'auto' }
+  let git: GitSettings = { pullStrategy: 'auto', pushScope: 'ask' }
   let status: AIStatus | null = null
   let prompts: PromptInfo[] = []
   let pull: ModelProgress | null = null

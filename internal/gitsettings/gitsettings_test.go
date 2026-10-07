@@ -27,7 +27,7 @@ func TestLoadOfAMissingFileReturnsDefaults(t *testing.T) {
 
 func TestSaveAndLoadRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "git.json")
-	want := gitsettings.Settings{PullStrategy: gitsettings.PullRebase}
+	want := gitsettings.Settings{PullStrategy: gitsettings.PullRebase, PushScope: gitsettings.PushCurrent}
 	if err := gitsettings.Save(path, want); err != nil {
 		t.Fatal(err)
 	}
@@ -61,5 +61,37 @@ func TestLoadFillsInAMissingStrategy(t *testing.T) {
 	}
 	if got.PullStrategy != gitsettings.PullAuto {
 		t.Errorf("strategy = %q, want auto filled in", got.PullStrategy)
+	}
+}
+
+func TestPushScopeDefaultsToAsk(t *testing.T) {
+	if got := gitsettings.Defaults().PushScope; got != gitsettings.PushAsk {
+		t.Errorf("default = %q, want ask", got)
+	}
+	path := filepath.Join(t.TempDir(), "git.json")
+	if err := os.WriteFile(path, []byte(`{"pullStrategy":"merge"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := gitsettings.Load(path)
+	if err != nil || got.PushScope != gitsettings.PushAsk || got.PullStrategy != gitsettings.PullMerge {
+		t.Fatalf("got %+v, %v; want merge + ask", got, err)
+	}
+}
+
+func TestSaveFillsAMissingPushScope(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "git.json")
+	if err := gitsettings.Save(path, gitsettings.Settings{PullStrategy: gitsettings.PullAuto}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := gitsettings.Load(path); got.PushScope != gitsettings.PushAsk {
+		t.Errorf("push scope = %q, want ask", got.PushScope)
+	}
+}
+
+func TestSaveRejectsAnUnknownPushScope(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "git.json")
+	err := gitsettings.Save(path, gitsettings.Settings{PullStrategy: gitsettings.PullAuto, PushScope: "some"})
+	if !errors.Is(err, gitsettings.ErrInvalid) {
+		t.Fatalf("err = %v, want ErrInvalid", err)
 	}
 }

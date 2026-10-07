@@ -16,6 +16,19 @@ func (a *App) Push(id string) error {
 	return a.write(id, func(ctx context.Context, dir string) error { return ops.Push(ctx, dir) })
 }
 
+// PushAll pushes the current branch and every other branch ahead of its
+// upstream (docs/spec/05-remote-and-stash.md). Each branch's outcome comes
+// back as a result; only a failure to start (busy, missing) is an error.
+func (a *App) PushAll(id string) ([]ops.BranchPushResult, error) {
+	var results []ops.BranchPushResult
+	err := a.write(id, func(ctx context.Context, dir string) error {
+		var pushErr error
+		results, pushErr = ops.PushAll(ctx, dir)
+		return pushErr
+	})
+	return results, err
+}
+
 // Pull reads the configured strategy once per call and runs it under the
 // write lock; the result (up to date, merged, rebased, or conflicted) goes
 // back to the caller the same way MergeBranch's Result does.

@@ -1021,6 +1021,7 @@ export namespace gitsettings {
 	
 	export class Settings {
 	    pullStrategy: string;
+	    pushScope: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -1029,6 +1030,7 @@ export namespace gitsettings {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.pullStrategy = source["pullStrategy"];
+	        this.pushScope = source["pushScope"];
 	    }
 	}
 
@@ -1291,6 +1293,24 @@ export namespace ops {
 	        this.authFailed = source["authFailed"];
 	    }
 	}
+	export class BranchPushResult {
+	    branch: string;
+	    target: string;
+	    status: string;
+	    reason?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new BranchPushResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.branch = source["branch"];
+	        this.target = source["target"];
+	        this.status = source["status"];
+	        this.reason = source["reason"];
+	    }
+	}
 	export class Remote {
 	    name: string;
 	    fetchURL: string;
@@ -1383,6 +1403,10 @@ export namespace refs {
 	    hash: string;
 	    current: boolean;
 	    upstream: string;
+	    ahead?: number;
+	    behind?: number;
+	    upstreamGone?: boolean;
+	    upstreamLocal?: boolean;
 	    worktree?: string;
 	    worktreeGone?: boolean;
 	
@@ -1397,6 +1421,10 @@ export namespace refs {
 	        this.hash = source["hash"];
 	        this.current = source["current"];
 	        this.upstream = source["upstream"];
+	        this.ahead = source["ahead"];
+	        this.behind = source["behind"];
+	        this.upstreamGone = source["upstreamGone"];
+	        this.upstreamLocal = source["upstreamLocal"];
 	        this.worktree = source["worktree"];
 	        this.worktreeGone = source["worktreeGone"];
 	    }
