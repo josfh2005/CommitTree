@@ -6,6 +6,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"strings"
 
 	"git-ui/internal/gitcmd"
@@ -17,6 +18,14 @@ type Branch struct {
 	Hash     string `json:"hash"`
 	Current  bool   `json:"current"`
 	Upstream string `json:"upstream"`
+	// Ahead and Behind compare a local branch with its upstream as the last
+	// fetch left it (%(upstream:track)); zero without an upstream.
+	Ahead  int `json:"ahead,omitempty"`
+	Behind int `json:"behind,omitempty"`
+	// UpstreamGone: the upstream is configured but its remote branch no
+	// longer exists. UpstreamLocal: the upstream is another local branch.
+	UpstreamGone  bool `json:"upstreamGone,omitempty"`
+	UpstreamLocal bool `json:"upstreamLocal,omitempty"`
 	// Worktree is the path of another worktree that has this local branch
 	// checked out, or "" (filled in by the app, not by List).
 	Worktree string `json:"worktree,omitempty"`
@@ -44,7 +53,7 @@ type Refs struct {
 	Tags     []Tag    `json:"tags"`
 }
 
-const refFormat = "%(refname)%00%(objectname)%00%(*objectname)%00%(HEAD)%00%(upstream:short)"
+const refFormat = "%(refname)%00%(objectname)%00%(*objectname)%00%(HEAD)%00%(upstream:short)%00%(upstream:track,nobracket)%00%(upstream:remotename)"
 
 func List(ctx context.Context, dir string) (Refs, error) {
 	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout,
@@ -65,14 +74,17 @@ func List(ctx context.Context, dir string) (Refs, error) {
 
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 		f := strings.Split(line, "\x00")
-		if len(f) != 5 {
+		if len(f) != 7 {
 			continue
 		}
-		ref, hash, peeled, head, upstream := f[0], f[1], f[2], f[3], f[4]
+		ref, hash, peeled, head, upstream, track, upstreamRemote := f[0], f[1], f[2], f[3], f[4], f[5], f[6]
 		switch {
 		case strings.HasPrefix(ref, "refs/heads/"):
+			ahead, behind, gone := ParseTrack(track)
 			r.Local = append(r.Local, Branch{Name: strings.TrimPrefix(ref, "refs/heads/"),
-				Hash: hash, Current: head == "*", Upstream: upstream})
+				Hash: hash, Current: head == "*", Upstream: upstream,
+				Ahead: ahead, Behind: behind, UpstreamGone: gone,
+				UpstreamLocal: upstream != "" && upstreamRemote == "."})
 		case strings.HasPrefix(ref, "refs/tags/"):
 			if peeled != "" {
 				hash = peeled
@@ -114,6 +126,23 @@ func splitRemote(rest string, remotes []string) (int, string) {
 		}
 	}
 	return best, name
+}
+
+// ParseTrack reads %(upstream:track,nobracket): "ahead 2", "behind 1",
+// "ahead 2, behind 1", "gone" or "" (up to date, or no upstream).
+func ParseTrack(s string) (ahead, behind int, gone bool) {
+	if s == "gone" {
+		return 0, 0, true
+	}
+	for _, part := range strings.Split(s, ", ") {
+		var n int
+		if _, err := fmt.Sscanf(part, "ahead %d", &n); err == nil {
+			ahead = n
+		} else if _, err := fmt.Sscanf(part, "behind %d", &n); err == nil {
+			behind = n
+		}
+	}
+	return ahead, behind, false
 }
 
 func CurrentLabel(ctx context.Context, dir string) string {
