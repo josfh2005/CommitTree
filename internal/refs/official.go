@@ -18,9 +18,27 @@ type OfficialRule struct {
 
 const defaultReleasePrefix = "release/"
 
+// RuleFromConfig builds the rule from the gitflow.branch.master,
+// gitflow.branch.develop and gitflow.prefix.release config values. It is
+// the one place that decides whether git-flow counts as configured (both
+// branch names set); otherwise the zero rule, the defaults, comes back.
+func RuleFromConfig(master, develop, releasePrefix string) OfficialRule {
+	if master == "" || develop == "" {
+		return OfficialRule{}
+	}
+	if releasePrefix == "" {
+		releasePrefix = defaultReleasePrefix
+	}
+	return OfficialRule{Master: master, Develop: develop, ReleasePrefix: releasePrefix}
+}
+
+// Configured reports whether the rule comes from a git-flow config rather
+// than being the defaults.
+func (r OfficialRule) Configured() bool { return r.Master != "" && r.Develop != "" }
+
 // IsOfficial reports whether the local branch name is official.
 func (r OfficialRule) IsOfficial(name string) bool {
-	if r.Master == "" || r.Develop == "" {
+	if !r.Configured() {
 		return name == "main" || name == "master" || name == "develop" || isRelease(name, defaultReleasePrefix)
 	}
 	prefix := r.ReleasePrefix
@@ -34,11 +52,17 @@ func isRelease(name, prefix string) bool {
 	return strings.HasPrefix(name, prefix) && len(name) > len(prefix)
 }
 
+// configList is a seam for tests: they replace it to simulate a config that
+// cannot be read (real git fails every command then, not just this one).
+var configList = func(ctx context.Context, dir string) (string, error) {
+	return gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "config", "--list", "-z")
+}
+
 // ReadOfficialRule reads the git-flow names from the repository's config.
 // It lives here, not in gitflow, because gitflow depends on ops and ops on
 // refs.
 func ReadOfficialRule(ctx context.Context, dir string) (OfficialRule, error) {
-	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "config", "--list", "-z")
+	out, err := configList(ctx, dir)
 	if err != nil {
 		return OfficialRule{}, err
 	}
@@ -54,11 +78,15 @@ func ReadOfficialRule(ctx context.Context, dir string) (OfficialRule, error) {
 			release = value
 		}
 	}
-	if master == "" || develop == "" {
-		return OfficialRule{}, nil
+	return RuleFromConfig(master, develop, release), nil
+}
+
+// OfficialRuleOrDefault is ReadOfficialRule for callers that must not fail
+// because the config could not be read: they get the default rule then.
+func OfficialRuleOrDefault(ctx context.Context, dir string) OfficialRule {
+	rule, err := ReadOfficialRule(ctx, dir)
+	if err != nil {
+		return OfficialRule{}
 	}
-	if release == "" {
-		release = defaultReleasePrefix
-	}
-	return OfficialRule{Master: master, Develop: develop, ReleasePrefix: release}, nil
+	return rule
 }

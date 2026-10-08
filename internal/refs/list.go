@@ -70,10 +70,8 @@ func List(ctx context.Context, dir string) (Refs, error) {
 		return Refs{}, err
 	}
 
-	rule, err := ReadOfficialRule(ctx, dir)
-	if err != nil {
-		return Refs{}, err
-	}
+	// An unreadable config must not hide the refs: use the default rule.
+	rule := OfficialRuleOrDefault(ctx, dir)
 
 	r := Refs{Local: []Branch{}, Remotes: []Remote{}, Tags: []Tag{}}
 	remoteNames := strings.Fields(remoteOut)

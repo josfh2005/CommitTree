@@ -51,7 +51,7 @@ export function pushChoiceOptions(repoName: string, refs: Refs | null): ChoiceOp
 
 export const pushFailed = (r: BranchPushResult) => r.status === 'rejected' || r.status === 'failed'
 
-/** The toast after a push of all branches in which nothing failed. */
+/** The toast after a push of the main branches in which nothing failed. */
 export function pushedMessage(results: BranchPushResult[]): string {
   if (results.length === 0) return 'Nothing to push'
   const pushed = results.filter((r) => r.status === 'pushed')

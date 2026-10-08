@@ -147,7 +147,7 @@ button's tooltip follows it: "Push
 its badge always counts the current branch. A one-line hint under the setting names the main branches: "main, master, develop and release/*, or your git-flow names".
 
 With *Ask each time*, Push pushes the current branch without asking when no
-other local branch is ahead of its upstream (counted from the last fetch).
+other main branch is ahead of its upstream (counted from the last fetch).
 Otherwise a dialog "Push `<repository>`" offers *Current branch (`<name>`)*
 (selected) and *Main branches (N)* — N counts the current branch (when it is
 a main branch) plus the other main branches ahead — with "Change the default in Settings → General." under it;

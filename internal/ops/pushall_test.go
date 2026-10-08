@@ -268,14 +268,17 @@ func TestPushAllPushesMasterDevelopAndReleaseBranchesAhead(t *testing.T) {
 func TestPushAllHonoursCustomGitFlowNames(t *testing.T) {
 	src := testrepo.New(t)
 	src.Commit("base")
-	for _, b := range []string{"prod", "dev", "rel/1", "develop", "release/1"} {
+	for _, b := range []string{"prod", "dev", "rel/1", "develop", "release/1", "master"} {
 		src.Git("branch", b)
 	}
 	a := testrepo.Clone(t, testrepo.NewBareFrom(t, src))
 	a.Git("config", "gitflow.branch.master", "prod")
 	a.Git("config", "gitflow.branch.develop", "dev")
 	a.Git("config", "gitflow.prefix.release", "rel/")
-	for _, b := range []string{"prod", "dev", "rel/1", "develop", "release/1"} {
+	// main and master are ahead too: with git-flow configured they are not
+	// official, like develop and release/1.
+	a.Commit("main local")
+	for _, b := range []string{"prod", "dev", "rel/1", "develop", "release/1", "master"} {
 		a.Git("branch", "--track", b, "origin/"+b)
 		a.Git("switch", "-q", b)
 		a.Commit(b + " local")

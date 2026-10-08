@@ -42,10 +42,8 @@ const pushFormat = "%(refname:strip=2)%00%(HEAD)%00%(upstream:remotename)%00%(up
 // branch tracking another local branch (remote ".") is never pushed: that
 // would move the local branch, not publish anything.
 func pushTargets(ctx context.Context, dir string) ([]pushTarget, error) {
-	rule, err := refs.ReadOfficialRule(ctx, dir)
-	if err != nil {
-		return nil, err
-	}
+	// An unreadable config falls back to the default rule.
+	rule := refs.OfficialRuleOrDefault(ctx, dir)
 	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "for-each-ref", "--format="+pushFormat, "refs/heads")
 	if err != nil {
 		return nil, err
@@ -75,9 +73,10 @@ func pushTargets(ctx context.Context, dir string) ([]pushTarget, error) {
 }
 
 // PushAll pushes the official current branch and every other official local
-// branch ahead of its upstream, one `git push --porcelain` per remote in name order. Never
-// forced and not atomic: each branch succeeds or fails on its own, and a
-// failure to reach one remote fails only that remote's branches.
+// branch ahead of its upstream, one `git push --porcelain` per remote in
+// name order. Never forced and not atomic: each branch succeeds or fails on
+// its own, and a failure to reach one remote fails only that remote's
+// branches.
 func PushAll(ctx context.Context, dir string) ([]BranchPushResult, error) {
 	targets, err := pushTargets(ctx, dir)
 	if err != nil {

@@ -92,7 +92,7 @@ describe('toolbarItems', () => {
 })
 
 describe('mergeCandidates', () => {
-  const b = (name: string, remote = '', current = false) => ({ name, remote, hash: 'h', current, upstream: '' })
+  const b = (name: string, remote = '', current = false) => ({ name, remote, hash: 'h', current, upstream: '', official: false })
   it('offers local branches then remote ones, never the current branch or a remote HEAD', () => {
     const r = refs({
       local: [b('main', '', true), b('feature/login'), b('fix/typo')],
@@ -107,7 +107,7 @@ describe('mergeCandidates', () => {
     expect(mergeCandidates(null)).toEqual([])
   })
   it('lists the branches on the selected commit first, once', () => {
-    const at = (name: string, remote: string, hash: string, current = false) => ({ name, remote, hash, current, upstream: '' })
+    const at = (name: string, remote: string, hash: string, current = false) => ({ name, remote, hash, current, upstream: '', official: false })
     const r = refs({
       local: [at('main', '', 'm', true), at('master', '', 'old'), at('dev', '', 'new')],
       remotes: [{ name: 'origin', branches: [at('HEAD', 'origin', 'new'), at('master', 'origin', 'new'), at('dev', 'origin', 'x')] }],
@@ -120,7 +120,7 @@ describe('mergeCandidates', () => {
 })
 
 describe('toolbarItems, follow-ups', () => {
-  const b = (name: string, current = false) => ({ name, remote: '', hash: 'h', current, upstream: '' })
+  const b = (name: string, current = false) => ({ name, remote: '', hash: 'h', current, upstream: '', official: false })
   it('disables Merge when there is no other branch to merge', () => {
     expect(item({ refs: refs({ local: [b('main', true)] }) }, 'merge')).toMatchObject({ enabled: false, title: 'No other branches' })
     expect(item({ refs: refs({ local: [b('main', true), b('dev')] }) }, 'merge').enabled).toBe(true)

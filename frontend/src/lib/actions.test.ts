@@ -52,7 +52,7 @@ function emptyFilters(): Filters {
 }
 
 function branch(name: string, remote = ''): Branch {
-  return { name, remote, hash: 'h', current: false, upstream: '' }
+  return { name, remote, hash: 'h', current: false, upstream: '', official: false }
 }
 
 describe('deleteBranch / deleteTag clear a matching branch filter', () => {
@@ -315,7 +315,7 @@ describe('startCommit', () => {
 })
 
 describe('pickAndMerge', () => {
-  const b = (name: string, remote = '', current = false) => ({ name, remote, hash: 'h', current, upstream: '' })
+  const b = (name: string, remote = '', current = false) => ({ name, remote, hash: 'h', current, upstream: '', official: false })
   const withRefs = async (detached = false) => {
     const { refs } = await import('./stores')
     refs.set({ head: 'main', headHash: 'abc', detached, local: [b('main', '', true), b('dev')], remotes: [{ name: 'origin', branches: [b('HEAD', 'origin'), b('feature', 'origin')] }], tags: [] })
@@ -519,7 +519,7 @@ describe('push follows the push scope', () => {
     expect(api.pushAll).toHaveBeenCalledTimes(1)
   })
 
-  it('toasts a push of all branches in which nothing failed', async () => {
+  it('toasts a push of the main branches in which nothing failed', async () => {
     vi.mocked(api.pushAll).mockResolvedValue([
       { branch: 'main', target: 'origin/main', status: 'upToDate' },
       { branch: 'feature', target: 'origin/feature', status: 'pushed' },
@@ -548,7 +548,7 @@ describe('push follows the push scope', () => {
     expect(vi.mocked(api.notify).mock.calls[0][0]).toMatchObject({ id: 'r1:problem', body: 'Push failed: 1 of 2 branches were not pushed' })
   })
 
-  it('a push of all branches that cannot start shows the error toast', async () => {
+  it('a push of the main branches that cannot start shows the error toast', async () => {
     vi.mocked(api.pushAll).mockRejectedValue(new Error('another operation is running'))
     expect(await pushAll('r1')).toBe(false)
     expect(get(toasts).map((t) => t.kind)).toEqual(['error'])

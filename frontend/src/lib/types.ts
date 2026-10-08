@@ -94,7 +94,7 @@ export interface Branch {
   upstreamLocal?: boolean
   /** A local branch "Main branches" pushes: main, master, develop, release/*
    *  or the repository's git-flow names (decided in Go, refs.OfficialRule). */
-  official?: boolean
+  official: boolean
   /** Path of another worktree that has this branch checked out. */
   worktree?: string
   /** That worktree's directory is gone but git has not pruned it yet. */
@@ -327,7 +327,7 @@ export interface GitSettings {
   pushScope: PushScope
 }
 
-/** One branch's outcome of a push of all branches (Go's ops.BranchPushResult). */
+/** One branch's outcome of a push of the main branches (Go's ops.BranchPushResult). */
 export interface BranchPushResult {
   branch: string
   /** <remote>/<branch> */
