@@ -26,6 +26,10 @@ type Branch struct {
 	// longer exists. UpstreamLocal: the upstream is another local branch.
 	UpstreamGone  bool `json:"upstreamGone,omitempty"`
 	UpstreamLocal bool `json:"upstreamLocal,omitempty"`
+	// Official: a local branch the "Push main branches" scope pushes —
+	// main, master, develop and release/*, or the git-flow names
+	// (OfficialRule). Never set on remote-tracking branches.
+	Official bool `json:"official"`
 	// Worktree is the path of another worktree that has this local branch
 	// checked out, or "" (filled in by the app, not by List).
 	Worktree string `json:"worktree,omitempty"`
@@ -66,6 +70,11 @@ func List(ctx context.Context, dir string) (Refs, error) {
 		return Refs{}, err
 	}
 
+	rule, err := ReadOfficialRule(ctx, dir)
+	if err != nil {
+		return Refs{}, err
+	}
+
 	r := Refs{Local: []Branch{}, Remotes: []Remote{}, Tags: []Tag{}}
 	remoteNames := strings.Fields(remoteOut)
 	for _, name := range remoteNames {
@@ -84,7 +93,8 @@ func List(ctx context.Context, dir string) (Refs, error) {
 			r.Local = append(r.Local, Branch{Name: strings.TrimPrefix(ref, "refs/heads/"),
 				Hash: hash, Current: head == "*", Upstream: upstream,
 				Ahead: ahead, Behind: behind, UpstreamGone: gone,
-				UpstreamLocal: upstream != "" && upstreamRemote == "."})
+				UpstreamLocal: upstream != "" && upstreamRemote == ".",
+				Official:      rule.IsOfficial(strings.TrimPrefix(ref, "refs/heads/"))})
 		case strings.HasPrefix(ref, "refs/tags/"):
 			if peeled != "" {
 				hash = peeled

@@ -26,7 +26,7 @@ func TestListLocalRemotesTags(t *testing.T) {
 	if got.Head != "main" || got.Detached || got.HeadHash != first {
 		t.Fatalf("head = %q detached=%v hash=%q", got.Head, got.Detached, got.HeadHash)
 	}
-	wantLocal := []refs.Branch{{Name: "main", Hash: first, Current: true, Upstream: "origin/main"}}
+	wantLocal := []refs.Branch{{Name: "main", Hash: first, Current: true, Upstream: "origin/main", Official: true}}
 	if !reflect.DeepEqual(got.Local, wantLocal) {
 		t.Fatalf("local = %+v", got.Local)
 	}

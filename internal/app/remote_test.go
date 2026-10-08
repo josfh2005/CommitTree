@@ -117,14 +117,14 @@ func TestPushAllThroughTheAppLayer(t *testing.T) {
 	bare := testrepo.NewBareFrom(t, r)
 	r.Git("remote", "add", "origin", bare)
 	r.Git("push", "-q", "-u", "origin", "main")
-	r.Git("switch", "-q", "-c", "topic")
-	r.Commit("on topic")
+	r.Git("switch", "-q", "-c", "release/1.0")
+	r.Commit("on release")
 
 	results, err := a.PushAll(id)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(results) != 1 || results[0] != (ops.BranchPushResult{Branch: "topic", Target: "origin/topic", Status: ops.PushPushed}) {
+	if len(results) != 1 || results[0] != (ops.BranchPushResult{Branch: "release/1.0", Target: "origin/release/1.0", Status: ops.PushPushed}) {
 		t.Fatalf("results = %+v", results)
 	}
 }

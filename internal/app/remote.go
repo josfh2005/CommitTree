@@ -16,8 +16,8 @@ func (a *App) Push(id string) error {
 	return a.write(id, func(ctx context.Context, dir string) error { return ops.Push(ctx, dir) })
 }
 
-// PushAll pushes the current branch and every other branch ahead of its
-// upstream (docs/spec/05-remote-and-stash.md). Each branch's outcome comes
+// PushAll pushes the main (official) branches ahead of their
+// upstreams (docs/spec/05-remote-and-stash.md). Each branch's outcome comes
 // back as a result; only a failure to start (busy, missing) is an error.
 func (a *App) PushAll(id string) ([]ops.BranchPushResult, error) {
 	var results []ops.BranchPushResult

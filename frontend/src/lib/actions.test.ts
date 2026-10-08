@@ -468,8 +468,9 @@ describe('push follows the push scope', () => {
   const ahead = (over: Partial<Refs> = {}): Refs => ({
     head: 'main', headHash: 'h', detached: false, remotes: [], tags: [],
     local: [
-      { name: 'main', remote: '', hash: 'h', current: true, upstream: 'origin/main' },
-      { name: 'feature', remote: '', hash: 'h', current: false, upstream: 'origin/feature', ahead: 2 },
+      { name: 'main', remote: '', hash: 'h', current: true, upstream: 'origin/main', official: true },
+      { name: 'develop', remote: '', hash: 'h', current: false, upstream: 'origin/develop', ahead: 2, official: true },
+      { name: 'feature', remote: '', hash: 'h', current: false, upstream: 'origin/feature', ahead: 2, official: false },
     ],
     ...over,
   })

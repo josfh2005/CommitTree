@@ -177,7 +177,7 @@ Settings.
 
 The Settings dialog has a fixed size, with tabs in a column on the left:
 
-- **General**: Appearance, the Git pull strategy and what Push does (ask, current branch, all branches).
+- **General**: Appearance, the Git pull strategy and what Push does (ask, current branch, main branches).
 - **Providers**: Anthropic and OpenAI, each with its API key (Save, or the
   stored key's hint and Remove), and Ollama with its status, URL (Test), the
   warning when the URL is not this machine, the installed models (name, size,

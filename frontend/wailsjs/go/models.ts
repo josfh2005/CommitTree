@@ -1407,6 +1407,7 @@ export namespace refs {
 	    behind?: number;
 	    upstreamGone?: boolean;
 	    upstreamLocal?: boolean;
+	    official: boolean;
 	    worktree?: string;
 	    worktreeGone?: boolean;
 	
@@ -1425,6 +1426,7 @@ export namespace refs {
 	        this.behind = source["behind"];
 	        this.upstreamGone = source["upstreamGone"];
 	        this.upstreamLocal = source["upstreamLocal"];
+	        this.official = source["official"];
 	        this.worktree = source["worktree"];
 	        this.worktreeGone = source["worktreeGone"];
 	    }

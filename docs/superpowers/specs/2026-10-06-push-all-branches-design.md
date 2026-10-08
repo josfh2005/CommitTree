@@ -1,5 +1,13 @@
 # Push all branches, and ahead/behind badges on branches
 
+> **Changed 2026-10-08 (owner):** "all" now means the *main branches* only —
+> `main`, `master`, `develop` and `release/*`, or the git-flow master, develop
+> and release-prefix names when git-flow is configured — never features. The
+> rule texts below that say "every other local branch" read "every other
+> *main* branch"; the current branch is pushed only when it is a main branch.
+> The setting value stays `all`; the labels read "Main branches" / "Push main
+> branches". See `docs/spec/05-remote-and-stash.md`.
+
 Date: 2026-10-06. Requested by the owner on 2026-10-06; designed with them the
 same day. Behaviour goes to `docs/spec/05-remote-and-stash.md` (Push, the
 setting), `docs/spec/01-repositories-and-sidebar.md` (branch badges, the repo

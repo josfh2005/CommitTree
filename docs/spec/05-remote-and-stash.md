@@ -141,19 +141,21 @@ checked-out branch's upstream can notify (see `11-notifications.md`).
 
 Settings → General → **Push** says what a click on Push (toolbar or the
 repository row's menu) does: *Ask each time* (the default), *Current branch
-only* or *All branches*. The toolbar button's tooltip follows it: "Push
-`<branch>`" (just "Push" with a detached HEAD), "Push all branches" or "Push — asks current or all branches";
-its badge always counts the current branch.
+only* or *Main branches* (the setting's value is still stored as `all`). The toolbar
+button's tooltip follows it: "Push
+`<branch>`" (just "Push" with a detached HEAD), "Push main branches" or "Push — asks current or main branches";
+its badge always counts the current branch. A one-line hint under the setting names the main branches: "main, master, develop and release/*, or your git-flow names".
 
 With *Ask each time*, Push pushes the current branch without asking when no
 other local branch is ahead of its upstream (counted from the last fetch).
 Otherwise a dialog "Push `<repository>`" offers *Current branch (`<name>`)*
-(selected) and *All branches (N)* — N counts the current branch plus the
-others ahead — with "Change the default in Settings → General." under it;
+(selected) and *Main branches (N)* — N counts the current branch (when it is
+a main branch) plus the other main branches ahead — with "Change the default in Settings → General." under it;
 confirming reads "Push" or "Push N branches" ("Push 1 branch" for one),
-Cancel pushes nothing. With a detached HEAD it offers only *All branches
-(N)*. The repository row's menu also has **Push all branches**, which pushes
-all branches whatever the setting says.
+Cancel pushes nothing. With a detached HEAD it offers only *Main branches
+(N)*. The repository row's menu also has **Push main branches**, which pushes
+the main branches whatever the setting says. Ask each time asks only when
+some other *main* branch is ahead; a feature branch ahead does not make it ask.
 
 **Current branch** publishes the checked-out branch:
 
@@ -165,12 +167,22 @@ all branches whatever the setting says.
   common case.
 - A detached HEAD has nothing to publish; Push refuses.
 
-**All branches** is `App.PushAll`. It pushes the current branch (as above;
-to its upstream even when that is gone, and up to date counts) plus every
-other local branch whose upstream is on a remote, still exists, and is
-ahead of it according to the last fetch. A branch that tracks another local
-branch, or has no upstream, is never pushed this way; with a detached HEAD
-only the other branches go. Each branch goes to its upstream by name
+**Main branches** is `App.PushAll`. A branch is a *main* (official) branch when
+its name is `main`, `master`, `develop` or starts with `release/`; when
+git-flow is configured in the repository (`gitflow.branch.master` and
+`gitflow.branch.develop` set) its names replace those defaults: the master
+and develop names and the release prefix (default `release/`). One Go rule
+(`refs.OfficialRule`) decides it, and the refs it returns carry the result
+(`official` on each local branch) for the "Main branches (N)" count. Only
+main branches are ever pushed this way — never a feature, hotfix or other
+branch, even the checked-out one. It pushes the current branch when it is a
+main branch (as above; to its upstream even when that is gone, and up to
+date counts; with no upstream it is published to `origin` and gets one) plus
+every other local main branch whose upstream is on a remote, still exists,
+and is ahead of it according to the last fetch. A branch that tracks another
+local branch, or has no upstream, is never pushed this way (except a main
+current branch with no upstream, as above); with a detached HEAD only the
+other branches go. Each branch goes to its upstream by name
 (`branch.<name>.pushRemote` and `push.default` are not consulted), with one
 `git push --porcelain` per remote, remotes in name order. Nothing is forced,
 no tag is pushed, and the push is not atomic: a branch the remote rejects
