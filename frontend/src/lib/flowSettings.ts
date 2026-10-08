@@ -27,13 +27,18 @@ export function flowSettingsError(c: FlowConfig): string {
     if (name === '') return `${label} is required`
     if (!validBranchName(name)) return `${label} is not a valid branch name`
   }
-  if (master === develop) return 'Production and development must be different branches'
+  // Case-insensitive, like the Go side: Main and main are one ref on macOS.
+  if (master.toLowerCase() === develop.toLowerCase()) return 'Production and development must be different branches'
+  const seen = new Map<string, string>()
   for (const { key, label } of PREFIXES) {
     const p = c.prefixes[key].trim()
     if (p === '') return `${label} is required`
     if (/\s/.test(p)) return `${label} has spaces`
     // A prefix is fine when a branch named with it would be.
     if (!validBranchName(p + 'x')) return `${label} is not valid`
+    const other = seen.get(p.toLowerCase())
+    if (other) return `${other} and ${label.toLowerCase()} must be different`
+    seen.set(p.toLowerCase(), label)
   }
   return ''
 }
@@ -80,6 +85,14 @@ export function flowSettingsPanel(d: FlowSettingsDeps) {
   const dirty = derived([state, form], ([$s, $f]) => !!$s.settings && !sameConfig(trimmed($f), toConfig($s.settings)))
   // Changes on every open, so an answer for an earlier one is dropped.
   let session = 0
+  // The form as it was when the shown error came up: editing it clears the error.
+  let errorFor = ''
+  form.subscribe(($f) => {
+    if (errorFor !== '' && JSON.stringify($f) !== errorFor) {
+      errorFor = ''
+      state.update((st) => (st.error === '' ? st : { ...st, error: '' }))
+    }
+  })
 
   async function load(): Promise<void> {
     const s = session
@@ -109,20 +122,30 @@ export function flowSettingsPanel(d: FlowSettingsDeps) {
     const cfg = trimmed(get(form))
     const bad = flowSettingsError(cfg)
     if (bad) {
+      errorFor = JSON.stringify(get(form))
       state.update((st) => ({ ...st, error: bad }))
       return false
     }
     const s = session
+    errorFor = ''
     state.update((st) => ({ ...st, error: '' }))
     let ok = true
     try {
       await (settings.initialized ? d.save(id, cfg) : d.init(id, cfg))
     } catch (e) {
       ok = false
-      if (s === session) state.update((st) => ({ ...st, error: errorMessage(e) }))
+      if (s === session) {
+        errorFor = JSON.stringify(get(form))
+        state.update((st) => ({ ...st, error: errorMessage(e) }))
+      }
     }
     if (ok && s === session) await load()
-    await d.afterWrite(id)
+    try {
+      await d.afterWrite(id)
+    } catch (e) {
+      // The write itself went through; do not reject save() over the reload.
+      if (ok && s === session) state.update((st) => ({ ...st, error: `Saved, but reloading failed: ${errorMessage(e)}` }))
+    }
     return ok
   }
 

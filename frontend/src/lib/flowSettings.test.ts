@@ -46,6 +46,17 @@ describe('flowSettingsError', () => {
   it('wants two different branches', () => {
     expect(flowSettingsError(config({ develop: 'main' }))).toBe('Production and development must be different branches')
   })
+  it('compares the two branches ignoring case', () => {
+    expect(flowSettingsError(config({ develop: 'MAIN' }))).toBe('Production and development must be different branches')
+  })
+  it('wants four different prefixes, ignoring case', () => {
+    expect(flowSettingsError(config({ prefixes: { ...config().prefixes, release: 'feature/' } }))).toBe('Feature prefix and release prefix must be different')
+    expect(flowSettingsError(config({ prefixes: { ...config().prefixes, warmfix: 'HOTFIX/' } }))).toBe('Hotfix prefix and warmfix prefix must be different')
+  })
+  it('refuses @ and @{ in a branch name', () => {
+    expect(flowSettingsError(config({ master: '@' }))).toBe('Production branch is not a valid branch name')
+    expect(flowSettingsError(config({ develop: '@{-1}' }))).toBe('Development branch is not a valid branch name')
+  })
   it('refuses spaces and invalid characters in a prefix', () => {
     expect(flowSettingsError(config({ prefixes: { ...config().prefixes, feature: 'my feature/' } }))).toBe('Feature prefix has spaces')
     expect(flowSettingsError(config({ prefixes: { ...config().prefixes, hotfix: 'fix~/' } }))).toBe('Hotfix prefix is not valid')
@@ -107,6 +118,27 @@ describe('flowSettingsPanel', () => {
     expect(get(p.form).develop).toBe('x')
     expect(d.afterWrite).toHaveBeenCalledWith('a')
     expect(await p.save()).toBe(false)
+  })
+
+  it('editing the form clears a stale save error', async () => {
+    const d = deps({ save: vi.fn(async () => { throw new Error('config.lock exists') }) })
+    const p = flowSettingsPanel(d)
+    await p.open('a')
+    p.form.update((f) => ({ ...f, develop: 'dev' }))
+    expect(await p.save()).toBe(false)
+    expect(get(p.state).error).toContain('config.lock')
+    p.form.update((f) => ({ ...f, develop: 'dev2' }))
+    expect(get(p.state).error).toBe('')
+  })
+
+  it('an afterWrite failure does not reject save()', async () => {
+    const d = deps({ afterWrite: vi.fn(async () => { throw new Error('refs gone') }) })
+    const p = flowSettingsPanel(d)
+    await p.open('a')
+    p.form.update((f) => ({ ...f, develop: 'dev' }))
+    expect(await p.save()).toBe(true)
+    expect(d.save).toHaveBeenCalled()
+    expect(get(p.state).error).toContain('refs gone')
   })
 
   it('a failed load is reported and nothing can be saved', async () => {

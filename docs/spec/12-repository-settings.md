@@ -50,11 +50,12 @@ main branches"." (see `05-remote-and-stash.md`).
 
 Checked before saving, and again by Go (`gitflow.SaveSettings`), which refuses
 with the same reasons: both branch names are filled in and valid branch names
-(what `git check-ref-format --branch` accepts), production and development
-differ, and every prefix is filled in, has no spaces and makes a valid branch
-name when a name is added to it. A prefix need not end in `/`. The first
+(what `git check-ref-format --branch` accepts, minus `@` and anything with
+`@{`), production and development differ (ignoring case), and every prefix is
+filled in, has no spaces, makes a valid branch name when a name is added to it
+and differs from the other three (ignoring case). A prefix need not end in `/`. The first
 problem is shown under the fields and Save stays disabled; a refusal from Go
-is shown there too, with what was typed kept. Enter in a field saves.
+is shown there too, with what was typed kept, until the next edit. Enter in a field saves.
 
 - **Set up**: **Save** (disabled until something changed) rewrites only the
   `gitflow.*` keys, under the repository's write lock and with the busy
@@ -66,7 +67,8 @@ is shown there too, with what was typed kept. Enter in a field saves.
   defaults the app uses — `main` or, failing that, `master` (else the
   checked-out branch), `develop`, `feature/`, `release/`, `hotfix/`,
   `warmfix/` — and a line says git-flow isn't set up and these defaults
-  decide the main branches for "Push main branches". The button reads **Set
+  decide the main branches for "Push main branches", and that Set up git-flow
+creates the development branch if it is missing. The button reads **Set
   up git-flow** and runs the same action as the Initialise dialog
   (`InitFlow`): production must exist, development is created from it when
   missing, and the keys are written. The repository is then git-flow enabled

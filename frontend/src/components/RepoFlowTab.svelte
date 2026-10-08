@@ -27,9 +27,11 @@
 
   async function save() {
     if (!settings || !!$busy || (setUp && !$dirty)) return
-    busy.set(setUp ? 'Saving git-flow…' : 'Setting up git-flow…')
+    // Before the await: saving reloads the settings and flips setUp.
+    const wasSetUp = setUp
+    busy.set(wasSetUp ? 'Saving git-flow…' : 'Setting up git-flow…')
     try {
-      if ((await panel.save()) && !setUp) toast('git-flow set up')
+      if ((await panel.save()) && !wasSetUp) toast('git-flow set up')
     } finally {
       busy.set('')
     }
@@ -40,7 +42,7 @@
 {#if loadError}<p class="warn">{loadError}</p>{/if}
 {#if settings}
   {#if !setUp}
-    <p class="hint">Git-flow isn't set up in this repository. Until it is, these defaults decide the main branches for "Push main branches".</p>
+    <p class="hint">Git-flow isn't set up in this repository. Until it is, these defaults decide the main branches for "Push main branches". "Set up git-flow" writes them and creates the development branch if it is missing.</p>
   {:else if settings.problem}
     <p class="warn">{settings.problem}.</p>
   {/if}

@@ -117,16 +117,23 @@ func TestSaveSettingsRefusesWhenNotSetUp(t *testing.T) {
 
 func TestSaveSettingsRefusesInvalidValues(t *testing.T) {
 	cases := map[string]func(*Config){
-		"empty production":      func(c *Config) { c.Master = "" },
-		"blank development":     func(c *Config) { c.Develop = "  " },
-		"invalid production":    func(c *Config) { c.Master = "a..b" },
-		"space in development":  func(c *Config) { c.Develop = "my dev" },
-		"dash development":      func(c *Config) { c.Develop = "-dev" },
-		"same branch":           func(c *Config) { c.Develop = c.Master },
-		"empty feature prefix":  func(c *Config) { c.Prefixes.Feature = "" },
-		"empty warmfix prefix":  func(c *Config) { c.Prefixes.Warmfix = "" },
-		"space in release":      func(c *Config) { c.Prefixes.Release = "rel ease/" },
-		"invalid hotfix prefix": func(c *Config) { c.Prefixes.Hotfix = "fix~/" },
+		"empty production":        func(c *Config) { c.Master = "" },
+		"blank development":       func(c *Config) { c.Develop = "  " },
+		"invalid production":      func(c *Config) { c.Master = "a..b" },
+		"space in development":    func(c *Config) { c.Develop = "my dev" },
+		"dash development":        func(c *Config) { c.Develop = "-dev" },
+		"same branch":             func(c *Config) { c.Develop = c.Master },
+		"same branch, case":       func(c *Config) { c.Develop = strings.ToUpper(c.Master) },
+		"at sign production":      func(c *Config) { c.Master = "@" },
+		"previous-branch dev":     func(c *Config) { c.Develop = "@{-1}" },
+		"at brace in name":        func(c *Config) { c.Master = "a@{b" },
+		"same feature, release":   func(c *Config) { c.Prefixes.Release = c.Prefixes.Feature },
+		"same hotfix, warmfix":    func(c *Config) { c.Prefixes.Warmfix = c.Prefixes.Hotfix },
+		"prefixes differ by case": func(c *Config) { c.Prefixes.Hotfix = strings.ToUpper(c.Prefixes.Feature) },
+		"empty feature prefix":    func(c *Config) { c.Prefixes.Feature = "" },
+		"empty warmfix prefix":    func(c *Config) { c.Prefixes.Warmfix = "" },
+		"space in release":        func(c *Config) { c.Prefixes.Release = "rel ease/" },
+		"invalid hotfix prefix":   func(c *Config) { c.Prefixes.Hotfix = "fix~/" },
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -161,5 +168,45 @@ func TestInitRefusesASpaceInAPrefix(t *testing.T) {
 	cfg := Config{Master: "main", Develop: "develop", Prefixes: Prefixes{Feature: "my feat/", Release: "r/", Hotfix: "h/", Warmfix: "w/"}}
 	if err := Init(ctx, r.Dir, cfg); err == nil {
 		t.Fatal("want an error")
+	}
+}
+
+// What counts as "git-flow is set up" is decided once, in refs: Read, the
+// settings and the official rule must agree on every config.
+func TestSetUpAgreesWithTheOfficialRule(t *testing.T) {
+	cases := map[string][][2]string{
+		"none":            nil,
+		"master only":     {{"gitflow.branch.master", "prod"}},
+		"develop only":    {{"gitflow.branch.develop", "dev"}},
+		"master+prefix":   {{"gitflow.branch.master", "prod"}, {"gitflow.prefix.release", "rel/"}},
+		"both":            {{"gitflow.branch.master", "prod"}, {"gitflow.branch.develop", "dev"}},
+		"both and prefix": {{"gitflow.branch.master", "prod"}, {"gitflow.branch.develop", "dev"}, {"gitflow.prefix.release", "rel/"}},
+	}
+	for name, keys := range cases {
+		t.Run(name, func(t *testing.T) {
+			r := testrepo.New(t)
+			r.Commit("init")
+			for _, kv := range keys {
+				r.Git("config", kv[0], kv[1])
+			}
+			rule, err := refs.ReadOfficialRule(ctx, r.Dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			flow, err := Read(ctx, r.Dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			settings, err := ReadSettings(ctx, r.Dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if flow.Initialized != rule.Configured() || settings.Initialized != rule.Configured() {
+				t.Fatalf("Read=%v ReadSettings=%v refs=%v", flow.Initialized, settings.Initialized, rule.Configured())
+			}
+			if rule.Configured() && (flow.Master != rule.Master || flow.Develop != rule.Develop || flow.Prefixes.Release != rule.ReleasePrefix) {
+				t.Fatalf("flow %+v disagrees with rule %+v", flow, rule)
+			}
+		})
 	}
 }

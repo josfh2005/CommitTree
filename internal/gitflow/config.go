@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"git-ui/internal/gitcmd"
+	"git-ui/internal/refs"
 )
 
 const (
@@ -118,6 +119,13 @@ func readConfig(ctx context.Context, dir string) (map[string]string, error) {
 	return cfg, nil
 }
 
+// configured reports whether git-flow is set up in the config. The rule is
+// refs.OfficialRule's, so what counts as official and what counts as set up
+// cannot drift apart.
+func configured(cfg map[string]string) bool {
+	return refs.RuleFromConfig(cfg["gitflow.branch.master"], cfg["gitflow.branch.develop"], cfg["gitflow.prefix.release"]).Configured()
+}
+
 func branchExists(ctx context.Context, dir, name string) bool {
 	_, err := git(ctx, dir, "rev-parse", "--verify", "--quiet", "refs/heads/"+name)
 	return err == nil
@@ -178,7 +186,7 @@ func Read(ctx context.Context, dir string) (Flow, error) {
 		return f, err
 	}
 	f.Master, f.Develop = cfg["gitflow.branch.master"], cfg["gitflow.branch.develop"]
-	f.Initialized = f.Master != "" && f.Develop != ""
+	f.Initialized = configured(cfg)
 	f.Prefixes = defaultPrefixes
 	for _, t := range types {
 		if v := cfg["gitflow.prefix."+t]; v != "" {

@@ -27,7 +27,7 @@ func ReadSettings(ctx context.Context, dir string) (Settings, error) {
 		return Settings{}, err
 	}
 	s := Settings{Master: cfg["gitflow.branch.master"], Develop: cfg["gitflow.branch.develop"], Prefixes: defaultPrefixes}
-	s.Initialized = s.Master != "" && s.Develop != ""
+	s.Initialized = configured(cfg)
 	for _, t := range types {
 		if v := cfg["gitflow.prefix."+t]; v != "" {
 			s.Prefixes.set(t, v)
@@ -72,7 +72,7 @@ func SaveSettings(ctx context.Context, dir string, cfg Config) error {
 	if err != nil {
 		return err
 	}
-	if cur["gitflow.branch.master"] == "" || cur["gitflow.branch.develop"] == "" {
+	if !configured(cur) {
 		return ErrNotInitialized
 	}
 	cfg = trimmed(cfg)
@@ -98,11 +98,18 @@ func validate(ctx context.Context, dir string, cfg Config) error {
 			return err
 		}
 	}
-	if cfg.Develop == cfg.Master {
+	// Case-insensitive: on a case-insensitive file system Main and main
+	// are the same loose ref, and classify matches prefixes ignoring case.
+	if strings.EqualFold(cfg.Develop, cfg.Master) {
 		return fmt.Errorf("%w: production and development are both %q", ErrInvalidName, cfg.Master)
 	}
-	for _, t := range types {
+	for i, t := range types {
 		p, _ := cfg.Prefixes.of(t)
+		for _, u := range types[:i] {
+			if q, _ := cfg.Prefixes.of(u); strings.EqualFold(p, q) {
+				return fmt.Errorf("the %s and %s prefixes are both %q", u, t, p)
+			}
+		}
 		if p == "" {
 			return fmt.Errorf("the %s prefix is empty", t)
 		}
@@ -117,7 +124,9 @@ func validate(ctx context.Context, dir string, cfg Config) error {
 }
 
 func checkBranchName(ctx context.Context, dir, n string) error {
-	if n == "" || strings.HasPrefix(n, "-") || strings.ContainsAny(n, " \t\r\n") {
+	// "@" and "@{...}" are revision syntax: git accepts them as branch names
+	// to check-ref-format --branch ("@{-1}" expands to the previous branch).
+	if n == "" || n == "@" || strings.Contains(n, "@{") || strings.HasPrefix(n, "-") || strings.ContainsAny(n, " \t\r\n") {
 		return fmt.Errorf("%w: %q", ErrInvalidName, n)
 	}
 	if _, err := git(ctx, dir, "check-ref-format", "--branch", n); err != nil {
@@ -127,13 +136,15 @@ func checkBranchName(ctx context.Context, dir, n string) error {
 }
 
 func writeConfig(ctx context.Context, dir string, cfg Config) error {
+	// The branch keys go last, develop then master: git-flow counts as set
+	// up only with both, so a failure midway never leaves a mixed pair.
 	set := [][2]string{
-		{"gitflow.branch.master", cfg.Master},
-		{"gitflow.branch.develop", cfg.Develop},
 		{"gitflow.prefix.feature", cfg.Prefixes.Feature},
 		{"gitflow.prefix.release", cfg.Prefixes.Release},
 		{"gitflow.prefix.hotfix", cfg.Prefixes.Hotfix},
 		{"gitflow.prefix.warmfix", cfg.Prefixes.Warmfix},
+		{"gitflow.branch.develop", cfg.Develop},
+		{"gitflow.branch.master", cfg.Master},
 	}
 	for _, kv := range set {
 		if _, err := git(ctx, dir, "config", kv[0], kv[1]); err != nil {

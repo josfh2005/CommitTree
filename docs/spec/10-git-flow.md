@@ -31,8 +31,10 @@ branch (created from production if missing) and the four prefixes.
 
 The same names can be edited later, without creating or renaming a branch,
 in the Git-flow tab of Repository settings (`12-repository-settings.md`);
-both the dialog and the tab refuse a prefix with spaces or one that cannot
-make a branch name.
+both the dialog and the tab refuse a prefix with spaces, one that cannot
+make a branch name and one equal to another prefix (ignoring case), and a
+production and development branch that differ only in case. The branch keys
+are written last, so a failed write never leaves git-flow half set up.
 
 Otherwise it opens a menu:
 - **Finish <type> <name>…** when the checked-out branch is a git-flow
