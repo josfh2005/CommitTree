@@ -19,6 +19,23 @@ func (a *App) InitFlow(id string, cfg gitflow.Config) error {
 	return a.write(id, func(ctx context.Context, dir string) error { return gitflow.Init(ctx, dir, cfg) })
 }
 
+// GetFlowSettings is the Git-flow tab of Repository settings
+// (docs/spec/12-repository-settings.md): the branch roles, or the defaults
+// when git-flow is not set up.
+func (a *App) GetFlowSettings(id string) (gitflow.Settings, error) {
+	dir, err := a.dir(id)
+	if err != nil {
+		return gitflow.Settings{}, err
+	}
+	return gitflow.ReadSettings(a.ctx, dir)
+}
+
+// SaveFlowSettings rewrites the gitflow.* keys of a repository that is set
+// up; it creates no branch. Setting up goes through InitFlow.
+func (a *App) SaveFlowSettings(id string, cfg gitflow.Config) error {
+	return a.write(id, func(ctx context.Context, dir string) error { return gitflow.SaveSettings(ctx, dir, cfg) })
+}
+
 func (a *App) StartFlow(id, typ, name, base string) (gitflow.StartResult, error) {
 	var res gitflow.StartResult
 	err := a.write(id, func(ctx context.Context, dir string) (err error) {

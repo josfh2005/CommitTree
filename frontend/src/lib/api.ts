@@ -1,5 +1,5 @@
 import * as Go from '../../wailsjs/go/app/App'
-import type { BranchPushResult, RepoAIInfo, RepoAIOverride, AIMessage, AISettings, AIStatus, AheadBehind, AutoFetchResult, Blame, ChatConfirmEvent, CommandLogView, CommandOutput, CommitInfo, ConflictFile, Details, Filters, Flow, FlowConfig, FlowFinishResult, FlowPlan, FlowStartResult, FlowType, GitSettings, HunkAction, HunkPick, Identity, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, RemoteConfig, RemoteTest, RegionChoice, RegionResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeDiff, WorktreeRemovalInfo, WorktreeState } from './types'
+import type { BranchPushResult, RepoAIInfo, RepoAIOverride, AIMessage, AISettings, AIStatus, AheadBehind, AutoFetchResult, Blame, ChatConfirmEvent, CommandLogView, CommandOutput, CommitInfo, ConflictFile, Details, Filters, Flow, FlowConfig, FlowSettings, FlowFinishResult, FlowPlan, FlowStartResult, FlowType, GitSettings, HunkAction, HunkPick, Identity, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, RemoteConfig, RemoteTest, RegionChoice, RegionResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeDiff, WorktreeRemovalInfo, WorktreeState } from './types'
 import type { NotifyTarget } from './notifyRules'
 
 // The generated bindings use Wails model classes; the JSON is identical to our
@@ -85,6 +85,8 @@ export const api = {
 
   mergeBranch: (id: string, branch: string) => call<MergeResult>(Go.MergeBranch(id, branch)),
   getFlow: (id: string) => call<Flow>(Go.GetFlow(id)),
+  getFlowSettings: (id: string) => call<FlowSettings>(Go.GetFlowSettings(id)),
+  saveFlowSettings: (id: string, cfg: FlowConfig) => call<void>(Go.SaveFlowSettings(id, cfg as any)),
   initFlow: (id: string, cfg: FlowConfig) => call<void>(Go.InitFlow(id, cfg as any)),
   startFlow: (id: string, type: FlowType, name: string, base: string) => call<FlowStartResult>(Go.StartFlow(id, type, name, base)),
   planFinish: (id: string, branch: string, releases: string[]) => call<FlowPlan>(Go.PlanFinish(id, branch, releases)),

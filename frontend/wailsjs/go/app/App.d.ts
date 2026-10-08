@@ -111,6 +111,8 @@ export function GetDiff(arg1:string,arg2:string,arg3:string,arg4:Array<string>):
 
 export function GetFlow(arg1:string):Promise<gitflow.Flow>;
 
+export function GetFlowSettings(arg1:string):Promise<gitflow.Settings>;
+
 export function GetGitSettings():Promise<gitsettings.Settings>;
 
 export function GetIdentity(arg1:string):Promise<app.Identity>;
@@ -218,6 +220,8 @@ export function ResolveMergeRegion(arg1:string,arg2:string,arg3:string,arg4:stri
 export function RestartConflictFile(arg1:string,arg2:string):Promise<void>;
 
 export function SaveAISettings(arg1:settings.Settings):Promise<void>;
+
+export function SaveFlowSettings(arg1:string,arg2:gitflow.Config):Promise<void>;
 
 export function SaveGitSettings(arg1:gitsettings.Settings):Promise<void>;
 

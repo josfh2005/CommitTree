@@ -92,6 +92,9 @@ export interface Branch {
   upstreamGone?: boolean
   /** The upstream is another local branch, not a remote one. */
   upstreamLocal?: boolean
+  /** A local branch "Main branches" pushes: main, master, develop, release/*
+   *  or the repository's git-flow names (decided in Go, refs.OfficialRule). */
+  official: boolean
   /** Path of another worktree that has this branch checked out. */
   worktree?: string
   /** That worktree's directory is gone but git has not pruned it yet. */
@@ -324,7 +327,7 @@ export interface GitSettings {
   pushScope: PushScope
 }
 
-/** One branch's outcome of a push of all branches (Go's ops.BranchPushResult). */
+/** One branch's outcome of a push of the main branches (Go's ops.BranchPushResult). */
 export interface BranchPushResult {
   branch: string
   /** <remote>/<branch> */
@@ -490,6 +493,17 @@ export interface Flow {
   current: FlowBranch | null
   branches: FlowBranch[]
   releases: string[]
+}
+
+/** The Git-flow tab of Repository settings: the repository's branch roles,
+ *  or the app's defaults when git-flow is not set up. */
+export interface FlowSettings {
+  initialized: boolean
+  /** Set when the configured production or development branch does not exist. */
+  problem: string
+  master: string
+  develop: string
+  prefixes: FlowPrefixes
 }
 
 export interface FlowConfig { master: string; develop: string; prefixes: FlowPrefixes }

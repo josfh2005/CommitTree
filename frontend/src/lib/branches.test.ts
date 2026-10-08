@@ -8,6 +8,7 @@ const b = (name: string, extra: Partial<Branch> = {}): Branch => ({
   hash: 'h',
   current: false,
   upstream: '',
+  official: false,
   ...extra,
 })
 

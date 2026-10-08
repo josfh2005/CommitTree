@@ -1,6 +1,7 @@
 <script lang="ts">
   import Icon from './Icon.svelte'
   import RepoAITab from './RepoAITab.svelte'
+  import RepoFlowTab from './RepoFlowTab.svelte'
   import { api } from '../lib/api'
   import { defaultRemoteName, remoteFormError } from '../lib/remoteForm'
   import { busy, refreshRepo, repoSettings, repos, selectedRepoId } from '../lib/stores'
@@ -27,7 +28,7 @@
   // Switching tabs rewrites the store but is not a new opening: it must not
   // reset the Remotes pane (an edit or add form in progress).
   let switching = false
-  const setTab = (t: 'remotes' | 'ai') => {
+  const setTab = (t: 'remotes' | 'flow' | 'ai') => {
     switching = true
     repoSettings.update((s) => (s ? { ...s, tab: t } : s))
   }
@@ -95,16 +96,19 @@
       <nav class="tabs" aria-label="Repository settings sections">
         <h3 class="ellipsis" title={repo.name}>{repo.name} settings</h3>
         <button class="tab" class:active={tab === 'remotes'} aria-current={tab === 'remotes' ? 'page' : undefined} on:click={() => setTab('remotes')}>Remotes</button>
+        <button class="tab" class:active={tab === 'flow'} aria-current={tab === 'flow' ? 'page' : undefined} on:click={() => setTab('flow')}>Git-flow</button>
         <button class="tab" class:active={tab === 'ai'} aria-current={tab === 'ai' ? 'page' : undefined} on:click={() => setTab('ai')}>AI</button>
       </nav>
       <div class="pane">
         <header>
-          <h3>{tab === 'ai' ? 'AI' : 'Remotes'}</h3>
+          <h3>{tab === 'ai' ? 'AI' : tab === 'flow' ? 'Git-flow' : 'Remotes'}</h3>
           <button class="icon-btn" title="Close" on:click={close}><Icon name="x" /></button>
         </header>
         <div class="content">
           {#if tab === 'ai'}
             <RepoAITab {repoID} />
+          {:else if tab === 'flow'}
+            <RepoFlowTab {repoID} />
           {:else}
           {#if loadError}<p class="warn">{loadError}</p>{/if}
           {#if error}<p class="warn">{error}</p>{/if}

@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { checkoutChoices, checkoutNotice } from './checkout'
 import type { Branch, Ref, Refs } from './types'
 
-const local = (name: string, extra: Partial<Branch> = {}): Branch => ({ name, remote: '', hash: 'h', current: false, upstream: '', ...extra })
-const remote = (remoteName: string, name: string): Branch => ({ name, remote: remoteName, hash: 'h', current: false, upstream: '' })
+const local = (name: string, extra: Partial<Branch> = {}): Branch => ({ name, remote: '', hash: 'h', current: false, upstream: '', official: false, ...extra })
+const remote = (remoteName: string, name: string): Branch => ({ name, remote: remoteName, hash: 'h', current: false, upstream: '', official: false })
 
 function refsOf(over: Partial<Refs> = {}): Refs {
   return {

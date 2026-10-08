@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"git-ui/internal/gitcmd"
+	"git-ui/internal/refs"
 )
 
 const (
@@ -50,6 +51,19 @@ func (p Prefixes) of(typ string) (string, bool) {
 		return p.Warmfix, true
 	}
 	return "", false
+}
+
+func (p *Prefixes) set(typ, v string) {
+	switch typ {
+	case Feature:
+		p.Feature = v
+	case Release:
+		p.Release = v
+	case Hotfix:
+		p.Hotfix = v
+	case Warmfix:
+		p.Warmfix = v
+	}
 }
 
 // Config is what Init writes.
@@ -103,6 +117,13 @@ func readConfig(ctx context.Context, dir string) (map[string]string, error) {
 		}
 	}
 	return cfg, nil
+}
+
+// configured reports whether git-flow is set up in the config. The rule is
+// refs.OfficialRule's, so what counts as official and what counts as set up
+// cannot drift apart.
+func configured(cfg map[string]string) bool {
+	return refs.RuleFromConfig(cfg["gitflow.branch.master"], cfg["gitflow.branch.develop"], cfg["gitflow.prefix.release"]).Configured()
 }
 
 func branchExists(ctx context.Context, dir, name string) bool {
@@ -165,20 +186,11 @@ func Read(ctx context.Context, dir string) (Flow, error) {
 		return f, err
 	}
 	f.Master, f.Develop = cfg["gitflow.branch.master"], cfg["gitflow.branch.develop"]
-	f.Initialized = f.Master != "" && f.Develop != ""
+	f.Initialized = configured(cfg)
 	f.Prefixes = defaultPrefixes
 	for _, t := range types {
-		if v, ok := cfg["gitflow.prefix."+t]; ok && v != "" {
-			switch t {
-			case Feature:
-				f.Prefixes.Feature = v
-			case Release:
-				f.Prefixes.Release = v
-			case Hotfix:
-				f.Prefixes.Hotfix = v
-			case Warmfix:
-				f.Prefixes.Warmfix = v
-			}
+		if v := cfg["gitflow.prefix."+t]; v != "" {
+			f.Prefixes.set(t, v)
 		}
 	}
 	if !f.Initialized {
@@ -298,38 +310,20 @@ func ending(f Flow, b FlowBranch, targets []string) string {
 	return f.Develop
 }
 
+// Init sets git-flow up: the production branch must exist, the development
+// branch is created from it when missing, and the keys are written.
 func Init(ctx context.Context, dir string, cfg Config) error {
+	cfg = trimmed(cfg)
 	if !branchExists(ctx, dir, cfg.Master) {
 		return fmt.Errorf("%s does not exist", cfg.Master)
 	}
-	if cfg.Develop == "" || cfg.Develop == cfg.Master || strings.HasPrefix(cfg.Develop, "-") {
-		return fmt.Errorf("%w: %q", ErrInvalidName, cfg.Develop)
-	}
-	if _, err := git(ctx, dir, "check-ref-format", "--branch", cfg.Develop); err != nil {
-		return fmt.Errorf("%w: %q", ErrInvalidName, cfg.Develop)
-	}
-	for _, t := range types {
-		if p, _ := cfg.Prefixes.of(t); p == "" {
-			return fmt.Errorf("the %s prefix is empty", t)
-		}
+	if err := validate(ctx, dir, cfg); err != nil {
+		return err
 	}
 	if !branchExists(ctx, dir, cfg.Develop) {
 		if _, err := git(ctx, dir, "branch", cfg.Develop, cfg.Master); err != nil {
 			return err
 		}
 	}
-	set := [][2]string{
-		{"gitflow.branch.master", cfg.Master},
-		{"gitflow.branch.develop", cfg.Develop},
-		{"gitflow.prefix.feature", cfg.Prefixes.Feature},
-		{"gitflow.prefix.release", cfg.Prefixes.Release},
-		{"gitflow.prefix.hotfix", cfg.Prefixes.Hotfix},
-		{"gitflow.prefix.warmfix", cfg.Prefixes.Warmfix},
-	}
-	for _, kv := range set {
-		if _, err := git(ctx, dir, "config", kv[0], kv[1]); err != nil {
-			return err
-		}
-	}
-	return nil
+	return writeConfig(ctx, dir, cfg)
 }

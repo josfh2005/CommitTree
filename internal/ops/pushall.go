@@ -10,7 +10,7 @@ import (
 	"git-ui/internal/refs"
 )
 
-// PushStatus is how one branch of a push of all branches ended.
+// PushStatus is how one branch of a push of the main branches ended.
 type PushStatus string
 
 const (
@@ -35,12 +35,15 @@ type pushTarget struct {
 
 const pushFormat = "%(refname:strip=2)%00%(HEAD)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream:track,nobracket)"
 
-// pushTargets is what PushAll pushes (docs/spec/05-remote-and-stash.md): the
-// current branch first — published to origin when it has no upstream —
-// then, by name, every other local branch ahead of a live upstream on a
-// remote. A branch tracking another local branch (remote ".") is never
-// pushed: that would move the local branch, not publish anything.
+// pushTargets is what PushAll pushes (docs/spec/05-remote-and-stash.md), among
+// the official branches only (refs.OfficialRule): the current branch first
+// — published to origin when it has no upstream — then, by name, every
+// other official local branch ahead of a live upstream on a remote. A
+// branch tracking another local branch (remote ".") is never pushed: that
+// would move the local branch, not publish anything.
 func pushTargets(ctx context.Context, dir string) ([]pushTarget, error) {
+	// An unreadable config falls back to the default rule.
+	rule := refs.OfficialRuleOrDefault(ctx, dir)
 	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "for-each-ref", "--format="+pushFormat, "refs/heads")
 	if err != nil {
 		return nil, err
@@ -52,6 +55,9 @@ func pushTargets(ctx context.Context, dir string) ([]pushTarget, error) {
 			continue
 		}
 		name, head, remote, remoteRef, track := f[0], f[1], f[2], f[3], f[4]
+		if !rule.IsOfficial(name) {
+			continue
+		}
 		ahead, _, gone := refs.ParseTrack(track)
 		onRemote := remote != "" && remote != "." && remoteRef != ""
 		switch {
@@ -66,10 +72,11 @@ func pushTargets(ctx context.Context, dir string) ([]pushTarget, error) {
 	return append(current, others...), nil
 }
 
-// PushAll pushes the current branch and every other local branch ahead of
-// its upstream, one `git push --porcelain` per remote in name order. Never
-// forced and not atomic: each branch succeeds or fails on its own, and a
-// failure to reach one remote fails only that remote's branches.
+// PushAll pushes the official current branch and every other official local
+// branch ahead of its upstream, one `git push --porcelain` per remote in
+// name order. Never forced and not atomic: each branch succeeds or fails on
+// its own, and a failure to reach one remote fails only that remote's
+// branches.
 func PushAll(ctx context.Context, dir string) ([]BranchPushResult, error) {
 	targets, err := pushTargets(ctx, dir)
 	if err != nil {

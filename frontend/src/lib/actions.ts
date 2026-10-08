@@ -775,9 +775,9 @@ async function refsOf(id: string): Promise<Refs | null> {
   }
 }
 
-// push follows Settings → General → Push: the current branch, all branches,
-// or — the default — a choice, asked only when another branch has commits
-// to push (docs/spec/05-remote-and-stash.md).
+// push follows Settings → General → Push: the current branch, the main
+// branches, or — the default — a choice, asked only when another main
+// branch has commits to push (docs/spec/05-remote-and-stash.md).
 export async function push(id: string): Promise<boolean> {
   const scope = get(gitSettings)?.pushScope ?? 'ask'
   const current = scope === 'ask' ? await refsOf(id) : null
@@ -790,7 +790,7 @@ export async function push(id: string): Promise<boolean> {
   return choice === 'all' ? pushAll(id) : runOp(id, 'push', 'Pushing…', () => api.push(id))
 }
 
-// pushAll pushes every branch with something to push. A toast sums up a
+// pushAll pushes the main branches with something to push. A toast sums up a
 // push in which nothing failed; otherwise a dialog lists every branch —
 // opened once the busy label is gone and the refs reloaded — and the push
 // notifies as failed.

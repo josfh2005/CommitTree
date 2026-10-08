@@ -186,6 +186,10 @@ export function GetFlow(arg1) {
   return window['go']['app']['App']['GetFlow'](arg1);
 }
 
+export function GetFlowSettings(arg1) {
+  return window['go']['app']['App']['GetFlowSettings'](arg1);
+}
+
 export function GetGitSettings() {
   return window['go']['app']['App']['GetGitSettings']();
 }
@@ -400,6 +404,10 @@ export function RestartConflictFile(arg1, arg2) {
 
 export function SaveAISettings(arg1) {
   return window['go']['app']['App']['SaveAISettings'](arg1);
+}
+
+export function SaveFlowSettings(arg1, arg2) {
+  return window['go']['app']['App']['SaveFlowSettings'](arg1, arg2);
 }
 
 export function SaveGitSettings(arg1) {

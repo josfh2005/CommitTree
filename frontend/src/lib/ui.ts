@@ -94,7 +94,7 @@ export interface FormOptions {
   submitLabel: string
 }
 
-/** A list of outcomes with a single OK, e.g. a push of all branches in
+/** A list of outcomes with a single OK, e.g. a push of the main branches in
  *  which some branches were not pushed. */
 export interface ResultsOptions { title: string; message?: string; rows: ResultRow[] }
 

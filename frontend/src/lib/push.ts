@@ -1,7 +1,7 @@
 import type { Branch, BranchPushResult, PushScope, Refs } from './types'
 import type { ChoiceOptions } from './ui'
 
-/** Push: what a click on Push and the "push all" choice do
+/** Push: what a click on Push and the "main branches" choice do
  *  (docs/spec/05-remote-and-stash.md). Pure, so every rule is tested. */
 
 export type PushChoice = 'current' | 'all'
@@ -12,17 +12,19 @@ export interface ResultRow { mark: string; label: string; detail: string; tone: 
 const commits = (n: number) => (n === 1 ? '1 commit' : `${n} commits`)
 const branches = (n: number) => (n === 1 ? '1 branch' : `${n} branches`)
 
-/** The local branches besides the current one that "All branches" pushes:
- *  ahead of a live upstream on a remote, as the last fetch saw it. */
+/** The local branches besides the current one that "Main branches" pushes:
+ *  official (decided in Go: main, master, develop, release/* or the git-flow
+ *  names) and ahead of a live upstream on a remote, as the last fetch saw it. */
 export function othersAhead(refs: Refs | null): Branch[] {
-  return (refs?.local ?? []).filter((b) => !b.current && !!b.upstream && !b.upstreamGone && !b.upstreamLocal && (b.ahead ?? 0) > 0)
+  return (refs?.local ?? []).filter((b) => !b.current && !!b.official && !!b.upstream && !b.upstreamGone && !b.upstreamLocal && (b.ahead ?? 0) > 0)
 }
 
-/** N in "All branches (N)": the current branch (unless HEAD is detached or
- *  it tracks another local branch) plus the others ahead. */
+/** N in "Main branches (N)": the current branch (when it is official, HEAD
+ *  is not detached and it does not track another local branch) plus the
+ *  others ahead. */
 export function pushCount(refs: Refs | null): number {
   const current = refs && !refs.detached ? refs.local.find((b) => b.current) : undefined
-  return (current && !current.upstreamLocal ? 1 : 0) + othersAhead(refs).length
+  return (current?.official && !current.upstreamLocal ? 1 : 0) + othersAhead(refs).length
 }
 
 /** What a click on Push does: the setting, except that "ask" pushes the
@@ -36,7 +38,7 @@ export function pushChoiceOptions(repoName: string, refs: Refs | null): ChoiceOp
   const n = pushCount(refs)
   const options: { value: PushChoice; label: string }[] = []
   if (refs && !refs.detached) options.push({ value: 'current', label: `Current branch (${refs.head})` })
-  options.push({ value: 'all', label: `All branches (${n})` })
+  options.push({ value: 'all', label: `Main branches (${n})` })
   return {
     title: `Push ${repoName}`,
     label: 'Push',
@@ -49,7 +51,7 @@ export function pushChoiceOptions(repoName: string, refs: Refs | null): ChoiceOp
 
 export const pushFailed = (r: BranchPushResult) => r.status === 'rejected' || r.status === 'failed'
 
-/** The toast after a push of all branches in which nothing failed. */
+/** The toast after a push of the main branches in which nothing failed. */
 export function pushedMessage(results: BranchPushResult[]): string {
   if (results.length === 0) return 'Nothing to push'
   const pushed = results.filter((r) => r.status === 'pushed')
@@ -83,8 +85,8 @@ export class PartialPushError extends Error {
 
 /** The toolbar Push button's tooltip: what a click will do. */
 export function pushTitle(scope: PushScope, refs: Refs | null): string {
-  if (scope === 'all') return 'Push all branches'
-  if (scope === 'ask') return 'Push — asks current or all branches'
+  if (scope === 'all') return 'Push main branches'
+  if (scope === 'ask') return 'Push — asks current or main branches'
   return refs?.head && !refs.detached ? `Push ${refs.head}` : 'Push'
 }
 
