@@ -146,7 +146,7 @@ export const pendingFinish = writable<PendingFinish | null>(null)
 export const chatRunRepo = writable('')
 export const settingsOpen = writable(false)
 /** The repository whose Repository settings dialog is open. */
-export const repoSettings = writable<{ repoID: string; tab?: 'remotes' | 'ai' } | null>(null)
+export const repoSettings = writable<{ repoID: string; tab?: 'remotes' | 'flow' | 'ai' } | null>(null)
 /** Wails' Environment().platform, read once at startup (App.svelte). */
 export const platform = writable('')
 export const mergeState = writable<MergeState | null>(null)

@@ -171,7 +171,8 @@ some other *main* branch is ahead; a feature branch ahead does not make it ask.
 its name is `main`, `master`, `develop` or starts with `release/`; when
 git-flow is configured in the repository (`gitflow.branch.master` and
 `gitflow.branch.develop` set) its names replace those defaults: the master
-and develop names and the release prefix (default `release/`). One Go rule
+and develop names and the release prefix (default `release/`); the Git-flow tab of Repository
+settings edits those names (`12-repository-settings.md`). One Go rule
 (`refs.OfficialRule`) decides it, and the refs it returns carry the result
 (`official` on each local branch) for the "Main branches (N)" count. Only
 main branches are ever pushed this way — never a feature, hotfix or other

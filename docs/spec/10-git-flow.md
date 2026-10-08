@@ -29,6 +29,11 @@ config, or the config names a branch that does not exist, it opens the
 Initialise dialog: production branch (an existing local branch), development
 branch (created from production if missing) and the four prefixes.
 
+The same names can be edited later, without creating or renaming a branch,
+in the Git-flow tab of Repository settings (`12-repository-settings.md`);
+both the dialog and the tab refuse a prefix with spaces or one that cannot
+make a branch name.
+
 Otherwise it opens a menu:
 - **Finish <type> <name>…** when the checked-out branch is a git-flow
   branch; otherwise **Finish…**, a list of the local git-flow branches with

@@ -3,7 +3,7 @@
 A repository's own settings, opened with "Repository settings…" in its row's
 context menu (not for a linked worktree, whose remotes are its main
 repository's; disabled while the folder is missing). The dialog is titled
-"<repository> settings" and has tabs: **Remotes** and **AI**. Escape or the
+"<repository> settings" and has tabs: **Remotes**, **Git-flow** and **AI**. Escape or the
 close button closes it, and it closes by itself if the repository leaves the
 list.
 
@@ -37,6 +37,44 @@ belong to the opening of the dialog that asked for them: one that answers
 after the dialog was closed or moved to another repository is dropped.
 Afterwards the sidebar, the log and the toolbar of the selected
 repository refresh.
+
+## Git-flow
+
+The repository's branch roles, as the `gitflow.*` keys of its own git config
+(the ones `10-git-flow.md` describes): **Production branch**
+(`gitflow.branch.master`), **Development branch** (`gitflow.branch.develop`)
+and the **Feature**, **Release**, **Hotfix** and **Warmfix** prefixes
+(`gitflow.prefix.*`; the warmfix one is the same field the Initialise dialog
+has). Under the fields: "These names decide the main branches pushed by "Push
+main branches"." (see `05-remote-and-stash.md`).
+
+Checked before saving, and again by Go (`gitflow.SaveSettings`), which refuses
+with the same reasons: both branch names are filled in and valid branch names
+(what `git check-ref-format --branch` accepts), production and development
+differ, and every prefix is filled in, has no spaces and makes a valid branch
+name when a name is added to it. A prefix need not end in `/`. The first
+problem is shown under the fields and Save stays disabled; a refusal from Go
+is shown there too, with what was typed kept. Enter in a field saves.
+
+- **Set up**: **Save** (disabled until something changed) rewrites only the
+  `gitflow.*` keys, under the repository's write lock and with the busy
+  label like any other write. It creates, renames and deletes no branch and
+  does not need the named branches to exist; when one does not, the tab says
+  "<branch> does not exist." Other keys (`bugfix`, `support`, a branch's
+  `.base`) are left alone.
+- **Not set up** (a repository without both branch keys): the fields show the
+  defaults the app uses — `main` or, failing that, `master` (else the
+  checked-out branch), `develop`, `feature/`, `release/`, `hotfix/`,
+  `warmfix/` — and a line says git-flow isn't set up and these defaults
+  decide the main branches for "Push main branches". The button reads **Set
+  up git-flow** and runs the same action as the Initialise dialog
+  (`InitFlow`): production must exist, development is created from it when
+  missing, and the keys are written. The repository is then git-flow enabled
+  as if initialised from the Flow button.
+
+After a save the tab reloads, and the repository's refs and sidebar are read
+again (the selected repository, or an expanded one in the sidebar), so the
+"Main branches (N)" count and the Push tooltip follow the new names at once.
 
 ## AI
 

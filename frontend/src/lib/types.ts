@@ -495,6 +495,17 @@ export interface Flow {
   releases: string[]
 }
 
+/** The Git-flow tab of Repository settings: the repository's branch roles,
+ *  or the app's defaults when git-flow is not set up. */
+export interface FlowSettings {
+  initialized: boolean
+  /** Set when the configured production or development branch does not exist. */
+  problem: string
+  master: string
+  develop: string
+  prefixes: FlowPrefixes
+}
+
 export interface FlowConfig { master: string; develop: string; prefixes: FlowPrefixes }
 export interface FlowStartResult { branch: string; notes: string[] }
 export interface FlowStep { target: string; done: boolean }
