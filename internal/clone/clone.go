@@ -64,9 +64,17 @@ func ParseProgress(line string) (p Progress, ok bool) {
 var (
 	ErrParentMissing     = errors.New("The parent folder doesn't exist.")
 	ErrParentNotAbsolute = errors.New("Parent folder must be a full path (or start with ~).")
-	ErrBadName           = errors.New(`The folder name can't be empty, "." or "..", or contain a slash.`)
-	ErrDestNotEmpty      = errors.New("The destination already exists and isn't an empty folder.")
+	// ErrHomeUnknown is a refused "~" when the home folder cannot be found;
+	// errors.Is(ErrHomeUnknown, ErrParentMissing) holds.
+	ErrHomeUnknown  = homeUnknown{}
+	ErrBadName      = errors.New(`The folder name can't be empty, "." or "..", or contain a slash.`)
+	ErrDestNotEmpty = errors.New("The destination already exists and isn't an empty folder.")
 )
+
+type homeUnknown struct{}
+
+func (homeUnknown) Error() string        { return "The home folder is unknown; type a full path." }
+func (homeUnknown) Is(target error) bool { return target == ErrParentMissing }
 
 // expandParent turns the parent folder as typed into an absolute path:
 // surrounding whitespace is trimmed and a leading "~" (alone or before a
@@ -77,7 +85,7 @@ func expandParent(parent string) (string, error) {
 	if parent == "~" || strings.HasPrefix(parent, "~/") {
 		home, err := os.UserHomeDir()
 		if err != nil || home == "" {
-			return "", fmt.Errorf("%w: the home folder is unknown, type a full path", ErrParentMissing)
+			return "", ErrHomeUnknown
 		}
 		parent = filepath.Join(home, parent[1:])
 	}

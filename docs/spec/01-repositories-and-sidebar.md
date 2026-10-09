@@ -77,8 +77,8 @@ terminal (see Terminal).
 ### Cloning a repository
 
 **Clone…** opens a dialog with the URL, the parent folder (typed or picked
-with "Choose…"; the last one used is remembered, the home folder before
-that; a leading `~` means the home folder, and anything that is not a full
+with "Choose…"; the last one a clone started with, accepted by the backend, is
+remembered, the home folder before that; a leading `~` means the home folder, and anything that is not a full
 path is refused) and the folder name. The name follows the URL as it is typed —
 its last path segment without `.git` — until the user edits it; clearing it
 makes it follow again. The name may not be empty, `.` or `..`, or contain a
@@ -88,7 +88,8 @@ that is empty or starts with `-` is refused.
 **Clone** runs `git clone --progress --recurse-submodules -- <url> <dest>`
 from the parent folder. Credentials come only from what is already set up
 (credential helpers, the keychain, ssh-agent, Git Credential Manager); the
-application never asks for a password. The dialog shows git's current phase
+application never asks for a password. The dialog shows the resolved
+destination (a typed `~` expanded) and git's current phase
 (counting, compressing, receiving, resolving, updating files, each
 submodule), a bar with the phase's percentage when git gives one, and git's
 detail line. **Cancel** stops git as Ctrl+C would; **Continue in

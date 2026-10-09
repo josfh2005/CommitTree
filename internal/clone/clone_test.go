@@ -109,6 +109,10 @@ func TestValidateTypedParent(t *testing.T) {
 	if _, err := Validate("~/nope", "app"); !errors.Is(err, ErrParentMissing) {
 		t.Errorf("missing ~ subfolder err = %v", err)
 	}
+	t.Setenv("HOME", "")
+	if _, err := Validate("~/code", "app"); !errors.Is(err, ErrParentMissing) || err.Error() != "The home folder is unknown; type a full path." {
+		t.Errorf("unknown home err = %v", err)
+	}
 	if got := ErrParentNotAbsolute.Error(); got != "Parent folder must be a full path (or start with ~)." {
 		t.Errorf("message = %q", got)
 	}

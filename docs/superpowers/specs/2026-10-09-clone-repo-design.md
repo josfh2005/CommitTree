@@ -68,7 +68,8 @@ unchanged) and **Clone…**. One clone runs at a time: while one is running,
   line shows the parent as typed (a `~` is not expanded there), and the
   remembered parent is the typed value, trimmed, kept only once the
   backend accepted the clone. If the home folder cannot be found, a `~` is
-  refused with `ErrParentMissing` (wrapped), not the full-path message. The
+  refused with `ErrHomeUnknown` ("The home folder is unknown; type a full path."),
+  which satisfies `errors.Is(err, ErrParentMissing)`, not the full-path message. The
   running view shows the destination the backend resolved, so a `~` appears
   expanded there.
 
