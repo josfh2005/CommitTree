@@ -100,7 +100,7 @@ func TestValidateTypedParent(t *testing.T) {
 			t.Errorf("Validate(%q) = %q, %v; want %q", tc.parent, dest, err, tc.want)
 		}
 	}
-	for _, parent := range []string{"foo/bar", "~other/x", "~other", "", "   ", "./x", ".."} {
+	for _, parent := range []string{"foo/bar", "~other/x", "~other", `~\x`, "", "   ", "./x", ".."} {
 		if _, err := Validate(parent, "app"); !errors.Is(err, ErrParentNotAbsolute) {
 			t.Errorf("Validate(%q) err = %v, want ErrParentNotAbsolute", parent, err)
 		}

@@ -73,10 +73,17 @@ export function viewFromStatus(s: CloneStatus): CloneView {
     : { kind: 'form', error: s.lastError }
 }
 
-/** Starts the clone in cloneForm under parent. The view turns to running
- *  before the backend is called: a tiny clone's clone:done can arrive
- *  before run resolves, and must not be overwritten by it. */
-export async function startClone(parent: string, run: (url: string, parent: string, name: string) => Promise<void>) {
+/** Starts the clone in cloneForm under parent (as typed: the backend may
+ *  expand it) and returns whether the backend accepted it. The view turns
+ *  to running before the backend is called: a tiny clone's clone:done can
+ *  arrive before run resolves, and must not be overwritten by it. Once
+ *  accepted, a still-running view shows the destination the backend
+ *  resolved (status), not the typed path. */
+export async function startClone(
+  parent: string,
+  run: (url: string, parent: string, name: string) => Promise<void>,
+  status?: () => Promise<CloneStatus>,
+): Promise<boolean> {
   const f = get(cloneForm)
   const url = f.url.trim()
   const name = f.name.trim()
@@ -87,7 +94,17 @@ export async function startClone(parent: string, run: (url: string, parent: stri
     await run(url, parent, name)
   } catch (e) {
     cloneView.set({ kind: 'form', error: errorMessage(e) })
+    return false
   }
+  if (status) {
+    try {
+      const s = await status()
+      if (s.running) cloneView.update((v) => (v.kind === 'running' ? { ...v, dest: s.dest } : v))
+    } catch {
+      // Keep the typed path.
+    }
+  }
+  return true
 }
 
 export interface CloneDeps {

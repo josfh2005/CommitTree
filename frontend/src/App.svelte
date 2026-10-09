@@ -18,7 +18,7 @@
   import { nextChatRunRepo } from './lib/chat'
   import { startNotifications } from './lib/notify'
   import { startAutoFetch } from './lib/autoFetch'
-import { startCloneEvents } from './lib/clone'
+  import { startCloneEvents } from './lib/clone'
   import { isCommandsToggle } from './lib/cmdlog'
   import { isSettingsShortcut } from './lib/shortcuts'
   import { isTerminalToggle } from './lib/terminal'

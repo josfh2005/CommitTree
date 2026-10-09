@@ -74,10 +74,10 @@ var (
 // relative and is refused.
 func expandParent(parent string) (string, error) {
 	parent = strings.TrimSpace(parent)
-	if parent == "~" || strings.HasPrefix(parent, "~/") || strings.HasPrefix(parent, `~\`) {
+	if parent == "~" || strings.HasPrefix(parent, "~/") {
 		home, err := os.UserHomeDir()
 		if err != nil || home == "" {
-			return "", ErrParentNotAbsolute
+			return "", fmt.Errorf("%w: the home folder is unknown, type a full path", ErrParentMissing)
 		}
 		parent = filepath.Join(home, parent[1:])
 	}

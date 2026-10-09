@@ -109,6 +109,33 @@ describe('startClone and events', () => {
     await p
   })
 
+  it('returns whether the backend accepted the clone', async () => {
+    expect(await startClone('/p', async () => {})).toBe(true)
+    expect(await startClone('/p', () => Promise.reject('refused'))).toBe(false)
+  })
+
+  it('shows the destination the backend resolved once it accepted the clone', async () => {
+    const status = async () => ({ running: true, url: '', dest: '/home/me/code/copy', progress: null, lastError: '' })
+    await startClone('~/code', async () => {}, status)
+    expect(get(cloneView)).toMatchObject({ kind: 'running', dest: '/home/me/code/copy' })
+  })
+
+  it('keeps the typed path when the clone already ended or the status fails', async () => {
+    await startClone('~/code', async () => {}, async () => ({ running: false, url: '', dest: '', progress: null, lastError: '' }))
+    expect(get(cloneView)).toMatchObject({ kind: 'running', dest: '~/code/copy' })
+    await startClone('~/code', async () => {}, () => Promise.reject('no'))
+    expect(get(cloneView)).toMatchObject({ kind: 'running', dest: '~/code/copy' })
+  })
+
+  it('does not overwrite a finished clone with the status', async () => {
+    const status = async () => {
+      await ev.fire('clone:done', { repo, error: '', cancelled: false } satisfies CloneDone)
+      return { running: true, url: '', dest: '/x', progress: null, lastError: '' }
+    }
+    await startClone('/p', async () => {}, status)
+    expect(get(cloneView).kind).toBe('form')
+  })
+
   it('does not get stuck on running when clone:done beats the CloneRepo promise', async () => {
     let resolve!: () => void
     const p = startClone('/p', () => new Promise<void>((r) => { resolve = r }))

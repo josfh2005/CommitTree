@@ -41,11 +41,11 @@
     }
   }
 
-  function submit() {
+  async function submit() {
     // One clone at a time: a running one is only ever shown, never restarted.
     if (view.kind !== 'form' || !canClone) return
-    cloneParent.set(dir)
-    startClone(dir, api.cloneRepo)
+    // Only a parent the backend accepted is remembered.
+    if (await startClone(dir, api.cloneRepo, api.cloneStatus)) cloneParent.set(dir)
   }
 
   // Closing never stops a running clone: that is "Continue in background".

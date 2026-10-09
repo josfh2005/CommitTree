@@ -66,7 +66,11 @@ unchanged) and **Clone…**. One clone runs at a time: while one is running,
   relative path reaches the backend as typed; `Validate` expands the `~` and
   refuses a relative path, and the refusal shows like the others. The preview
   line shows the parent as typed (a `~` is not expanded there), and the
-  remembered parent is the typed value, trimmed.
+  remembered parent is the typed value, trimmed, kept only once the
+  backend accepted the clone. If the home folder cannot be found, a `~` is
+  refused with `ErrParentMissing` (wrapped), not the full-path message. The
+  running view shows the destination the backend resolved, so a `~` appears
+  expanded there.
 
 ### Progress
 
@@ -142,7 +146,7 @@ last), process group, interrupt-on-cancel, `WaitDelay`, `begin`/`record`
 and error mapping (`ErrCancelled`, `ErrTimeout`). Differences: no fixed
 timeout; stderr is split on both `\r` and `\n` and each non-empty piece is
 passed to `onLine` as it arrives (and still kept for the record and the
-error); each piece resets the stall timer, and a stall ends the command with
+error); any write to stdout or stderr resets the stall timer, and a stall ends the command with
 `ErrTimeout`. The code both share moves into a helper rather than being
 copied.
 
@@ -193,7 +197,8 @@ copied.
 - `lib/clone.ts` (pure, tested): `dirName(url)`, form validation, and a store
   that follows `clone:progress` / `clone:done` independently of the dialog
   being open; on `clone:done` it selects the repo or raises the toast when
-  the dialog is closed. The last parent is a persisted store entry.
+  the dialog is closed. The last parent is the persisted `cloneParent` store in `lib/stores.ts`,
+  saved only once the backend accepted the clone.
 
 ## Testing
 
