@@ -130,8 +130,16 @@ export function ExplainLinesInChat(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   return window['go']['app']['App']['ExplainLinesInChat'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }
 
+export function FastForwardBranch(arg1, arg2) {
+  return window['go']['app']['App']['FastForwardBranch'](arg1, arg2);
+}
+
 export function Fetch(arg1) {
   return window['go']['app']['App']['Fetch'](arg1);
+}
+
+export function FetchRemote(arg1, arg2) {
+  return window['go']['app']['App']['FetchRemote'](arg1, arg2);
 }
 
 export function Fingerprint(arg1) {
@@ -348,6 +356,10 @@ export function Push(arg1) {
 
 export function PushAll(arg1) {
   return window['go']['app']['App']['PushAll'](arg1);
+}
+
+export function PushBranch(arg1, arg2) {
+  return window['go']['app']['App']['PushBranch'](arg1, arg2);
 }
 
 export function RebaseOnto(arg1, arg2) {

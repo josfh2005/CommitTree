@@ -252,6 +252,48 @@ not set itself. When that happens, a toast reports how many submodules are
 affected and offers an "Update all" action (see the Submodules section of
 docs/spec/01-repositories-and-sidebar.md); there is no automatic update.
 
+### Per-branch Fetch, Pull and Push
+
+The sidebar's branch context menu (docs/spec/01-repositories-and-sidebar.md)
+has remote actions on one branch. All of them are disabled while another
+write runs; Pull and Push are also disabled while a merge, rebase or
+cherry-pick is in progress. Each refreshes the refs (and so the ahead/behind
+badges) afterwards.
+
+- **Fetch `<remote>`** (`App.FetchRemote`) fetches and prunes just that
+  remote: a remote-tracking row's own remote, a local branch's upstream
+  remote, or — when it has no upstream — `origin`, else the repository's only
+  remote. With no origin and several remotes (or none) it is disabled ("No
+  remote").
+- **Pull `<branch>`** on the current branch is exactly the toolbar's Pull
+  (configured strategy, conflicts handled as above). On any other local
+  branch (`App.FastForwardBranch`, under the write lock) the branch is only
+  fast-forwarded to its upstream, without a checkout:
+  `git fetch <remote> <upstream ref>:refs/heads/<branch>`, with no force, so
+  git refuses anything but a fast-forward. A diverged branch fails with
+  "`<branch>` has diverged — check it out to pull". A branch that is only ahead
+  of its upstream (the upstream is already in it) has nothing to pull and is
+  not an error. A toast says "Pulled `<branch>`" when it moved and
+  "`<branch>` is up to date" when it did not. It is disabled, with a tooltip,
+  for a branch with no upstream ("No upstream"), one whose upstream was
+  deleted on the remote ("The upstream was deleted on the remote"), one that
+  tracks a local branch ("Tracks a local branch") and one checked out in a
+  linked worktree ("Checked out in another worktree").
+- **Push `<branch>`** (`App.PushBranch`, under the write lock) pushes only
+  that local branch, current or not, to its upstream with
+  `git push --porcelain <remote> refs/heads/<branch>:<upstream ref>`: never
+  forced, no tags, no scope dialog. A branch with no upstream reads "Publish
+  `<branch>` to `<remote>`" (origin, else the only remote; disabled with "No
+  remote" when there is neither) and is pushed there with `-u`. A branch
+  whose upstream was deleted on the remote also reads "Publish": pushing it
+  re-creates the remote branch (Main branches skips such a branch). A branch that
+  tracks a local branch is disabled ("Tracks a local branch"). The outcome is
+  read from the same per-ref porcelain parsing as Main branches, so a rejected
+  push reads "The remote has commits you don't have — pull `<branch>` first"
+  (any other rejection shows git's reason) as an error toast; success toasts
+  "Pushed `<branch>`" (or "Everything up to date"). The push uses the same
+  network timeout as the other remote commands.
+
 ### Ahead/behind
 
 The count is read fresh whenever asked, by comparing the current branch with

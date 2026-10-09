@@ -763,6 +763,11 @@ export async function fetchRemote(id: string) {
   await runOp(id, 'fetch', 'Fetching…', () => api.fetch(id))
 }
 
+// fetchBranchRemote is the branch menu's "Fetch <remote>": just that remote.
+export async function fetchBranchRemote(id: string, remote: string) {
+  await runOp(id, 'fetch', 'Fetching…', () => api.fetchRemote(id, remote))
+}
+
 const repoLabel = (id: string) => get(repos).find((r) => r.id === id)?.name ?? 'repository'
 
 // refsOf reads a repository's refs fresh — the row menu can push a
@@ -830,6 +835,40 @@ export async function pull(id: string) {
     busy.set('')
     await refreshRepo()
   }
+}
+
+// pullBranch is the branch menu's Pull: the current branch gets the ordinary
+// pull (configured strategy, conflicts); any other is only fast-forwarded to
+// its upstream, without a checkout (docs/spec/05-remote-and-stash.md), and a
+// toast says whether it moved.
+export async function pullBranch(id: string, branch: Branch) {
+  if (branch.current) return pull(id)
+  const name = repoLabel(id)
+  const outcome: { moved?: boolean } = {}
+  const ok = await runOp(id, 'pull', `Pulling ${branch.name}…`, async () => {
+    outcome.moved = await api.fastForwardBranch(id, branch.name)
+  })
+  if (ok) {
+    const message = outcome.moved ? `Pulled ${branch.name}` : `${branch.name} is up to date`
+    toast(id === get(selectedRepoId) ? message : `${name}: ${message}`, 'info')
+  }
+}
+
+// pushBranch is the branch menu's Push: one branch to its upstream, or
+// published to a remote. A rejection is an error toast with git's reason.
+export async function pushBranch(id: string, branch: Branch): Promise<boolean> {
+  const name = repoLabel(id)
+  const outcome: { result?: BranchPushResult } = {}
+  const ok = await runOp(id, 'push', `Pushing ${branch.name}…`, async () => {
+    const r = await api.pushBranch(id, branch.name)
+    if (pushFailed(r)) throw new Error(r.reason || `Could not push ${branch.name}`)
+    outcome.result = r
+  })
+  if (ok && outcome.result) {
+    const message = pushedMessage([outcome.result])
+    toast(id === get(selectedRepoId) ? message : `${name}: ${message}`, 'info')
+  }
+  return ok
 }
 
 export async function stashChanges(id: string) {
