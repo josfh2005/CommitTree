@@ -239,3 +239,19 @@ func TestProgressThrottleNeverDropsAPhasesLastUpdate(t *testing.T) {
 		t.Error("an update after the interval must be sent")
 	}
 }
+
+func TestListDirsBindingIsNeverNil(t *testing.T) {
+	a, _ := cloneApp(t)
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "docs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got, err := a.ListDirs(root + "/d")
+	if err != nil || len(got) != 1 || got[0] != root+"/docs" {
+		t.Errorf("ListDirs = %v, %v", got, err)
+	}
+	got, err = a.ListDirs("relative/")
+	if err != nil || got == nil || len(got) != 0 {
+		t.Errorf("ListDirs(relative) = %#v, %v; want empty non-nil", got, err)
+	}
+}

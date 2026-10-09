@@ -72,6 +72,44 @@ unchanged) and **Clone…**. One clone runs at a time: while one is running,
   which satisfies `errors.Is(err, ErrParentMissing)`, not the full-path message. The
   running view shows the destination the backend resolved, so a `~` appears
   expanded there.
+- **Parent folder suggestions.** Typing in the parent field (not a value set
+  by the remembered parent or by "Choose…") shows a dropdown of folders under
+  the field. It is our own listbox (not a `<datalist>`): the input is a
+  `role="combobox"` with `aria-expanded`, `aria-controls` and
+  `aria-activedescendant`; the list is `role="listbox"` and each row
+  `role="option"` with `aria-selected`.
+  - *What is listed* (`clone.ListDirs`): the text up to its last `/` is the
+    folder to read and the rest is the prefix (case-sensitive). Only folders
+    (symlinks to folders count; files and dangling links do not). Names
+    starting with `.` only when the prefix starts with `.`. Sorted by name,
+    at most 50 (`MaxSuggestions`). Each suggestion is the whole path in the
+    typed form, without a trailing `/`: a leading `~/` is expanded (like
+    `Validate`) to read the folder but kept in the suggestion. The text is
+    trimmed first.
+  - *Nothing is listed* (an empty list, never an error) for a relative path,
+    `~user`, a folder that does not exist, is a file or cannot be read, an
+    empty text, and `~`/`~/` when the home folder is unknown. A bare `~`
+    suggests `~/`, so Tab can start descending.
+  - *Timing:* a lookup runs 150 ms after the last keystroke; a newer lookup
+    (or closing the list) discards an answer still in flight, so the list
+    never shows a stale answer. From the keystroke until the answer for the new
+    text arrives the shown list is *stale*: nothing is highlighted and only
+    Esc acts on it (Tab moves focus, Enter submits, the arrows do nothing), so
+    a key never completes a suggestion made for older text. Picking a suggestion looks up the next level
+    at once, without the pause.
+  - *Keys:* Down/Up move the highlight, wrapping (from nothing: Down → first,
+    Up → last). Tab/Enter complete the highlighted folder and add `/` (not
+    doubled after `~/`); the field then lists that folder's children. Tab with
+    nothing highlighted completes the first suggestion while a name is being
+    typed (text not ending in `/`); after a `/`, or with Shift, it moves focus.
+    Enter with nothing highlighted is not used, so it submits the form. Esc
+    closes the list only (the event does not reach the dialog) and cancels any
+    pending lookup so it cannot reopen; with the list closed Esc closes the
+    dialog as before. Keys with Ctrl/Alt/Meta and IME-composition keys
+    (`isComposing`, `keyCode` 229) are ignored. Mouse presses anywhere on the
+    list, scrollbar included, keep the field focused. A click (on mousedown, so the field
+    keeps focus) completes like Tab. The list closes on blur, on Choose… and on
+    Clone, and when empty.
 
 ### Progress
 
@@ -160,6 +198,8 @@ copied.
   `ErrParentNotAbsolute`, `ErrParentMissing`, `ErrBadName`, `ErrDestNotEmpty`.
   `parent` is the text the user typed: `Validate` trims it, expands a leading
   `~` and requires the result to be absolute before the other checks.
+- `ListDirs(partial string) []string` — the parent folder suggestions above;
+  never nil, no error.
 - `Run(ctx, url, dest string, stall time.Duration, onProgress func(Progress)) error`
   — refuses a URL starting with `-`; records whether `dest` existed; runs
   `git clone --progress --recurse-submodules -- <url> <dest>` from the
@@ -183,6 +223,8 @@ copied.
   `Shutdown` calls `CancelClone`.
 - `PickCloneParent(start string) (string, error)` — directory picker.
 - `DefaultCloneParent() string` — the home folder.
+- `ListDirs(partial string) ([]string, error)` — `clone.ListDirs`, with a
+  non-nil empty slice when there is nothing (the error is always nil).
 - Events: `clone:progress` (`Progress`), throttled to at most ~10 per
   second, but a phase's 100% update is always sent; `clone:done`
   (`{Repo *repos.Repo, Error string, Cancelled bool}`). On success, and on a
@@ -200,6 +242,9 @@ copied.
   being open; on `clone:done` it selects the repo or raises the toast when
   the dialog is closed. The last parent is the persisted `cloneParent` store in `lib/stores.ts`,
   saved only once the backend accepted the clone.
+- `lib/pathcomplete.ts` (pure, tested): the suggestion list state, `handleKey`
+  (what each key does), `applyPick`, and `createCompleter` (150 ms debounce,
+  latest answer wins, cancel). `CloneDialog.svelte` renders the dropdown.
 
 ## Testing
 
@@ -211,6 +256,15 @@ copied.
   folder, a pre-existing empty destination survives a failure, a URL
   starting with `-` refused, and the stall watchdog
   (`GIT_SSH_COMMAND="sleep 30"` with a short stall) ending as a timeout.
+- Go, `internal/clone`, `ListDirs`: prefix filter (case-sensitive), folders
+  only (symlinks to folders in, to files and dangling out), hidden names only
+  with a `.` prefix, sorted, the 50 limit, trailing `/` lists all children,
+  relative / `~user` / missing / file → empty non-nil, `~/` keeps the typed
+  form, bare `~`, trimmed text, unknown home. `internal/app`: the binding
+  returns `[]`, not nil.
+- Frontend, `lib/pathcomplete.test.ts`: wrap-around selection, each key in
+  open, stale and closed states (Enter without selection is not handled, Esc closes
+  only the list), `applyPick`, debounce, newest-answer-wins, cancel.
 - Go, `internal/gitcmd`: `RunStream` splits on `\r` and `\n`, records the
   command, maps cancel and stall.
 - Go, `internal/app`: one clone at a time; the repo is added and

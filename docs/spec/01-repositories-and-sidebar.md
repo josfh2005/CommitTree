@@ -81,9 +81,33 @@ with "Choose…"; the last one a clone started with, accepted by the backend, is
 remembered, the home folder before that; a leading `~` means the home folder, and anything that is not a full
 path is refused) and the folder name. The name follows the URL as it is typed —
 its last path segment without `.git` — until the user edits it; clearing it
-makes it follow again. The name may not be empty, `.` or `..`, or contain a
+makes it follow again. While the parent folder is typed, a dropdown under the
+field suggests folders: see "Parent folder suggestions" below. The name may not be empty, `.` or `..`, or contain a
 slash, and the destination must not exist or must be an empty folder; a URL
 that is empty or starts with `-` is refused.
+
+Parent folder suggestions: while the user types in the parent field (not when
+the value is set by the remembered parent or by "Choose…"), a dropdown under
+the field lists the folders matching the text, looked up ~150 ms after the
+last keystroke (only the newest answer is shown). The text up to its last `/`
+is the folder to list and what follows is the prefix a name must start with
+(case-sensitive). Only folders are listed (a symlink to a folder counts, files
+do not), those whose name starts with `.` only when the prefix itself starts
+with `.`, sorted by name, at most 50. A leading `~/` is expanded to look the
+folder up but suggestions keep the typed `~/` form; a bare `~` suggests `~/`;
+`~user`, relative paths, and folders that do not exist or cannot be read give
+no suggestions (and no error). Surrounding whitespace is ignored. With no
+suggestion the dropdown is not shown. Keys in the field: Down / Up move the
+highlight (wrapping; from nothing, Down goes to the first and Up to the
+last); Tab or Enter complete the highlighted folder and add a `/` so the next
+level is listed straight away; Tab with nothing highlighted completes the first
+suggestion while a name is being typed (the text does not end in `/`),
+otherwise (and with Shift) it moves focus as usual; Enter with nothing
+highlighted submits the form as usual; Esc closes the dropdown only, not the
+dialog. Between a keystroke and the answer for the new text the list is stale:
+nothing is highlighted and only Esc acts on it (Tab moves focus, Enter
+submits). Esc also cancels a pending lookup. Clicking a suggestion completes it the same way. The dropdown also
+closes when the field loses focus, when Choose… is used and on Clone.
 
 **Clone** runs `git clone --progress --recurse-submodules -- <url> <dest>`
 from the parent folder. Credentials come only from what is already set up
