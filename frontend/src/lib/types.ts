@@ -540,3 +540,7 @@ export interface RepoAIInfo {
   state: RepoAIState
   error?: string
 }
+
+export interface CloneProgress { phase: string; percent: number; detail: string }
+export interface CloneStatus { running: boolean; url: string; dest: string; progress: CloneProgress | null; lastError: string }
+export interface CloneDone { repo: Repo | null; error: string; cancelled: boolean }
