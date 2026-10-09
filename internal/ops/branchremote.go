@@ -15,6 +15,7 @@ var (
 	ErrNoBranch      = errors.New("ops: no such local branch")
 	ErrNoUpstream    = errors.New("ops: the branch has no upstream")
 	ErrUpstreamLocal = errors.New("ops: the branch tracks a local branch")
+	ErrNoRemote      = errors.New("ops: no remote to publish to")
 )
 
 // FetchRemote fetches one remote and prunes what it no longer has, the
@@ -55,30 +56,68 @@ func upstreamOf(ctx context.Context, dir, branch string) (branchUpstream, error)
 // upstream, fetching it first, without touching the working tree:
 // `git fetch <remote> <ref>:refs/heads/<branch>`, which git refuses unless
 // it is a fast-forward (and for a branch another worktree has checked out;
-// its message is passed on). The current branch is pulled instead.
-func FastForwardBranch(ctx context.Context, dir, branch string) error {
+// its message is passed on). It reports whether the branch moved: a branch
+// already at, or only ahead of, its upstream has nothing to pull. The
+// current branch is pulled instead.
+func FastForwardBranch(ctx context.Context, dir, branch string) (bool, error) {
 	up, err := upstreamOf(ctx, dir, branch)
 	if err != nil {
-		return err
+		return false, err
 	}
 	switch {
 	case up.remote == ".":
-		return fmt.Errorf("%w: %s", ErrUpstreamLocal, branch)
+		return false, fmt.Errorf("%w: %s", ErrUpstreamLocal, branch)
 	case up.remote == "" || up.remoteRef == "":
-		return fmt.Errorf("%w: %s", ErrNoUpstream, branch)
+		return false, fmt.Errorf("%w: %s", ErrNoUpstream, branch)
 	case up.current:
-		return fmt.Errorf("%s is the current branch — pull it instead", branch)
+		return false, fmt.Errorf("%s is the current branch — pull it instead", branch)
+	}
+	before, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--verify", "refs/heads/"+branch)
+	if err != nil {
+		return false, err
 	}
 	_, err = gitcmd.Run(ctx, dir, gitcmd.NetworkTimeout, "fetch", "--", up.remote, up.remoteRef+":refs/heads/"+branch)
 	var gerr *gitcmd.Error
 	if errors.As(err, &gerr) && strings.Contains(gerr.Stderr, "non-fast-forward") {
-		return fmt.Errorf("%s has diverged — check it out to pull", branch)
+		// Rejected because the branch is not an ancestor of the upstream: it
+		// has diverged, unless it is merely ahead (the upstream, which git
+		// leaves in FETCH_HEAD even on a rejection, is already in it).
+		if _, ancErr := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "merge-base", "--is-ancestor", "FETCH_HEAD", "refs/heads/"+branch); ancErr == nil {
+			return false, nil
+		}
+		return false, fmt.Errorf("%s has diverged — check it out to pull", branch)
 	}
-	return err
+	if err != nil {
+		return false, err
+	}
+	after, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--verify", "refs/heads/"+branch)
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(after) != strings.TrimSpace(before), nil
+}
+
+// DefaultRemote is where a branch with no upstream is published: origin,
+// else the repository's only remote.
+func DefaultRemote(ctx context.Context, dir string) (string, error) {
+	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "remote")
+	if err != nil {
+		return "", err
+	}
+	remotes := strings.Fields(out)
+	for _, r := range remotes {
+		if r == "origin" {
+			return r, nil
+		}
+	}
+	if len(remotes) == 1 {
+		return remotes[0], nil
+	}
+	return "", ErrNoRemote
 }
 
 // PushBranch pushes one local branch, current or not, to its upstream — to
-// origin with -u when it has none — never forced and without tags. Like each
+// DefaultRemote with -u when it has none — never forced and without tags. Like each
 // branch of PushAll, a rejection or a failure is the result, not an error;
 // only a branch that cannot be pushed at all (unknown, or tracking a local
 // branch) is one.
@@ -92,7 +131,11 @@ func PushBranch(ctx context.Context, dir, branch string) (BranchPushResult, erro
 	case up.remote == ".":
 		return BranchPushResult{}, fmt.Errorf("%w: %s", ErrUpstreamLocal, branch)
 	case up.remote == "" || up.remoteRef == "":
-		t = pushTarget{branch: branch, remote: "origin", remoteRef: "refs/heads/" + branch, setUpstream: true}
+		remote, err := DefaultRemote(ctx, dir)
+		if err != nil {
+			return BranchPushResult{}, err
+		}
+		t = pushTarget{branch: branch, remote: remote, remoteRef: "refs/heads/" + branch, setUpstream: true}
 	}
 	results := []BranchPushResult{{Branch: branch, Target: t.remote + "/" + strings.TrimPrefix(t.remoteRef, "refs/heads/")}}
 	pushGroup(ctx, dir, t.remote, []int{0}, []pushTarget{t}, results)

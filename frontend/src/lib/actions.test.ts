@@ -20,7 +20,7 @@ vi.mock('./api', () => ({
     push: vi.fn().mockResolvedValue(undefined),
     pushAll: vi.fn().mockResolvedValue([]),
     fetchRemote: vi.fn().mockResolvedValue(undefined),
-    fastForwardBranch: vi.fn().mockResolvedValue(undefined),
+    fastForwardBranch: vi.fn().mockResolvedValue(true),
     pushBranch: vi.fn(),
     pull: vi.fn(),
     notify: vi.fn().mockResolvedValue(undefined),
@@ -564,7 +564,7 @@ describe('the branch menu\'s Fetch, Pull and Push', () => {
   beforeEach(() => {
     toasts.set([])
     vi.mocked(api.fetchRemote).mockReset().mockResolvedValue(undefined)
-    vi.mocked(api.fastForwardBranch).mockReset().mockResolvedValue(undefined)
+    vi.mocked(api.fastForwardBranch).mockReset().mockResolvedValue(true)
     vi.mocked(api.pushBranch).mockReset().mockResolvedValue({ branch: 'feature', target: 'origin/feature', status: 'pushed' })
     vi.mocked(api.pull).mockReset().mockResolvedValue({ outcome: 0, conflicts: [] })
     vi.mocked(api.getRefs).mockClear()
@@ -597,6 +597,18 @@ describe('the branch menu\'s Fetch, Pull and Push', () => {
     expect(api.fastForwardBranch).toHaveBeenCalledWith('r1', 'feature')
     expect(api.pull).not.toHaveBeenCalled()
     expect(api.getRefs).toHaveBeenCalled()
+    expect(get(toasts).map((t) => [t.message, t.kind])).toEqual([['Pulled feature', 'info']])
+  })
+
+  it('says so when the branch had nothing to pull', async () => {
+    vi.mocked(api.fastForwardBranch).mockResolvedValue(false)
+    await pullBranch('r1', feature())
+    expect(get(toasts).map((t) => t.message)).toEqual(['feature is up to date'])
+  })
+
+  it('names another repository in the pull toast', async () => {
+    await pullBranch('r2', feature())
+    expect(get(toasts).map((t) => t.message)).toEqual(['beta: Pulled feature'])
   })
 
   it('a diverged branch toasts the error', async () => {

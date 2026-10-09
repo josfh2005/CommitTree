@@ -839,24 +839,33 @@ export async function pull(id: string) {
 
 // pullBranch is the branch menu's Pull: the current branch gets the ordinary
 // pull (configured strategy, conflicts); any other is only fast-forwarded to
-// its upstream, without a checkout (docs/spec/05-remote-and-stash.md).
+// its upstream, without a checkout (docs/spec/05-remote-and-stash.md), and a
+// toast says whether it moved.
 export async function pullBranch(id: string, branch: Branch) {
   if (branch.current) return pull(id)
-  await runOp(id, 'pull', `Pulling ${branch.name}…`, () => api.fastForwardBranch(id, branch.name))
+  const name = repoLabel(id)
+  const outcome: { moved?: boolean } = {}
+  const ok = await runOp(id, 'pull', `Pulling ${branch.name}…`, async () => {
+    outcome.moved = await api.fastForwardBranch(id, branch.name)
+  })
+  if (ok) {
+    const message = outcome.moved ? `Pulled ${branch.name}` : `${branch.name} is up to date`
+    toast(id === get(selectedRepoId) ? message : `${name}: ${message}`, 'info')
+  }
 }
 
 // pushBranch is the branch menu's Push: one branch to its upstream, or
-// published to origin. A rejection is an error toast with git's reason.
+// published to a remote. A rejection is an error toast with git's reason.
 export async function pushBranch(id: string, branch: Branch): Promise<boolean> {
   const name = repoLabel(id)
-  let result: BranchPushResult | null = null
+  const outcome: { result?: BranchPushResult } = {}
   const ok = await runOp(id, 'push', `Pushing ${branch.name}…`, async () => {
     const r = await api.pushBranch(id, branch.name)
     if (pushFailed(r)) throw new Error(r.reason || `Could not push ${branch.name}`)
-    result = r
+    outcome.result = r
   })
-  if (ok && result) {
-    const message = pushedMessage([result])
+  if (ok && outcome.result) {
+    const message = pushedMessage([outcome.result])
     toast(id === get(selectedRepoId) ? message : `${name}: ${message}`, 'info')
   }
   return ok

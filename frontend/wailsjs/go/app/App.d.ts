@@ -83,7 +83,7 @@ export function ExplainInChat(arg1:string,arg2:string,arg3:string,arg4:string):P
 
 export function ExplainLinesInChat(arg1:string,arg2:string,arg3:string,arg4:number,arg5:number,arg6:string,arg7:string):Promise<void>;
 
-export function FastForwardBranch(arg1:string,arg2:string):Promise<void>;
+export function FastForwardBranch(arg1:string,arg2:string):Promise<boolean>;
 
 export function Fetch(arg1:string):Promise<void>;
 

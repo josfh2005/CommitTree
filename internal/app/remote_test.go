@@ -164,8 +164,8 @@ func TestBranchRemoteActionsThroughTheAppLayer(t *testing.T) {
 	if err := a.FetchRemote(id, "origin"); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.FastForwardBranch(id, "topic"); err != nil {
-		t.Fatal(err)
+	if moved, err := a.FastForwardBranch(id, "topic"); err != nil || !moved {
+		t.Fatalf("moved = %v, err = %v, want moved", moved, err)
 	}
 	if got := r.Git("rev-parse", "topic"); got != h {
 		t.Errorf("topic = %s, want %s", got, h)
@@ -182,7 +182,7 @@ func TestBranchRemoteActionsRefuseWhileAnotherWriteRuns(t *testing.T) {
 	if err := a.FetchRemote(id, "origin"); !errors.Is(err, ErrBusy) {
 		t.Errorf("FetchRemote err = %v, want ErrBusy", err)
 	}
-	if err := a.FastForwardBranch(id, "main"); !errors.Is(err, ErrBusy) {
+	if _, err := a.FastForwardBranch(id, "main"); !errors.Is(err, ErrBusy) {
 		t.Errorf("FastForwardBranch err = %v, want ErrBusy", err)
 	}
 	if _, err := a.PushBranch(id, "main"); !errors.Is(err, ErrBusy) {

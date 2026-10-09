@@ -4,7 +4,7 @@
   import { api } from '../lib/api'
   import { checkoutBranch, deleteBranch, deleteTag, fetchBranchRemote, mergeBranch, newBranch, newTag, pullBranch, pushBranch, rebaseOnto, stashApply, stashDrop, stashPop } from '../lib/actions'
   import { groupBranches, leafName, type BranchGroup } from '../lib/branches'
-import { branchLabel, branchMenuGroups, branchRemote, type BranchMenuId } from '../lib/branchMenu'
+  import { branchLabel, branchMenuGroups, branchRemote, type BranchMenuId } from '../lib/branchMenu'
   import { rebaseBlocker } from '../lib/rebase'
   import { busy, expandedStashSections, repos, expandedTagSections, filters, loadSideRefs, mainView, mergeState, refs, selectRepo, selectStash, selectedRepoId, selectedStash, sideRefs, stashEntries, toggleStashExpanded, toggleTagsExpanded } from '../lib/stores'
   import { isFilterRow, refsView } from '../lib/repoRefs'

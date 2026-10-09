@@ -47,8 +47,9 @@ func behindClone(t *testing.T) (*testrepo.Repo, string) {
 func TestFastForwardBranchMovesANonCurrentBranch(t *testing.T) {
 	a, h := behindClone(t)
 	mainBefore := a.Git("rev-parse", "main")
-	if err := ops.FastForwardBranch(ctx, a.Dir, "develop"); err != nil {
-		t.Fatal(err)
+	moved, err := ops.FastForwardBranch(ctx, a.Dir, "develop")
+	if err != nil || !moved {
+		t.Fatalf("moved = %v, err = %v, want moved", moved, err)
 	}
 	if got := a.Git("rev-parse", "develop"); got != h {
 		t.Errorf("develop = %s, want %s", got, h)
@@ -65,8 +66,8 @@ func TestFastForwardBranchFetchesNewCommitsItself(t *testing.T) {
 	h := b.Commit("more")
 	b.Git("push", "-q", "origin", "feature")
 	// a never fetched: the branch still reaches the commit.
-	if err := ops.FastForwardBranch(ctx, a.Dir, "feature2"); err != nil {
-		t.Fatal(err)
+	if moved, err := ops.FastForwardBranch(ctx, a.Dir, "feature2"); err != nil || !moved {
+		t.Fatalf("moved = %v, err = %v, want moved", moved, err)
 	}
 	if got := a.Git("rev-parse", "feature2"); got != h {
 		t.Errorf("feature2 = %s, want %s", got, h)
@@ -78,8 +79,8 @@ func TestFastForwardBranchRefusesADivergedBranch(t *testing.T) {
 	a.Git("switch", "-q", "develop")
 	local := a.Commit("local develop")
 	a.Git("switch", "-q", "main")
-	err := ops.FastForwardBranch(ctx, a.Dir, "develop")
-	if err == nil || err.Error() != "develop has diverged — check it out to pull" {
+	moved, err := ops.FastForwardBranch(ctx, a.Dir, "develop")
+	if moved || err == nil || err.Error() != "develop has diverged — check it out to pull" {
 		t.Fatalf("err = %v, want the diverged message", err)
 	}
 	if a.Git("rev-parse", "develop") != local {
@@ -87,17 +88,37 @@ func TestFastForwardBranchRefusesADivergedBranch(t *testing.T) {
 	}
 }
 
+func TestFastForwardBranchOnlyAheadOfItsUpstreamIsUpToDate(t *testing.T) {
+	a, _ := aheadClone(t) // develop (not checked out) has a commit origin/develop lacks
+	before := a.Git("rev-parse", "develop")
+	moved, err := ops.FastForwardBranch(ctx, a.Dir, "develop")
+	if err != nil || moved {
+		t.Fatalf("moved = %v, err = %v, want no change and no error", moved, err)
+	}
+	if a.Git("rev-parse", "develop") != before {
+		t.Error("develop moved")
+	}
+}
+
+func TestFastForwardBranchAlreadyAtItsUpstreamDoesNotMove(t *testing.T) {
+	a, _ := clones(t)
+	a.Git("branch", "--track", "feature2", "origin/feature")
+	if moved, err := ops.FastForwardBranch(ctx, a.Dir, "feature2"); err != nil || moved {
+		t.Fatalf("moved = %v, err = %v, want no change", moved, err)
+	}
+}
+
 func TestFastForwardBranchRefusesWithoutAnUpstreamOrOnALocalOne(t *testing.T) {
 	a, _ := clones(t)
 	a.Git("branch", "loose")
 	a.Git("branch", "--track", "child", "main")
-	if err := ops.FastForwardBranch(ctx, a.Dir, "loose"); !errors.Is(err, ops.ErrNoUpstream) {
+	if _, err := ops.FastForwardBranch(ctx, a.Dir, "loose"); !errors.Is(err, ops.ErrNoUpstream) {
 		t.Errorf("no upstream: err = %v, want ErrNoUpstream", err)
 	}
-	if err := ops.FastForwardBranch(ctx, a.Dir, "child"); !errors.Is(err, ops.ErrUpstreamLocal) {
+	if _, err := ops.FastForwardBranch(ctx, a.Dir, "child"); !errors.Is(err, ops.ErrUpstreamLocal) {
 		t.Errorf("local upstream: err = %v, want ErrUpstreamLocal", err)
 	}
-	if err := ops.FastForwardBranch(ctx, a.Dir, "main"); err == nil {
+	if _, err := ops.FastForwardBranch(ctx, a.Dir, "main"); err == nil {
 		t.Error("the current branch must go through pull")
 	}
 }
@@ -105,7 +126,7 @@ func TestFastForwardBranchRefusesWithoutAnUpstreamOrOnALocalOne(t *testing.T) {
 func TestFastForwardBranchSurfacesGitsMessageForAWorktreeBranch(t *testing.T) {
 	a, _ := behindClone(t)
 	a.Git("worktree", "add", "-q", t.TempDir()+"/wt", "develop")
-	err := ops.FastForwardBranch(ctx, a.Dir, "develop")
+	_, err := ops.FastForwardBranch(ctx, a.Dir, "develop")
 	if err == nil || !strings.Contains(err.Error(), "checked out") {
 		t.Fatalf("err = %v, want git's checked-out message", err)
 	}
@@ -181,5 +202,46 @@ func TestPushBranchRefusesABranchTrackingALocalOne(t *testing.T) {
 	}
 	if _, err := ops.PushBranch(ctx, a.Dir, "missing"); err == nil {
 		t.Error("an unknown branch must be an error")
+	}
+}
+
+func TestPushBranchPublishesToTheOnlyRemoteWhenThereIsNoOrigin(t *testing.T) {
+	a, _ := aheadClone(t)
+	a.Git("remote", "rename", "origin", "backup")
+	a.Git("branch", "topic")
+	got, err := ops.PushBranch(ctx, a.Dir, "topic")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := ops.BranchPushResult{Branch: "topic", Target: "backup/topic", Status: ops.PushPushed}
+	if got != want {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+}
+
+func TestPushBranchWithNoOriginAndSeveralRemotesHasNowhereToPublish(t *testing.T) {
+	a, _ := aheadClone(t)
+	a.Git("remote", "rename", "origin", "backup")
+	a.Git("remote", "add", "other", testrepo.NewBareFrom(t, a))
+	a.Git("branch", "topic")
+	if _, err := ops.PushBranch(ctx, a.Dir, "topic"); !errors.Is(err, ops.ErrNoRemote) {
+		t.Errorf("err = %v, want ErrNoRemote", err)
+	}
+}
+
+func TestPushBranchWithAGoneUpstreamRecreatesTheRemoteBranch(t *testing.T) {
+	a, bare := aheadClone(t)
+	b := testrepo.Clone(t, bare)
+	b.Git("push", "-q", "origin", "--delete", "develop")
+	a.Git("fetch", "-q", "--prune")
+	got, err := ops.PushBranch(ctx, a.Dir, "develop")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != ops.PushPushed || got.Target != "origin/develop" {
+		t.Fatalf("got %+v, want pushed to origin/develop", got)
+	}
+	if remoteHash(a, "origin", "develop") != a.Git("rev-parse", "develop") {
+		t.Error("develop was not recreated on the remote")
 	}
 }

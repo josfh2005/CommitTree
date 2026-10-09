@@ -84,12 +84,49 @@ describe('branchMenuGroups', () => {
   })
 })
 
+describe('Pull and Push in the less common states', () => {
+  it('Pull is disabled for a branch checked out in a linked worktree', () => {
+    expect(find(branchMenuGroups(local({ worktree: '/wt' }), opts()), 'pull')).toMatchObject({ disabled: true, title: 'Checked out in another worktree' })
+  })
+
+  it('Pull is disabled when the upstream was deleted, and Push says it publishes again', () => {
+    const groups = branchMenuGroups(local({ upstreamGone: true }), opts())
+    expect(find(groups, 'pull')).toMatchObject({ disabled: true, title: 'The upstream was deleted on the remote' })
+    expect(find(groups, 'push')).toMatchObject({ label: 'Publish feature to origin', disabled: false })
+  })
+
+  it('publishes to the only remote when there is no origin', () => {
+    const groups = branchMenuGroups(local({ upstream: '' }), opts({ remotes: ['backup'] }))
+    expect(find(groups, 'push').label).toBe('Publish feature to backup')
+    expect(find(groups, 'fetch').label).toBe('Fetch backup')
+  })
+
+  it('with no origin and several remotes (or none) Fetch and Publish are disabled', () => {
+    for (const remotes of [['a', 'b'], []]) {
+      const groups = branchMenuGroups(local({ upstream: '' }), opts({ remotes }))
+      expect(find(groups, 'fetch')).toMatchObject({ label: 'Fetch', disabled: true, title: 'No remote' })
+      expect(find(groups, 'push')).toMatchObject({ disabled: true, title: 'No remote' })
+    }
+  })
+
+  it('a branch with a live upstream still pushes without an origin', () => {
+    const groups = branchMenuGroups(local({ upstream: 'a/feature' }), opts({ remotes: ['a', 'b'] }))
+    expect(find(groups, 'fetch').label).toBe('Fetch a')
+    expect(find(groups, 'push')).toMatchObject({ label: 'Push feature', disabled: false })
+  })
+})
+
 describe('branchRemote', () => {
   it('uses the longest remote name that prefixes the upstream', () => {
     expect(branchRemote(local({ upstream: 'team/fork/feature' }), ['team', 'team/fork'])).toBe('team/fork')
   })
   it('falls back to origin', () => {
-    expect(branchRemote(local({ upstream: '' }), ['backup'])).toBe('origin')
+    expect(branchRemote(local({ upstream: '' }), ['backup', 'origin'])).toBe('origin')
     expect(branchRemote(local({ upstream: 'main', upstreamLocal: true }), ['origin'])).toBe('origin')
+  })
+  it('without origin it is the only remote, else none', () => {
+    expect(branchRemote(local({ upstream: '' }), ['backup'])).toBe('backup')
+    expect(branchRemote(local({ upstream: '' }), ['a', 'b'])).toBe('')
+    expect(branchRemote(local({ upstream: '' }), [])).toBe('')
   })
 })

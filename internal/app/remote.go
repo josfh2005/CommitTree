@@ -19,9 +19,15 @@ func (a *App) FetchRemote(id, remote string) error {
 
 // FastForwardBranch is the branch menu's Pull on a branch that is not
 // checked out: it moves the branch up to its upstream when that is a
-// fast-forward (docs/spec/05-remote-and-stash.md).
-func (a *App) FastForwardBranch(id, branch string) error {
-	return a.write(id, func(ctx context.Context, dir string) error { return ops.FastForwardBranch(ctx, dir, branch) })
+// fast-forward (docs/spec/05-remote-and-stash.md) and reports whether it moved.
+func (a *App) FastForwardBranch(id, branch string) (bool, error) {
+	var moved bool
+	err := a.write(id, func(ctx context.Context, dir string) error {
+		var ffErr error
+		moved, ffErr = ops.FastForwardBranch(ctx, dir, branch)
+		return ffErr
+	})
+	return moved, err
 }
 
 // PushBranch is the branch menu's Push: one local branch to its upstream,
