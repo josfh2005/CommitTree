@@ -1,0 +1,121 @@
+package app
+
+import (
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"git-ui/internal/clone"
+	"git-ui/internal/testrepo"
+)
+
+func cloneApp(t *testing.T) (*App, chan CloneDone) {
+	t.Helper()
+	a, _ := newTestApp(t)
+	a.ctx = context.Background()
+	done := make(chan CloneDone, 4)
+	WithAI(a, AIDeps{Emit: func(name string, data any) {
+		if name == "clone:done" {
+			done <- data.(CloneDone)
+		}
+	}})
+	return a, done
+}
+
+func waitDone(t *testing.T, ch chan CloneDone) CloneDone {
+	t.Helper()
+	select {
+	case d := <-ch:
+		return d
+	case <-time.After(30 * time.Second):
+		t.Fatal("no clone:done")
+		return CloneDone{}
+	}
+}
+
+func TestCloneRepoAddsTheRepository(t *testing.T) {
+	a, done := cloneApp(t)
+	src := testrepo.New(t)
+	src.Commit("base")
+	bare := testrepo.NewBareFrom(t, src)
+	parent := t.TempDir()
+
+	if err := a.CloneRepo("file://"+bare, parent, "copy"); err != nil {
+		t.Fatal(err)
+	}
+	d := waitDone(t, done)
+	if d.Repo == nil || d.Error != "" || d.Cancelled {
+		t.Fatalf("done = %+v", d)
+	}
+	if d.Repo.Path != canonical(filepath.Join(parent, "copy")) {
+		t.Fatalf("path = %q", d.Repo.Path)
+	}
+	if _, ok := a.store.Get(d.Repo.ID); !ok {
+		t.Fatal("repo not in the store")
+	}
+	if s := a.CloneStatus(); s.Running || s.LastError != "" {
+		t.Fatalf("status = %+v", s)
+	}
+}
+
+func TestCloneRepoOneAtATimeAndCancel(t *testing.T) {
+	t.Setenv("GIT_SSH_COMMAND", "sleep 30;:")
+	a, done := cloneApp(t)
+	parent := t.TempDir()
+
+	if err := a.CloneRepo("ssh://example.invalid/x.git", parent, "x"); err != nil {
+		t.Fatal(err)
+	}
+	if s := a.CloneStatus(); !s.Running || s.Dest != filepath.Join(parent, "x") {
+		t.Fatalf("status = %+v", s)
+	}
+	if err := a.CloneRepo("ssh://example.invalid/y.git", parent, "y"); !errors.Is(err, ErrCloneRunning) {
+		t.Fatalf("second clone err = %v", err)
+	}
+	time.Sleep(200 * time.Millisecond)
+	a.CancelClone()
+	d := waitDone(t, done)
+	if !d.Cancelled || d.Error != "" || d.Repo != nil {
+		t.Fatalf("done = %+v", d)
+	}
+	if _, err := os.Stat(filepath.Join(parent, "x")); !os.IsNotExist(err) {
+		t.Fatalf("dest left behind: %v", err)
+	}
+	if s := a.CloneStatus(); s.Running {
+		t.Fatalf("still running: %+v", s)
+	}
+}
+
+func TestCloneRepoValidatesFirst(t *testing.T) {
+	a, done := cloneApp(t)
+	parent := t.TempDir()
+	os.MkdirAll(filepath.Join(parent, "full", "x"), 0o755)
+
+	if err := a.CloneRepo("file:///nowhere", parent, "full"); !errors.Is(err, clone.ErrDestNotEmpty) {
+		t.Fatalf("err = %v", err)
+	}
+	if err := a.CloneRepo("-x", parent, "new"); !errors.Is(err, clone.ErrBadURL) {
+		t.Fatalf("err = %v", err)
+	}
+	select {
+	case d := <-done:
+		t.Fatalf("unexpected clone:done %+v", d)
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+func TestCloneRepoFailureIsKeptInStatus(t *testing.T) {
+	a, done := cloneApp(t)
+	missing := filepath.Join(t.TempDir(), "nope")
+	if err := a.CloneRepo(missing, t.TempDir(), "x"); err != nil {
+		t.Fatal(err)
+	}
+	d := waitDone(t, done)
+	want := "Repository not found at " + missing + "."
+	if d.Error != want || a.CloneStatus().LastError != want {
+		t.Fatalf("done = %+v, status = %+v", d, a.CloneStatus())
+	}
+}

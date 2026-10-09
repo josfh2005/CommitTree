@@ -178,6 +178,44 @@ export namespace app {
 		    return a;
 		}
 	}
+	export class CloneState {
+	    running: boolean;
+	    url: string;
+	    dest: string;
+	    progress?: clone.Progress;
+	    lastError: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CloneState(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.running = source["running"];
+	        this.url = source["url"];
+	        this.dest = source["dest"];
+	        this.progress = this.convertValues(source["progress"], clone.Progress);
+	        this.lastError = source["lastError"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class CommandLogView {
 	    repo: string;
 	    entries: cmdlog.Entry[];
@@ -523,6 +561,27 @@ export namespace app {
 	        this.hash = source["hash"];
 	        this.truncated = source["truncated"];
 	        this.patchable = source["patchable"];
+	    }
+	}
+
+}
+
+export namespace clone {
+	
+	export class Progress {
+	    phase: string;
+	    percent: number;
+	    detail: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Progress(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.phase = source["phase"];
+	        this.percent = source["percent"];
+	        this.detail = source["detail"];
 	    }
 	}
 
