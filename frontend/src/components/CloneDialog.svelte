@@ -4,7 +4,7 @@
   import {
     cancelClone, cloneCancelling, cloneDialogOpen, cloneForm, cloneView, editName, editURL, joinPath, nameError, startClone,
   } from '../lib/clone'
-  import { applyPick, closedList, createCompleter, handleKey, openList, splitPath } from '../lib/pathcomplete'
+  import { applyPick, closedList, createCompleter, handleKey, markStale, openList, splitPath } from '../lib/pathcomplete'
   import { cloneParent } from '../lib/stores'
   import { dialog } from '../lib/ui'
 
@@ -53,13 +53,17 @@
   }
 
   function onParentKey(e: KeyboardEvent) {
-    if (e.isComposing) return
-    const r = handleKey(list, e.key, e.shiftKey, parent)
+    // keyCode 229: the key that confirms an IME composition (Safari reports no isComposing then).
+    if (e.isComposing || e.keyCode === 229) return
+    const r = handleKey(list, e.key, e.shiftKey, parent, e.ctrlKey || e.altKey || e.metaKey)
     list = r.state
     if (!r.handled) return
     e.preventDefault()
-    // Esc closes the suggestions only, not the dialog.
-    if (e.key === 'Escape') e.stopPropagation()
+    if (e.key === 'Escape') {
+      // Esc closes the suggestions only, not the dialog, and no lookup may reopen them.
+      e.stopPropagation()
+      closeList()
+    }
     if (r.pick !== null) pick(r.pick)
   }
 
@@ -89,7 +93,7 @@
   // Closing never stops a running clone: that is "Continue in background".
   const close = () => cloneDialogOpen.set(false)
   // Escape closes a confirm opened on top of this dialog first.
-  const onKey = (e: KeyboardEvent) => { if ($cloneDialogOpen && e.key === 'Escape' && !$dialog) close() }
+  const onKey = (e: KeyboardEvent) => { if ($cloneDialogOpen && e.key === 'Escape' && !$dialog && !e.defaultPrevented) close() }
 </script>
 
 <svelte:window on:keydown={onKey} />
@@ -109,16 +113,17 @@
             <span class="parent">
               <span class="field">
                 <input spellcheck="false" autocomplete="off" placeholder="/path/to/folder or ~/folder" bind:value={parent}
-                  role="combobox" aria-autocomplete="list" aria-expanded={list.open} aria-controls="clone-parent-list"
+                  role="combobox" aria-label="Parent folder" aria-autocomplete="list" aria-expanded={list.open} aria-controls={list.open ? 'clone-parent-list' : undefined}
                   aria-activedescendant={list.selected >= 0 ? optionID(list.selected) : undefined}
-                  on:input={(e) => completer.request(e.currentTarget.value)}
+                  on:input={(e) => { list = markStale(list); completer.request(e.currentTarget.value) }}
                   on:keydown={onParentKey} on:blur={closeList} />
                 {#if list.open}
-                  <ul id="clone-parent-list" class="suggest" role="listbox" aria-label="Folders">
+                  <!-- mousedown is kept off the input's blur, scrollbar included. -->
+                  <ul id="clone-parent-list" class="suggest" role="listbox" aria-label="Folders" on:mousedown|preventDefault>
                     {#each list.items as item, i (item)}
                       {@const parts = splitPath(item)}
                       <li id={optionID(i)} role="option" aria-selected={i === list.selected} class:selected={i === list.selected}
-                        title={item} on:mousedown|preventDefault={() => pick(item)}>
+                        title={item} on:mousedown={() => pick(item)}>
                         <span class="dir">{parts.dir}</span><span class="name">{parts.name}</span>
                       </li>
                     {/each}

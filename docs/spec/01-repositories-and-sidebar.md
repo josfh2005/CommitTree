@@ -104,7 +104,9 @@ level is listed straight away; Tab with nothing highlighted completes the first
 suggestion while a name is being typed (the text does not end in `/`),
 otherwise (and with Shift) it moves focus as usual; Enter with nothing
 highlighted submits the form as usual; Esc closes the dropdown only, not the
-dialog. Clicking a suggestion completes it the same way. The dropdown also
+dialog. Between a keystroke and the answer for the new text the list is stale:
+nothing is highlighted and only Esc acts on it (Tab moves focus, Enter
+submits). Esc also cancels a pending lookup. Clicking a suggestion completes it the same way. The dropdown also
 closes when the field loses focus, when Choose… is used and on Clone.
 
 **Clone** runs `git clone --progress --recurse-submodules -- <url> <dest>`

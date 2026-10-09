@@ -92,7 +92,10 @@ unchanged) and **Clone…**. One clone runs at a time: while one is running,
     suggests `~/`, so Tab can start descending.
   - *Timing:* a lookup runs 150 ms after the last keystroke; a newer lookup
     (or closing the list) discards an answer still in flight, so the list
-    never shows a stale answer. Picking a suggestion looks up the next level
+    never shows a stale answer. From the keystroke until the answer for the new
+    text arrives the shown list is *stale*: nothing is highlighted and only
+    Esc acts on it (Tab moves focus, Enter submits, the arrows do nothing), so
+    a key never completes a suggestion made for older text. Picking a suggestion looks up the next level
     at once, without the pause.
   - *Keys:* Down/Up move the highlight, wrapping (from nothing: Down → first,
     Up → last). Tab/Enter complete the highlighted folder and add `/` (not
@@ -100,8 +103,11 @@ unchanged) and **Clone…**. One clone runs at a time: while one is running,
     nothing highlighted completes the first suggestion while a name is being
     typed (text not ending in `/`); after a `/`, or with Shift, it moves focus.
     Enter with nothing highlighted is not used, so it submits the form. Esc
-    closes the list only (the event does not reach the dialog); with the list
-    closed Esc closes the dialog as before. A click (on mousedown, so the field
+    closes the list only (the event does not reach the dialog) and cancels any
+    pending lookup so it cannot reopen; with the list closed Esc closes the
+    dialog as before. Keys with Ctrl/Alt/Meta and IME-composition keys
+    (`isComposing`, `keyCode` 229) are ignored. Mouse presses anywhere on the
+    list, scrollbar included, keep the field focused. A click (on mousedown, so the field
     keeps focus) completes like Tab. The list closes on blur, on Choose… and on
     Clone, and when empty.
 
@@ -257,7 +263,7 @@ copied.
   form, bare `~`, trimmed text, unknown home. `internal/app`: the binding
   returns `[]`, not nil.
 - Frontend, `lib/pathcomplete.test.ts`: wrap-around selection, each key in
-  open and closed states (Enter without selection is not handled, Esc closes
+  open, stale and closed states (Enter without selection is not handled, Esc closes
   only the list), `applyPick`, debounce, newest-answer-wins, cancel.
 - Go, `internal/gitcmd`: `RunStream` splits on `\r` and `\n`, records the
   command, maps cancel and stall.

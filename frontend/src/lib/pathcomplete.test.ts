@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  applyPick, closeList, createCompleter, handleKey, moveSelection, openList, splitPath, closedList,
+  applyPick, createCompleter, handleKey, markStale, moveSelection, openList, splitPath, closedList,
 } from './pathcomplete'
 
 const list = (items: string[], selected = -1) => ({ items, selected, open: items.length > 0 })
@@ -31,8 +31,17 @@ describe('moveSelection', () => {
   })
 })
 
-describe('closeList', () => {
-  it('empties and closes', () => expect(closeList()).toEqual(closedList))
+describe('markStale', () => {
+  it('clears the highlight and flags the list as waiting for a new answer', () => {
+    const s = markStale(list(['/a', '/b'], 1))
+    expect(s).toMatchObject({ items: ['/a', '/b'], selected: -1, open: true, stale: true })
+  })
+  it('a new answer is fresh again', () => {
+    expect(openList(['/a']).stale).toBeFalsy()
+  })
+  it('leaves a closed list closed', () => {
+    expect(markStale(closedList)).toBe(closedList)
+  })
 })
 
 describe('applyPick', () => {
@@ -93,6 +102,24 @@ describe('handleKey', () => {
     expect(r).toMatchObject({ handled: true, pick: null })
     expect(r.state).toEqual(closedList)
   })
+  describe('while the list is stale (the text changed, the answer is pending)', () => {
+    const stale = markStale(list(items, 0))
+    it('does not handle Tab, Enter or the arrows: Tab moves focus, Enter submits', () => {
+      for (const key of ['Tab', 'Enter', 'ArrowDown', 'ArrowUp']) {
+        const r = handleKey(stale, key, false, '/a/p')
+        expect(r.handled).toBe(false)
+        expect(r.pick).toBeNull()
+      }
+    })
+    it('Esc still closes the list', () => {
+      expect(handleKey(stale, 'Escape', false, '/a/p')).toMatchObject({ handled: true, state: closedList })
+    })
+  })
+  it('ignores keys pressed with Ctrl, Alt or Meta', () => {
+    for (const key of ['ArrowDown', 'Tab', 'Enter', 'Escape']) {
+      expect(handleKey(list(items, 0), key, false, '/a/o', true).handled).toBe(false)
+    }
+  })
   it('leaves other keys alone', () => {
     expect(handleKey(list(items), 'a', false, '/a/').handled).toBe(false)
   })
@@ -139,6 +166,22 @@ describe('createCompleter', () => {
     resolvers['/ab'](['/ab-new'])
     await vi.runAllTimersAsync()
     resolvers['/a'](['/a-old'])
+    await vi.runAllTimersAsync()
+    expect(got).toEqual([['/ab-new']])
+  })
+
+  it('request() also supersedes an answer in flight and an earlier request', async () => {
+    const resolvers: Record<string, (v: string[]) => void> = {}
+    const fetch = (v: string) => new Promise<string[]>((r) => { resolvers[v] = r })
+    const got: string[][] = []
+    const c = createCompleter(fetch, (items) => got.push(items), 150)
+    c.now('/a')
+    c.request('/ab')
+    resolvers['/a'](['/a-old'])
+    await vi.advanceTimersByTimeAsync(10)
+    expect(got).toEqual([])
+    await vi.advanceTimersByTimeAsync(150)
+    resolvers['/ab'](['/ab-new'])
     await vi.runAllTimersAsync()
     expect(got).toEqual([['/ab-new']])
   })

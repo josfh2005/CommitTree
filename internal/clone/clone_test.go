@@ -269,3 +269,28 @@ func TestListDirsHomeUnknownIsEmpty(t *testing.T) {
 		t.Errorf("ListDirs(~) without a home = %#v", got)
 	}
 }
+
+func TestListDirsSortsByBytes(t *testing.T) {
+	root := t.TempDir()
+	listTree(t, root, "docs", "Dev", "Zed", "alpha")
+	want := []string{root + "/Dev", root + "/Zed", root + "/alpha", root + "/docs"}
+	if got := ListDirs(root + "/"); !eq(got, want) {
+		t.Errorf("ListDirs = %v; want uppercase names first (byte order) %v", got, want)
+	}
+}
+
+func TestListDirsUnreadableIsEmpty(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads every folder")
+	}
+	root := t.TempDir()
+	listTree(t, root, "locked/inner")
+	locked := filepath.Join(root, "locked")
+	if err := os.Chmod(locked, 0o000); err != nil {
+		t.Skip("chmod unavailable")
+	}
+	t.Cleanup(func() { os.Chmod(locked, 0o755) })
+	if got := ListDirs(locked + "/"); got == nil || len(got) != 0 {
+		t.Errorf("ListDirs(unreadable) = %#v; want empty non-nil", got)
+	}
+}

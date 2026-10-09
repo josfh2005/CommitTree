@@ -161,12 +161,8 @@ func (a *App) DefaultCloneParent() string {
 }
 
 // ListDirs suggests folders for the parent being typed in the Clone
-// dialog; never nil, and never an error: a path that cannot be listed
-// simply has no suggestions.
+// dialog; never nil (clone.ListDirs gives an empty list, so JS gets []), and
+// never an error: a path that cannot be listed simply has no suggestions.
 func (a *App) ListDirs(partial string) ([]string, error) {
-	dirs := clone.ListDirs(partial)
-	if dirs == nil {
-		dirs = []string{}
-	}
-	return dirs, nil
+	return clone.ListDirs(partial), nil
 }

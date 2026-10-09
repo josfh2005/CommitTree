@@ -6,6 +6,9 @@ export interface PathList {
   /** Index of the highlighted suggestion; -1 when none (the typed text stands). */
   selected: number
   open: boolean
+  /** The text changed since these items were listed: the answer for the new
+   *  text is pending, so the items no longer describe what is typed. */
+  stale?: boolean
 }
 
 export const closedList: PathList = { items: [], selected: -1, open: false }
@@ -15,7 +18,11 @@ export function openList(items: string[]): PathList {
   return items.length === 0 ? closedList : { items, selected: -1, open: true }
 }
 
-export const closeList = (): PathList => closedList
+/** The list after the text changed: still shown until the new answer comes,
+ *  but nothing is highlighted and no key acts on it (except Esc). */
+export function markStale(s: PathList): PathList {
+  return s.open ? { ...s, selected: -1, stale: true } : s
+}
 
 /** Moves the highlight by delta, wrapping at both ends. From "none", down
  *  goes to the first suggestion and up to the last. */
@@ -54,10 +61,13 @@ export interface KeyResult {
  *    Enter is left alone (it submits) and Tab completes the first suggestion
  *    only while a name is being typed (the text does not end in "/"); after
  *    a "/", and with Shift, Tab moves focus as usual.
- *  - Esc closes the list. */
-export function handleKey(s: PathList, key: string, shift: boolean, value: string): KeyResult {
+ *  - Esc closes the list.
+ *  A stale list (see markStale) only answers Esc, so Tab moves focus and Enter
+ *  submits; keys with Ctrl, Alt or Meta (modified) are left alone. */
+export function handleKey(s: PathList, key: string, shift: boolean, value: string, modified = false): KeyResult {
   const unhandled: KeyResult = { state: s, handled: false, pick: null }
-  if (!s.open || s.items.length === 0) return unhandled
+  if (!s.open || s.items.length === 0 || modified) return unhandled
+  if (s.stale && key !== 'Escape') return unhandled
   switch (key) {
     case 'ArrowDown':
       return { state: moveSelection(s, 1), handled: true, pick: null }
