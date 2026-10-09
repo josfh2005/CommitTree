@@ -123,7 +123,7 @@
                     {#each list.items as item, i (item)}
                       {@const parts = splitPath(item)}
                       <li id={optionID(i)} role="option" aria-selected={i === list.selected} class:selected={i === list.selected}
-                        title={item} on:mousedown={() => pick(item)}>
+                        title={item} on:mousedown={(e) => e.button === 0 && pick(item)}>
                         <span class="dir">{parts.dir}</span><span class="name">{parts.name}</span>
                       </li>
                     {/each}
