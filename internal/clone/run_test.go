@@ -3,6 +3,7 @@ package clone
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -55,6 +56,58 @@ func TestRunWithSubmodule(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dest, "lib", ".git")); err != nil {
 		t.Fatalf("submodule not cloned: %v", err)
+	}
+}
+
+func TestRunKeepsAClonePartiallyDoneWhenASubmoduleFails(t *testing.T) {
+	sub := testrepo.New(t)
+	sub.Commit("sub base")
+	subBare := testrepo.NewBareFrom(t, sub)
+	top := testrepo.New(t)
+	top.Commit("base")
+	top.Git("-c", "protocol.file.allow=always", "submodule", "add", "-q", "file://"+subBare, "lib")
+	top.Git("commit", "-q", "-m", "add lib")
+	bare := testrepo.NewBareFrom(t, top)
+	if err := os.RemoveAll(subBare); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_CONFIG_COUNT", "1")
+	t.Setenv("GIT_CONFIG_KEY_0", "protocol.file.allow")
+	t.Setenv("GIT_CONFIG_VALUE_0", "always")
+
+	url := "file://" + bare
+	dest := filepath.Join(t.TempDir(), "top")
+	err := Run(context.Background(), url, dest, Stall, func(Progress) {})
+	if !errors.Is(err, ErrPartial) {
+		t.Fatalf("err = %v, want ErrPartial", err)
+	}
+	var gerr *gitcmd.Error
+	if !errors.As(err, &gerr) {
+		t.Fatalf("err = %v, git's error is not reachable", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(dest, ".git")); statErr != nil {
+		t.Fatalf("the cloned repository was removed: %v", statErr)
+	}
+	msg := Explain(err, url)
+	if strings.Contains(msg, "Repository not found at "+url) {
+		t.Fatalf("Explain blames the top-level URL: %q", msg)
+	}
+	if !strings.HasPrefix(msg, "Cloned, but some submodules or files could not be checked out: ") {
+		t.Fatalf("Explain = %q", msg)
+	}
+}
+
+func TestRunKeepsNoPartialCloneOnCancelOrStall(t *testing.T) {
+	// A cancel or a stall is not a partial outcome: the folder is removed
+	// (TestRunCancelLeavesNoFolder, and the stall here).
+	t.Setenv("GIT_SSH_COMMAND", "sleep 30;:")
+	dest := filepath.Join(t.TempDir(), "x")
+	err := Run(context.Background(), "ssh://example.invalid/x.git", dest, 300*time.Millisecond, func(Progress) {})
+	if errors.Is(err, ErrPartial) {
+		t.Fatalf("a stall is not partial: %v", err)
+	}
+	if _, statErr := os.Stat(dest); !os.IsNotExist(statErr) {
+		t.Fatalf("dest left behind: %v", statErr)
 	}
 }
 
@@ -165,5 +218,52 @@ func TestExplainHidesCredentials(t *testing.T) {
 		if strings.Contains(m, "tok3n") {
 			t.Fatalf("token leaked: %q", m)
 		}
+	}
+}
+
+func TestRunDoesNotRemoveADanglingSymlink(t *testing.T) {
+	parent := t.TempDir()
+	dest := filepath.Join(parent, "link")
+	if err := os.Symlink(filepath.Join(parent, "gone"), dest); err != nil {
+		t.Fatal(err)
+	}
+	if err := Run(context.Background(), filepath.Join(parent, "nope"), dest, Stall, func(Progress) {}); err == nil {
+		t.Fatal("want an error")
+	}
+	if _, err := os.Lstat(dest); err != nil {
+		t.Fatalf("the symlink was removed: %v", err)
+	}
+}
+
+func TestExplainNamesNotTheTopLevelURLForAnotherRepository(t *testing.T) {
+	stderr := "Cloning into '/x/top/lib'...\nfatal: repository 'https://user:tok3n@h.invalid/lib.git/' does not exist\nfatal: clone of 'https://user:tok3n@h.invalid/lib.git' into submodule path '/x/top/lib' failed\n"
+	msg := Explain(gitErr(stderr), "https://h.invalid/top.git")
+	if strings.Contains(msg, "Repository not found at") || strings.Contains(msg, "tok3n") {
+		t.Fatalf("Explain = %q", msg)
+	}
+	if !strings.Contains(msg, "lib.git") {
+		t.Fatalf("Explain = %q, want git's own message", msg)
+	}
+	// git over ssh or file:// quotes just the path.
+	if msg := Explain(gitErr("fatal: '/o/top.git' does not appear to be a git repository\n"), "git@h.invalid:o/top.git"); msg != "Repository not found at git@h.invalid:o/top.git." {
+		t.Fatalf("Explain = %q", msg)
+	}
+	// The top-level repository still gets the short message.
+	if msg := Explain(gitErr("fatal: repository 'https://h.invalid/top.git/' not found\n"), "https://h.invalid/top.git"); msg != "Repository not found at https://h.invalid/top.git." {
+		t.Fatalf("Explain = %q", msg)
+	}
+}
+
+func TestExplainPartialHidesCredentials(t *testing.T) {
+	err := fmt.Errorf("%w: %w", ErrPartial, gitErr("fatal: unable to access 'https://user:tok3n@h.invalid/lib.git/': Could not resolve host: h.invalid\n"))
+	msg := Explain(err, "https://user:tok3n@h.invalid/top.git")
+	if strings.Contains(msg, "tok3n") || !strings.HasPrefix(msg, "Cloned, but ") {
+		t.Fatalf("Explain = %q", msg)
+	}
+}
+
+func TestSSHHostNeverEchoesCredentials(t *testing.T) {
+	if got := sshHost("https://user:tok3n@h.invalid/x.git"); strings.Contains(got, "tok3n") {
+		t.Fatalf("sshHost = %q", got)
 	}
 }

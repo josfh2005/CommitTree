@@ -30,6 +30,13 @@ export type CloneView =
   | { kind: 'form'; error: string }
   | { kind: 'running'; url: string; dest: string; progress: CloneProgress | null }
 
+/** url with any credentials hidden, as the backend shows it
+ *  (cmdlog.RedactArgs): user:password@ → user:***@, a bare user@ → ***@. */
+export function redactURL(url: string): string {
+  return url.replace(/([A-Za-z][A-Za-z0-9+.-]*:\/\/)([^/@\s:]+)(:[^/@\s]*)?@/g, (_m, scheme, user, pass) =>
+    pass ? `${scheme}${user}:***@` : `${scheme}***@`)
+}
+
 export interface CloneForm { url: string; name: string; nameEdited: boolean }
 export const emptyForm: CloneForm = { url: '', name: '', nameEdited: false }
 
@@ -38,6 +45,18 @@ export const cloneView = writable<CloneView>({ kind: 'form', error: '' })
  *  in the background reopens with them. */
 export const cloneForm = writable<CloneForm>(emptyForm)
 export const cloneDialogOpen = writable(false)
+/** Cancel was asked for and clone:done has not arrived yet (git can take a
+ *  few seconds to stop). */
+export const cloneCancelling = writable(false)
+
+export async function cancelClone(cancel: () => Promise<void>) {
+  cloneCancelling.set(true)
+  try {
+    await cancel()
+  } catch {
+    cloneCancelling.set(false)
+  }
+}
 
 export function editURL(f: CloneForm, url: string): CloneForm {
   return { ...f, url, name: f.nameEdited ? f.name : dirName(url) }
@@ -61,7 +80,9 @@ export async function startClone(parent: string, run: (url: string, parent: stri
   const f = get(cloneForm)
   const url = f.url.trim()
   const name = f.name.trim()
-  cloneView.set({ kind: 'running', url, dest: joinPath(parent, name), progress: null })
+  cloneCancelling.set(false)
+  // The view is shown on screen: it never holds the URL's credentials.
+  cloneView.set({ kind: 'running', url: redactURL(url), dest: joinPath(parent, name), progress: null })
   try {
     await run(url, parent, name)
   } catch (e) {
@@ -83,12 +104,16 @@ export function startCloneEvents(deps: CloneDeps): () => void {
     cloneView.update((v) => (v.kind === 'running' ? { ...v, progress: p } : v)))
   const offDone = deps.on('clone:done', async (d: CloneDone) => {
     const open = get(cloneDialogOpen)
+    cloneCancelling.set(false)
     cloneView.set({ kind: 'form', error: d.error })
     if (d.repo) {
       cloneDialogOpen.set(false)
       cloneForm.set(emptyForm)
       await deps.added(d.repo)
-      if (!open) deps.toast(`Cloned ${d.repo.name}`, 'info')
+      // Cloned, but not completely (a submodule or the checkout failed): the
+      // dialog is gone, so the error is shown as a toast whatever it was.
+      if (d.error) deps.toast(d.error, 'error')
+      else if (!open) deps.toast(`Cloned ${d.repo.name}`, 'info')
     } else if (d.error && !open) {
       deps.toast(d.error, 'error', { label: 'Show', run: () => cloneDialogOpen.set(true) })
     }

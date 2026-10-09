@@ -79,7 +79,8 @@ func Validate(parent, name string) (string, error) {
 		return "", ErrBadName
 	}
 	dest := filepath.Join(parent, name)
-	info, err := os.Stat(dest)
+	// Lstat: a dangling symlink is something that exists, not a free name.
+	info, err := os.Lstat(dest)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 		return dest, nil
@@ -106,17 +107,23 @@ var (
 	ErrBadURL = errors.New(`Enter a repository URL; it can't start with "-".`)
 	// ErrCancelled is returned when the clone was cancelled.
 	ErrCancelled = errors.New("clone cancelled")
+	// ErrPartial is returned when git fetched the repository but failed
+	// afterwards (a submodule, the checkout): the folder is kept.
+	ErrPartial = errors.New("clone partly done")
 )
 
 // Run clones url into dest (an absolute path that Validate accepted),
 // with its submodules, passing git's progress to onProgress as it comes.
-// When the clone fails or is cancelled and dest did not exist before, dest
-// is removed; a destination that existed (an empty folder) is left alone.
+// When the clone is cancelled or stalls, or fails before git had fetched
+// the repository, and dest did not exist before, dest is removed; a
+// destination that existed (an empty folder) is left alone. A failure
+// after the fetch (a submodule, the checkout) leaves the repository git
+// deliberately keeps and returns ErrPartial wrapping git's error.
 func Run(ctx context.Context, url, dest string, stall time.Duration, onProgress func(Progress)) error {
 	if strings.TrimSpace(url) == "" || strings.HasPrefix(url, "-") {
 		return ErrBadURL
 	}
-	_, statErr := os.Stat(dest)
+	_, statErr := os.Lstat(dest)
 	existed := statErr == nil
 	_, err := gitcmd.RunStream(ctx, filepath.Dir(dest), nil, stall, func(line string) {
 		if p, ok := ParseProgress(line); ok {
@@ -126,13 +133,27 @@ func Run(ctx context.Context, url, dest string, stall time.Duration, onProgress 
 	if err == nil {
 		return nil
 	}
+	cancelled := ctx.Err() != nil || errors.Is(err, gitcmd.ErrCancelled)
+	if !cancelled && !errors.Is(err, gitcmd.ErrTimeout) && hasHead(dest) {
+		return fmt.Errorf("%w: %w", ErrPartial, err)
+	}
 	if !existed {
 		_ = os.RemoveAll(dest)
 	}
-	if ctx.Err() != nil || errors.Is(err, gitcmd.ErrCancelled) {
+	if cancelled {
 		return fmt.Errorf("%w: %w", ErrCancelled, err)
 	}
 	return err
+}
+
+// hasHead reports whether dest is a repository of its own with a valid
+// HEAD, i.e. git got as far as fetching and checking out the main branch.
+func hasHead(dest string) bool {
+	if _, err := os.Lstat(filepath.Join(dest, ".git")); err != nil {
+		return false // not its own repository: rev-parse would find a parent's
+	}
+	_, err := gitcmd.Run(context.Background(), dest, 10*time.Second, "rev-parse", "--verify", "-q", "HEAD")
+	return err == nil
 }
 
 // Explain turns a failed Run into the message the user sees, with any
@@ -146,6 +167,10 @@ func Explain(err error, url string) string {
 	if !errors.As(err, &gerr) {
 		return cmdlog.MaskOutput(err.Error(), secrets)
 	}
+	if errors.Is(err, ErrPartial) {
+		return "Cloned, but some submodules or files could not be checked out: " +
+			cmdlog.MaskOutput(tail(lastMessage(gerr), 3), secrets)
+	}
 	s := strings.ToLower(gerr.Stderr)
 	switch {
 	// Before IsAuthError, which counts this marker as an auth failure too.
@@ -153,11 +178,56 @@ func Explain(err error, url string) string {
 		return fmt.Sprintf("The host's SSH key isn't trusted yet. Connect once from a terminal (ssh -T %s) to accept it.", sshHost(url))
 	case ops.IsAuthError(err):
 		return "Authentication failed. Set up a credential helper or an SSH key for this host, then try again."
-	case strings.Contains(s, "does not exist"), strings.Contains(s, "not found"),
-		strings.Contains(s, "does not appear to be a git repository"):
+	case notFound(s) && notFoundIsTopLevel(gerr.Stderr, redacted[0], secrets):
 		return fmt.Sprintf("Repository not found at %s.", redacted[0])
 	}
 	return cmdlog.MaskOutput(lastMessage(gerr), secrets)
+}
+
+func notFound(lowerStderr string) bool {
+	return strings.Contains(lowerStderr, "does not exist") || strings.Contains(lowerStderr, "not found") ||
+		strings.Contains(lowerStderr, "does not appear to be a git repository")
+}
+
+// notFoundIsTopLevel is false when a not-found line of stderr quotes a
+// path or URL other than the repository being cloned (a submodule's), so
+// the message does not blame the wrong repository.
+func notFoundIsTopLevel(stderr, redactedURL string, secrets []string) bool {
+	want := normalizeURL(redactedURL)
+	for _, l := range strings.FieldsFunc(stderr, func(r rune) bool { return r == '\r' || r == '\n' }) {
+		if !notFound(strings.ToLower(l)) {
+			continue
+		}
+		if _, rest, ok := strings.Cut(l, "'"); ok {
+			if quoted, _, ok := strings.Cut(rest, "'"); ok && !namesURL(want, normalizeURL(cmdlog.MaskOutput(quoted, secrets))) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// namesURL reports whether quoted names the repository at want: the same
+// URL, or its path alone (git over ssh or file:// quotes just the path).
+func namesURL(want, quoted string) bool {
+	if want == quoted {
+		return true
+	}
+	path := strings.TrimLeft(quoted, "/")
+	return path != "" && (strings.HasSuffix(want, "/"+path) || strings.HasSuffix(want, ":"+path))
+}
+
+func normalizeURL(u string) string {
+	return strings.TrimSuffix(strings.TrimRight(strings.TrimSpace(u), "/"), ".git")
+}
+
+// tail is the last n lines of s.
+func tail(s string, n int) string {
+	lines := strings.Split(s, "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.Join(lines, "\n")
 }
 
 // lastMessage is git's stderr without its progress lines.
@@ -179,6 +249,11 @@ func lastMessage(gerr *gitcmd.Error) string {
 // sshHost is the user@host to try `ssh -T` with: from an ssh:// URL or an
 // scp-like git@host:path; otherwise url itself.
 func sshHost(url string) string {
+	_, secrets := cmdlog.RedactArgs([]string{url})
+	return cmdlog.MaskOutput(sshHostOf(url), secrets)
+}
+
+func sshHostOf(url string) string {
 	if u, err := neturl.Parse(url); err == nil && u.Scheme == "ssh" {
 		if u.User != nil {
 			return u.User.Username() + "@" + u.Hostname()

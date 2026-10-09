@@ -10,6 +10,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"git-ui/internal/clone"
+	"git-ui/internal/cmdlog"
 	"git-ui/internal/repos"
 )
 
@@ -26,7 +27,9 @@ type CloneState struct {
 	LastError string          `json:"lastError"`
 }
 
-// CloneDone is the clone:done event: the added repository, or why not.
+// CloneDone is the clone:done event: the added repository, or why not. Both
+// Repo and Error are set when the repository was cloned but not completely
+// (a submodule or the checkout failed).
 type CloneDone struct {
 	Repo      *repos.Repo `json:"repo"`
 	Error     string      `json:"error"`
@@ -41,6 +44,11 @@ const progressEvery = 100 * time.Millisecond
 // clone:done. One clone runs at a time.
 func (a *App) CloneRepo(url, parent, name string) error {
 	url = strings.TrimSpace(url)
+	a.cloneMu.Lock()
+	defer a.cloneMu.Unlock()
+	if a.clone.Running {
+		return ErrCloneRunning
+	}
 	dest, err := clone.Validate(parent, strings.TrimSpace(name))
 	if err != nil {
 		return err
@@ -48,16 +56,20 @@ func (a *App) CloneRepo(url, parent, name string) error {
 	if url == "" || strings.HasPrefix(url, "-") {
 		return clone.ErrBadURL
 	}
-	a.cloneMu.Lock()
-	defer a.cloneMu.Unlock()
-	if a.clone.Running {
-		return ErrCloneRunning
-	}
 	ctx, cancel := context.WithCancel(a.ctx)
-	a.clone = CloneState{Running: true, URL: url, Dest: dest}
+	// The status is shown on screen: it carries the URL without credentials.
+	shown, _ := cmdlog.RedactArgs([]string{url})
+	a.clone = CloneState{Running: true, URL: shown[0], Dest: dest}
 	a.cloneCancel = cancel
 	go a.runClone(ctx, cancel, url, dest)
 	return nil
+}
+
+// throttled reports whether p is dropped from clone:progress: another
+// update of the same phase too soon after the last one sent. A phase's
+// last update (100%) is never dropped.
+func throttled(p clone.Progress, lastPhase string, lastSent time.Time) bool {
+	return p.Percent != 100 && p.Phase == lastPhase && time.Since(lastSent) < progressEvery
 }
 
 func (a *App) runClone(ctx context.Context, cancel context.CancelFunc, url, dest string) {
@@ -68,11 +80,11 @@ func (a *App) runClone(ctx context.Context, cancel context.CancelFunc, url, dest
 		a.cloneMu.Lock()
 		a.clone.Progress = &p
 		a.cloneMu.Unlock()
-		if p.Phase == lastPhase && time.Since(lastSent) < progressEvery {
+		if throttled(p, lastPhase, lastSent) {
 			return
 		}
 		lastPhase, lastSent = p.Phase, time.Now()
-		a.emit("clone:progress", p)
+		a.emitUnlessShutdown("clone:progress", p)
 	})
 	var done CloneDone
 	switch {
@@ -85,6 +97,15 @@ func (a *App) runClone(ctx context.Context, cancel context.CancelFunc, url, dest
 		}
 	case errors.Is(err, clone.ErrCancelled):
 		done.Cancelled = true
+	case errors.Is(err, clone.ErrPartial):
+		// git kept what it fetched: add it, and say what is missing.
+		done.Error = clone.Explain(err, url)
+		repo, addErr := a.store.Add(context.Background(), dest)
+		if addErr != nil {
+			done.Error = addErr.Error()
+		} else {
+			done.Repo = &repo
+		}
 	default:
 		done.Error = clone.Explain(err, url)
 	}
@@ -92,7 +113,15 @@ func (a *App) runClone(ctx context.Context, cancel context.CancelFunc, url, dest
 	a.clone = CloneState{LastError: done.Error}
 	a.cloneCancel = nil
 	a.cloneMu.Unlock()
-	a.emit("clone:done", done)
+	a.emitUnlessShutdown("clone:done", done)
+}
+
+// emitUnlessShutdown is emit, except once the app is quitting: Wails'
+// EventsEmit on its cancelled context ends the process with log.Fatalf.
+func (a *App) emitUnlessShutdown(name string, data any) {
+	if a.ctx.Err() == nil {
+		a.emit(name, data)
+	}
 }
 
 // CancelClone stops the running clone, if any; clone:done follows.

@@ -100,9 +100,15 @@ as Open folder… would add it, and selected; with the dialog closed, a toast
 says "Cloned <name>". When it fails, the dialog returns to the form with its
 values and the reason — authentication, an untrusted SSH host key, a
 repository not found, a stall, or git's own message, with credentials
-hidden; with the dialog closed, an error toast offers **Show**. A destination
-folder the clone created is removed after a failure or cancel; an empty
-folder that existed before is left in place. The clone is recorded like any
+hidden; with the dialog closed, an error toast offers **Show**. The progress
+view shows the URL with its credentials hidden, and **Cancel** reads
+"Cancelling…" until git has stopped. When git fetched the repository but
+then failed on a submodule or the checkout, the folder is kept: the
+repository is added and selected, and an error toast says "Cloned, but some
+submodules or files could not be checked out" with git's reason. A
+destination folder the clone created is otherwise removed after a failure or
+cancel; an empty folder that existed before is left in place. Quitting the
+app cancels a running clone. The clone is recorded like any
 command but, belonging to no repository, does not appear in the Commands
 panel.
 

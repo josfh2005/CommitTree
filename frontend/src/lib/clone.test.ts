@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach } from 'vitest'
 import { get } from 'svelte/store'
 import {
-  cloneDialogOpen, cloneForm, cloneView, dirName, editName, editURL, emptyForm, joinPath, nameError,
+  cancelClone, cloneCancelling, cloneDialogOpen, cloneForm, cloneView, dirName, editName, editURL, emptyForm, joinPath, nameError, redactURL,
   startClone, startCloneEvents, viewFromStatus,
 } from './clone'
 import type { CloneDone, CloneProgress, Repo } from './types'
@@ -149,10 +149,56 @@ describe('startClone and events', () => {
     expect(toasts[0]).toMatchObject({ message: 'boom', kind: 'error', action: { label: 'Show' } })
   })
 
+  it('cloned but not completely: the success path, and the error as an error toast', async () => {
+    const error = 'Cloned, but some submodules or files could not be checked out: fatal: boom'
+    await ev.fire('clone:done', { repo, error, cancelled: false })
+    expect(get(cloneDialogOpen)).toBe(false)
+    expect(added).toEqual([repo])
+    expect(get(cloneForm)).toEqual(emptyForm)
+    expect(toasts).toEqual([{ message: error, kind: 'error', action: undefined }])
+    toasts.length = 0
+    await ev.fire('clone:done', { repo, error, cancelled: false })
+    expect(toasts).toEqual([{ message: error, kind: 'error', action: undefined }])
+  })
+
   it('on cancel: form, no error, no toast', async () => {
     cloneView.set({ kind: 'running', url: 'u', dest: '/d', progress: null })
     await ev.fire('clone:done', { repo: null, error: '', cancelled: true })
     expect(get(cloneView)).toEqual({ kind: 'form', error: '' })
     expect(toasts).toEqual([])
+  })
+})
+
+describe('redactURL', () => {
+  it.each([
+    ['https://user:tok3n@h/o/x.git', 'https://user:***@h/o/x.git'],
+    ['https://tok3n@h/o/x.git', 'https://***@h/o/x.git'],
+    ['ssh://git@h:2222/o/x.git', 'ssh://***@h:2222/o/x.git'],
+    ['https://h/o/x.git', 'https://h/o/x.git'],
+    ['git@h:o/x.git', 'git@h:o/x.git'],
+    ['https://user:***@h/o/x.git', 'https://user:***@h/o/x.git'],
+  ])('%s', (url, want) => expect(redactURL(url)).toBe(want))
+})
+
+describe('running view and cancelling', () => {
+  it('startClone shows the URL without credentials but runs with the typed one', async () => {
+    cloneForm.set(editURL(emptyForm, 'https://user:tok3n@h/o/copy.git'))
+    let ran = ''
+    await startClone('/p', async (url) => { ran = url })
+    expect(ran).toBe('https://user:tok3n@h/o/copy.git')
+    expect(get(cloneView)).toMatchObject({ kind: 'running', url: 'https://user:***@h/o/copy.git' })
+  })
+
+  it('cancelClone marks cancelling until clone:done; a failed cancel call undoes it', async () => {
+    cloneCancelling.set(false)
+    await cancelClone(async () => {})
+    expect(get(cloneCancelling)).toBe(true)
+    const ev = fakeEvents()
+    const stop = startCloneEvents({ on: ev.on as any, added: async () => {}, toast: () => {} })
+    await ev.fire('clone:done', { repo: null, error: '', cancelled: true })
+    expect(get(cloneCancelling)).toBe(false)
+    stop()
+    await cancelClone(async () => { throw new Error('x') })
+    expect(get(cloneCancelling)).toBe(false)
   })
 })

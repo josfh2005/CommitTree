@@ -1,7 +1,7 @@
 <script lang="ts">
   import { api } from '../lib/api'
   import {
-    cloneDialogOpen, cloneForm, cloneView, editName, editURL, joinPath, nameError, startClone,
+    cancelClone, cloneCancelling, cloneDialogOpen, cloneForm, cloneView, editName, editURL, joinPath, nameError, startClone,
   } from '../lib/clone'
   import { cloneParent } from '../lib/stores'
   import { dialog } from '../lib/ui'
@@ -87,7 +87,9 @@
         {/if}
         {#if p?.detail}<p class="preview ellipsis" title={p.detail}>{p.detail}</p>{/if}
         <div class="buttons">
-          <button type="button" class="btn" on:click={() => api.cancelClone()}>Cancel</button>
+          <button type="button" class="btn" disabled={$cloneCancelling} on:click={() => cancelClone(api.cancelClone)}>
+            {$cloneCancelling ? 'Cancelling…' : 'Cancel'}
+          </button>
           <button type="button" class="btn primary" on:click={close}>Continue in background</button>
         </div>
       {/if}

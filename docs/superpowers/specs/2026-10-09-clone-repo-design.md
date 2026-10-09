@@ -90,14 +90,31 @@ ends it as a timeout when git writes nothing for five minutes.
   - `Host key verification failed`: "The host's SSH key isn't trusted yet.
     Connect once from a terminal (ssh -T <host>) to accept it.";
   - repository not found / does not appear to be a git repository:
-    "Repository not found at <url>.";
+    "Repository not found at <url>." (only when the line names the
+    repository being cloned; one that names another path or URL, a
+    submodule's, shows git's own message);
   - timeout: "Clone stalled: git sent nothing for 5 minutes.";
   - anything else: git's stderr, credentials masked (`cmdlog.MaskOutput`).
-- **Cancel:** back to the form, no error.
+- **Partly cloned:** once git has fetched the repository it keeps it on
+  purpose when the checkout or a submodule then fails ("Clone succeeded, but
+  checkout failed", "Failed to clone 'lib' a second time"), and exits
+  non-zero. If the failure is not a cancel or a stall and the destination
+  holds a repository with a valid `HEAD`, the folder is **kept**: the
+  repository is added and selected as on success, and `clone:done` carries
+  both the repository and the error "Cloned, but some submodules or files
+  could not be checked out: <git's message, credentials masked, last lines>".
+  The dialog closes, an error toast shows the message (also when the dialog
+  was closed), and the status keeps it as the last error. `clone.Run`
+  returns `ErrPartial` (wrapping git's error) for this case.
+- **Cancel:** back to the form, no error. The Cancel button reads
+  "Cancelling…" and is disabled until `clone:done` arrives.
 - **Clean-up:** git removes what it created when it fails or is
-  interrupted. As a safety net, if the destination did **not** exist before
-  the clone and exists after a failure or cancel, the app removes it. A
-  destination that existed before (an empty folder) is never removed.
+  interrupted before the fetch is done. As a safety net, if the destination
+  did **not** exist before the clone and exists after a cancel, a stall or a
+  failure that left no repository with a valid `HEAD`, the app removes it.
+  A destination that existed before (an empty folder) is never removed; a
+  dangling symlink counts as existing (`Lstat`) and is refused, never
+  removed. Quitting the app cancels a running clone.
 
 ### Command log
 
@@ -130,24 +147,31 @@ copied.
 - `Run(ctx, url, dest string, stall time.Duration, onProgress func(Progress)) error`
   — refuses a URL starting with `-`; records whether `dest` existed; runs
   `git clone --progress --recurse-submodules -- <url> <dest>` from the
-  parent folder through `RunStream`; on error, removes `dest` only if it did
-  not exist before.
+  parent folder through `RunStream`; on a cancel, a stall or a failure
+  that left no repository with a valid `HEAD`, removes `dest` only if it
+  did not exist before (checked with `Lstat`); on any other failure with
+  such a repository it keeps `dest` and returns `ErrPartial` wrapping git's
+  error.
 - `Explain(err error, url string) string` — the user-facing messages above.
 
 ### `internal/app/clone.go`
 
-- `CloneRepo(url, parent, name string) error` — validates synchronously
-  (returns the typed error), refuses while a clone is running
-  (`ErrCloneRunning`), then runs the clone in a goroutine under a
+- `CloneRepo(url, parent, name string) error` — refuses while a clone is
+  running (`ErrCloneRunning`, checked first), validates synchronously
+  (returns the typed error), then runs the clone in a goroutine under a
   cancellable context derived from `a.ctx`.
 - `CancelClone()` — cancels the running clone, if any.
 - `CloneStatus() CloneState` — `{Running, URL, Dest, Progress, LastError}`,
-  so a reopened dialog shows the right view.
+  so a reopened dialog shows the right view; `URL` is the URL with its
+  credentials redacted (`cmdlog.RedactArgs`), as the progress view shows it.
+  `Shutdown` calls `CancelClone`.
 - `PickCloneParent(start string) (string, error)` — directory picker.
 - `DefaultCloneParent() string` — the home folder.
 - Events: `clone:progress` (`Progress`), throttled to at most ~10 per
-  second; `clone:done` (`{Repo *repos.Repo, Error string, Cancelled bool}`).
-  On success the repo is added with `a.store.Add` before `clone:done`.
+  second, but a phase's 100% update is always sent; `clone:done`
+  (`{Repo *repos.Repo, Error string, Cancelled bool}`). On success, and on a
+  partly done clone (`Repo` and `Error` both set), the repo is added with
+  `a.store.Add` before `clone:done`.
 
 ### Frontend
 

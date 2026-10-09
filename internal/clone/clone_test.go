@@ -47,6 +47,10 @@ func TestValidate(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if err := os.Symlink(filepath.Join(parent, "gone"), filepath.Join(parent, "dangling")); err != nil {
+		t.Fatal(err)
+	}
+
 	for _, name := range []string{"new", "empty", "my repo ñ"} {
 		dest, err := Validate(parent, name)
 		if err != nil || dest != filepath.Join(parent, name) {
@@ -61,6 +65,8 @@ func TestValidate(t *testing.T) {
 		`a\b`:  ErrBadName,
 		"full": ErrDestNotEmpty,
 		"file": ErrDestNotEmpty,
+		// A dangling symlink exists: it is not a free name.
+		"dangling": ErrDestNotEmpty,
 	} {
 		if _, err := Validate(parent, name); !errors.Is(err, want) {
 			t.Errorf("Validate(%q) err = %v, want %v", name, err, want)

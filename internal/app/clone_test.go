@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -117,5 +118,98 @@ func TestCloneRepoFailureIsKeptInStatus(t *testing.T) {
 	want := "Repository not found at " + missing + "."
 	if d.Error != want || a.CloneStatus().LastError != want {
 		t.Fatalf("done = %+v, status = %+v", d, a.CloneStatus())
+	}
+}
+
+func TestCloneRepoPartialAddsTheRepositoryWithTheError(t *testing.T) {
+	a, done := cloneApp(t)
+	sub := testrepo.New(t)
+	sub.Commit("sub base")
+	subBare := testrepo.NewBareFrom(t, sub)
+	top := testrepo.New(t)
+	top.Commit("base")
+	top.Git("-c", "protocol.file.allow=always", "submodule", "add", "-q", "file://"+subBare, "lib")
+	top.Git("commit", "-q", "-m", "add lib")
+	bare := testrepo.NewBareFrom(t, top)
+	if err := os.RemoveAll(subBare); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_CONFIG_COUNT", "1")
+	t.Setenv("GIT_CONFIG_KEY_0", "protocol.file.allow")
+	t.Setenv("GIT_CONFIG_VALUE_0", "always")
+	parent := t.TempDir()
+
+	if err := a.CloneRepo("file://"+bare, parent, "top"); err != nil {
+		t.Fatal(err)
+	}
+	d := waitDone(t, done)
+	if d.Repo == nil || d.Error == "" || d.Cancelled {
+		t.Fatalf("done = %+v", d)
+	}
+	if !strings.HasPrefix(d.Error, "Cloned, but some submodules or files could not be checked out: ") {
+		t.Fatalf("error = %q", d.Error)
+	}
+	if _, ok := a.store.Get(d.Repo.ID); !ok {
+		t.Fatal("repo not in the store")
+	}
+	if s := a.CloneStatus(); s.Running || s.LastError != d.Error {
+		t.Fatalf("status = %+v", s)
+	}
+}
+
+func TestCloneStatusShowsTheURLWithoutCredentials(t *testing.T) {
+	t.Setenv("GIT_SSH_COMMAND", "sleep 30;:")
+	a, done := cloneApp(t)
+	if err := a.CloneRepo("https://user:tok3n@127.0.0.1:1/x.git", t.TempDir(), "x"); err != nil {
+		t.Fatal(err)
+	}
+	if s := a.CloneStatus(); !s.Running || strings.Contains(s.URL, "tok3n") || s.URL == "" {
+		t.Fatalf("status = %+v", s)
+	}
+	a.CancelClone()
+	waitDone(t, done)
+}
+
+func TestCloneRepoRunningIsCheckedBeforeValidating(t *testing.T) {
+	t.Setenv("GIT_SSH_COMMAND", "sleep 30;:")
+	a, done := cloneApp(t)
+	parent := t.TempDir()
+	if err := a.CloneRepo("ssh://example.invalid/x.git", parent, "x"); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.CloneRepo("-x", parent, ""); !errors.Is(err, ErrCloneRunning) {
+		t.Fatalf("err = %v, want ErrCloneRunning", err)
+	}
+	a.CancelClone()
+	waitDone(t, done)
+}
+
+func TestShutdownCancelsARunningClone(t *testing.T) {
+	t.Setenv("GIT_SSH_COMMAND", "sleep 30;:")
+	a, done := cloneApp(t)
+	if err := a.CloneRepo("ssh://example.invalid/x.git", t.TempDir(), "x"); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(200 * time.Millisecond)
+	a.Shutdown(context.Background())
+	if d := waitDone(t, done); !d.Cancelled {
+		t.Fatalf("done = %+v", d)
+	}
+}
+
+func TestProgressThrottleNeverDropsAPhasesLastUpdate(t *testing.T) {
+	now := time.Now()
+	same := clone.Progress{Phase: "Receiving objects", Percent: 50}
+	if !throttled(same, "Receiving objects", now) {
+		t.Error("a quick update of the same phase should be dropped")
+	}
+	if throttled(clone.Progress{Phase: "Receiving objects", Percent: 100}, "Receiving objects", now) {
+		t.Error("100% must be sent")
+	}
+	if throttled(same, "Counting objects", now) {
+		t.Error("a new phase must be sent")
+	}
+	if throttled(same, "Receiving objects", now.Add(-time.Second)) {
+		t.Error("an update after the interval must be sent")
 	}
 }
