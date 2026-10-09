@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -93,6 +94,68 @@ func expandParent(parent string) (string, error) {
 		return "", ErrParentNotAbsolute
 	}
 	return filepath.Clean(parent), nil
+}
+
+// MaxSuggestions is how many folders ListDirs returns at most.
+const MaxSuggestions = 50
+
+// ListDirs suggests completions for a parent folder being typed: the
+// folders (symlinks to folders count) inside the part of partial up to its
+// last "/" whose name starts with what follows that "/". Names starting with
+// "." are left out unless the typed prefix starts with ".". The result is
+// sorted by name, at most MaxSuggestions long, and each entry is the whole
+// path in the form typed (a leading "~/" is kept, not expanded), with no
+// trailing "/". partial is trimmed and its "~" expanded like Validate does;
+// a bare "~" suggests "~/" (when the home folder is known). A relative or
+// missing folder, or an unreadable one, gives an empty (non-nil) list: typing
+// never fails.
+func ListDirs(partial string) []string {
+	none := []string{}
+	partial = strings.TrimSpace(partial)
+	if partial == "~" {
+		if _, err := expandParent(partial); err != nil {
+			return none
+		}
+		return []string{"~/"}
+	}
+	slash := strings.LastIndex(partial, "/")
+	if slash < 0 {
+		return none
+	}
+	typedDir, prefix := partial[:slash+1], partial[slash+1:]
+	dir, err := expandParent(typedDir)
+	if err != nil {
+		return none
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return none
+	}
+	showHidden := strings.HasPrefix(prefix, ".")
+	var names []string
+	for _, e := range entries {
+		name := e.Name()
+		if !strings.HasPrefix(name, prefix) || (!showHidden && strings.HasPrefix(name, ".")) {
+			continue
+		}
+		isDir := e.IsDir()
+		if !isDir && e.Type()&fs.ModeSymlink != 0 {
+			info, err := os.Stat(filepath.Join(dir, name))
+			isDir = err == nil && info.IsDir()
+		}
+		if isDir {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	if len(names) > MaxSuggestions {
+		names = names[:MaxSuggestions]
+	}
+	out := make([]string, len(names))
+	for i, n := range names {
+		out[i] = typedDir + n
+	}
+	return out
 }
 
 // Validate checks that name can be cloned into under parent, as git would

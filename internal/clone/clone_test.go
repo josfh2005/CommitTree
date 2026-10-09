@@ -2,6 +2,7 @@ package clone
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -115,5 +116,156 @@ func TestValidateTypedParent(t *testing.T) {
 	}
 	if got := ErrParentNotAbsolute.Error(); got != "Parent folder must be a full path (or start with ~)." {
 		t.Errorf("message = %q", got)
+	}
+}
+
+// listTree makes dirs (and files, names ending in "!") under root.
+func listTree(t *testing.T, root string, names ...string) {
+	t.Helper()
+	for _, n := range names {
+		p := filepath.Join(root, n)
+		if len(n) > 0 && n[len(n)-1] == '!' {
+			if err := os.WriteFile(filepath.Join(root, n[:len(n)-1]), nil, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			continue
+		}
+		if err := os.MkdirAll(p, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func eq(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func TestListDirsPrefixSortedFilesExcluded(t *testing.T) {
+	root := t.TempDir()
+	listTree(t, root, "src", "docs", "Dev", "doc-files!", "downloads")
+	got := ListDirs(root + "/d")
+	want := []string{root + "/docs", root + "/downloads"}
+	if !eq(got, want) {
+		t.Errorf("ListDirs prefix = %v; want %v", got, want)
+	}
+	// Case-sensitive: "D" only matches "Dev".
+	if got := ListDirs(root + "/D"); !eq(got, []string{root + "/Dev"}) {
+		t.Errorf("ListDirs(D) = %v", got)
+	}
+}
+
+func TestListDirsTrailingSlashListsAllChildren(t *testing.T) {
+	root := t.TempDir()
+	listTree(t, root, "b", "a", "file!")
+	got := ListDirs(root + "/")
+	if want := []string{root + "/a", root + "/b"}; !eq(got, want) {
+		t.Errorf("ListDirs(root/) = %v; want %v", got, want)
+	}
+}
+
+func TestListDirsHiddenOnlyWhenTyped(t *testing.T) {
+	root := t.TempDir()
+	listTree(t, root, ".config", ".cache", "code")
+	if got := ListDirs(root + "/"); !eq(got, []string{root + "/code"}) {
+		t.Errorf("hidden shown without a dot: %v", got)
+	}
+	if got := ListDirs(root + "/c"); !eq(got, []string{root + "/code"}) {
+		t.Errorf("ListDirs(c) = %v", got)
+	}
+	if got := ListDirs(root + "/."); !eq(got, []string{root + "/.cache", root + "/.config"}) {
+		t.Errorf("ListDirs(.) = %v", got)
+	}
+}
+
+func TestListDirsFollowsSymlinkToDirectory(t *testing.T) {
+	root := t.TempDir()
+	listTree(t, root, "real", "plain!")
+	if err := os.Symlink(filepath.Join(root, "real"), filepath.Join(root, "link")); err != nil {
+		t.Skip("symlinks unavailable")
+	}
+	if err := os.Symlink(filepath.Join(root, "plain"), filepath.Join(root, "filelink")); err != nil {
+		t.Skip("symlinks unavailable")
+	}
+	if err := os.Symlink(filepath.Join(root, "gone"), filepath.Join(root, "dangling")); err != nil {
+		t.Skip("symlinks unavailable")
+	}
+	want := []string{root + "/link", root + "/real"}
+	if got := ListDirs(root + "/"); !eq(got, want) {
+		t.Errorf("ListDirs = %v; want %v", got, want)
+	}
+}
+
+func TestListDirsLimit(t *testing.T) {
+	root := t.TempDir()
+	for i := 0; i < MaxSuggestions+20; i++ {
+		listTree(t, root, fmt.Sprintf("d%03d", i))
+	}
+	got := ListDirs(root + "/")
+	if len(got) != MaxSuggestions {
+		t.Fatalf("len = %d; want %d", len(got), MaxSuggestions)
+	}
+	if got[0] != root+"/d000" || got[MaxSuggestions-1] != fmt.Sprintf("%s/d%03d", root, MaxSuggestions-1) {
+		t.Errorf("not the first %d sorted: %s .. %s", MaxSuggestions, got[0], got[MaxSuggestions-1])
+	}
+}
+
+func TestListDirsRelativeOrMissingIsEmpty(t *testing.T) {
+	root := t.TempDir()
+	listTree(t, root, "a")
+	t.Chdir(root)
+	for _, in := range []string{"", "a", "a/", "./", "../", "~user/", "~user", root + "/nope/", root + "/nope/x", root + "/a/x"} {
+		if got := ListDirs(in); got == nil || len(got) != 0 {
+			t.Errorf("ListDirs(%q) = %#v; want empty non-nil", in, got)
+		}
+	}
+	// A file is not a folder to list.
+	listTree(t, root, "f!")
+	if got := ListDirs(root + "/f/"); len(got) != 0 {
+		t.Errorf("file as folder: %v", got)
+	}
+}
+
+func TestListDirsTildeKeepsTheTypedForm(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	listTree(t, home, "projects", "pics", "notes!", "projects/alpha", "projects/beta")
+	if got := ListDirs("~/p"); !eq(got, []string{"~/pics", "~/projects"}) {
+		t.Errorf("ListDirs(~/p) = %v", got)
+	}
+	if got := ListDirs("~/projects/"); !eq(got, []string{"~/projects/alpha", "~/projects/beta"}) {
+		t.Errorf("ListDirs(~/projects/) = %v", got)
+	}
+	if got := ListDirs("~/"); !eq(got, []string{"~/pics", "~/projects"}) {
+		t.Errorf("ListDirs(~/) = %v", got)
+	}
+	// A bare ~ offers the home folder itself, so Tab can start descending.
+	if got := ListDirs("~"); !eq(got, []string{"~/"}) {
+		t.Errorf("ListDirs(~) = %v", got)
+	}
+}
+
+func TestListDirsTrimsWhitespace(t *testing.T) {
+	root := t.TempDir()
+	listTree(t, root, "docs")
+	if got := ListDirs("  " + root + "/d \n"); !eq(got, []string{root + "/docs"}) {
+		t.Errorf("ListDirs = %v", got)
+	}
+}
+
+func TestListDirsHomeUnknownIsEmpty(t *testing.T) {
+	t.Setenv("HOME", "")
+	if got := ListDirs("~/"); got == nil || len(got) != 0 {
+		t.Errorf("ListDirs(~/) without a home = %#v", got)
+	}
+	if got := ListDirs("~"); got == nil || len(got) != 0 {
+		t.Errorf("ListDirs(~) without a home = %#v", got)
 	}
 }

@@ -306,6 +306,10 @@ export function IsShallow(arg1) {
   return window['go']['app']['App']['IsShallow'](arg1);
 }
 
+export function ListDirs(arg1) {
+  return window['go']['app']['App']['ListDirs'](arg1);
+}
+
 export function ListModels(arg1) {
   return window['go']['app']['App']['ListModels'](arg1);
 }

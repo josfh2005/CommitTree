@@ -171,6 +171,8 @@ export function IsAncestorOfHead(arg1:string,arg2:string):Promise<boolean>;
 
 export function IsShallow(arg1:string):Promise<boolean>;
 
+export function ListDirs(arg1:string):Promise<Array<string>>;
+
 export function ListModels(arg1:string):Promise<Array<string>>;
 
 export function ListPrompts():Promise<Array<prompts.Info>>;

@@ -14,6 +14,7 @@ export const api = {
   cloneStatus: () => call<CloneStatus>(Go.CloneStatus()),
   pickCloneParent: (start: string) => call<string>(Go.PickCloneParent(start)),
   defaultCloneParent: () => call<string>(Go.DefaultCloneParent()),
+  listDirs: (partial: string) => call<string[]>(Go.ListDirs(partial)),
   relocateRepo: (id: string) => call<Repo>(Go.RelocateRepo(id)),
   openRepoFolder: (id: string) => call<void>(Go.OpenRepoFolder(id)),
   openRepoTerminal: (id: string) => call<void>(Go.OpenRepoTerminal(id)),
