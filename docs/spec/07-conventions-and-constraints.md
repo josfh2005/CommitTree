@@ -244,15 +244,19 @@ behaviours exist only because of it:
   locale-dependent phrase.
 - **Different timeouts for different kinds of command.** An ordinary read
   (status, log, diff) is capped at ten seconds. A command that talks to a
-  remote (fetch, pull, push) is allowed up to five minutes. A command that
-  may run one of the repository's own hooks (a `--continue` step, which can
-  trigger a commit hook) is allowed up to two minutes — long enough for a
-  slow hook, short enough that a hook stuck waiting on input is eventually
-  killed. A command that times out is reported as a distinct timeout error,
-  not folded into a generic failure, so the interface can say so. If a
-  killed git process leaves a child (such as a credential helper) holding
-  its output pipe open, the application does not wait indefinitely for that
-  child either — it gives it a short grace period before moving on.
+  remote (fetch, pull, push) is allowed up to five minutes. A clone is the
+  exception: it has no fixed limit, since a large repository can take far
+  longer. Its output is read as git writes it (to show progress), and a
+  stall watchdog ends it as a timeout when git has written nothing for five
+  minutes. A command that may run one of the repository's own hooks (a
+  `--continue` step, which can trigger a commit hook) is allowed up to two
+  minutes — long enough for a slow hook, short enough that a hook stuck
+  waiting on input is eventually killed. A command that times out is
+  reported as a distinct timeout error, not folded into a generic failure,
+  so the interface can say so. If a killed git process leaves a child (such
+  as a credential helper) holding its output pipe open, the application
+  does not wait indefinitely for that child either — it gives it a short
+  grace period before moving on.
 - **No editor ever opens.** Any git subcommand that might otherwise launch
   an editor (committing without a message, continuing a rebase, cherry-pick
   or revert, applying a mailbox patch) is either given its content directly
