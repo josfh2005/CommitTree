@@ -140,3 +140,52 @@ func TestPushAllRefusesWhileAnotherWriteRuns(t *testing.T) {
 		t.Fatalf("err = %v, want ErrBusy", err)
 	}
 }
+
+func TestBranchRemoteActionsThroughTheAppLayer(t *testing.T) {
+	a, r, id := newPlainApp(t)
+	bare := testrepo.NewBareFrom(t, r)
+	r.Git("remote", "add", "origin", bare)
+	r.Git("push", "-q", "-u", "origin", "main")
+	r.Git("branch", "topic")
+
+	res, err := a.PushBranch(id, "topic")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res != (ops.BranchPushResult{Branch: "topic", Target: "origin/topic", Status: ops.PushPushed}) {
+		t.Fatalf("result = %+v", res)
+	}
+
+	clone := testrepo.Clone(t, bare)
+	clone.Git("switch", "-q", "topic")
+	h := clone.Commit("from clone")
+	clone.Git("push", "-q", "origin", "topic")
+
+	if err := a.FetchRemote(id, "origin"); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.FastForwardBranch(id, "topic"); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.Git("rev-parse", "topic"); got != h {
+		t.Errorf("topic = %s, want %s", got, h)
+	}
+}
+
+func TestBranchRemoteActionsRefuseWhileAnotherWriteRuns(t *testing.T) {
+	a, _, id := newPlainApp(t)
+	unlock, err := a.lockWrite(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unlock()
+	if err := a.FetchRemote(id, "origin"); !errors.Is(err, ErrBusy) {
+		t.Errorf("FetchRemote err = %v, want ErrBusy", err)
+	}
+	if err := a.FastForwardBranch(id, "main"); !errors.Is(err, ErrBusy) {
+		t.Errorf("FastForwardBranch err = %v, want ErrBusy", err)
+	}
+	if _, err := a.PushBranch(id, "main"); !errors.Is(err, ErrBusy) {
+		t.Errorf("PushBranch err = %v, want ErrBusy", err)
+	}
+}

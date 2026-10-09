@@ -252,6 +252,39 @@ not set itself. When that happens, a toast reports how many submodules are
 affected and offers an "Update all" action (see the Submodules section of
 docs/spec/01-repositories-and-sidebar.md); there is no automatic update.
 
+### Per-branch Fetch, Pull and Push
+
+The sidebar's branch context menu (docs/spec/01-repositories-and-sidebar.md)
+has remote actions on one branch. All of them are disabled while another
+write runs; Pull and Push are also disabled while a merge, rebase or
+cherry-pick is in progress. Each refreshes the refs (and so the ahead/behind
+badges) afterwards.
+
+- **Fetch `<remote>`** (`App.FetchRemote`) fetches and prunes just that
+  remote: a remote-tracking row's own remote, a local branch's upstream
+  remote, or `origin` when it has no upstream.
+- **Pull `<branch>`** on the current branch is exactly the toolbar's Pull
+  (configured strategy, conflicts handled as above). On any other local
+  branch (`App.FastForwardBranch`, under the write lock) the branch is only
+  fast-forwarded to its upstream, without a checkout:
+  `git fetch <remote> <upstream ref>:refs/heads/<branch>`, with no force, so
+  git refuses anything but a fast-forward. A diverged branch fails with
+  "`<branch>` has diverged — check it out to pull"; a branch checked out in a
+  linked worktree fails with git's own message. It is disabled, with a tooltip,
+  for a branch with no upstream ("No upstream") and for one that tracks a
+  local branch ("Tracks a local branch").
+- **Push `<branch>`** (`App.PushBranch`, under the write lock) pushes only
+  that local branch, current or not, to its upstream with
+  `git push --porcelain <remote> refs/heads/<branch>:<upstream ref>`: never
+  forced, no tags, no scope dialog. A branch with no upstream reads "Publish
+  `<branch>` to origin" and is pushed to origin with `-u`. A branch that
+  tracks a local branch is disabled ("Tracks a local branch"). The outcome is
+  read from the same per-ref porcelain parsing as Main branches, so a rejected
+  push reads "The remote has commits you don't have — pull `<branch>` first"
+  (any other rejection shows git's reason) as an error toast; success toasts
+  "Pushed `<branch>`" (or "Everything up to date"). The push uses the same
+  network timeout as the other remote commands.
+
 ### Ahead/behind
 
 The count is read fresh whenever asked, by comparing the current branch with

@@ -763,6 +763,11 @@ export async function fetchRemote(id: string) {
   await runOp(id, 'fetch', 'Fetching…', () => api.fetch(id))
 }
 
+// fetchBranchRemote is the branch menu's "Fetch <remote>": just that remote.
+export async function fetchBranchRemote(id: string, remote: string) {
+  await runOp(id, 'fetch', 'Fetching…', () => api.fetchRemote(id, remote))
+}
+
 const repoLabel = (id: string) => get(repos).find((r) => r.id === id)?.name ?? 'repository'
 
 // refsOf reads a repository's refs fresh — the row menu can push a
@@ -830,6 +835,31 @@ export async function pull(id: string) {
     busy.set('')
     await refreshRepo()
   }
+}
+
+// pullBranch is the branch menu's Pull: the current branch gets the ordinary
+// pull (configured strategy, conflicts); any other is only fast-forwarded to
+// its upstream, without a checkout (docs/spec/05-remote-and-stash.md).
+export async function pullBranch(id: string, branch: Branch) {
+  if (branch.current) return pull(id)
+  await runOp(id, 'pull', `Pulling ${branch.name}…`, () => api.fastForwardBranch(id, branch.name))
+}
+
+// pushBranch is the branch menu's Push: one branch to its upstream, or
+// published to origin. A rejection is an error toast with git's reason.
+export async function pushBranch(id: string, branch: Branch): Promise<boolean> {
+  const name = repoLabel(id)
+  let result: BranchPushResult | null = null
+  const ok = await runOp(id, 'push', `Pushing ${branch.name}…`, async () => {
+    const r = await api.pushBranch(id, branch.name)
+    if (pushFailed(r)) throw new Error(r.reason || `Could not push ${branch.name}`)
+    result = r
+  })
+  if (ok && result) {
+    const message = pushedMessage([result])
+    toast(id === get(selectedRepoId) ? message : `${name}: ${message}`, 'info')
+  }
+  return ok
 }
 
 export async function stashChanges(id: string) {

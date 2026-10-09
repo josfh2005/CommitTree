@@ -2,13 +2,14 @@
   import BranchRow from './BranchRow.svelte'
   import Icon from './Icon.svelte'
   import { api } from '../lib/api'
-  import { checkoutBranch, deleteBranch, deleteTag, mergeBranch, newBranch, newTag, rebaseOnto, stashApply, stashDrop, stashPop } from '../lib/actions'
+  import { checkoutBranch, deleteBranch, deleteTag, fetchBranchRemote, mergeBranch, newBranch, newTag, pullBranch, pushBranch, rebaseOnto, stashApply, stashDrop, stashPop } from '../lib/actions'
   import { groupBranches, leafName, type BranchGroup } from '../lib/branches'
+import { branchLabel, branchMenuGroups, branchRemote, type BranchMenuId } from '../lib/branchMenu'
   import { rebaseBlocker } from '../lib/rebase'
   import { busy, expandedStashSections, repos, expandedTagSections, filters, loadSideRefs, mainView, mergeState, refs, selectRepo, selectStash, selectedRepoId, selectedStash, sideRefs, stashEntries, toggleStashExpanded, toggleTagsExpanded } from '../lib/stores'
   import { isFilterRow, refsView } from '../lib/repoRefs'
   import type { Branch, StashEntry, Tag } from '../lib/types'
-  import { openMenu, openMenuAsync } from '../lib/ui'
+  import { openMenu, openMenuAsync, SEPARATOR, type MenuEntry, type MenuItem } from '../lib/ui'
 
   export let repoId: string
   /** Set when repoId is a submodule opened under its parent (see RepoRow):
@@ -36,7 +37,6 @@
   let openGroups: Record<string, boolean> = {}
 
   const branchRef = (b: Branch) => (b.remote ? `refs/remotes/${b.remote}/${b.name}` : `refs/heads/${b.name}`)
-  const branchLabel = (b: Branch) => (b.remote ? `${b.remote}/${b.name}` : b.name)
 
   $: local = groupBranches(repoRefs?.local ?? [])
 
@@ -79,6 +79,7 @@
 
   function branchMenu(event: MouseEvent, b: Branch) {
     const head = repoRefs?.head ?? ''
+    const remotes = (repoRefs?.remotes ?? []).map((r) => r.name)
     openMenuAsync(event, async () => {
       const contained = b.current ? false : await api.isAncestorOfHead(repoId, branchLabel(b)).catch(() => false)
       const rebaseWhy = rebaseBlocker(
@@ -86,23 +87,29 @@
         head,
         branchLabel(b),
       )
-      return [
-        { label: 'Check out', action: () => checkoutBranch(repoId, b), disabled: b.current || !!b.worktree || !!$busy },
-        {
-          label: `Merge ${branchLabel(b)} into ${head}`,
-          action: () => mergeBranch(repoId, b, head),
-          disabled: b.current || !!$busy || !!repoRefs?.detached || !!$mergeState?.merging,
-        },
-        {
-          label: `Rebase ${head} onto ${branchLabel(b)}`,
-          action: () => rebaseOnto(repoId, branchLabel(b), branchLabel(b), head),
-          disabled: rebaseWhy !== null,
-          title: rebaseWhy ?? undefined,
-        },
-        { label: 'New branch from here…', action: () => newBranch(repoId, branchLabel(b), branchLabel(b)) },
-        { label: 'New tag here…', action: () => newTag(repoId, branchLabel(b), branchLabel(b)) },
-        { label: b.remote ? 'Delete on remote…' : 'Delete…', action: () => deleteBranch(repoId, b), danger: true, disabled: b.current || !!b.worktree },
-      ]
+      const groups = branchMenuGroups(b, {
+        head,
+        detached: !!repoRefs?.detached,
+        busy: !!$busy,
+        merging: !!$mergeState?.merging,
+        rebaseWhy,
+        remotes,
+      })
+      const actions: Record<BranchMenuId, () => unknown> = {
+        checkout: () => checkoutBranch(repoId, b),
+        fetch: () => fetchBranchRemote(repoId, branchRemote(b, remotes)),
+        pull: () => pullBranch(repoId, b),
+        push: () => pushBranch(repoId, b),
+        merge: () => mergeBranch(repoId, b, head),
+        rebase: () => rebaseOnto(repoId, branchLabel(b), branchLabel(b), head),
+        'new-branch': () => newBranch(repoId, branchLabel(b), branchLabel(b)),
+        'new-tag': () => newTag(repoId, branchLabel(b), branchLabel(b)),
+        delete: () => deleteBranch(repoId, b),
+      }
+      return groups.flatMap((g, i): MenuEntry[] => [
+        ...(i > 0 ? [SEPARATOR] : []),
+        ...g.map((e): MenuItem => ({ label: e.label, action: () => void actions[e.id](), disabled: e.disabled, title: e.title, danger: e.danger })),
+      ])
     })
   }
 
