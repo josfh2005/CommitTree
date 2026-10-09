@@ -79,3 +79,37 @@ func TestValidate(t *testing.T) {
 		t.Errorf("file as parent err = %v", err)
 	}
 }
+
+func TestValidateTypedParent(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.Mkdir(filepath.Join(home, "code"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	abs := t.TempDir()
+
+	for _, tc := range []struct{ parent, want string }{
+		{"~/code", filepath.Join(home, "code", "app")},
+		{"~", filepath.Join(home, "app")},
+		{"~/code/", filepath.Join(home, "code", "app")},
+		{"  " + abs + "  ", filepath.Join(abs, "app")},
+		{abs + "/", filepath.Join(abs, "app")},
+	} {
+		dest, err := Validate(tc.parent, "app")
+		if err != nil || dest != tc.want {
+			t.Errorf("Validate(%q) = %q, %v; want %q", tc.parent, dest, err, tc.want)
+		}
+	}
+	for _, parent := range []string{"foo/bar", "~other/x", "~other", "", "   ", "./x", ".."} {
+		if _, err := Validate(parent, "app"); !errors.Is(err, ErrParentNotAbsolute) {
+			t.Errorf("Validate(%q) err = %v, want ErrParentNotAbsolute", parent, err)
+		}
+	}
+	// An absolute path is still checked for existing.
+	if _, err := Validate("~/nope", "app"); !errors.Is(err, ErrParentMissing) {
+		t.Errorf("missing ~ subfolder err = %v", err)
+	}
+	if got := ErrParentNotAbsolute.Error(); got != "Parent folder must be a full path (or start with ~)." {
+		t.Errorf("message = %q", got)
+	}
+}

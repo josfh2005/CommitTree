@@ -62,6 +62,32 @@ func TestCloneRepoAddsTheRepository(t *testing.T) {
 	}
 }
 
+func TestCloneRepoExpandsATypedParent(t *testing.T) {
+	a, done := cloneApp(t)
+	src := testrepo.New(t)
+	src.Commit("base")
+	bare := testrepo.NewBareFrom(t, src)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.Mkdir(filepath.Join(home, "code"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := a.CloneRepo("file://"+bare, "  ~/code ", "copy"); err != nil {
+		t.Fatal(err)
+	}
+	d := waitDone(t, done)
+	if d.Repo == nil || d.Error != "" {
+		t.Fatalf("done = %+v", d)
+	}
+	if d.Repo.Path != canonical(filepath.Join(home, "code", "copy")) {
+		t.Fatalf("path = %q", d.Repo.Path)
+	}
+	if err := a.CloneRepo("file://"+bare, "code", "other"); !errors.Is(err, clone.ErrParentNotAbsolute) {
+		t.Fatalf("relative parent err = %v", err)
+	}
+}
+
 func TestCloneRepoOneAtATimeAndCancel(t *testing.T) {
 	t.Setenv("GIT_SSH_COMMAND", "sleep 30;:")
 	a, done := cloneApp(t)

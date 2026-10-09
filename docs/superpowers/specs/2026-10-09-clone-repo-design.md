@@ -39,7 +39,8 @@ unchanged) and **Clone…**. One clone runs at a time: while one is running,
 - **URL** — required. Any form git accepts (`https://…`, `ssh://…`,
   `git@host:org/repo.git`, a local path or `file://`). A URL starting with
   `-` is refused.
-- **Parent folder** — with a "Choose…" button (directory picker); see below. Defaults to
+- **Parent folder** — a text field the user can type in, with a "Choose…"
+  button (directory picker) that fills it; see below. Defaults to
   the last parent used (remembered per machine in the frontend's persisted
   store), else the home folder.
 - **Folder name** — filled from the URL as the user types: the last path
@@ -47,8 +48,13 @@ unchanged) and **Clone…**. One clone runs at a time: while one is running,
   `git@h:org/repo.git` → `repo`, `/src/thing/` → `thing`). Once the user
   edits the name by hand, further URL edits no longer overwrite it.
 - A preview line shows the full destination path.
-- **Clone** is enabled when the URL and name are non-empty. The backend
+- **Clone** is enabled when the URL, the name and the (trimmed) parent folder
+  are non-empty. The backend
   validates before starting:
+  - the parent folder, as typed, is trimmed and a leading `~` (exactly `~`,
+    or `~/…`) is expanded to the home folder (`~user` is not expanded); the
+    result must be an absolute path, else the refusal is "Parent folder must
+    be a full path (or start with ~).";
   - the parent folder exists and is a directory;
   - the name is not empty, `.` or `..`, and contains no path separator;
   - the destination does not exist, or is an empty directory (git's own
@@ -56,8 +62,11 @@ unchanged) and **Clone…**. One clone runs at a time: while one is running,
   The name's own rules are checked as the user types and shown under the
   field; a backend refusal (parent missing, destination not empty, bad URL)
   is shown above the buttons. Nothing is run.
-- The parent folder is shown as a read-only path and changed only through
-  "Choose…", so no typed `~` or relative path ever reaches the backend.
+- The parent folder may be typed or picked with "Choose…". A typed `~` or
+  relative path reaches the backend as typed; `Validate` expands the `~` and
+  refuses a relative path, and the refusal shows like the others. The preview
+  line shows the parent as typed (a `~` is not expanded there), and the
+  remembered parent is the typed value, trimmed.
 
 ### Progress
 
@@ -143,7 +152,9 @@ copied.
   `Progress{Phase string; Percent int /* -1 when none */; Detail string}`;
   false for lines that are not progress.
 - `Validate(parent, name string) (dest string, err error)` — typed errors
-  `ErrParentMissing`, `ErrBadName`, `ErrDestNotEmpty`.
+  `ErrParentNotAbsolute`, `ErrParentMissing`, `ErrBadName`, `ErrDestNotEmpty`.
+  `parent` is the text the user typed: `Validate` trims it, expands a leading
+  `~` and requires the result to be absolute before the other checks.
 - `Run(ctx, url, dest string, stall time.Duration, onProgress func(Progress)) error`
   — refuses a URL starting with `-`; records whether `dest` existed; runs
   `git clone --progress --recurse-submodules -- <url> <dest>` from the

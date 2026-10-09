@@ -76,9 +76,10 @@ terminal (see Terminal).
 
 ### Cloning a repository
 
-**Clone…** opens a dialog with the URL, the parent folder (shown read-only,
-changed with "Choose…"; the last one used is remembered, the home folder
-before that) and the folder name. The name follows the URL as it is typed —
+**Clone…** opens a dialog with the URL, the parent folder (typed or picked
+with "Choose…"; the last one used is remembered, the home folder before
+that; a leading `~` means the home folder, and anything that is not a full
+path is refused) and the folder name. The name follows the URL as it is typed —
 its last path segment without `.git` — until the user edits it; clearing it
 makes it follow again. The name may not be empty, `.` or `..`, or contain a
 slash, and the destination must not exist or must be an empty folder; a URL

@@ -7,11 +7,19 @@
   import { dialog } from '../lib/ui'
 
   let parent = ''
+  let opened = false
   // Every opening reads the remembered parent afresh (the last clone's, else the home folder).
-  $: if ($cloneDialogOpen) { if (parent === '') initParent() } else parent = ''
+  // Only the opening does: the field may be emptied while typing a new path.
+  $: if ($cloneDialogOpen !== opened) {
+    opened = $cloneDialogOpen
+    if (opened) initParent()
+    else parent = ''
+  }
   async function initParent() {
     try {
-      parent = $cloneParent || (await api.defaultCloneParent())
+      const initial = $cloneParent || (await api.defaultCloneParent())
+      // Typing before the default arrived wins.
+      if (parent === '') parent = initial
     } catch {
       // No default: the user picks a folder with Choose….
     }
@@ -20,7 +28,9 @@
   $: view = $cloneView
   $: form = $cloneForm
   $: nameErr = form.name === '' ? '' : nameError(form.name)
-  $: canClone = form.url.trim() !== '' && form.name.trim() !== '' && nameErr === '' && parent !== ''
+  // The parent may be typed: the backend trims it and expands a leading ~.
+  $: dir = parent.trim()
+  $: canClone = form.url.trim() !== '' && form.name.trim() !== '' && nameErr === '' && dir !== ''
 
   async function choose() {
     try {
@@ -34,8 +44,8 @@
   function submit() {
     // One clone at a time: a running one is only ever shown, never restarted.
     if (view.kind !== 'form' || !canClone) return
-    cloneParent.set(parent)
-    startClone(parent, api.cloneRepo)
+    cloneParent.set(dir)
+    startClone(dir, api.cloneRepo)
   }
 
   // Closing never stops a running clone: that is "Continue in background".
@@ -59,7 +69,7 @@
           </label>
           <label>Parent folder
             <span class="parent">
-              <input readonly value={parent} title={parent} />
+              <input spellcheck="false" placeholder="/path/to/folder or ~/folder" bind:value={parent} />
               <button type="button" class="btn" on:click={choose}>Choose…</button>
             </span>
           </label>
@@ -68,7 +78,7 @@
               on:input={(e) => cloneForm.set(editName(form, e.currentTarget.value))} />
           </label>
           {#if nameErr}<p class="problem">{nameErr}</p>{/if}
-          {#if parent && form.name.trim()}<p class="preview ellipsis" title={joinPath(parent, form.name.trim())}>{joinPath(parent, form.name.trim())}</p>{/if}
+          {#if dir && form.name.trim()}<p class="preview ellipsis" title={joinPath(dir, form.name.trim())}>{joinPath(dir, form.name.trim())}</p>{/if}
           {#if view.error}<p class="problem" role="alert">{view.error}</p>{/if}
           <div class="buttons">
             <button type="button" class="btn" on:click={close}>Cancel</button>

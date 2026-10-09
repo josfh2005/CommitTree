@@ -62,16 +62,41 @@ func ParseProgress(line string) (p Progress, ok bool) {
 }
 
 var (
-	ErrParentMissing = errors.New("The parent folder doesn't exist.")
-	ErrBadName       = errors.New(`The folder name can't be empty, "." or "..", or contain a slash.`)
-	ErrDestNotEmpty  = errors.New("The destination already exists and isn't an empty folder.")
+	ErrParentMissing     = errors.New("The parent folder doesn't exist.")
+	ErrParentNotAbsolute = errors.New("Parent folder must be a full path (or start with ~).")
+	ErrBadName           = errors.New(`The folder name can't be empty, "." or "..", or contain a slash.`)
+	ErrDestNotEmpty      = errors.New("The destination already exists and isn't an empty folder.")
 )
 
+// expandParent turns the parent folder as typed into an absolute path:
+// surrounding whitespace is trimmed and a leading "~" (alone or before a
+// separator) becomes the home folder. "~user" is not expanded, so it stays
+// relative and is refused.
+func expandParent(parent string) (string, error) {
+	parent = strings.TrimSpace(parent)
+	if parent == "~" || strings.HasPrefix(parent, "~/") || strings.HasPrefix(parent, `~\`) {
+		home, err := os.UserHomeDir()
+		if err != nil || home == "" {
+			return "", ErrParentNotAbsolute
+		}
+		parent = filepath.Join(home, parent[1:])
+	}
+	if !filepath.IsAbs(parent) {
+		return "", ErrParentNotAbsolute
+	}
+	return filepath.Clean(parent), nil
+}
+
 // Validate checks that name can be cloned into under parent, as git would
-// accept it: parent is a directory, name is one plain path segment, and the
+// accept it: parent (as typed: trimmed, with a leading ~ expanded) is an
+// absolute path to a directory, name is one plain path segment, and the
 // destination does not exist or is an empty directory. It returns the
 // destination path.
 func Validate(parent, name string) (string, error) {
+	parent, err := expandParent(parent)
+	if err != nil {
+		return "", err
+	}
 	if info, err := os.Stat(parent); err != nil || !info.IsDir() {
 		return "", ErrParentMissing
 	}
