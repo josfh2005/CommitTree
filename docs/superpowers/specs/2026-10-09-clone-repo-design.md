@@ -39,7 +39,7 @@ unchanged) and **Clone…**. One clone runs at a time: while one is running,
 - **URL** — required. Any form git accepts (`https://…`, `ssh://…`,
   `git@host:org/repo.git`, a local path or `file://`). A URL starting with
   `-` is refused.
-- **Parent folder** — with a "Choose…" button (directory picker). Defaults to
+- **Parent folder** — with a "Choose…" button (directory picker); see below. Defaults to
   the last parent used (remembered per machine in the frontend's persisted
   store), else the home folder.
 - **Folder name** — filled from the URL as the user types: the last path
@@ -53,7 +53,11 @@ unchanged) and **Clone…**. One clone runs at a time: while one is running,
   - the name is not empty, `.` or `..`, and contains no path separator;
   - the destination does not exist, or is an empty directory (git's own
     rule).
-  A refused field shows its error under it; nothing is run.
+  The name's own rules are checked as the user types and shown under the
+  field; a backend refusal (parent missing, destination not empty, bad URL)
+  is shown above the buttons. Nothing is run.
+- The parent folder is shown as a read-only path and changed only through
+  "Choose…", so no typed `~` or relative path ever reaches the backend.
 
 ### Progress
 
