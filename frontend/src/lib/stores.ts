@@ -44,6 +44,8 @@ export const sidebarWidth = persisted('sidebarWidth', 280)
 export const chatWidth = persisted('chatWidth', 340)
 export const detailsHeight = persisted('detailsHeight', 280)
 export const chatOpen = persisted('chatOpen', true)
+/** The parent folder the last clone went into; '' until the first clone. */
+export const cloneParent = persisted<string>('cloneParent', '')
 /** Settings → Appearance → High contrast; main.ts applies it to the page. */
 export const highContrast = persisted('highContrast', false, (v): v is boolean => typeof v === 'boolean')
 const isBool = (v: unknown): v is boolean => typeof v === 'boolean'

@@ -38,6 +38,10 @@ export function BranchCounts(arg1, arg2) {
   return window['go']['app']['App']['BranchCounts'](arg1, arg2);
 }
 
+export function CancelClone() {
+  return window['go']['app']['App']['CancelClone']();
+}
+
 export function CancelCommand(arg1, arg2) {
   return window['go']['app']['App']['CancelCommand'](arg1, arg2);
 }
@@ -74,6 +78,14 @@ export function ClearCommandLog(arg1) {
   return window['go']['app']['App']['ClearCommandLog'](arg1);
 }
 
+export function CloneRepo(arg1, arg2, arg3) {
+  return window['go']['app']['App']['CloneRepo'](arg1, arg2, arg3);
+}
+
+export function CloneStatus() {
+  return window['go']['app']['App']['CloneStatus']();
+}
+
 export function CommandLog(arg1) {
   return window['go']['app']['App']['CommandLog'](arg1);
 }
@@ -100,6 +112,10 @@ export function CreateBranch(arg1, arg2, arg3, arg4) {
 
 export function CreateTag(arg1, arg2, arg3, arg4) {
   return window['go']['app']['App']['CreateTag'](arg1, arg2, arg3, arg4);
+}
+
+export function DefaultCloneParent() {
+  return window['go']['app']['App']['DefaultCloneParent']();
 }
 
 export function DeleteBranch(arg1, arg2, arg3) {
@@ -336,6 +352,10 @@ export function OpenRepoTerminal(arg1) {
 
 export function OwedStashDrop(arg1) {
   return window['go']['app']['App']['OwedStashDrop'](arg1);
+}
+
+export function PickCloneParent(arg1) {
+  return window['go']['app']['App']['PickCloneParent'](arg1);
 }
 
 export function PlanFinish(arg1, arg2, arg3) {

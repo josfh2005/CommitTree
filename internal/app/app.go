@@ -105,6 +105,11 @@ type App struct {
 	// lets a worktree removal run `git worktree remove` from the main
 	// repository's directory rather than the worktree's own.
 	wtParent map[string]string
+	// cloneMu guards clone and cloneCancel: the one clone the Clone dialog
+	// may be running, and what stops it (nil when none runs).
+	cloneMu     sync.Mutex
+	clone       CloneState
+	cloneCancel context.CancelFunc
 	// settingsParent is wtParent plus the linked worktrees the user also
 	// added to the list: every linked worktree's main repository, which is
 	// whose per-repository AI settings apply to it.

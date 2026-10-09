@@ -4,6 +4,7 @@
   import BottomDock from './components/BottomDock.svelte'
   import ChangesView from './components/ChangesView.svelte'
   import ChatPanel from './components/ChatPanel.svelte'
+  import CloneDialog from './components/CloneDialog.svelte'
   import ContextMenu from './components/ContextMenu.svelte'
   import DialogHost from './components/DialogHost.svelte'
   import LogView from './components/LogView.svelte'
@@ -17,11 +18,13 @@
   import { nextChatRunRepo } from './lib/chat'
   import { startNotifications } from './lib/notify'
   import { startAutoFetch } from './lib/autoFetch'
+  import { startCloneEvents } from './lib/clone'
   import { isCommandsToggle } from './lib/cmdlog'
   import { isSettingsShortcut } from './lib/shortcuts'
   import { isTerminalToggle } from './lib/terminal'
   import { conflictOwnsScreen } from './lib/remote'
-  import { blameTarget, chatOpen, chatRunRepo, chatWidth, closeBlame, commandsOpen, dockHeight, loadAISettings, loadGitSettings, loadRefs, loadRepos, loadWorktreeState, mainView, mergeState, platform, refreshRepo, selectedHash, selectedRepo, selectedRepoId, selectedStash, settingsOpen, sidebarWidth, stashConflictDismissed, stashEntries, terminalOpen, uncommittedSelected } from './lib/stores'
+  import { blameTarget, chatOpen, chatRunRepo, chatWidth, closeBlame, commandsOpen, dockHeight, loadAISettings, loadGitSettings, loadRefs, loadRepos, loadWorktreeState, mainView, mergeState, platform, refreshRepo, selectRepo, selectedHash, selectedRepo, selectedRepoId, selectedStash, settingsOpen, sidebarWidth, stashConflictDismissed, stashEntries, terminalOpen, uncommittedSelected } from './lib/stores'
+  import { toast } from './lib/ui'
   import type { RepoChangedEvent, WorktreeChangedEvent } from './lib/types'
   import { Environment, EventsOn } from '../wailsjs/runtime/runtime'
 
@@ -107,7 +110,17 @@
     const offRuns = ['chat:start', 'chat:done', 'chat:error'].map((name) =>
       EventsOn(name, (payload: { repoID?: string }) => chatRunRepo.update((cur) => nextChatRunRepo(cur, name, payload))),
     )
+    // Follows a clone whether or not its dialog is open.
+    const offClone = startCloneEvents({
+      on: EventsOn,
+      added: async (repo) => {
+        await loadRepos()
+        selectRepo(repo.id)
+      },
+      toast,
+    })
     return () => {
+      offClone()
       stopFocus()
       stopNotifications()
       stopAutoFetch()
@@ -163,6 +176,7 @@
 <ContextMenu />
 <!-- Before DialogHost: a confirm opened from it must stack on top. -->
 <RepoSettingsDialog />
+<CloneDialog />
 <DialogHost />
 <Toasts />
 <SettingsDialog />

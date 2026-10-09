@@ -19,6 +19,7 @@ import { moveGroup, moveRepo, nameOrder, type RepoPlace, type RepoSortOrder } fr
 import { classifyGroupRename, renameCollapsedGroup } from './repoGroupRename'
 import { movedMessage, updateMessage } from './submodules'
 import { removeRepoTabs, terminalState } from './terminal'
+import { cloneDialogOpen, cloneView, viewFromStatus } from './clone'
 
 export function branchRef(branch: Branch): string {
   return branch.remote ? `refs/remotes/${branch.remote}/${branch.name}` : `refs/heads/${branch.name}`
@@ -70,6 +71,17 @@ export async function addRepo() {
   } catch (e) {
     toast(errorMessage(e), 'error')
   }
+}
+
+/** Opens the Clone dialog on the running clone's progress, or on the form
+ *  (with the last clone's error, if it failed). */
+export async function openCloneDialog() {
+  try {
+    cloneView.set(viewFromStatus(await api.cloneStatus()))
+  } catch (e) {
+    cloneView.set({ kind: 'form', error: errorMessage(e) })
+  }
+  cloneDialogOpen.set(true)
 }
 
 export async function removeRepo(repo: Repo) {

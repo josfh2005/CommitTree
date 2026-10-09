@@ -52,8 +52,9 @@ func (a *App) TerminalClose(tab string) error { return a.term.Close(tab) }
 // TerminalShell is the basename of the shell new tabs run, for tab labels.
 func (a *App) TerminalShell() string { return a.term.Shell() }
 
-// Shutdown is Wails' OnShutdown hook: no shell outlives the app.
+// Shutdown is Wails' OnShutdown hook: no shell or clone outlives the app.
 func (a *App) Shutdown(ctx context.Context) {
+	a.CancelClone()
 	a.term.CloseAll()
 	a.stopNotifications()
 }

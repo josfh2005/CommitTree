@@ -31,9 +31,10 @@ selected here.
 ## Repository list
 
 The sidebar lists every repository the user has added, above an "Add repo"
-control. Adding a repository opens a directory picker; the chosen directory
-must be a git working tree (checked with `git rev-parse --show-toplevel`
-from that directory) or the add is refused with an error. Given a
+control. "Add repo" opens a menu with **Open folder…** and **Clone…**. Open
+folder… opens a directory picker; the chosen directory must be a git working
+tree (checked with `git rev-parse --show-toplevel` from that directory) or the
+add is refused with an error. Given a
 subdirectory of a working tree, the entry records the tree's top-level
 directory, not the subdirectory that was picked. The entry's display name is
 the top-level directory's own name.
@@ -72,6 +73,46 @@ the repository's working tree — the Terminal app on macOS, a Command Prompt
 on Windows, `x-terminal-emulator` elsewhere — also launched and not waited
 on, and refused for a missing repository. It is separate from the embedded
 terminal (see Terminal).
+
+### Cloning a repository
+
+**Clone…** opens a dialog with the URL, the parent folder (typed or picked
+with "Choose…"; the last one a clone started with, accepted by the backend, is
+remembered, the home folder before that; a leading `~` means the home folder, and anything that is not a full
+path is refused) and the folder name. The name follows the URL as it is typed —
+its last path segment without `.git` — until the user edits it; clearing it
+makes it follow again. The name may not be empty, `.` or `..`, or contain a
+slash, and the destination must not exist or must be an empty folder; a URL
+that is empty or starts with `-` is refused.
+
+**Clone** runs `git clone --progress --recurse-submodules -- <url> <dest>`
+from the parent folder. Credentials come only from what is already set up
+(credential helpers, the keychain, ssh-agent, Git Credential Manager); the
+application never asks for a password. The dialog shows the resolved
+destination (a typed `~` expanded) and git's current phase
+(counting, compressing, receiving, resolving, updating files, each
+submodule), a bar with the phase's percentage when git gives one, and git's
+detail line. **Cancel** stops git as Ctrl+C would; **Continue in
+background** closes the dialog without stopping the clone. One clone runs at
+a time: **Clone…** during a clone reopens its progress.
+
+There is no fixed time limit; the clone is stopped as stalled when git
+writes nothing for five minutes. When it succeeds, the repository is added
+as Open folder… would add it, and selected; with the dialog closed, a toast
+says "Cloned <name>". When it fails, the dialog returns to the form with its
+values and the reason — authentication, an untrusted SSH host key, a
+repository not found, a stall, or git's own message, with credentials
+hidden; with the dialog closed, an error toast offers **Show**. The progress
+view shows the URL with its credentials hidden, and **Cancel** reads
+"Cancelling…" until git has stopped. When git fetched the repository but
+then failed on a submodule or the checkout, the folder is kept: the
+repository is added and selected, and an error toast says "Cloned, but some
+submodules or files could not be checked out" with git's reason. A
+destination folder the clone created is otherwise removed after a failure or
+cancel; an empty folder that existed before is left in place. Quitting the
+app cancels a running clone. The clone is recorded like any
+command but, belonging to no repository, does not appear in the Commands
+panel.
 
 ### Worktrees
 

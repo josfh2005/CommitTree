@@ -37,6 +37,8 @@ export function AutoFetchPaused(arg1:string):Promise<Array<string>>;
 
 export function BranchCounts(arg1:string,arg2:string):Promise<ops.AheadBehind>;
 
+export function CancelClone():Promise<void>;
+
 export function CancelCommand(arg1:string,arg2:number):Promise<void>;
 
 export function CancelPull():Promise<void>;
@@ -55,6 +57,10 @@ export function ClearChat(arg1:string):Promise<void>;
 
 export function ClearCommandLog(arg1:string):Promise<void>;
 
+export function CloneRepo(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function CloneStatus():Promise<app.CloneState>;
+
 export function CommandLog(arg1:string):Promise<app.CommandLogView>;
 
 export function CommandLogOutput(arg1:string,arg2:number):Promise<cmdlog.Output>;
@@ -68,6 +74,8 @@ export function ConfirmChatAction(arg1:string,arg2:string,arg3:boolean):Promise<
 export function CreateBranch(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<void>;
 
 export function CreateTag(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
+
+export function DefaultCloneParent():Promise<string>;
 
 export function DeleteBranch(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
@@ -186,6 +194,8 @@ export function OpenRepoFolder(arg1:string):Promise<void>;
 export function OpenRepoTerminal(arg1:string):Promise<void>;
 
 export function OwedStashDrop(arg1:string):Promise<number>;
+
+export function PickCloneParent(arg1:string):Promise<string>;
 
 export function PlanFinish(arg1:string,arg2:string,arg3:Array<string>):Promise<gitflow.Plan>;
 
