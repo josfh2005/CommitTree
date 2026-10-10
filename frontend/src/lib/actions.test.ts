@@ -44,6 +44,7 @@ import { api } from './api'
 import { filters, gitSettings, mergeState, repos, selectedRepoId } from './stores'
 import { windowFocused } from './notify'
 import type { Branch, Filters, MergeState, Refs, Repo, WorktreeRemovalInfo } from './types'
+import { EMPTY, taskState } from './tasks'
 import { choiceDialog, confirmDialog, confirmDialogWithCheckbox, resultsDialog, toasts } from './ui'
 
 function mergeStateOf(over: Partial<MergeState>): MergeState {
@@ -440,7 +441,8 @@ describe('operations notify', () => {
   })
 
   it('a slow push notifies finished', async () => {
-    const now = vi.spyOn(Date, 'now').mockReturnValueOnce(0).mockReturnValueOnce(12_000)
+    // beginOp's task start reads the clock first, then track's start and end.
+    const now = vi.spyOn(Date, 'now').mockReturnValueOnce(0).mockReturnValueOnce(0).mockReturnValueOnce(12_000)
     await push('r1')
     now.mockRestore()
     expect(vi.mocked(api.notify).mock.calls[0][0]).toMatchObject({ id: 'r1:done', body: 'Push finished · 12 s' })
@@ -641,5 +643,55 @@ describe('the branch menu\'s Fetch, Pull and Push', () => {
     })
     expect(await pushBranch('r1', feature())).toBe(false)
     expect(get(toasts).map((t) => [t.message, t.kind])).toEqual([["The remote has commits you don't have — pull feature first", 'error']])
+  })
+})
+
+describe('operations as status-bar tasks', () => {
+  beforeEach(() => {
+    taskState.set(EMPTY)
+    repos.set([{ id: 'r1', name: 'one' }, { id: 'r2', name: 'two' }] as Repo[])
+    selectedRepoId.set('r1')
+  })
+
+  it('pull is a task of its repository while it runs, then the last result', async () => {
+    let resolve!: (v: unknown) => void
+    vi.mocked(api.pull).mockReturnValueOnce(new Promise((r) => (resolve = r)) as never)
+    const done = pull('r2')
+    expect(get(taskState).tasks).toMatchObject([{ kind: 'op', label: 'Pulling…', repoId: 'r2', repoName: 'two' }])
+    selectedRepoId.set('r1')
+    resolve({ outcome: 1, conflicts: [] })
+    await done
+    expect(get(taskState).tasks).toEqual([])
+    expect(get(taskState).last).toMatchObject({ outcome: 'ok', text: 'Pulled', repoId: 'r2' })
+  })
+
+  it('a failed pull is "Pulling failed" with the reason', async () => {
+    vi.mocked(api.pull).mockRejectedValueOnce(new Error('no upstream'))
+    await pull('r1')
+    expect(get(taskState).last).toMatchObject({ outcome: 'failed', text: 'Pulling failed', message: 'no upstream' })
+  })
+
+  it('a cancelled pull is "Pulling cancelled"', async () => {
+    vi.mocked(api.pull).mockRejectedValueOnce(new Error('git command cancelled'))
+    await pull('r1')
+    expect(get(taskState).last).toMatchObject({ outcome: 'cancelled', text: 'Pulling cancelled' })
+  })
+
+  it('run-based actions register on the selected repository', async () => {
+    await deleteTag('r1', 'v1')
+    expect(get(taskState).last).toMatchObject({ text: 'Deleted tag', repoId: 'r1' })
+  })
+
+  it('a failed run-based action is a failed task', async () => {
+    vi.mocked(api.deleteTag).mockRejectedValueOnce(new Error('boom'))
+    await deleteTag('r1', 'v1')
+    expect(get(taskState).last).toMatchObject({ outcome: 'failed', text: 'Deleting tag failed', message: 'boom' })
+  })
+
+  it('deleteBranch ends its task once, with the first failure', async () => {
+    vi.mocked(api.deleteBranch).mockRejectedValueOnce(new Error('boom'))
+    await deleteBranch('r1', branch('feature'))
+    expect(get(taskState).tasks).toEqual([])
+    expect(get(taskState).last).toMatchObject({ outcome: 'failed', text: 'Deleting branch failed', message: 'boom' })
   })
 })

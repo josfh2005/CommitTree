@@ -33,6 +33,7 @@ describe('resultText', () => {
     expect(resultText('op', 'Deleting branch…', 'ok')).toBe('Deleted branch')
     expect(resultText('op', 'Cherry-picking…', 'ok')).toBe('Cherry-picked')
     expect(resultText('op', 'Committing merge…', 'ok')).toBe('Committed merge')
+    expect(resultText('op', 'Initialising git-flow…', 'ok')).toBe('Initialised git-flow')
   })
   it('falls back to "<label> — done" for a label the table lacks', () => {
     expect(resultText('op', 'Frobbing…', 'ok')).toBe('Frobbing — done')

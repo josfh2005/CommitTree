@@ -1,6 +1,7 @@
 import { get } from 'svelte/store'
 import { api } from './api'
-import { busy, chatOpen, chatRunRepo, collapsedRepoGroups, expandedRepos, filters, focusCommitBox, gitSettings, loadIdentity, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, refs, repoManualSeeded, repos, repoSortOrder, selectRepo, selectUncommitted, selectedHash, selectedRepoId, stashConflictDismissed } from './stores'
+import { chatOpen, chatRunRepo, collapsedRepoGroups, expandedRepos, filters, focusCommitBox, gitSettings, loadIdentity, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, refs, repoManualSeeded, repos, repoSortOrder, selectRepo, selectUncommitted, selectedHash, selectedRepoId, stashConflictDismissed } from './stores'
+import { beginOp } from './tasks'
 import { notifyStashConflicts, opError, track } from './notify'
 import type { OpKind } from './notifyRules'
 import type { Branch, BranchPushResult, FileStatus, HunkAction, HunkPick, MergeState, RebasePreview, RegionChoice, Refs, Repo, ResetInfo, ResetMode, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
@@ -32,15 +33,17 @@ function clearBranchFilter(ref: string) {
 }
 
 async function run(label: string, fn: () => Promise<unknown>): Promise<boolean> {
-  busy.set(label)
+  const end = beginOp(label)
+  let failure: unknown
   try {
     await fn()
     return true
   } catch (e) {
+    failure = e
     toast(errorMessage(e), 'error')
     return false
   } finally {
-    busy.set('')
+    end(failure)
     await refreshRepo()
   }
 }
@@ -49,15 +52,17 @@ async function run(label: string, fn: () => Promise<unknown>): Promise<boolean> 
 // it tracks how the operation ended, and a failure's toast names the
 // repository when it is not the selected one.
 async function runOp(id: string, op: OpKind, label: string, fn: () => Promise<unknown>): Promise<boolean> {
-  busy.set(label)
+  const end = beginOp(label, id)
+  let failure: unknown
   try {
     await track(id, op, fn)
     return true
   } catch (e) {
+    failure = e
     opError(id, e)
     return false
   } finally {
-    busy.set('')
+    end(failure)
     await refreshRepo()
   }
 }
@@ -442,12 +447,12 @@ export async function deleteBranch(id: string, branch: Branch) {
     danger: true,
   })
   if (!ok) return
-  busy.set('Deleting branch…')
+  const end = beginOp('Deleting branch…', id)
   try {
     await api.deleteBranch(id, branch.name, false)
   } catch (e) {
     const message = errorMessage(e)
-    busy.set('')
+    end(e)
     if (!message.includes('not fully merged')) {
       toast(message, 'error')
       return
@@ -455,7 +460,7 @@ export async function deleteBranch(id: string, branch: Branch) {
     if (await confirmForceDeleteBranch(id, branch.name)) clearBranchFilter(branchRef(branch))
     return
   } finally {
-    busy.set('')
+    end()
   }
   clearBranchFilter(branchRef(branch))
   await refreshRepo()
@@ -572,15 +577,17 @@ async function confirmMerge(id: string, branch: Branch, into: string): Promise<s
 export async function mergeBranch(id: string, branch: Branch, into: string) {
   const label = await confirmMerge(id, branch, into)
   if (label === null) return
-  busy.set('Merging…')
+  const end = beginOp('Merging…', id)
+  let failure: unknown
   try {
     const result = await track(id, 'merge', () => api.mergeBranch(id, label), (r) => r.conflicts?.length ?? 0)
     if (result.outcome === UP_TO_DATE) toast(`${into} is already up to date with ${label}.`, 'info')
     await warnMovedSubmodules(id)
   } catch (e) {
+    failure = e
     opError(id, e)
   } finally {
-    busy.set('')
+    end(failure)
     await refreshRepo()
   }
 }
@@ -629,11 +636,13 @@ export async function commitMerge(id: string, message = ''): Promise<boolean> {
   }
   const kind = state?.kind
   const label = kind === 'rebase' || kind === 'cherry-pick' ? 'Continuing…' : 'Committing merge…'
+  const end = beginOp(label, id)
+  let failure: unknown
   try {
-    busy.set(label)
     await api.commitMerge(id, message)
     return true
   } catch (e) {
+    failure = e
     const text = errorMessage(e)
     if ((kind === 'rebase' || kind === 'cherry-pick') && isEmptyStepError(text)) {
       const skip = await confirmDialog({ title: 'Nothing to commit', message: `${text}\n\nSkip this commit instead?`, confirmLabel: 'Skip this commit' })
@@ -643,7 +652,7 @@ export async function commitMerge(id: string, message = ''): Promise<boolean> {
     }
     return false
   } finally {
-    busy.set('')
+    end(failure)
     await refreshRepo()
   }
 }
@@ -663,16 +672,18 @@ export async function takeMergeSide(id: string, path: string, side: 'ours' | 'th
 /** resolveMergeRegion settles one region from the Merge view. A region the
  *  AI or another click resolved meanwhile writes nothing; the view reloads. */
 export async function resolveMergeRegion(id: string, path: string, region: string, choice: RegionChoice, text: string, reload: () => void) {
-  busy.set('Resolving…')
+  const end = beginOp('Resolving…', id)
+  let failure: unknown
   try {
     const res = await api.resolveMergeRegion(id, path, region, choice, text)
     if (res.staged) toast(`${path} resolved and staged`)
   } catch (e) {
+    failure = e
     const message = errorMessage(e)
     toast(message.includes('no such conflict region') ? 'That region changed; reloaded.' : message, 'error')
     reload()
   } finally {
-    busy.set('')
+    end(failure)
     await refreshRepo()
   }
 }
@@ -681,17 +692,19 @@ export async function resolveMergeRegion(id: string, path: string, region: strin
  *  when option is -1); the card itself updates from chat:choice. Returns
  *  whether it was applied. */
 export async function chooseRegionOption(repoID: string, callID: string, option: number, text: string, path: string): Promise<boolean> {
-  busy.set('Resolving…')
+  const end = beginOp('Resolving…', repoID)
+  let failure: unknown
   try {
     const res = await api.chooseRegionOption(repoID, callID, option, text)
     // Settled another way: nothing was written; the card says so itself.
     if (!res.settled) toast(res.staged ? `${path} resolved and staged` : 'Region resolved')
     return true
   } catch (e) {
+    failure = e
     toast(errorMessage(e), 'error')
     return false
   } finally {
-    busy.set('')
+    end(failure)
     await refreshRepo()
   }
 }
@@ -716,16 +729,18 @@ export async function rebaseOnto(id: string, onto: string, ontoLabel: string, he
   }
   const ok = await confirmDialog({ title: 'Rebase', message: rebaseMessage(head, ontoLabel, preview), confirmLabel: 'Rebase' })
   if (!ok) return
-  busy.set('Rebasing…')
+  const end = beginOp('Rebasing…', id)
+  let failure: unknown
   try {
     const result = await track(id, 'rebase', () => api.rebaseOnto(id, onto), (r) => r.conflicts?.length ?? 0)
     const msg = doneMessage(result.outcome, { op: 'rebase', head, target: ontoLabel, commits: preview.commits })
     if (msg) toast(msg, 'info')
     await warnMovedSubmodules(id)
   } catch (e) {
+    failure = e
     opError(id, e)
   } finally {
-    busy.set('')
+    end(failure)
     await refreshRepo()
   }
 }
@@ -733,16 +748,18 @@ export async function rebaseOnto(id: string, onto: string, ontoLabel: string, he
 export async function cherryPick(id: string, hash: string, short: string, subject: string, head: string) {
   const ok = await confirmDialog({ title: 'Cherry-pick', message: `Cherry-pick ${short} ${subject} onto ${head}?`, confirmLabel: 'Cherry-pick' })
   if (!ok) return
-  busy.set('Cherry-picking…')
+  const end = beginOp('Cherry-picking…', id)
+  let failure: unknown
   try {
     const result = await track(id, 'cherry-pick', () => api.cherryPick(id, hash), (r) => r.conflicts?.length ?? 0)
     const msg = doneMessage(result.outcome, { op: 'cherry-pick', head, target: short })
     if (msg) toast(msg, 'info')
     await warnMovedSubmodules(id)
   } catch (e) {
+    failure = e
     opError(id, e)
   } finally {
-    busy.set('')
+    end(failure)
     await refreshRepo()
   }
 }
@@ -813,7 +830,8 @@ export async function push(id: string): Promise<boolean> {
 // notifies as failed.
 export async function pushAll(id: string): Promise<boolean> {
   const name = repoLabel(id)
-  busy.set('Pushing branches…')
+  const end = beginOp('Pushing branches…', id)
+  let failure: unknown
   let partial: BranchPushResult[] | null = null
   try {
     const results = await track(id, 'push', async () => {
@@ -825,26 +843,29 @@ export async function pushAll(id: string): Promise<boolean> {
     toast(id === get(selectedRepoId) ? message : `${name}: ${message}`, 'info')
     return true
   } catch (e) {
+    failure = e
     if (e instanceof PartialPushError) partial = e.results
     else opError(id, e)
     return false
   } finally {
-    busy.set('')
+    end(failure)
     await refreshRepo()
     if (partial) void resultsDialog({ title: `Push results — ${name}`, rows: pushResultRows(partial) })
   }
 }
 
 export async function pull(id: string) {
-  busy.set('Pulling…')
+  const end = beginOp('Pulling…', id)
+  let failure: unknown
   try {
     const result = await track(id, 'pull', () => api.pull(id), (r) => r.conflicts?.length ?? 0)
     if (result.outcome === PULL_UP_TO_DATE) toast('Already up to date.', 'info')
     await warnMovedSubmodules(id)
   } catch (e) {
+    failure = e
     opError(id, e)
   } finally {
-    busy.set('')
+    end(failure)
     await refreshRepo()
   }
 }

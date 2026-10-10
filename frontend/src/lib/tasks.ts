@@ -79,6 +79,7 @@ const PAST: Record<string, string> = {
   'Discarding…': 'Discarded',
   'Dropping stash…': 'Dropped stash',
   'Fetching…': 'Fetched',
+  'Initialising git-flow…': 'Initialised git-flow',
   'Initialising…': 'Initialised',
   'Merging…': 'Merged',
   'Popping stash…': 'Popped stash',

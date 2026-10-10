@@ -7,7 +7,8 @@
   import { busy, refreshRepo, repoSettings, repos, selectedRepoId } from '../lib/stores'
   import { remotesPanel } from '../lib/remotesPanel'
   import type { RemoteConfig } from '../lib/types'
-  import { confirmDialog, dialog } from '../lib/ui'
+  import { beginOp } from '../lib/tasks'
+import { confirmDialog, dialog } from '../lib/ui'
 
   const panel = remotesPanel({
     list: (id) => api.listRemotes(id),
@@ -53,11 +54,20 @@
   }
 
   async function write(label: string, fn: () => Promise<void>): Promise<boolean> {
-    busy.set(label)
+    const end = beginOp(label, repoID)
+    let failure: unknown
     try {
-      return await panel.write(fn)
+      // The panel catches a failed write to show it; keep the error for the task.
+      return await panel.write(async () => {
+        try {
+          await fn()
+        } catch (e) {
+          failure = e
+          throw e
+        }
+      })
     } finally {
-      busy.set('')
+      end(failure)
     }
   }
 
