@@ -434,6 +434,9 @@ export interface CommandEntry {
    *  path), not necessarily identical to Repo.path; match it against the
    *  `repo` a CommandLog call returned, not against Repo.path directly. */
   repo: string
+  /** The sidebar repository id the command ran in; '' outside every listed
+   *  repository (e.g. a clone's destination). */
+  repoId: string
   args: string[]
   origin: CommandOrigin
   kind: 'read' | 'write'

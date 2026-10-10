@@ -64,8 +64,38 @@ func (a *App) originContext(ctx context.Context, dir string, args []string) cont
 // it. Before Startup (and in tests) there is no Wails runtime to emit to.
 func (a *App) emitCommand(e cmdlog.Entry) {
 	if a.started.Load() && a.cmdEmit != nil {
+		e.RepoID = a.repoIDForKey(e.Repo)
 		a.cmdEmit(e)
 	}
+}
+
+// repoIDForKey is the id of the listed repository — stored, then a detected
+// worktree, then a detected submodule, the same order as repo() — whose
+// folder has backend key key; "" when none. The mutexes are only held to
+// read the maps, never while git runs, so calling it from the recorder's
+// hooks cannot deadlock.
+func (a *App) repoIDForKey(key string) string {
+	for _, r := range a.store.List() {
+		if cmdlog.RepoKey(r.Path) == key {
+			return r.ID
+		}
+	}
+	a.wtMu.Lock()
+	for id, r := range a.worktrees {
+		if cmdlog.RepoKey(r.Path) == key {
+			a.wtMu.Unlock()
+			return id
+		}
+	}
+	a.wtMu.Unlock()
+	a.smMu.Lock()
+	defer a.smMu.Unlock()
+	for id, r := range a.submodules {
+		if cmdlog.RepoKey(r.Path) == key {
+			return id
+		}
+	}
+	return ""
 }
 
 // markAIWrite marks repository id as running an approved AI write until
@@ -107,7 +137,11 @@ func (a *App) CommandLog(id string) (CommandLogView, error) {
 	if err != nil {
 		return CommandLogView{}, err
 	}
-	return CommandLogView{Repo: cmdlog.RepoKey(dir), Entries: a.cmds.List(dir)}, nil
+	entries := a.cmds.List(dir)
+	for i := range entries {
+		entries[i].RepoID = id
+	}
+	return CommandLogView{Repo: cmdlog.RepoKey(dir), Entries: entries}, nil
 }
 
 // CommandLogOutput is what command entryID printed.

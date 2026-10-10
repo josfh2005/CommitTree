@@ -252,3 +252,50 @@ func TestAIWriteMarkAppliesWhileRunning(t *testing.T) {
 		t.Fatalf("running entries: %+v", running)
 	}
 }
+
+func TestEmittedEntriesCarryRepoID(t *testing.T) {
+	a, id := newTestApp(t)
+	var mu sync.Mutex
+	var got []cmdlog.Entry
+	a.cmdEmit = func(e cmdlog.Entry) { mu.Lock(); got = append(got, e); mu.Unlock() }
+	a.started.Store(true)
+	if err := a.CreateBranch(id, "with-id", "HEAD", false); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(got) == 0 {
+		t.Fatal("no events")
+	}
+	for _, e := range got {
+		if e.RepoID != id {
+			t.Fatalf("entry %v has repoId %q, want %q", e.Args, e.RepoID, id)
+		}
+	}
+}
+
+func TestCommandLogEntriesCarryRepoID(t *testing.T) {
+	a, id := newTestApp(t)
+	if err := a.CreateBranch(id, "listed", "HEAD", false); err != nil {
+		t.Fatal(err)
+	}
+	view, err := a.CommandLog(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(view.Entries) == 0 {
+		t.Fatal("no entries")
+	}
+	for _, e := range view.Entries {
+		if e.RepoID != id {
+			t.Fatalf("entry %v has repoId %q, want %q", e.Args, e.RepoID, id)
+		}
+	}
+}
+
+func TestRepoIDForKeyUnknownIsEmpty(t *testing.T) {
+	a, _ := newTestApp(t)
+	if got := a.repoIDForKey(cmdlog.RepoKey(t.TempDir())); got != "" {
+		t.Fatalf("got %q, want empty", got)
+	}
+}

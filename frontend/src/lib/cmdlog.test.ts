@@ -3,7 +3,7 @@ import { commandLine, commandsShortcutLabel, elapsedMs, emptyMessage, formatCloc
 import type { CommandEntry } from './types'
 
 const entry = (id: number, over: Partial<CommandEntry> = {}): CommandEntry => ({
-  id, repo: '/r', args: ['status'], origin: 'auto', kind: 'read', start: '2026-09-27T10:04:05Z',
+  id, repo: '/r', repoId: '', args: ['status'], origin: 'auto', kind: 'read', start: '2026-09-27T10:04:05Z',
   durationMs: 12, exitCode: 0, outcome: 'ok', outputTruncated: false, outputDropped: false, ...over,
 })
 const key = (over: Partial<KeyboardEvent>) => ({ code: 'KeyJ', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...over })

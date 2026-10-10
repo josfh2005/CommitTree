@@ -42,8 +42,12 @@ var ErrNotRunning = errors.New("command is not running")
 // Entry is one command as the Commands panel lists it; its output is
 // fetched separately with Output.
 type Entry struct {
-	ID              int64     `json:"id"`
-	Repo            string    `json:"repo"`
+	ID   int64  `json:"id"`
+	Repo string `json:"repo"`
+	// RepoID is the sidebar repository the command ran in, filled in by
+	// the app layer (cmdlog does not know repository ids); empty when the
+	// folder is not a listed repository, e.g. a clone's destination.
+	RepoID          string    `json:"repoId"`
 	Args            []string  `json:"args"`
 	Origin          Origin    `json:"origin"`
 	Kind            Kind      `json:"kind"`
