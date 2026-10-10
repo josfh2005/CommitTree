@@ -69,7 +69,7 @@ describe('endTask', () => {
 describe('applyEntry', () => {
   it('tracks a running write and drops it on its end', () => {
     const s1 = applyEntry(EMPTY, entry(), 6000, nameOf)
-    expect(s1.writes).toEqual([{ id: 7, repoId: 'a', origin: 'ai', args: ['commit', '-m', 'x'], start: 5000 }])
+    expect(s1.writes).toEqual([{ id: 7, repoId: 'a', origin: 'ai', args: ['commit', '-m', 'x'], start: 5000, folded: false }])
     const s2 = applyEntry(s1, entry({ outcome: 'ok' }), 7000, nameOf)
     expect(s2.writes).toEqual([])
     expect(s2.last).toEqual({ kind: 'git', outcome: 'ok', text: 'git commit -m x', message: '', repoId: 'a', repoName: 'alpha', end: 7000 })
@@ -87,6 +87,16 @@ describe('applyEntry', () => {
     const withOp = addTask(EMPTY, task())
     const s = applyEntry(applyEntry(withOp, entry({ origin: 'you' }), 1, nameOf), entry({ origin: 'you', outcome: 'failed', exitCode: 1 }), 2, nameOf)
     expect(s.last).toBeNull()
+  })
+  it('a write started inside an op stays folded even if the op ends first', () => {
+    const op = task()
+    let s = applyEntry(addTask(EMPTY, op), entry({ origin: 'you' }), 1, nameOf)
+    s = endTask(s, 'op:1', 'ok', '', 2)
+    expect(s.last?.text).toBe('Pushed')
+    const last = s.last
+    s = applyEntry(s, entry({ origin: 'you', outcome: 'ok' }), 3, nameOf)
+    expect(s.last).toBe(last)
+    expect(s.writes).toEqual([])
   })
   it('does not record an Auto write as the last result', () => {
     const s = applyEntry(applyEntry(EMPTY, entry({ origin: 'auto' }), 1, nameOf), entry({ origin: 'auto', outcome: 'ok' }), 2, nameOf)
@@ -129,6 +139,11 @@ describe('cancelTarget', () => {
     s = applyEntry(s, entry({ id: 4, start: new Date(2000).toISOString() }), 1, nameOf)
     s = applyEntry(s, entry({ id: 5, repoId: 'b', start: new Date(3000).toISOString() }), 1, nameOf)
     expect(cancelTarget(s, task())).toEqual({ kind: 'command', repoId: 'a', entryId: 4 })
+  })
+  it('cancels nothing for an op or fetch without a repository, whatever else runs', () => {
+    const s = applyEntry(EMPTY, entry({ repoId: '' }), 1, nameOf)
+    expect(cancelTarget(s, task({ repoId: '', repoName: '' }))).toBeNull()
+    expect(cancelTarget(s, task({ id: 'fetch:', kind: 'fetch', origin: 'auto', repoId: '', repoName: '' }))).toBeNull()
   })
 })
 

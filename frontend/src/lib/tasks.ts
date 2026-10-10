@@ -35,7 +35,15 @@ export interface TaskResult {
 }
 
 /** A git write that has started and not ended, from cmdlog:entry. */
-export interface RunningWrite { id: number; repoId: string; origin: CommandOrigin; args: string[]; start: number }
+export interface RunningWrite {
+  id: number
+  repoId: string
+  origin: CommandOrigin
+  args: string[]
+  start: number
+  /** True when an op or fetch of its repository was running as it started: it then never has a result of its own. */
+  folded: boolean
+}
 
 export interface TaskState {
   tasks: Task[]
@@ -147,13 +155,13 @@ export function applyEntry(s: TaskState, e: CommandEntry, now: number, nameOf: (
   if (e.kind !== 'write') return s
   if (e.outcome === 'running') {
     if (s.ended.includes(e.id) || s.writes.some((w) => w.id === e.id)) return s
-    return { ...s, writes: [...s.writes, { id: e.id, repoId: e.repoId, origin: e.origin, args: e.args, start: Date.parse(e.start) }] }
+    return { ...s, writes: [...s.writes, { id: e.id, repoId: e.repoId, origin: e.origin, args: e.args, start: Date.parse(e.start), folded: foldedIn(s, e.repoId) }] }
   }
   const ended = [...s.ended, e.id].slice(-ENDED_KEPT)
   const w = s.writes.find((x) => x.id === e.id)
   if (!w) return { ...s, ended }
   const writes = s.writes.filter((x) => x.id !== e.id)
-  if (w.repoId === '' || foldedIn(s, w.repoId) || w.origin === 'auto') return { ...s, writes, ended }
+  if (w.repoId === '' || w.folded || foldedIn(s, w.repoId) || w.origin === 'auto') return { ...s, writes, ended }
   const outcome: TaskOutcome = e.outcome === 'ok' ? 'ok' : e.outcome === 'cancelled' ? 'cancelled' : 'failed'
   return {
     ...s,
@@ -186,6 +194,7 @@ export function cancelTarget(s: TaskState, t: Task): CancelTarget | null {
   if (t.kind === 'clone') return { kind: 'clone' }
   if (t.kind === 'model') return { kind: 'model' }
   if (t.kind === 'git') return { kind: 'command', repoId: t.repoId, entryId: Number(t.id.slice('git:'.length)) }
+  if (t.repoId === '') return null
   const newest = s.writes
     .filter((w) => w.repoId === t.repoId)
     .sort((a, b) => b.start - a.start || b.id - a.id)[0]
