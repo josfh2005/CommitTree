@@ -28,9 +28,10 @@ From left to right:
 2. **Cancel**, when the task can be cancelled at that moment. After a click
    it reads "Cancelling…" and is disabled until the task ends. A cancel
    that reaches a command which has just ended on its own ("command is not
-   running") is ignored silently; any other failure to cancel is an error
-   toast and the button is usable again. "Cancelling…" disappears with the
-   task.
+   running") cancelled nothing: it is ignored silently and the button goes
+   back to "Cancel" (the operation may already be running its next
+   command). Any other failure to cancel is an error toast and the button
+   is usable again too. "Cancelling…" disappears with the task.
 3. At the right edge, **"+N"** when N more tasks run ("+2" for two more).
 
 ## What counts as a task

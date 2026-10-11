@@ -1,6 +1,7 @@
-import { formatElapsed } from './cmdlog'
-import type { TaskKind, TaskOutcome } from './tasks'
+import { formatElapsed, NOT_RUNNING_MESSAGE } from './cmdlog'
+import type { CancelTarget, TaskKind, TaskOutcome } from './tasks'
 import type { Repo } from './types'
+import { errorMessage } from './ui'
 
 /** Elapsed time once a task has run a full second; '' before. */
 export function elapsedText(start: number, now: number): string {
@@ -20,4 +21,26 @@ export function openAction(t: { kind: TaskKind; repoId: string }, cloneRunning: 
   if (t.kind === 'model') return { kind: 'providers' }
   const repo = list.find((r) => r.id === t.repoId)
   return repo && !repo.missing ? { kind: 'commands', repoId: repo.id } : null
+}
+
+export interface CancelDeps {
+  cancelPull: () => Promise<void>
+  cancelCommand: (repoId: string, entryId: number) => Promise<void>
+  toast: (message: string, kind: 'error') => void
+}
+
+/** Asks the backend to stop a model download or a command; returns whether
+ *  the "Cancelling…" state should stay (until the task ends). It does not
+ *  when nothing was cancelled: the command had already ended on its own
+ *  (silent) or the cancel failed (an error toast). */
+export async function cancelTask(target: Exclude<CancelTarget, { kind: 'clone' }>, deps: CancelDeps): Promise<boolean> {
+  try {
+    if (target.kind === 'model') await deps.cancelPull()
+    else await deps.cancelCommand(target.repoId, target.entryId)
+    return true
+  } catch (e) {
+    const message = errorMessage(e)
+    if (!message.includes(NOT_RUNNING_MESSAGE)) deps.toast(message, 'error')
+    return false
+  }
 }

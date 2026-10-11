@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { elapsedText, outcomeIcon, openAction } from './statusBar'
+import { describe, expect, it, vi } from 'vitest'
+import { cancelTask, elapsedText, outcomeIcon, openAction } from './statusBar'
 import type { Repo } from './types'
 
 const repos = [{ id: 'a', name: 'alpha', missing: false }, { id: 'm', name: 'gone', missing: true }] as Repo[]
@@ -34,5 +34,33 @@ describe('openAction', () => {
     }
     expect(openAction({ kind: 'op', repoId: 'm' }, false, repos)).toBeNull()
     expect(openAction({ kind: 'op', repoId: 'x' }, false, repos)).toBeNull()
+  })
+})
+
+describe('cancelTask', () => {
+  const command = { kind: 'command', repoId: 'a', entryId: 7 } as const
+  const deps = (cancelCommand: () => Promise<void>) => ({ cancelPull: vi.fn().mockResolvedValue(undefined), cancelCommand: vi.fn(cancelCommand), toast: vi.fn() })
+
+  it('keeps Cancelling… after a cancel that went through', async () => {
+    const d = deps(async () => {})
+    expect(await cancelTask(command, d)).toBe(true)
+    expect(d.cancelCommand).toHaveBeenCalledWith('a', 7)
+    expect(d.toast).not.toHaveBeenCalled()
+  })
+  it('cancels a model download with cancelPull', async () => {
+    const d = deps(async () => {})
+    expect(await cancelTask({ kind: 'model' }, d)).toBe(true)
+    expect(d.cancelPull).toHaveBeenCalled()
+    expect(d.cancelCommand).not.toHaveBeenCalled()
+  })
+  it('clears the flag, silently, when the command had already ended', async () => {
+    const d = deps(async () => { throw new Error('command is not running') })
+    expect(await cancelTask(command, d)).toBe(false)
+    expect(d.toast).not.toHaveBeenCalled()
+  })
+  it('clears the flag and toasts any other failure', async () => {
+    const d = deps(async () => { throw new Error('boom') })
+    expect(await cancelTask(command, d)).toBe(false)
+    expect(d.toast).toHaveBeenCalledWith('boom', 'error')
   })
 })

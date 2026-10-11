@@ -3,12 +3,11 @@
   import { api } from '../lib/api'
   import { openCloneDialog } from '../lib/actions'
   import { cancelClone, cloneCancelling } from '../lib/clone'
-  import { NOT_RUNNING_MESSAGE } from '../lib/cmdlog'
-  import { settingsTab } from '../lib/settingsTabs'
-  import { elapsedText, openAction, outcomeIcon } from '../lib/statusBar'
+    import { settingsTab } from '../lib/settingsTabs'
+  import { cancelTask, elapsedText, openAction, outcomeIcon } from '../lib/statusBar'
   import { commandsOpen, repos, selectRepo, selectedRepoId, settingsOpen } from '../lib/stores'
   import { cancelTarget, relativeTime, shownTasks, taskState, type Task, type TaskResult } from '../lib/tasks'
-  import { errorMessage, toast } from '../lib/ui'
+  import { toast } from '../lib/ui'
 
   let now = Date.now()
   const timer = setInterval(() => (now = Date.now()), 1000)
@@ -43,17 +42,8 @@
       return
     }
     cancelling = { ...cancelling, [t.id]: true }
-    try {
-      if (target.kind === 'model') await api.cancelPull()
-      else await api.cancelCommand(target.repoId, target.entryId)
-    } catch (e) {
-      const message = errorMessage(e)
-      // The command ended on its own just before: nothing to cancel, nothing to report.
-      if (!message.includes(NOT_RUNNING_MESSAGE)) {
-        toast(message, 'error')
-        cancelling = { ...cancelling, [t.id]: false }
-      }
-    }
+    const stays = await cancelTask(target, { cancelPull: api.cancelPull, cancelCommand: api.cancelCommand, toast })
+    if (!stays) cancelling = { ...cancelling, [t.id]: false }
   }
 
   function open(t: Pick<Task | TaskResult, 'kind' | 'repoId'>, running: boolean) {
