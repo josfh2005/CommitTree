@@ -32,8 +32,8 @@ function clearBranchFilter(ref: string) {
   filters.update((f) => (f.branch === ref ? { ...f, branch: '' } : f))
 }
 
-async function run(label: string, fn: () => Promise<unknown>): Promise<boolean> {
-  const end = beginOp(label)
+async function run(id: string, label: string, fn: () => Promise<unknown>): Promise<boolean> {
+  const end = beginOp(label, id)
   let failure: unknown
   try {
     await fn()
@@ -332,7 +332,7 @@ export async function relocateRepo(id: string) {
 
 export async function checkoutBranch(id: string, branch: Pick<Branch, 'name' | 'remote'>) {
   let notice = ''
-  const ok = await run('Checking out…', async () => {
+  const ok = await run(id, 'Checking out…', async () => {
     if (!branch.remote) return api.checkout(id, branch.name)
     notice = checkoutNotice(await api.checkoutRemote(id, branch.remote, branch.name), branch.remote, branch.name)
   })
@@ -347,7 +347,7 @@ export async function checkoutCommit(id: string, hash: string) {
     message: `HEAD will be detached at ${hash.slice(0, 8)}. New commits made there won't belong to any branch.`,
     confirmLabel: 'Check out',
   })
-  if (ok && (await run('Checking out…', () => api.checkoutDetached(id, hash)))) await warnMovedSubmodules(id)
+  if (ok && (await run(id, 'Checking out…', () => api.checkoutDetached(id, hash)))) await warnMovedSubmodules(id)
 }
 
 const HUNK_BUSY: Record<HunkAction, string> = { stage: 'Staging…', unstage: 'Unstaging…', discard: 'Discarding…' }
@@ -360,7 +360,7 @@ const HUNK_BUSY: Record<HunkAction, string> = { stage: 'Staging…', unstage: 'U
 const discardToasts = new Map<string, number>()
 
 export async function applyHunkSelection(id: string, path: string, staged: boolean, hash: string, picks: HunkPick[], action: HunkAction, what: string) {
-  const ok = await run(HUNK_BUSY[action], () => api.applyHunkSelection(id, path, staged, hash, picks, action))
+  const ok = await run(id, HUNK_BUSY[action], () => api.applyHunkSelection(id, path, staged, hash, picks, action))
   if (ok && action === 'discard') {
     const previous = discardToasts.get(id)
     if (previous !== undefined) dismissToast(previous)
@@ -369,7 +369,7 @@ export async function applyHunkSelection(id: string, path: string, staged: boole
 }
 
 export async function undoDiscard(id: string) {
-  await run('Restoring…', () => api.undoDiscard(id))
+  await run(id, 'Restoring…', () => api.undoDiscard(id))
 }
 
 export async function resetBranch(id: string, hash: string, short: string, branch: string) {
@@ -393,7 +393,7 @@ export async function resetBranch(id: string, hash: string, short: string, branc
     confirmLabel: (m) => (m === 'hard' ? 'Reset and discard' : 'Reset'),
     danger: (m) => m === 'hard',
   })
-  if (mode && (await run('Resetting…', () => api.resetBranch(id, hash, mode)))) await warnMovedSubmodules(id)
+  if (mode && (await run(id, 'Resetting…', () => api.resetBranch(id, hash, mode)))) await warnMovedSubmodules(id)
 }
 
 export async function newBranch(id: string, target: string, targetLabel: string) {
@@ -406,7 +406,7 @@ export async function newBranch(id: string, target: string, targetLabel: string)
   })
   const name = result?.value.trim()
   if (!result || !name) return
-  await run('Creating branch…', () => api.createBranch(id, name, target, result.checked))
+  await run(id, 'Creating branch…', () => api.createBranch(id, name, target, result.checked))
 }
 
 // confirmForceDeleteBranch offers the same "not merged" confirmation the
@@ -422,7 +422,7 @@ async function confirmForceDeleteBranch(id: string, name: string): Promise<boole
     danger: true,
   })
   if (!force) return false
-  return run('Deleting branch…', () => api.deleteBranch(id, name, true))
+  return run(id, 'Deleting branch…', () => api.deleteBranch(id, name, true))
 }
 
 export async function deleteBranch(id: string, branch: Branch) {
@@ -434,7 +434,7 @@ export async function deleteBranch(id: string, branch: Branch) {
       danger: true,
     })
     if (ok) {
-      const deleted = await run('Deleting remote branch…', () => api.deleteRemoteBranch(id, branch.remote, branch.name))
+      const deleted = await run(id, 'Deleting remote branch…', () => api.deleteRemoteBranch(id, branch.remote, branch.name))
       if (deleted) clearBranchFilter(branchRef(branch))
     }
     return
@@ -475,7 +475,7 @@ export async function newTag(id: string, target: string, targetLabel: string) {
   })
   const name = result?.value.trim()
   if (!result || !name) return
-  await run('Creating tag…', () => api.createTag(id, name, target, result.second.trim()))
+  await run(id, 'Creating tag…', () => api.createTag(id, name, target, result.second.trim()))
 }
 
 export async function deleteTag(id: string, name: string) {
@@ -486,7 +486,7 @@ export async function deleteTag(id: string, name: string) {
     danger: true,
   })
   if (ok) {
-    const deleted = await run('Deleting tag…', () => api.deleteTag(id, name))
+    const deleted = await run(id, 'Deleting tag…', () => api.deleteTag(id, name))
     if (deleted) clearBranchFilter(`refs/tags/${name}`)
   }
 }
@@ -620,7 +620,7 @@ export async function abortMerge(id: string) {
   const state = get(mergeState)
   const warning = abortWarning(state ?? ({ kind: 'merge' } as MergeState), get(chatRunRepo) === id)
   const ok = await confirmDialog({ ...warning, danger: true })
-  if (ok) await run(`${warning.title}…`, () => api.abortMerge(id))
+  if (ok) await run(id, `${warning.title}…`, () => api.abortMerge(id))
 }
 
 /** commitMerge advances the resolution in progress: a merge commits with
@@ -646,7 +646,7 @@ export async function commitMerge(id: string, message = ''): Promise<boolean> {
     const text = errorMessage(e)
     if ((kind === 'rebase' || kind === 'cherry-pick') && isEmptyStepError(text)) {
       const skip = await confirmDialog({ title: 'Nothing to commit', message: `${text}\n\nSkip this commit instead?`, confirmLabel: 'Skip this commit' })
-      if (skip) await run('Skipping…', () => api.skipStep(id))
+      if (skip) await run(id, 'Skipping…', () => api.skipStep(id))
     } else {
       toast(text, 'error')
     }
@@ -657,8 +657,8 @@ export async function commitMerge(id: string, message = ''): Promise<boolean> {
   }
 }
 
-export const stageMergeFile = (id: string, path: string) => run('Staging…', () => api.stageMergeFile(id, path))
-export const unstageMergeFile = (id: string, path: string) => run('Unstaging…', () => api.unstageMergeFile(id, path))
+export const stageMergeFile = (id: string, path: string) => run(id, 'Staging…', () => api.stageMergeFile(id, path))
+export const unstageMergeFile = (id: string, path: string) => run(id, 'Unstaging…', () => api.unstageMergeFile(id, path))
 export async function takeMergeSide(id: string, path: string, side: 'ours' | 'theirs', branch: string) {
   const ok = await confirmDialog({
     title: `Take ${branch}`,
@@ -666,7 +666,7 @@ export async function takeMergeSide(id: string, path: string, side: 'ours' | 'th
     confirmLabel: `Take ${branch}`,
     danger: true,
   })
-  if (ok) await run(side === 'ours' ? 'Taking ours…' : 'Taking theirs…', () => api.takeMergeSide(id, path, side))
+  if (ok) await run(id, side === 'ours' ? 'Taking ours…' : 'Taking theirs…', () => api.takeMergeSide(id, path, side))
 }
 
 /** resolveMergeRegion settles one region from the Merge view. A region the
@@ -716,7 +716,7 @@ export async function restartConflictFile(id: string, path: string) {
     confirmLabel: 'Restart file',
     danger: true,
   })
-  if (ok) await run('Restarting…', () => api.restartConflictFile(id, path))
+  if (ok) await run(id, 'Restarting…', () => api.restartConflictFile(id, path))
 }
 
 export async function rebaseOnto(id: string, onto: string, ontoLabel: string, head: string) {
@@ -767,7 +767,7 @@ export async function cherryPick(id: string, hash: string, short: string, subjec
 export async function skipStep(id: string) {
   const state = get(mergeState)
   const ok = await confirmDialog({ ...skipWarning(state ?? ({ kind: 'rebase' } as MergeState)), danger: true })
-  if (ok) await run('Skipping…', () => api.skipStep(id))
+  if (ok) await run(id, 'Skipping…', () => api.skipStep(id))
 }
 
 export async function resolveConflicts(id: string) {
@@ -779,14 +779,14 @@ export async function resolveConflicts(id: string) {
   }
 }
 
-export const stageFile = (id: string, path: string) => run('Staging…', () => api.stageFile(id, path))
-export const unstageFile = (id: string, path: string) => run('Unstaging…', () => api.unstageFile(id, path))
+export const stageFile = (id: string, path: string) => run(id, 'Staging…', () => api.stageFile(id, path))
+export const unstageFile = (id: string, path: string) => run(id, 'Unstaging…', () => api.unstageFile(id, path))
 
 // commitChanges goes through the same run()/refreshRepo() path as every other
 // mutation, so a commit bumps logVersion and reloads refs like the spec
 // says, instead of only refreshing the worktree state as CommitBox used to.
 export const commitChanges = (id: string, message: string, amend: boolean) =>
-  run(amend ? 'Amending…' : 'Committing…', () => api.commitChanges(id, message, amend))
+  run(id, amend ? 'Amending…' : 'Committing…', () => api.commitChanges(id, message, amend))
 
 export async function fetchRemote(id: string) {
   await runOp(id, 'fetch', 'Fetching…', () => api.fetch(id))
@@ -912,7 +912,7 @@ export async function stashChanges(id: string) {
     submitLabel: 'Stash',
   })
   if (!result) return
-  await run('Stashing…', () => api.stashPush(id, result.value.trim(), result.checked))
+  await run(id, 'Stashing…', () => api.stashPush(id, result.value.trim(), result.checked))
 }
 
 export async function stashApply(id: string, index: number) {
@@ -924,8 +924,8 @@ export async function stashApply(id: string, index: number) {
   })
   if (!result.ok) return
   const ok = stashApplyAction(result.checked) === 'pop'
-    ? await run('Popping stash…', () => api.stashPop(id, index))
-    : await run('Applying stash…', () => api.stashApply(id, index))
+    ? await run(id, 'Popping stash…', () => api.stashPop(id, index))
+    : await run(id, 'Applying stash…', () => api.stashApply(id, index))
   if (ok) notifyStashConflicts(id)
 }
 
@@ -941,7 +941,7 @@ export async function stashPop(id: string, index: number) {
     message: 'Apply this stash and remove it from the list? If it conflicts, it stays until the conflict is resolved.',
     confirmLabel: 'Pop',
   })
-  if (ok && (await run('Popping stash…', () => api.stashPop(id, index)))) notifyStashConflicts(id)
+  if (ok && (await run(id, 'Popping stash…', () => api.stashPop(id, index)))) notifyStashConflicts(id)
 }
 
 export async function stashDrop(id: string, index: number) {
@@ -951,7 +951,7 @@ export async function stashDrop(id: string, index: number) {
     confirmLabel: 'Drop',
     danger: true,
   })
-  if (ok) await run('Dropping stash…', () => api.stashDrop(id, index))
+  if (ok) await run(id, 'Dropping stash…', () => api.stashDrop(id, index))
 }
 
 export async function discardFile(id: string, state: WorktreeState, file: FileStatus, staged: boolean) {
@@ -964,7 +964,7 @@ export async function discardFile(id: string, state: WorktreeState, file: FileSt
     confirmLabel: hard ? 'Delete' : 'Discard',
     danger: true,
   })
-  if (ok) await run('Discarding…', () => api.discardFile(id, file.path))
+  if (ok) await run(id, 'Discarding…', () => api.discardFile(id, file.path))
 }
 
 // openSubmodule mirrors the log's click-to-deselect: a click on the already
@@ -980,14 +980,14 @@ export function openSubmodule(parentId: string, s: Submodule) {
   selectRepo(get(selectedRepoId) === id ? parentId : id)
 }
 
-export const initSubmodule = (parentId: string, s: Submodule) => run('Initialising…', () => api.initSubmodule(parentId, s.path))
+export const initSubmodule = (parentId: string, s: Submodule) => run(parentId, 'Initialising…', () => api.initSubmodule(parentId, s.path))
 
 export async function updateSubmodule(parentId: string, s: Submodule) {
   const ok = await confirmDialog({ title: 'Update submodule', message: updateMessage(s), confirmLabel: 'Update' })
-  if (ok) await run('Updating…', () => api.updateSubmodule(parentId, s.path))
+  if (ok) await run(parentId, 'Updating…', () => api.updateSubmodule(parentId, s.path))
 }
 
-export const syncSubmodule = (parentId: string, s: Submodule) => run('Syncing URL…', () => api.syncSubmodule(parentId, s.path))
+export const syncSubmodule = (parentId: string, s: Submodule) => run(parentId, 'Syncing URL…', () => api.syncSubmodule(parentId, s.path))
 
 export async function initAllSubmodules(parentId: string, list: Submodule[]) {
   const targets = list.filter((s) => s.configured && !s.initialised)

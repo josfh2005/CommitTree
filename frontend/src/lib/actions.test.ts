@@ -677,9 +677,14 @@ describe('operations as status-bar tasks', () => {
     expect(get(taskState).last).toMatchObject({ outcome: 'cancelled', text: 'Pulling cancelled' })
   })
 
-  it('run-based actions register on the selected repository', async () => {
-    await deleteTag('r1', 'v1')
-    expect(get(taskState).last).toMatchObject({ text: 'Deleted tag', repoId: 'r1' })
+  it('run-based actions register on the repository acted on, not the selected one', async () => {
+    let resolve!: (v?: unknown) => void
+    vi.mocked(api.deleteTag).mockReturnValueOnce(new Promise((r) => (resolve = r)) as never)
+    const done = deleteTag('r2', 'v1')
+    await vi.waitFor(() => expect(get(taskState).tasks).toMatchObject([{ kind: 'op', label: 'Deleting tag…', repoId: 'r2', repoName: 'two' }]))
+    resolve()
+    await done
+    expect(get(taskState).last).toMatchObject({ text: 'Deleted tag', repoId: 'r2', repoName: 'two' })
   })
 
   it('a failed run-based action is a failed task', async () => {
