@@ -1,5 +1,5 @@
 import { formatElapsed, NOT_RUNNING_MESSAGE } from './cmdlog'
-import type { CancelTarget, TaskKind, TaskOutcome } from './tasks'
+import type { CancelTarget, Task, TaskKind, TaskOutcome, TaskResult } from './tasks'
 import type { Repo } from './types'
 import { errorMessage } from './ui'
 
@@ -10,6 +10,16 @@ export function elapsedText(start: number, now: number): string {
 
 export function outcomeIcon(o: TaskOutcome): string {
   return o === 'ok' ? '✓' : o === 'failed' ? '✗' : '⊘'
+}
+
+/** What the live region announces: the shown task (label and repository),
+ *  or — when nothing runs, or only an Auto task does — the last result
+ *  (icon and text). No progress, elapsed time or "N min ago": those would
+ *  be re-announced as they tick. */
+export function announcement(shown: Pick<Task, 'origin' | 'label' | 'repoName'> | null, last: Pick<TaskResult, 'outcome' | 'text' | 'repoName'> | null): string {
+  if (shown && shown.origin !== 'auto') return shown.repoName ? `${shown.label} ${shown.repoName}` : shown.label
+  if (last) return `${outcomeIcon(last.outcome)} ${last.text}${last.repoName ? ` ${last.repoName}` : ''}`
+  return ''
 }
 
 export type OpenAction = { kind: 'clone' } | { kind: 'providers' } | { kind: 'commands'; repoId: string }

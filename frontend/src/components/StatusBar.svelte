@@ -3,8 +3,8 @@
   import { api } from '../lib/api'
   import { openCloneDialog } from '../lib/actions'
   import { cancelClone, cloneCancelling } from '../lib/clone'
-    import { settingsTab } from '../lib/settingsTabs'
-  import { cancelTask, elapsedText, openAction, outcomeIcon } from '../lib/statusBar'
+  import { settingsTab } from '../lib/settingsTabs'
+  import { announcement, cancelTask, elapsedText, openAction, outcomeIcon } from '../lib/statusBar'
   import { commandsOpen, repos, selectRepo, selectedRepoId, settingsOpen } from '../lib/stores'
   import { cancelTarget, relativeTime, shownTasks, taskState, type Task, type TaskResult } from '../lib/tasks'
   import { toast } from '../lib/ui'
@@ -23,6 +23,7 @@
   $: tasks = $shownTasks
   $: shown = tasks[0] ?? null
   $: last = $taskState.last
+  $: announced = announcement(shown, last)
   // "Cancelling…" goes with its task; the list closes when at most one is left.
   $: {
     const ids = new Set(tasks.map((t) => t.id))
@@ -102,11 +103,12 @@
 <svelte:window on:mousedown={onWindowDown} on:keydown={onWindowKey} />
 
 <footer class="statusbar">
-  <!-- Only the label is live: elapsed time and progress tick outside it. -->
+  <!-- One persistent live region, outside the buttons: elapsed time and progress tick outside it. -->
+  <span class="sr-only" role="status" aria-live="polite">{announced}</span>
   {#if shown}
     <button class="main" title={shown.label + (shown.repoName ? ` · ${shown.repoName}` : '')} on:click={() => open(shown, true)}>
       <span class="spinner" aria-hidden="true"></span>
-      <span class="label" role="status" aria-live="polite">{shown.label}</span>
+      <span class="label">{shown.label}</span>
       {#if shown.repoName}<span class="muted">· {shown.repoName}</span>{/if}
       {#if shown.progress}<span class="muted">· {shown.progress}</span>{/if}
       {#if elapsedText(shown.start, now)}<span class="muted" aria-hidden="true">· {elapsedText(shown.start, now)}</span>{/if}
@@ -117,12 +119,10 @@
     {/if}
   {:else if last}
     <button class="main result" class:error={last.outcome === 'failed'} title={last.message || last.text} on:click={() => open(last, false)}>
-      <span class="label" role="status" aria-live="polite">{outcomeIcon(last.outcome)} {last.text}</span>
+      <span class="label">{outcomeIcon(last.outcome)} {last.text}</span>
       {#if last.repoName}<span class="muted">· {last.repoName}</span>{/if}
       <span class="muted">· {relativeTime(now - last.end)}</span>
     </button>
-  {:else}
-    <span class="label" role="status" aria-live="polite"></span>
   {/if}
   <span class="spacer"></span>
   {#if tasks.length > 1}
@@ -157,6 +157,7 @@
   .muted { color: var(--muted); white-space: nowrap; }
   .result .label { color: var(--muted); }
   .result.error .label { color: var(--danger); }
+  .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
   .spacer { flex: 1; }
   .chip { font-size: 11px; padding: 0 6px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); }
   .chip:hover { background: var(--hover); }

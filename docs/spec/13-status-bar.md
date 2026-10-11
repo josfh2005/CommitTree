@@ -143,9 +143,13 @@ where the detail is:
 
 ## Accessibility
 
-The label area is a live region (polite): a screen reader hears a task
-start and end, but not the progress or the elapsed time ticking, which are
-outside it. The bar's buttons are reachable with Tab; "+N" says that it
+The bar has one live region (polite), visually hidden and outside the
+buttons, so it stays in place while the visible text changes. It says the
+shown task ("Pushing… git-ui", the label and the repository's name) when it
+starts, and the last result ("✓ Pushed git-ui") when it ends. Progress, the
+elapsed time and "N min ago" are not in it, so they are not read as they
+tick. An Auto task (a background fetch) is left out: while only Auto tasks
+run, the region keeps the last result. The bar's buttons are reachable with Tab; "+N" says that it
 opens a popup and whether it is open; the list is a labelled list ("Running
 tasks"). Animations stop when the system asks for reduced motion.
 

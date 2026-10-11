@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { cancelTask, elapsedText, outcomeIcon, openAction } from './statusBar'
+import { announcement, cancelTask, elapsedText, outcomeIcon, openAction } from './statusBar'
 import type { Repo } from './types'
 
 const repos = [{ id: 'a', name: 'alpha', missing: false }, { id: 'm', name: 'gone', missing: true }] as Repo[]
@@ -62,5 +62,25 @@ describe('cancelTask', () => {
     const d = deps(async () => { throw new Error('boom') })
     expect(await cancelTask(command, d)).toBe(false)
     expect(d.toast).toHaveBeenCalledWith('boom', 'error')
+  })
+})
+
+describe('announcement', () => {
+  const task = (over = {}) => ({ origin: 'you' as const, label: 'Pushing…', repoName: 'alpha', ...over })
+  const result = (over = {}) => ({ outcome: 'ok' as const, text: 'Pushed', repoName: 'alpha', ...over })
+  it('announces the shown task with its repository', () => {
+    expect(announcement(task(), result())).toBe('Pushing… alpha')
+    expect(announcement(task({ repoName: '' }), null)).toBe('Pushing…')
+  })
+  it('announces the last result when nothing runs, with its icon', () => {
+    expect(announcement(null, result())).toBe('✓ Pushed alpha')
+    expect(announcement(null, result({ outcome: 'failed', text: 'Pulling failed', repoName: '' }))).toBe('✗ Pulling failed')
+  })
+  it('leaves an Auto task out and announces the last result instead', () => {
+    expect(announcement(task({ origin: 'auto', label: 'Fetching' }), result())).toBe('✓ Pushed alpha')
+    expect(announcement(task({ origin: 'auto' }), null)).toBe('')
+  })
+  it('is empty with nothing to say', () => {
+    expect(announcement(null, null)).toBe('')
   })
 })
