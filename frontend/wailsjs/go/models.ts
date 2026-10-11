@@ -592,6 +592,7 @@ export namespace cmdlog {
 	export class Entry {
 	    id: number;
 	    repo: string;
+	    repoId: string;
 	    args: string[];
 	    origin: string;
 	    kind: string;
@@ -611,6 +612,7 @@ export namespace cmdlog {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.repo = source["repo"];
+	        this.repoId = source["repoId"];
 	        this.args = source["args"];
 	        this.origin = source["origin"];
 	        this.kind = source["kind"];

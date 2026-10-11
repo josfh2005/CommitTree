@@ -1,6 +1,7 @@
 import { get, writable } from 'svelte/store'
 import type { EventsOn } from '../../wailsjs/runtime/runtime'
 import type { CloneDone, CloneProgress, CloneStatus, Repo } from './types'
+import { beginTask, finishTask, hasTask, setTaskProgress } from './tasks'
 import { errorMessage, type Toast } from './ui'
 
 /** The folder git would clone url into: its last path segment without a
@@ -24,6 +25,12 @@ export function nameError(name: string): string {
 export function joinPath(parent: string, name: string): string {
   const sep = parent.includes('\\') && !parent.includes('/') ? '\\' : '/'
   return parent.replace(/[/\\]+$/, '') + sep + name
+}
+
+/** The clone's progress as the status bar shows it. */
+export function cloneProgressText(p: CloneProgress | null): string {
+  if (!p) return ''
+  return p.percent > 0 ? `${p.phase} ${p.percent} %` : p.phase
 }
 
 export type CloneView =
@@ -104,6 +111,11 @@ export async function startClone(
       // Keep the typed path.
     }
   }
+  // clone:done may already have arrived (a tiny clone): only a clone still
+  // running becomes a task, or it would never end.
+  if (get(cloneView).kind === 'running' && !hasTask('clone')) {
+    beginTask({ id: 'clone', kind: 'clone', origin: 'you', label: `Cloning ${name}`, repoId: '', repoName: '' })
+  }
   return true
 }
 
@@ -117,9 +129,12 @@ export interface CloneDeps {
 /** Follows clone:progress and clone:done whether or not the dialog is
  *  open; returns the unsubscribe. */
 export function startCloneEvents(deps: CloneDeps): () => void {
-  const offProgress = deps.on('clone:progress', (p: CloneProgress) =>
-    cloneView.update((v) => (v.kind === 'running' ? { ...v, progress: p } : v)))
+  const offProgress = deps.on('clone:progress', (p: CloneProgress) => {
+    cloneView.update((v) => (v.kind === 'running' ? { ...v, progress: p } : v))
+    setTaskProgress('clone', cloneProgressText(p))
+  })
   const offDone = deps.on('clone:done', async (d: CloneDone) => {
+    finishTask('clone', d.cancelled ? 'cancelled' : d.repo && !d.error ? 'ok' : 'failed', d.error)
     const open = get(cloneDialogOpen)
     cloneCancelling.set(false)
     cloneView.set({ kind: 'form', error: d.error })

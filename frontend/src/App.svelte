@@ -13,6 +13,7 @@
   import Sidebar from './components/Sidebar.svelte'
   import Splitter from './components/Splitter.svelte'
   import StashView from './components/StashView.svelte'
+  import StatusBar from './components/StatusBar.svelte'
   import Toasts from './components/Toasts.svelte'
   import { startFocusRefresh } from './lib/actions'
   import { nextChatRunRepo } from './lib/chat'
@@ -24,6 +25,7 @@
   import { isTerminalToggle } from './lib/terminal'
   import { conflictOwnsScreen } from './lib/remote'
   import { blameTarget, chatOpen, chatRunRepo, chatWidth, closeBlame, commandsOpen, dockHeight, loadAISettings, loadGitSettings, loadRefs, loadRepos, loadWorktreeState, mainView, mergeState, platform, refreshRepo, selectRepo, selectedHash, selectedRepo, selectedRepoId, selectedStash, settingsOpen, sidebarWidth, stashConflictDismissed, stashEntries, terminalOpen, uncommittedSelected } from './lib/stores'
+  import { noteCommand } from './lib/tasks'
   import { toast } from './lib/ui'
   import type { RepoChangedEvent, WorktreeChangedEvent } from './lib/types'
   import { Environment, EventsOn } from '../wailsjs/runtime/runtime'
@@ -119,8 +121,12 @@
       },
       toast,
     })
+    // Running git writes of every repository, for the status bar — the
+    // Commands panel keeps its own listener.
+    const offCommands = EventsOn('cmdlog:entry', noteCommand)
     return () => {
       offClone()
+      offCommands()
       stopFocus()
       stopNotifications()
       stopAutoFetch()
@@ -145,32 +151,35 @@
 
 <svelte:window on:keydown={onKeydown} />
 
-<div class="app">
-  <aside style="width: {$sidebarWidth}px"><Sidebar /></aside>
-  <Splitter on:drag={(e) => sidebarWidth.set(clamp($sidebarWidth + e.detail, 200, 480))} />
-  <main bind:clientHeight={mainHeight}>
-    <div class="view">
-      {#if showChanges && $selectedRepo}
-        <ChangesView repoId={$selectedRepo.id} />
-      {:else if showStash && $selectedRepo && selectedStashEntry}
-        <StashView repoId={$selectedRepo.id} entry={selectedStashEntry} />
-      {:else if showBlame && $selectedRepo}
-        <BlameView repoId={$selectedRepo.id} />
-      {:else}
-        <LogView />
+<div class="shell">
+  <div class="app">
+    <aside style="width: {$sidebarWidth}px"><Sidebar /></aside>
+    <Splitter on:drag={(e) => sidebarWidth.set(clamp($sidebarWidth + e.detail, 200, 480))} />
+    <main bind:clientHeight={mainHeight}>
+      <div class="view">
+        {#if showChanges && $selectedRepo}
+          <ChangesView repoId={$selectedRepo.id} />
+        {:else if showStash && $selectedRepo && selectedStashEntry}
+          <StashView repoId={$selectedRepo.id} entry={selectedStashEntry} />
+        {:else if showBlame && $selectedRepo}
+          <BlameView repoId={$selectedRepo.id} />
+        {:else}
+          <LogView />
+        {/if}
+      </div>
+      {#if dockOpen}
+        <Splitter direction="horizontal" on:drag={(e) => dockHeight.set(clamp($dockHeight - e.detail, 120, Math.max(120, mainHeight - 200)))} />
       {/if}
-    </div>
-    {#if dockOpen}
-      <Splitter direction="horizontal" on:drag={(e) => dockHeight.set(clamp($dockHeight - e.detail, 120, Math.max(120, mainHeight - 200)))} />
+      <!-- The dock stays mounted while closed so the terminal's shells and
+           scrollback survive; only its layout is toggled with CSS. -->
+      <div class="dock" class:hidden={!dockOpen} style="height: {clamp($dockHeight, 120, Math.max(120, mainHeight - 200))}px"><BottomDock /></div>
+    </main>
+    {#if $chatOpen}
+      <Splitter on:drag={(e) => chatWidth.set(clamp($chatWidth - e.detail, 260, 560))} />
+      <section class="side" style="width: {$chatWidth}px"><ChatPanel /></section>
     {/if}
-    <!-- The dock stays mounted while closed so the terminal's shells and
-         scrollback survive; only its layout is toggled with CSS. -->
-    <div class="dock" class:hidden={!dockOpen} style="height: {clamp($dockHeight, 120, Math.max(120, mainHeight - 200))}px"><BottomDock /></div>
-  </main>
-  {#if $chatOpen}
-    <Splitter on:drag={(e) => chatWidth.set(clamp($chatWidth - e.detail, 260, 560))} />
-    <section class="side" style="width: {$chatWidth}px"><ChatPanel /></section>
-  {/if}
+  </div>
+  <StatusBar />
 </div>
 
 <ContextMenu />
@@ -182,7 +191,8 @@
 <SettingsDialog />
 
 <style>
-  .app { display: flex; height: 100%; }
+  .shell { display: flex; flex-direction: column; height: 100%; }
+  .app { display: flex; flex: 1; min-height: 0; }
   aside { flex: none; min-width: 0; background: var(--sidebar); }
   main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); }
   .view { flex: 1; min-height: 0; }

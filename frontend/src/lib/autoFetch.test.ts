@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { FIRST_ROUND_MS, outcome, runRound, startAutoFetch, type AutoFetchDeps } from './autoFetch'
+import { get } from 'svelte/store'
+import { FIRST_ROUND_MS, fetchWithTask, outcome, runRound, startAutoFetch, type AutoFetchDeps } from './autoFetch'
 import { pausedTooltip } from './toolbar'
 import { autoFetchMinutes } from './stores'
+import { EMPTY, taskState } from './tasks'
 import type { AutoFetchResult, Repo } from './types'
 
 const res = (over: Partial<AutoFetchResult> = {}): AutoFetchResult => ({
@@ -154,5 +156,20 @@ describe('pausedTooltip', () => {
     expect(pausedTooltip([])).toBe('')
     expect(pausedTooltip(['origin'])).toBe('Background fetch paused for origin: authentication failed. Fetch to retry.')
     expect(pausedTooltip(['origin', 'upstream'])).toBe('Background fetch paused for origin, upstream: authentication failed. Fetch to retry.')
+  })
+})
+
+describe('fetchWithTask', () => {
+  beforeEach(() => taskState.set(EMPTY))
+
+  it('is an Auto "Fetching" task of the repository while it runs, and never the last result', async () => {
+    let seen: unknown[] = []
+    await fetchWithTask('a', async () => { seen = get(taskState).tasks; return res() })
+    expect(seen).toMatchObject([{ id: 'fetch:a', kind: 'fetch', origin: 'auto', label: 'Fetching', repoId: 'a' }])
+    expect(get(taskState).tasks).toEqual([])
+    expect(get(taskState).last).toBeNull()
+    await expect(fetchWithTask('a', async () => { throw new Error('auth') })).rejects.toThrow('auth')
+    expect(get(taskState).tasks).toEqual([])
+    expect(get(taskState).last).toBeNull()
   })
 })

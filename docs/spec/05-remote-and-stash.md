@@ -133,8 +133,10 @@ skipped. Meanwhile the toolbar's Fetch shows an amber dot and names the
 stopped remotes in its tooltip. The macOS keychain may ask once for access to a stored credential;
 "Always Allow" ends that. No failure is notified;
 the Commands panel has it. Each remote's fetch times out after 60 s. A
-background fetch never shows the busy label, and when it changes the selected repository's remote branches, the
-log and the ahead/behind badges refresh. New commits it brings to the
+background fetch never shows the busy label; each repository's fetch shows in
+the status bar (`13-status-bar.md`) as an automatic "Fetching" task while it
+runs, and never becomes the bar's last result. When it changes the selected
+repository's remote branches, the log and the ahead/behind badges refresh. New commits it brings to the
 checked-out branch's upstream can notify (see `11-notifications.md`).
 
 ### Push

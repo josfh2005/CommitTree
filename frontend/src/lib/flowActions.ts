@@ -4,19 +4,26 @@ import {
   conflictMessage, finishFields, finishMessage, finishPickItems, finishReleases, finishedMessage, flowMenu,
   initConfig, initFields, planReleases, startBase, startFields, startedMessage,
 } from './flow'
-import { busy, mergeState, pendingFinish, refreshRepo, refs, selectedRepoId } from './stores'
+import { mergeState, pendingFinish, refreshRepo, refs, selectedRepoId } from './stores'
 import { opError, track } from './notify'
+import { conflictsBody } from './notifyRules'
+import { beginOp } from './tasks'
 import type { Flow, FlowType } from './types'
 import { errorMessage, formDialog, menu, pickDialog, toast, type MenuItem } from './ui'
 
 async function busyDo<T>(repoId: string, label: string, fn: () => Promise<T>, conflictsOf?: (r: T) => number) {
-  busy.set(label)
+  const end = beginOp(label, repoId)
+  let failure: unknown
+  let conflicts: string | undefined
   try {
-    await track(repoId, 'flow', fn, conflictsOf)
+    const result = await track(repoId, 'flow', fn, conflictsOf)
+    const files = conflictsOf ? conflictsOf(result) : 0
+    if (files > 0) conflicts = conflictsBody('flow', files)
   } catch (e) {
+    failure = e
     opError(repoId, e)
   } finally {
-    busy.set('')
+    end(failure, conflicts)
     await refreshRepo()
   }
 }

@@ -43,6 +43,10 @@ a write against a second repository while the first is busy, but the
 interface does not offer that at all. Read views keep working while an
 operation is busy: they are not gated by it.
 
+Every operation with a busy label also shows in the status bar along the
+bottom of the window (`13-status-bar.md`), and its end — done, failed or
+cancelled — becomes the bar's last result.
+
 An operation clears the busy label when it finishes, whether it succeeded
 or failed, and then refreshes the affected views (refs, log, working tree)
 so the interface reflects the repository's new state rather than trusting

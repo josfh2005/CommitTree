@@ -1,3 +1,5 @@
+import { persisted } from './stores'
+
 export type SettingsTab = 'general' | 'providers' | 'models' | 'prompts'
 
 /** The Settings dialog's tabs, in the order the left column lists them.
@@ -28,3 +30,12 @@ export function migrateRememberedTab(storage: Pick<Storage, 'getItem' | 'setItem
     // Storage unavailable: nothing remembered to migrate.
   }
 }
+
+// The tab the Settings dialog opens on: the last one used. Shared so other
+// places (the status bar) can open a given tab.
+try {
+  migrateRememberedTab(localStorage, 'settingsTab')
+} catch {
+  // Storage unavailable: the tab falls back to General.
+}
+export const settingsTab = persisted('settingsTab', 'general', isSettingsTab)

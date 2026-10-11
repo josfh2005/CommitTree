@@ -118,7 +118,10 @@ destination (a typed `~` expanded) and git's current phase
 submodule), a bar with the phase's percentage when git gives one, and git's
 detail line. **Cancel** stops git as Ctrl+C would; **Continue in
 background** closes the dialog without stopping the clone. One clone runs at
-a time: **Clone…** during a clone reopens its progress.
+a time: **Clone…** during a clone reopens its progress. A clone continued in
+the background shows in the status bar (`13-status-bar.md`) with its phase and
+percentage; clicking it reopens the progress, and its **Cancel** stops the
+clone as the dialog's does.
 
 There is no fixed time limit; the clone is stopped as stalled when git
 writes nothing for five minutes. When it succeeds, the repository is added

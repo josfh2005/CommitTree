@@ -19,7 +19,7 @@
 </div>
 
 <style>
-  .toasts { position: fixed; right: 16px; bottom: 16px; z-index: 60; display: flex; flex-direction: column; gap: 8px; }
+  .toasts { position: fixed; right: 16px; bottom: 38px; z-index: 60; display: flex; flex-direction: column; gap: 8px; }
   .toast {
     display: flex;
     align-items: flex-start;

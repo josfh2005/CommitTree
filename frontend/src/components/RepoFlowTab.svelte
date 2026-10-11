@@ -2,6 +2,7 @@
   import { api } from '../lib/api'
   import { flowSettingsError, flowSettingsPanel } from '../lib/flowSettings'
   import { busy, expandedRepos, loadSideRefs, refreshRepo, selectedRepoId } from '../lib/stores'
+  import { beginOp } from '../lib/tasks'
   import { toast } from '../lib/ui'
   import { get } from 'svelte/store'
 
@@ -26,14 +27,18 @@
   $: formError = settings ? flowSettingsError($form) : ''
 
   async function save() {
-    if (!settings || !!$busy || (setUp && !$dirty)) return
+    if (!settings || !!$busy || formError !== '' || (setUp && !$dirty)) return
     // Before the await: saving reloads the settings and flips setUp.
     const wasSetUp = setUp
-    busy.set(wasSetUp ? 'Saving git-flow…' : 'Setting up git-flow…')
+    const end = beginOp(wasSetUp ? 'Saving git-flow…' : 'Setting up git-flow…', repoID)
+    let failure: unknown
     try {
-      if ((await panel.save()) && !wasSetUp) toast('git-flow set up')
+      const saved = await panel.save()
+      // The panel keeps a failed write's message in its state instead of throwing.
+      if (!saved) failure = get(state).error || 'git-flow was not saved'
+      if (saved && !wasSetUp) toast('git-flow set up')
     } finally {
-      busy.set('')
+      end(failure)
     }
   }
   const onKey = (e: KeyboardEvent) => { if (e.key === 'Enter') save() }
