@@ -23,6 +23,9 @@ vi.mock('./api', () => ({
     fastForwardBranch: vi.fn().mockResolvedValue(true),
     pushBranch: vi.fn(),
     pull: vi.fn(),
+    stashApply: vi.fn().mockResolvedValue(undefined),
+    stashPop: vi.fn().mockResolvedValue(undefined),
+    getMergeState: vi.fn(),
     notify: vi.fn().mockResolvedValue(undefined),
   },
 }))
@@ -39,7 +42,7 @@ vi.mock('./ui', async (importOriginal) => {
   }
 })
 
-import { applyHunkSelection, chooseRegionOption, commitMerge, fetchBranchRemote, mergeBranch, pull, pullBranch, push, pushAll, pushBranch, placeRepo, placeRepoGroup, setRepoSortOrder, deleteBranch, deleteTag, removeWorktree, skipStep } from './actions'
+import { applyHunkSelection, chooseRegionOption, commitMerge, fetchBranchRemote, mergeBranch, pull, pullBranch, push, pushAll, pushBranch, placeRepo, placeRepoGroup, setRepoSortOrder, deleteBranch, deleteTag, removeWorktree, skipStep, stashApply } from './actions'
 import { api } from './api'
 import { filters, gitSettings, mergeState, repos, selectedRepoId } from './stores'
 import { windowFocused } from './notify'
@@ -675,6 +678,34 @@ describe('operations as status-bar tasks', () => {
     vi.mocked(api.pull).mockRejectedValueOnce(new Error('git command cancelled'))
     await pull('r1')
     expect(get(taskState).last).toMatchObject({ outcome: 'cancelled', text: 'Pulling cancelled' })
+  })
+
+  it('a pull that stops on conflicts is a failed task, not "Pulled"', async () => {
+    vi.mocked(api.pull).mockResolvedValueOnce({ outcome: 2, conflicts: ['a.txt'] })
+    await pull('r1')
+    expect(get(taskState).last).toMatchObject({
+      outcome: 'failed', text: 'Pulling stopped on conflicts', message: 'Conflicts in 1 file after the pull', repoId: 'r1',
+    })
+  })
+
+  it('a merge that stops on conflicts is a failed task', async () => {
+    vi.mocked(api.mergeBranch).mockResolvedValueOnce({ outcome: 2, conflicts: ['a', 'b'] })
+    await mergeBranch('r1', { name: 'feature' } as Branch, 'main')
+    expect(get(taskState).last).toMatchObject({
+      outcome: 'failed', text: 'Merging stopped on conflicts', message: 'Conflicts in 2 files after the merge',
+    })
+  })
+
+  it('a stash apply that leaves conflicts is a failed task', async () => {
+    vi.mocked(api.getMergeState).mockResolvedValueOnce(mergeStateOf({ kind: 'stash', conflicts: ['a'] }))
+    await stashApply('r1', 0)
+    expect(get(taskState).last).toMatchObject({ outcome: 'failed', text: 'Applying stash stopped on conflicts', message: 'Conflicts in 1 file after the stash' })
+  })
+
+  it('a clean stash apply is still "Applied stash"', async () => {
+    vi.mocked(api.getMergeState).mockResolvedValueOnce(mergeStateOf({ kind: 'stash', merging: false, conflicts: [] }))
+    await stashApply('r1', 0)
+    expect(get(taskState).last).toMatchObject({ outcome: 'ok', text: 'Applied stash' })
   })
 
   it('run-based actions register on the repository acted on, not the selected one', async () => {

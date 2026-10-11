@@ -3,7 +3,7 @@ import { api } from './api'
 import { chatOpen, chatRunRepo, collapsedRepoGroups, expandedRepos, filters, focusCommitBox, gitSettings, loadIdentity, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, refs, repoManualSeeded, repos, repoSortOrder, selectRepo, selectUncommitted, selectedHash, selectedRepoId, stashConflictDismissed } from './stores'
 import { beginOp } from './tasks'
 import { notifyStashConflicts, opError, track } from './notify'
-import type { OpKind } from './notifyRules'
+import { conflictsBody, type OpKind } from './notifyRules'
 import type { Branch, BranchPushResult, FileStatus, HunkAction, HunkPick, MergeState, RebasePreview, RegionChoice, Refs, Repo, ResetInfo, ResetMode, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
 import { PULL_UP_TO_DATE, UP_TO_DATE } from './types'
 import { abortWarning, commitWarning, isEmptyStepError, skipWarning, staleMergeChoice, takeMessage } from './merge'
@@ -32,18 +32,34 @@ function clearBranchFilter(ref: string) {
   filters.update((f) => (f.branch === ref ? { ...f, branch: '' } : f))
 }
 
-async function run(id: string, label: string, fn: () => Promise<unknown>): Promise<boolean> {
+/** The status-bar end of an operation that returned but stopped on conflicts. */
+const stoppedOn = (op: OpKind, files: number) => (files > 0 ? conflictsBody(op, files) : undefined)
+
+/** A stash apply/pop reports a conflict as success and leaves it in the
+ *  merge state: read it right after, for the task's end. */
+const stashStop = (id: string) => async () => {
+  try {
+    const s = await api.getMergeState(id)
+    return s?.merging && s.kind === 'stash' ? stoppedOn('stash', s.conflicts.length) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+async function run(id: string, label: string, fn: () => Promise<unknown>, stopped?: () => Promise<string | undefined>): Promise<boolean> {
   const end = beginOp(label, id)
   let failure: unknown
+  let conflicts: string | undefined
   try {
     await fn()
+    conflicts = await stopped?.()
     return true
   } catch (e) {
     failure = e
     toast(errorMessage(e), 'error')
     return false
   } finally {
-    end(failure)
+    end(failure, conflicts)
     await refreshRepo()
   }
 }
@@ -579,15 +595,17 @@ export async function mergeBranch(id: string, branch: Branch, into: string) {
   if (label === null) return
   const end = beginOp('Merging…', id)
   let failure: unknown
+  let conflicts: string | undefined
   try {
     const result = await track(id, 'merge', () => api.mergeBranch(id, label), (r) => r.conflicts?.length ?? 0)
+    conflicts = stoppedOn('merge', result.conflicts?.length ?? 0)
     if (result.outcome === UP_TO_DATE) toast(`${into} is already up to date with ${label}.`, 'info')
     await warnMovedSubmodules(id)
   } catch (e) {
     failure = e
     opError(id, e)
   } finally {
-    end(failure)
+    end(failure, conflicts)
     await refreshRepo()
   }
 }
@@ -731,8 +749,10 @@ export async function rebaseOnto(id: string, onto: string, ontoLabel: string, he
   if (!ok) return
   const end = beginOp('Rebasing…', id)
   let failure: unknown
+  let conflicts: string | undefined
   try {
     const result = await track(id, 'rebase', () => api.rebaseOnto(id, onto), (r) => r.conflicts?.length ?? 0)
+    conflicts = stoppedOn('rebase', result.conflicts?.length ?? 0)
     const msg = doneMessage(result.outcome, { op: 'rebase', head, target: ontoLabel, commits: preview.commits })
     if (msg) toast(msg, 'info')
     await warnMovedSubmodules(id)
@@ -740,7 +760,7 @@ export async function rebaseOnto(id: string, onto: string, ontoLabel: string, he
     failure = e
     opError(id, e)
   } finally {
-    end(failure)
+    end(failure, conflicts)
     await refreshRepo()
   }
 }
@@ -750,8 +770,10 @@ export async function cherryPick(id: string, hash: string, short: string, subjec
   if (!ok) return
   const end = beginOp('Cherry-picking…', id)
   let failure: unknown
+  let conflicts: string | undefined
   try {
     const result = await track(id, 'cherry-pick', () => api.cherryPick(id, hash), (r) => r.conflicts?.length ?? 0)
+    conflicts = stoppedOn('cherry-pick', result.conflicts?.length ?? 0)
     const msg = doneMessage(result.outcome, { op: 'cherry-pick', head, target: short })
     if (msg) toast(msg, 'info')
     await warnMovedSubmodules(id)
@@ -759,7 +781,7 @@ export async function cherryPick(id: string, hash: string, short: string, subjec
     failure = e
     opError(id, e)
   } finally {
-    end(failure)
+    end(failure, conflicts)
     await refreshRepo()
   }
 }
@@ -857,15 +879,17 @@ export async function pushAll(id: string): Promise<boolean> {
 export async function pull(id: string) {
   const end = beginOp('Pulling…', id)
   let failure: unknown
+  let conflicts: string | undefined
   try {
     const result = await track(id, 'pull', () => api.pull(id), (r) => r.conflicts?.length ?? 0)
+    conflicts = stoppedOn('pull', result.conflicts?.length ?? 0)
     if (result.outcome === PULL_UP_TO_DATE) toast('Already up to date.', 'info')
     await warnMovedSubmodules(id)
   } catch (e) {
     failure = e
     opError(id, e)
   } finally {
-    end(failure)
+    end(failure, conflicts)
     await refreshRepo()
   }
 }
@@ -924,8 +948,8 @@ export async function stashApply(id: string, index: number) {
   })
   if (!result.ok) return
   const ok = stashApplyAction(result.checked) === 'pop'
-    ? await run(id, 'Popping stash…', () => api.stashPop(id, index))
-    : await run(id, 'Applying stash…', () => api.stashApply(id, index))
+    ? await run(id, 'Popping stash…', () => api.stashPop(id, index), stashStop(id))
+    : await run(id, 'Applying stash…', () => api.stashApply(id, index), stashStop(id))
   if (ok) notifyStashConflicts(id)
 }
 
@@ -941,7 +965,7 @@ export async function stashPop(id: string, index: number) {
     message: 'Apply this stash and remove it from the list? If it conflicts, it stays until the conflict is resolved.',
     confirmLabel: 'Pop',
   })
-  if (ok && (await run(id, 'Popping stash…', () => api.stashPop(id, index)))) notifyStashConflicts(id)
+  if (ok && (await run(id, 'Popping stash…', () => api.stashPop(id, index), stashStop(id)))) notifyStashConflicts(id)
 }
 
 export async function stashDrop(id: string, index: number) {

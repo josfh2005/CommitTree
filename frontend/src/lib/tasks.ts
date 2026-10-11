@@ -54,7 +54,10 @@ export interface TaskState {
 }
 
 export type CancelTarget = { kind: 'clone' } | { kind: 'model' } | { kind: 'command'; repoId: string; entryId: number }
-export type EndTask = (error?: unknown) => void
+/** Ends a task: with no error it ends ok — unless stoppedOnConflicts (the
+ *  conflicts' description, e.g. "Conflicts in 2 files after the pull") says
+ *  the operation returned but stopped halfway; it then ends failed. */
+export type EndTask = (error?: unknown, stoppedOnConflicts?: string) => void
 
 export const EMPTY: TaskState = { tasks: [], writes: [], ended: [], last: null }
 const ENDED_KEPT = 200
@@ -122,6 +125,11 @@ export function resultText(kind: TaskKind, label: string, outcome: TaskOutcome):
   return PAST[label] ?? `${base} — done`
 }
 
+/** "Pulling main stopped on conflicts". */
+export function stoppedText(label: string): string {
+  return `${label.replace(/…$/, '')} stopped on conflicts`
+}
+
 export function addTask(s: TaskState, t: Task): TaskState {
   return { ...s, tasks: [...s.tasks.filter((x) => x.id !== t.id), t] }
 }
@@ -131,16 +139,25 @@ export function updateTask(s: TaskState, id: string, patch: Partial<Pick<Task, '
   return { ...s, tasks: s.tasks.map((t) => (t.id === id ? { ...t, ...patch } : t)) }
 }
 
-/** endTask removes task id; a You/AI task becomes the last result. */
-export function endTask(s: TaskState, id: string, outcome: TaskOutcome, message: string, now: number): TaskState {
+/** endTask removes task id; a You/AI task becomes the last result. An ok
+ *  end with stoppedOnConflicts is a failed one that says so: the operation
+ *  returned, but left conflicts to resolve (the description is the tooltip). */
+export function endTask(s: TaskState, id: string, outcome: TaskOutcome, message: string, now: number, stoppedOnConflicts = ''): TaskState {
   const t = s.tasks.find((x) => x.id === id)
   if (!t) return s
   const tasks = s.tasks.filter((x) => x.id !== id)
   if (t.origin === 'auto') return { ...s, tasks }
+  const stopped = outcome === 'ok' && stoppedOnConflicts !== ''
   return {
     ...s,
     tasks,
-    last: { kind: t.kind, outcome, text: resultText(t.kind, t.label, outcome), message, repoId: t.repoId, repoName: t.repoName, end: now },
+    last: {
+      kind: t.kind,
+      outcome: stopped ? 'failed' : outcome,
+      text: stopped ? stoppedText(t.label) : resultText(t.kind, t.label, outcome),
+      message: stopped ? stoppedOnConflicts : message,
+      repoId: t.repoId, repoName: t.repoName, end: now,
+    },
   }
 }
 
@@ -228,11 +245,11 @@ export function hasTask(id: string): boolean {
 export function beginTask(t: Omit<Task, 'start' | 'progress'> & { progress?: string }, now = Date.now()): EndTask {
   taskState.update((s) => addTask(s, { progress: '', ...t, start: now }))
   let done = false
-  return (error) => {
+  return (error, stoppedOnConflicts) => {
     if (done) return
     done = true
     const { outcome, message } = outcomeOf(error)
-    taskState.update((s) => endTask(s, t.id, outcome, message, Date.now()))
+    taskState.update((s) => endTask(s, t.id, outcome, message, Date.now(), stoppedOnConflicts))
   }
 }
 
@@ -244,9 +261,9 @@ let opSeq = 0
 export function beginOp(label: string, repoId: string = get(selectedRepoId)): EndTask {
   busy.set(label)
   const end = beginTask({ id: `op:${++opSeq}`, kind: 'op', origin: 'you', label, repoId, repoName: repoName(repoId) })
-  return (error) => {
+  return (error, stoppedOnConflicts) => {
     busy.set('')
-    end(error)
+    end(error, stoppedOnConflicts)
   }
 }
 

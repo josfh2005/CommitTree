@@ -6,6 +6,7 @@ import {
 } from './flow'
 import { mergeState, pendingFinish, refreshRepo, refs, selectedRepoId } from './stores'
 import { opError, track } from './notify'
+import { conflictsBody } from './notifyRules'
 import { beginOp } from './tasks'
 import type { Flow, FlowType } from './types'
 import { errorMessage, formDialog, menu, pickDialog, toast, type MenuItem } from './ui'
@@ -13,13 +14,16 @@ import { errorMessage, formDialog, menu, pickDialog, toast, type MenuItem } from
 async function busyDo<T>(repoId: string, label: string, fn: () => Promise<T>, conflictsOf?: (r: T) => number) {
   const end = beginOp(label, repoId)
   let failure: unknown
+  let conflicts: string | undefined
   try {
-    await track(repoId, 'flow', fn, conflictsOf)
+    const result = await track(repoId, 'flow', fn, conflictsOf)
+    const files = conflictsOf ? conflictsOf(result) : 0
+    if (files > 0) conflicts = conflictsBody('flow', files)
   } catch (e) {
     failure = e
     opError(repoId, e)
   } finally {
-    end(failure)
+    end(failure, conflicts)
     await refreshRepo()
   }
 }

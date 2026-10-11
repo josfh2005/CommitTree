@@ -62,6 +62,16 @@ describe('endTask', () => {
     expect(s.tasks).toEqual([])
     expect(s.last).toBe(before.last)
   })
+  it('an ok end that stopped on conflicts is a failed result that says so', () => {
+    const s = endTask(addTask(EMPTY, task({ label: 'Pulling main…' })), 'op:1', 'ok', '', 9000, 'Conflicts in 2 files after the pull')
+    expect(s.last).toEqual({
+      kind: 'op', outcome: 'failed', text: 'Pulling main stopped on conflicts', message: 'Conflicts in 2 files after the pull', repoId: 'a', repoName: 'alpha', end: 9000,
+    })
+  })
+  it('a real failure keeps its own message even with conflicts reported', () => {
+    const s = endTask(addTask(EMPTY, task({ label: 'Pulling…' })), 'op:1', 'failed', 'boom', 9000, 'Conflicts in 2 files after the pull')
+    expect(s.last).toMatchObject({ outcome: 'failed', text: 'Pulling failed', message: 'boom' })
+  })
   it('ignores an unknown id', () => {
     expect(endTask(EMPTY, 'nope', 'ok', '', 1)).toBe(EMPTY)
   })

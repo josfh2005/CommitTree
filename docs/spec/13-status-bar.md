@@ -125,6 +125,15 @@ The text of the result comes from the task's label:
 - a git write shown on its own reads as its command line, with ✓, ✗ or ⊘
   for how it ended (the failure's message in the tooltip).
 
+- an operation that ends normally but stops on conflicts — a merge, pull,
+  rebase, cherry-pick, git-flow finish, or a stash apply or pop that leaves
+  conflicts — is not a success: it reads `✗ <label without its ellipsis>
+  stopped on conflicts` ("Pulling main stopped on conflicts", "Merging
+  stopped on conflicts", "Applying stash stopped on conflicts"), in the
+  error colour, and the tooltip says how many files ("Conflicts in 2 files
+  after the pull"). The conflicts themselves are resolved in the conflict
+  view, as before.
+
 An operation's result is its own: the git writes it ran do not add results
 of their own.
 
