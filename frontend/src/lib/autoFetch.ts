@@ -3,6 +3,7 @@ import { api } from './api'
 import { notify } from './notify'
 import { remoteBody, type NotifyEvent } from './notifyRules'
 import { autoFetchMinutes, busy, refreshRepo, repos, selectedRepoId } from './stores'
+import { beginTask, repoName } from './tasks'
 import type { AutoFetchResult, Repo } from './types'
 
 /** Background fetch (docs/spec/05-remote-and-stash.md): rounds over every
@@ -41,9 +42,23 @@ export interface AutoFetchDeps {
   notify: (e: NotifyEvent) => void
 }
 
+/** fetchWithTask runs one background fetch as an Auto "Fetching" task of
+ *  repository id: shown while it runs, never the last result. */
+export async function fetchWithTask(id: string, fetch: (id: string) => Promise<AutoFetchResult>): Promise<AutoFetchResult> {
+  const end = beginTask({ id: `fetch:${id}`, kind: 'fetch', origin: 'auto', label: 'Fetching', repoId: id, repoName: repoName(id) })
+  try {
+    const r = await fetch(id)
+    end()
+    return r
+  } catch (e) {
+    end(e)
+    throw e
+  }
+}
+
 const defaultDeps: AutoFetchDeps = {
   repos: () => get(repos),
-  fetch: (id) => api.autoFetch(id),
+  fetch: (id) => fetchWithTask(id, api.autoFetch),
   online: () => navigator.onLine,
   selectedId: () => get(selectedRepoId),
   busy: () => get(busy) !== '',

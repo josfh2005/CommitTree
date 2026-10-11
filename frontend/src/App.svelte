@@ -24,6 +24,7 @@
   import { isTerminalToggle } from './lib/terminal'
   import { conflictOwnsScreen } from './lib/remote'
   import { blameTarget, chatOpen, chatRunRepo, chatWidth, closeBlame, commandsOpen, dockHeight, loadAISettings, loadGitSettings, loadRefs, loadRepos, loadWorktreeState, mainView, mergeState, platform, refreshRepo, selectRepo, selectedHash, selectedRepo, selectedRepoId, selectedStash, settingsOpen, sidebarWidth, stashConflictDismissed, stashEntries, terminalOpen, uncommittedSelected } from './lib/stores'
+  import { noteCommand } from './lib/tasks'
   import { toast } from './lib/ui'
   import type { RepoChangedEvent, WorktreeChangedEvent } from './lib/types'
   import { Environment, EventsOn } from '../wailsjs/runtime/runtime'
@@ -119,8 +120,12 @@
       },
       toast,
     })
+    // Running git writes of every repository, for the status bar — the
+    // Commands panel keeps its own listener.
+    const offCommands = EventsOn('cmdlog:entry', noteCommand)
     return () => {
       offClone()
+      offCommands()
       stopFocus()
       stopNotifications()
       stopAutoFetch()

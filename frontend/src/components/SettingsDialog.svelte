@@ -5,9 +5,10 @@
   import { api } from '../lib/api'
   import { formatBytes, percent } from '../lib/format'
   import { modelForProvider, modelHint, processingNotice, providerShortLabel, PROVIDERS, settingsHaveModels } from '../lib/providers'
-  import { SETTINGS_TABS, isSettingsTab, migrateRememberedTab, tabUsesAI } from '../lib/settingsTabs'
+  import { SETTINGS_TABS, settingsTab, tabUsesAI } from '../lib/settingsTabs'
+  import { modelDone, modelProgress, modelPull, startModelPull } from '../lib/modelPull'
   import { statusText } from '../lib/notifyRules'
-  import { AUTO_FETCH_CHOICES, autoFetchMinutes, highContrast, loadAISettings, loadGitSettings, notifyAi, notifyDone, notifyEnabled, notifyProblem, notifyRemote, persisted, settingsOpen, themePref } from '../lib/stores'
+  import { AUTO_FETCH_CHOICES, autoFetchMinutes, highContrast, loadAISettings, loadGitSettings, notifyAi, notifyDone, notifyEnabled, notifyProblem, notifyRemote, settingsOpen, themePref } from '../lib/stores'
   import type { ThemePref } from '../lib/theme'
 
   const THEMES: { value: ThemePref; label: string }[] = [
@@ -15,18 +16,13 @@
     { value: 'light', label: 'Light' },
     { value: 'dark', label: 'Dark' },
   ]
-  import type { AISettings, AIStatus, GitSettings, ModelDone, ModelProgress, ProviderName, PromptInfo } from '../lib/types'
+  import type { AISettings, AIStatus, GitSettings, ModelDone, ProviderName, PromptInfo } from '../lib/types'
   import { errorMessage, toast } from '../lib/ui'
 
   const RECOMMENDED = 'qwen2.5:7b'
 
   // The tab the dialog opens on: the last one used.
-  try {
-    migrateRememberedTab(localStorage, 'settingsTab')
-  } catch {
-    // Storage unavailable: the tab falls back to General.
-  }
-  const tab = persisted('settingsTab', 'general', isSettingsTab)
+  const tab = settingsTab
   // The hosted providers on the Providers tab, each with its API key.
   const HOSTED: ProviderName[] = ['anthropic', 'openai']
 
@@ -41,7 +37,6 @@
   let git: GitSettings = { pullStrategy: 'auto', pushScope: 'ask' }
   let status: AIStatus | null = null
   let prompts: PromptInfo[] = []
-  let pull: ModelProgress | null = null
   let otherModel = ''
   let saving = false
   let keyInput: Record<string, string> = { openai: '', anthropic: '' }
@@ -52,9 +47,9 @@
   // which only reflects the backend's aiStatus snapshot (no key stored).
   let modelErrors: Record<string, string> = {}
 
-  const offProgress = EventsOn('model:progress', (p: ModelProgress) => (pull = p))
+  const offProgress = EventsOn('model:progress', modelProgress)
   const offDone = EventsOn('model:done', async (p: ModelDone) => {
-    pull = null
+    modelDone(p)
     if (p.error && !p.canceled) toast(p.error, 'error')
     else if (!p.error) toast(`Downloaded ${p.name}`)
     await refresh()
@@ -212,8 +207,7 @@
     const model = name.trim()
     if (!model) return
     try {
-      await api.pullModel(model)
-      pull = { name: model, status: 'starting', completed: 0, total: 0 }
+      await startModelPull(model, api.pullModel)
     } catch (e) {
       toast(errorMessage(e), 'error')
     }
@@ -384,11 +378,11 @@
                   {/each}
                 </ul>
               {/if}
-              {#if pull}
+              {#if $modelPull}
                 <div class="pull">
-                  <div class="bar"><div style="width: {percent(pull.completed, pull.total)}%"></div></div>
+                  <div class="bar"><div style="width: {percent($modelPull.completed, $modelPull.total)}%"></div></div>
                   <span class="hint">
-                    {pull.name}: {pull.status}{#if pull.total} · {formatBytes(pull.completed)} / {formatBytes(pull.total)}{/if}
+                    {$modelPull.name}: {$modelPull.status}{#if $modelPull.total} · {formatBytes($modelPull.completed)} / {formatBytes($modelPull.total)}{/if}
                   </span>
                   <button class="btn" on:click={() => api.cancelPull()}>Cancel</button>
                 </div>

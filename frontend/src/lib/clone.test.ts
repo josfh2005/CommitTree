@@ -2,8 +2,9 @@ import { describe, expect, it, beforeEach } from 'vitest'
 import { get } from 'svelte/store'
 import {
   cancelClone, cloneCancelling, cloneDialogOpen, cloneForm, cloneView, dirName, editName, editURL, emptyForm, joinPath, nameError, redactURL,
-  startClone, startCloneEvents, viewFromStatus,
+  cloneProgressText, startClone, startCloneEvents, viewFromStatus,
 } from './clone'
+import { EMPTY, taskState } from './tasks'
 import type { CloneDone, CloneProgress, Repo } from './types'
 
 describe('dirName', () => {
@@ -227,5 +228,55 @@ describe('running view and cancelling', () => {
     stop()
     await cancelClone(async () => { throw new Error('x') })
     expect(get(cloneCancelling)).toBe(false)
+  })
+})
+
+describe('clone as a status-bar task', () => {
+  beforeEach(() => taskState.set(EMPTY))
+
+  it('becomes a task once the backend accepts it, with progress, and ends with the clone', async () => {
+    cloneForm.set({ url: 'https://h/foo.git', name: 'foo', nameEdited: false })
+    await startClone('/p', async () => {})
+    expect(get(taskState).tasks).toMatchObject([{ id: 'clone', kind: 'clone', label: 'Cloning foo', repoId: '' }])
+    const handlers: Record<string, (p: any) => void> = {}
+    const off = startCloneEvents({ on: ((n: string, f: any) => { handlers[n] = f; return () => {} }) as any, added: async () => {}, toast: () => {} })
+    handlers['clone:progress']({ phase: 'Receiving', percent: 42, detail: '' })
+    expect(get(taskState).tasks[0].progress).toBe('Receiving 42 %')
+    await handlers['clone:done']({ repo: { id: 'n', name: 'foo' }, error: '', cancelled: false })
+    expect(get(taskState).tasks).toEqual([])
+    expect(get(taskState).last).toMatchObject({ outcome: 'ok', text: 'Cloned foo' })
+    off()
+  })
+
+  it('a clone that ended before the backend call resolved leaves no task', async () => {
+    cloneForm.set({ url: 'https://h/foo.git', name: 'foo', nameEdited: false })
+    await startClone('/p', async () => { cloneView.set({ kind: 'form', error: '' }) })
+    expect(get(taskState).tasks).toEqual([])
+  })
+
+  it('a refused clone leaves no task', async () => {
+    cloneForm.set({ url: 'x', name: 'foo', nameEdited: false })
+    await startClone('/p', async () => { throw new Error('bad url') })
+    expect(get(taskState).tasks).toEqual([])
+  })
+
+  it('cancelled and failed clones', async () => {
+    for (const [d, outcome] of [[{ repo: null, error: 'git clone cancelled', cancelled: true }, 'cancelled'], [{ repo: null, error: 'not found', cancelled: false }, 'failed']] as const) {
+      taskState.set(EMPTY)
+      cloneForm.set({ url: 'https://h/foo.git', name: 'foo', nameEdited: false })
+      await startClone('/p', async () => {})
+      const handlers: Record<string, (p: any) => void> = {}
+      startCloneEvents({ on: ((n: string, f: any) => { handlers[n] = f; return () => {} }) as any, added: async () => {}, toast: () => {} })
+      await handlers['clone:done'](d)
+      expect(get(taskState).last?.outcome).toBe(outcome)
+    }
+  })
+})
+
+describe('cloneProgressText', () => {
+  it('shows the phase, with its percentage when git gives one', () => {
+    expect(cloneProgressText(null)).toBe('')
+    expect(cloneProgressText({ phase: 'Counting', percent: 0, detail: '' })).toBe('Counting')
+    expect(cloneProgressText({ phase: 'Receiving', percent: 42, detail: '' })).toBe('Receiving 42 %')
   })
 })
