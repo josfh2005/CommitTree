@@ -27,7 +27,7 @@
   $: formError = settings ? flowSettingsError($form) : ''
 
   async function save() {
-    if (!settings || !!$busy || (setUp && !$dirty)) return
+    if (!settings || !!$busy || formError !== '' || (setUp && !$dirty)) return
     // Before the await: saving reloads the settings and flips setUp.
     const wasSetUp = setUp
     const end = beginOp(wasSetUp ? 'Saving git-flow…' : 'Setting up git-flow…', repoID)

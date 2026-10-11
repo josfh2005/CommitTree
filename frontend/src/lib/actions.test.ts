@@ -116,6 +116,22 @@ describe('commitMerge', () => {
     expect(api.skipStep).toHaveBeenCalledWith('repo1')
   })
 
+  it('stops the Continuing task before the Skip dialog, and the skip has the last result', async () => {
+    taskState.set(EMPTY)
+    mergeState.set(mergeStateOf({ kind: 'rebase' }))
+    vi.mocked(api.commitMerge).mockRejectedValue(new Error("No changes - did you forget to use 'git add'?"))
+    let answer!: (v: boolean) => void
+    vi.mocked(confirmDialog).mockReturnValueOnce(new Promise<boolean>((r) => (answer = r)))
+
+    const done = commitMerge('repo1')
+    await vi.waitFor(() => expect(confirmDialog).toHaveBeenCalled())
+    expect(get(taskState).tasks).toEqual([])
+    answer(true)
+    await done
+
+    expect(get(taskState).last).toMatchObject({ outcome: 'ok', text: 'Skipped' })
+  })
+
   it('offers Skip when a cherry-pick step comes back empty', async () => {
     mergeState.set(mergeStateOf({ kind: 'cherry-pick' }))
     vi.mocked(api.commitMerge).mockRejectedValue(new Error('The previous cherry-pick is now empty, possibly due to conflict resolution.'))

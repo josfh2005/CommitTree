@@ -88,7 +88,8 @@ shown one included — one row each: spinner, label, repository, progress,
 elapsed time and the row's own Cancel. Clicking a row does what clicking the
 bar does for that task. When the list opens, focus moves to its first row;
 ↑ and ↓ move between rows and Enter opens one. Esc, a click outside, or the
-"+N" chip again closes it, and focus goes back to the chip. The list closes
+"+N" chip again closes it; after Esc focus goes back to the chip (after a
+click it stays where the click put it). The list closes
 by itself when no more than one task is left.
 
 ## At rest: the last result

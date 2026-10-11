@@ -661,6 +661,9 @@ export async function commitMerge(id: string, message = ''): Promise<boolean> {
     return true
   } catch (e) {
     failure = e
+    // Ended before the dialog: the task must not keep ticking while it waits,
+    // and a skip that follows has its own result.
+    end(e)
     const text = errorMessage(e)
     if ((kind === 'rebase' || kind === 'cherry-pick') && isEmptyStepError(text)) {
       const skip = await confirmDialog({ title: 'Nothing to commit', message: `${text}\n\nSkip this commit instead?`, confirmLabel: 'Skip this commit' })

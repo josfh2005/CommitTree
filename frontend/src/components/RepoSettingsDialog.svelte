@@ -8,7 +8,7 @@
   import { remotesPanel } from '../lib/remotesPanel'
   import type { RemoteConfig } from '../lib/types'
   import { beginOp } from '../lib/tasks'
-import { confirmDialog, dialog } from '../lib/ui'
+  import { confirmDialog, dialog } from '../lib/ui'
 
   const panel = remotesPanel({
     list: (id) => api.listRemotes(id),
