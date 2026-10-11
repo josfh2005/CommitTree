@@ -40,6 +40,7 @@ Then take the area documents in any order.
 | [git-flow](10-git-flow.md) | Starting and finishing feature, release, hotfix and warmfix branches from the Flow button |
 | [Notifications](11-notifications.md) | Which events notify, and when as an OS notification or a toast |
 | [Repository settings](12-repository-settings.md) | A repository's own settings dialog; the Remotes tab: list, test, edit, remove and add remotes |
+| [Status bar](13-status-bar.md) | The bar along the bottom of the window: the task running now, Cancel, and how the last one ended |
 | [Conventions and constraints](07-conventions-and-constraints.md) | What is true everywhere, plus the git appendix |
 
 ## What this specification is not

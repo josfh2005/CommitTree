@@ -59,6 +59,8 @@ once); a hook or helper that ignores the interrupt can keep running past
 that point on its own. A command that runs past its time limit is
 interrupted the same way and shows "Timed out".
 
+A running write can also be seen and cancelled from the status bar (`13-status-bar.md`), within its operation when it belongs to one.
+
 The operation that ran the command reports an error, "git command
 cancelled" — never the hook output or exit-signal text a cancelled git can
 leave on stderr — the way it reports any failure: a toast for an action
