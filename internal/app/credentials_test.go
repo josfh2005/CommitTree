@@ -84,6 +84,19 @@ func TestFetchAsksForCredentials(t *testing.T) {
 	}
 }
 
+func TestFetchOfTheAIChatSaysSo(t *testing.T) {
+	a, r, id, ev := credApp(t, &credprompt.Answer{Username: "me", Secret: "tok"})
+	lockedOrigin(t, r, "tok")
+	done := a.markAIWrite(id) // what an approved chat write does around its tool
+	defer done()
+	if err := a.Fetch(id); err != nil {
+		t.Fatal(err)
+	}
+	if req := ev.find(t, "credential:request").data.(credprompt.Request); !req.FromAI {
+		t.Fatalf("request %+v is not marked as the AI chat's", req)
+	}
+}
+
 func TestAutoFetchNeverAsks(t *testing.T) {
 	a, r, id, _ := credApp(t, nil)
 	lockedOrigin(t, r, "tok")

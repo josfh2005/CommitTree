@@ -321,6 +321,24 @@ func TestNoticeIsNotADialog(t *testing.T) {
 	}
 }
 
+func TestSocketIsPrivate(t *testing.T) {
+	s, _ := newTestServer(t, time.Minute)
+	di, err := os.Stat(s.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	si, err := os.Stat(s.sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m := di.Mode().Perm(); m != 0o700 {
+		t.Errorf("socket directory mode %v, want 0700", m)
+	}
+	if m := si.Mode().Perm(); m != 0o600 {
+		t.Errorf("socket mode %v, want 0600", m)
+	}
+}
+
 func TestShutdownRefusesAndRemovesSocket(t *testing.T) {
 	s, ui := newTestServer(t, time.Minute)
 	sess := s.begin(Info{})

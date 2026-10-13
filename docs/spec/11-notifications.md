@@ -15,6 +15,7 @@ focused, an in-app toast when it is focused but the event is out of sight.
 | The AI needs you | A write card waits for confirmation | always |
 | | A decision card shown to you | always; not when the card was refused and the AI retries |
 | Problems | A chat answer ended with an error | always |
+| | A git command waits for credentials in the credential dialog | the window is not focused; once per request |
 | New commits on the remote | A background fetch brought commits to the checked-out branch's upstream that the branch does not have — "3 new commits on origin/main" | always (while Fetch in the background is on) |
 
 One user operation is one event, however many git commands it runs. An
@@ -33,6 +34,16 @@ remote branches and background fetch failures never notify (see
 The title is the repository name; the body one sentence — "Push finished ·
 14 s", "Pull failed: <first line of the error, at most 120 characters>",
 "Conflicts in 3 files after the merge".
+
+A credential request (`05-remote-and-stash.md`, "Credentials") notifies only
+while the window is not focused — with it focused the dialog itself is on
+screen — and once per request, not again when "N more waiting" changes. The
+body reads "CommitTree needs credentials for <host> (<context line>)", for
+example "CommitTree needs credentials for github.com (Push · my-repo)"
+("SSH" when the request names no host); the title is the repository name
+("CommitTree" for a clone). It never contains a username or anything typed.
+It is a Problems notification, so it follows that setting, and clicking it
+brings the window forward on that repository.
 
 ## Where it appears
 

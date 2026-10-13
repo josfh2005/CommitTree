@@ -120,7 +120,8 @@ with no remote, or with another write running, is skipped. Turning it Off
 during a round lets the repository being fetched finish and fetches no
 other.
 
-A background fetch never asks for anything: askpass programs and Git
+A background fetch never asks for anything — not even through CommitTree's
+own credential dialog (see "Credentials"): askpass programs and Git
 Credential Manager's dialogs are turned off for it, so a remote that needs a
 password or a passphrase fails instead (helpers that answer on their own,
 such as the macOS keychain or ssh-agent, still work). Such an authentication
@@ -296,6 +297,120 @@ badges) afterwards.
   "Pushed `<branch>`" (or "Everything up to date"). The push uses the same
   network timeout as the other remote commands.
 
+### Credentials
+
+When git needs a credential that nothing already has, CommitTree asks for
+it in its own dialog instead of failing: a username and token for HTTPS, an
+SSH key passphrase or password, or a decision about an unknown SSH host.
+
+**Who answers first.** The user's setup always wins. Git asks its
+configured credential helpers in order (the macOS keychain, `store`, Git
+Credential Manager, …) and CommitTree's own helper is the last of them, so it
+is asked only when none of the others returned a credential. A Git Credential
+Manager that shows its own window keeps doing so; ssh-agent keys and
+`IdentityFile` keys without a passphrase never reach the dialog. A saved
+credential that the server no longer accepts (a revoked token in the
+keychain) makes the command fail once — git removes it from the helpers —
+with "The saved credential was not accepted and was removed. Try again to
+enter a new one."; the next attempt shows the dialog.
+
+**Which commands may ask.** Only network commands the user starts:
+
+- the toolbar's Fetch, Pull and Push, and Push main branches;
+- the branch menu's Fetch `<remote>`, Pull and Push, and deleting a remote
+  branch;
+- Clone (`01-repositories-and-sidebar.md`);
+- a submodule's Update or Initialise, and Update all / Initialise all;
+- Test in Repository settings → Remotes (`12-repository-settings.md`);
+- the AI chat's fetch, push and pull, once the user accepted their cards
+  (`06-ai.md`).
+
+Everything else behaves as before: reads, local writes, commit signing,
+hooks of a local write, git-flow's local fetch and the background fetch
+(below) never open a dialog. If the credential prompts could not be started
+(Windows, or no socket could be created) nothing asks, as before.
+
+**The HTTPS dialog.** Title "Sign in to `<host>`"; under it the context
+line — what runs and where: "Push · my-repo", "Fetch origin · my-repo",
+"Clone · github.com/owner/repo" (the URL with its credentials hidden), plus
+" · Requested by the AI chat" when the AI chat started the command. Then a
+**Username** field (prefilled when git knew one), a **Token** password field
+with a show/hide button and, for `github.com`, `gitlab.com` and
+`bitbucket.org`, the hint "Use a personal access token, not your account
+password.", the **Remember** checkbox (below) and **Cancel** / **Continue**.
+**Continue** is disabled while the username or the token is empty, or while
+an answer is being sent. Enter submits the form, Esc cancels; focus starts
+on the first empty field. An answer with a line break or a NUL character is
+refused in the dialog ("Line breaks are not allowed.") and the dialog stays
+open.
+
+**Remember.** The checkbox names the helper that would keep the credential:
+
+1. The user's helpers that apply to the URL, as `git config` reports them in
+   the repository (for a clone: the system and global configuration). A
+   URL-scoped helper (`credential.<url>.helper`) counts when it matches; an
+   empty `credential.helper` value resets the list, as in git. The label
+   names the last one: "Remember in osxkeychain".
+2. Else the platform helper, when git ships it: `osxkeychain` on macOS,
+   `libsecret` on Linux.
+3. Else no checkbox, and the dialog says "Not saved: no credential helper is
+   set up."
+
+It is checked by default. When the command succeeds: checked with the
+user's helper — git already stored it; unchecked with the user's helper —
+`git credential reject` removes what the helper stored; checked with the
+platform helper — `git credential approve` stores it there; unchecked with
+no helper — nothing is stored. Those two commands appear in the Commands
+panel like any other; their arguments hold no secret and what is fed to
+them is never recorded. When the credential was refused, nothing is saved,
+the operation's error is "The username or token was not accepted." and the
+next attempt asks again. CommitTree never keeps a secret itself.
+
+**SSH.** ssh's own prompt is recognised from its text:
+
+| Prompt | Dialog |
+|---|---|
+| `Enter passphrase for key '<path>':` | "SSH key passphrase": the key path, one hidden field, no Remember, and the hint "To stop being asked, add the key to ssh-agent (on macOS `UseKeychain yes` in ~/.ssh/config)." |
+| `<user>@<host>'s password:` | "SSH password for `<user>`@`<host>`": one hidden field |
+| `The authenticity of host … can't be established` | "Unknown SSH host": the host, the key type and fingerprint in monospace, and "Check the fingerprint with the server's owner before trusting it." Buttons **Cancel** (the default: focused, and Enter and Esc both cancel) and **Trust and connect**, which lets ssh add the key to `known_hosts` |
+| a prompt ssh marks as information only (for example a security key's "Confirm user presence") | no dialog: an info toast with ssh's text |
+| any other text (a keyboard-interactive "Verification code:") | "The SSH server asks": ssh's text verbatim and one hidden field (ssh's prompt does not name the host) |
+
+A passphrase or password that ssh asks for again is the previous one being
+refused: the dialog reappears with "That was not accepted. Try again." An
+SSH passphrase is never saved. A *changed* host key is refused by ssh before
+any prompt and fails as before. git's own "Username for …" / "Password for
+…" prompts are never shown: the credential dialog already asked.
+
+**Queue, timeout, cancel.** One dialog shows at a time; further requests
+(for example a clone and a push in another repository) wait behind it and
+the dialog says "N more waiting". Each request's minute starts when it is
+shown. A dialog unanswered for 60 s closes; its last 20 s show "Closes in N
+s". The command then fails with "No credentials entered (timed out)."; Cancel
+fails it with "No credentials entered." (for an unknown host: "The SSH host
+was not trusted."). The text is the operation's error wherever that error
+is shown (a toast, the push results dialog, the clone dialog, the Test row,
+the AI chat's tool result). When the command ends first — cancelled from the
+status bar or the Commands panel, timed out, or a clone stopped as stalled —
+its dialog closes without a message. Quitting the application with a dialog
+open answers "no credential" to every pending request and quits as usual.
+The command's own time limit keeps running while a dialog is open.
+
+**While it waits.** The status bar shows "Waiting for credentials…" in place
+of the task's progress (`13-status-bar.md`), and the clone dialog's progress
+view shows the same line. When the window is not focused a notification
+announces the request (`11-notifications.md`).
+
+**Background fetch.** Unchanged: it never asks (see "Background fetch"),
+and an authentication failure still pauses that remote until a fetch or
+pull the user starts succeeds — which may now open the dialog.
+
+**What is never shown or kept.** Nothing typed in the dialog reaches the
+Commands panel, an event, a toast, a notification, the AI chat or a log
+(`07-conventions-and-constraints.md`). The AI has no tool to see or answer
+the dialog; its tool result says only whether the command worked and git's
+error.
+
 ### Ahead/behind
 
 The count is read fresh whenever asked, by comparing the current branch with
@@ -443,6 +558,10 @@ stashes.
 11. The ahead/behind count, and any other read of a branch's upstream
     relationship, reports zero rather than an error when there is no
     upstream to compare against.
+12. Only a network command the user starts (or the AI chat's, after its card)
+    may open the credential dialog; the user's own credential helpers are
+    always asked first, and the background fetch never asks.
+13. A secret typed in the credential dialog reaches git and nothing else.
 
 ## Known divergences
 

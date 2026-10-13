@@ -10,9 +10,10 @@ import (
 	"git-ui/internal/gitcmd"
 )
 
-// RemoteTestTimeout bounds a connection test: long enough for a slow
-// server, short enough that the Remotes tab never seems stuck.
-// Longer than a credential dialog (credprompt.DefaultTimeout), which Test may open.
+// RemoteTestTimeout bounds a connection test. It is longer than a credential
+// dialog's minute (credprompt.DefaultTimeout), which Test may open and which
+// counts against it, so an unanswered dialog ends as "No credentials entered
+// (timed out)." and not as "Timed out".
 const RemoteTestTimeout = 90 * time.Second
 
 // Remote is one configured remote (docs/spec/12-repository-settings.md).
