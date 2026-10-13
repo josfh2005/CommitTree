@@ -71,7 +71,7 @@ describe('credential', () => {
   })
 
   it('writes a notification body with no username', () => {
-    expect(notifyBody({ ...base, username: 'me' })).toBe('Credentials needed for github.com · Push · repo')
-    expect(notifyBody({ ...base, kind: 'ssh-passphrase', host: '' })).toBe('Credentials needed for SSH · Push · repo')
+    expect(notifyBody({ ...base, username: 'me' })).toBe('CommitTree needs credentials for github.com (Push · repo)')
+    expect(notifyBody({ ...base, kind: 'ssh-passphrase', host: '' })).toBe('CommitTree needs credentials for SSH (Push · repo)')
   })
 })

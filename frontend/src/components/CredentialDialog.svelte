@@ -47,9 +47,16 @@
     else secretEl?.focus()
   }
 
+  let sending = false
+
   async function send(a: CredentialAnswer) {
-    if (!r) return
+    if (!r || sending) return
     const id = r.id
+    // Never keep the secret in component state once it is sent: the copy in
+    // `a` is all that is left, and a second submit while this one is in flight
+    // is ignored.
+    sending = true
+    secret = ''
     error = ''
     try {
       await api.answerCredential(id, a)
@@ -57,13 +64,12 @@
     } catch (e) {
       error = errorMessage(e)
     } finally {
-      // Never keep the secret in component state once it was sent.
-      secret = ''
+      sending = false
     }
   }
 
   function submit() {
-    if (ok) void send(answer)
+    if (ok && !sending) void send({ ...answer })
   }
 
   async function cancel() {
@@ -82,7 +88,7 @@
     if (e.key === 'Escape' || (e.key === 'Enter' && r.kind === 'ssh-hostkey')) {
       e.preventDefault()
       e.stopPropagation()
-      void cancel()
+      if (!e.repeat) void cancel()
     }
   }
 </script>
@@ -99,6 +105,7 @@
         <p>CommitTree has never connected to <strong>{r.host}</strong>. Check the fingerprint with the server's owner before trusting it.</p>
         <p class="mono">{r.keyType} {r.fingerprint}</p>
         <div class="buttons">
+          {#if r.waiting > 0}<span class="left">{r.waiting} more waiting</span>{/if}
           {#if left}<span class="left" aria-live="polite">{left}</span>{/if}
           <button type="button" class="btn" bind:this={cancelBtn} on:click={cancel}>Cancel</button>
           <button type="button" class="btn primary" on:click={() => send({ username: '', secret: '', remember: false, trust: true })}>Trust and connect</button>
@@ -135,7 +142,7 @@
             {#if r.waiting > 0}<span class="left">{r.waiting} more waiting</span>{/if}
             {#if left}<span class="left" aria-live="polite">{left}</span>{/if}
             <button type="button" class="btn" on:click={cancel}>Cancel</button>
-            <button type="submit" class="btn primary" disabled={!ok}>Continue</button>
+            <button type="submit" class="btn primary" disabled={!ok || sending}>Continue</button>
           </div>
         </form>
       {/if}

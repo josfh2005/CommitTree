@@ -91,5 +91,5 @@ export function waitingText(t: { kind: string; repoId: string }, r: CredentialRe
 
 /** The notification body when the window is not focused: host and context only. */
 export function notifyBody(r: CredentialRequest): string {
-  return `Credentials needed for ${r.host || 'SSH'} · ${r.context}`
+  return `CommitTree needs credentials for ${r.host || 'SSH'} (${r.context})`
 }
