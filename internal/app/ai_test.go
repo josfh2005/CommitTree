@@ -93,6 +93,28 @@ func (e *events) wait(t *testing.T, name string) event {
 	}
 }
 
+// find returns the first event with the given name already emitted, waiting
+// up to 5 s for it. Unlike wait it leaves ch alone, for a test whose other
+// goroutine drains it.
+func (e *events) find(t *testing.T, name string) event {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		e.mu.Lock()
+		for _, ev := range e.list {
+			if ev.name == name {
+				e.mu.Unlock()
+				return ev
+			}
+		}
+		e.mu.Unlock()
+		if time.Now().After(deadline) {
+			t.Fatalf("no %s event; got %v", name, e.names())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func (e *events) names() []string {
 	e.mu.Lock()
 	defer e.mu.Unlock()

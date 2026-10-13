@@ -51,5 +51,5 @@ func (a *App) TestRemote(id, name string) (ops.RemoteTest, error) {
 	if err != nil {
 		return ops.RemoteTest{}, err
 	}
-	return ops.TestRemote(a.ctx, dir, name)
+	return ops.TestRemote(a.prompting(a.ctx, id, dir, "Test "+name), dir, name)
 }

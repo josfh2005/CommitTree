@@ -1,6 +1,10 @@
 package ops
 
-import "testing"
+import (
+	"testing"
+
+	"git-ui/internal/gitcmd"
+)
 
 func TestParsePorcelainAndClassify(t *testing.T) {
 	out := "To ../r.git\n" +
@@ -50,5 +54,14 @@ func TestParsePorcelainToleratesATrimmedFlagAndNoise(t *testing.T) {
 	}
 	if got := parsePorcelain("fatal: 'x' does not appear to be a git repository\n"); len(got) != 0 {
 		t.Errorf("error text parsed to %+v", got)
+	}
+}
+
+func TestPushErrorTextPrefersThePromptOutcomeToGitsStderr(t *testing.T) {
+	err := &gitcmd.Error{Args: []string{"push"}, ExitCode: 128,
+		Stderr: "fatal: could not read Username for 'https://h': terminal prompts disabled\n",
+		Err:    &gitcmd.PromptError{Msg: "No credentials entered."}}
+	if got := pushErrorText(err); got != "No credentials entered." {
+		t.Fatalf("pushErrorText = %q", got)
 	}
 }

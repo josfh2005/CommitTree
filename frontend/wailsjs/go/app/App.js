@@ -18,6 +18,10 @@ export function AddRepo() {
   return window['go']['app']['App']['AddRepo']();
 }
 
+export function AnswerCredential(arg1, arg2) {
+  return window['go']['app']['App']['AnswerCredential'](arg1, arg2);
+}
+
 export function ApplyHunkSelection(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['app']['App']['ApplyHunkSelection'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
@@ -44,6 +48,10 @@ export function CancelClone() {
 
 export function CancelCommand(arg1, arg2) {
   return window['go']['app']['App']['CancelCommand'](arg1, arg2);
+}
+
+export function CancelCredential(arg1) {
+  return window['go']['app']['App']['CancelCredential'](arg1);
 }
 
 export function CancelPull() {

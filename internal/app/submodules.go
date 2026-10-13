@@ -81,7 +81,7 @@ func (a *App) submoduleWrite(id, path string, fn func(ctx context.Context, dir, 
 // InitSubmodule initialises and checks out the submodule at path.
 func (a *App) InitSubmodule(id, path string) error {
 	return a.submoduleWrite(id, path, func(ctx context.Context, dir, rel string) error {
-		return submodules.Init(ctx, dir, rel)
+		return submodules.Init(a.prompting(ctx, id, dir, "Submodule update"), dir, rel)
 	})
 }
 
@@ -89,7 +89,7 @@ func (a *App) InitSubmodule(id, path string) error {
 // commit.
 func (a *App) UpdateSubmodule(id, path string) error {
 	err := a.submoduleWrite(id, path, func(ctx context.Context, dir, rel string) error {
-		return submodules.Update(ctx, dir, rel)
+		return submodules.Update(a.prompting(ctx, id, dir, "Submodule update"), dir, rel)
 	})
 	// submodules.Update reports the *ErrDirty it returns by the name passed
 	// to it, which is path relative to its direct parent (e.g. "inner" for
@@ -133,7 +133,7 @@ func (a *App) submoduleWriteAll(id string, fn func(ctx context.Context, dir stri
 // recursively.
 func (a *App) InitAllSubmodules(id string) error {
 	return a.submoduleWriteAll(id, func(ctx context.Context, dir string) error {
-		return submodules.InitAll(ctx, dir)
+		return submodules.InitAll(a.prompting(ctx, id, dir, "Submodule update"), dir)
 	})
 }
 
@@ -141,6 +141,6 @@ func (a *App) InitAllSubmodules(id string) error {
 // commit, recursively.
 func (a *App) UpdateAllSubmodules(id string) error {
 	return a.submoduleWriteAll(id, func(ctx context.Context, dir string) error {
-		return submodules.UpdateAll(ctx, dir)
+		return submodules.UpdateAll(a.prompting(ctx, id, dir, "Submodule update"), dir)
 	})
 }

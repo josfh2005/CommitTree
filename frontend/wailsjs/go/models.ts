@@ -659,6 +659,29 @@ export namespace cmdlog {
 
 }
 
+export namespace credprompt {
+	
+	export class Answer {
+	    username: string;
+	    secret: string;
+	    remember: boolean;
+	    trust: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Answer(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.username = source["username"];
+	        this.secret = source["secret"];
+	        this.remember = source["remember"];
+	        this.trust = source["trust"];
+	    }
+	}
+
+}
+
 export namespace gitflow {
 	
 	export class Prefixes {

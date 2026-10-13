@@ -12,7 +12,8 @@ import (
 
 // RemoteTestTimeout bounds a connection test: long enough for a slow
 // server, short enough that the Remotes tab never seems stuck.
-const RemoteTestTimeout = 30 * time.Second
+// Longer than a credential dialog (credprompt.DefaultTimeout), which Test may open.
+const RemoteTestTimeout = 90 * time.Second
 
 // Remote is one configured remote (docs/spec/12-repository-settings.md).
 type Remote struct {
@@ -96,13 +97,20 @@ func RemoveRemote(ctx context.Context, dir, name string) error {
 	return err
 }
 
-// TestRemote asks the remote for its branches without ever prompting. A
-// failure to reach it is a result, not an error.
+// TestRemote asks the remote for its branches; a ctx marked by
+// gitcmd.WithPrompts may prompt, any other never does. A failure to reach
+// it is a result, not an error.
 func TestRemote(ctx context.Context, dir, name string) (RemoteTest, error) {
-	_, err := gitcmd.RunEnv(ctx, dir, RemoteTestTimeout, NoPromptEnv, "ls-remote", "--heads", "--", strings.TrimSpace(name))
+	var env []string
+	if !gitcmd.Prompts(ctx) {
+		env = NoPromptEnv
+	}
+	_, err := gitcmd.RunEnv(ctx, dir, RemoteTestTimeout, env, "ls-remote", "--heads", "--", strings.TrimSpace(name))
 	switch {
 	case err == nil:
 		return RemoteTest{OK: true, Message: "Connected"}, nil
+	case errors.As(err, new(*gitcmd.PromptError)):
+		return RemoteTest{Message: err.Error()}, nil
 	case IsAuthError(err):
 		return RemoteTest{Message: "Authentication failed"}, nil
 	case errors.Is(err, gitcmd.ErrTimeout):

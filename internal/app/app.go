@@ -15,6 +15,7 @@ import (
 
 	"git-ui/internal/ai/reposettings"
 	"git-ui/internal/cmdlog"
+	"git-ui/internal/credprompt"
 	"git-ui/internal/gitcmd"
 	"git-ui/internal/gitlog"
 	"git-ui/internal/graph"
@@ -122,6 +123,9 @@ type App struct {
 	submodules map[string]repos.Repo
 	// notes delivers OS notifications; see notify.go.
 	notes notifyState
+	// creds lets marked network commands ask for credentials; nil when
+	// prompts are off (tests, Windows).
+	creds *credprompt.Server
 }
 
 func New(store *repos.Store) *App {
@@ -610,7 +614,7 @@ func (a *App) DeleteBranch(id, name string, force bool) error {
 
 func (a *App) DeleteRemoteBranch(id, remote, name string) error {
 	return a.write(id, func(ctx context.Context, dir string) error {
-		return refs.DeleteRemoteBranch(ctx, dir, remote, name)
+		return refs.DeleteRemoteBranch(a.prompting(ctx, id, dir, "Delete "+remote+"/"+name), dir, remote, name)
 	})
 }
 
