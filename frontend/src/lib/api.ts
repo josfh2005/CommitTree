@@ -1,6 +1,7 @@
 import * as Go from '../../wailsjs/go/app/App'
 import type { BranchPushResult, CloneStatus, RepoAIInfo, RepoAIOverride, AIMessage, AISettings, AIStatus, AheadBehind, AutoFetchResult, Blame, ChatConfirmEvent, CommandLogView, CommandOutput, CommitInfo, ConflictFile, Details, Filters, Flow, FlowConfig, FlowSettings, FlowFinishResult, FlowPlan, FlowStartResult, FlowType, GitSettings, HunkAction, HunkPick, Identity, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, RemoteConfig, RemoteTest, RegionChoice, RegionResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeDiff, WorktreeRemovalInfo, WorktreeState } from './types'
 import type { NotifyTarget } from './notifyRules'
+import type { CredentialAnswer } from './credential'
 
 // The generated bindings use Wails model classes; the JSON is identical to our
 // interfaces, so cast at this single boundary.
@@ -11,6 +12,8 @@ export const api = {
   addRepo: () => call<Repo>(Go.AddRepo()),
   cloneRepo: (url: string, parent: string, name: string) => call<void>(Go.CloneRepo(url, parent, name)),
   cancelClone: () => call<void>(Go.CancelClone()),
+  answerCredential: (id: string, a: CredentialAnswer) => call<void>(Go.AnswerCredential(id, a as any)),
+  cancelCredential: (id: string) => call<void>(Go.CancelCredential(id)),
   cloneStatus: () => call<CloneStatus>(Go.CloneStatus()),
   pickCloneParent: (start: string) => call<string>(Go.PickCloneParent(start)),
   defaultCloneParent: () => call<string>(Go.DefaultCloneParent()),
