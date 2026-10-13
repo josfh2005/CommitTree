@@ -16,8 +16,10 @@ the tooltip) and three buttons.
   the credential dialog (`05-remote-and-stash.md`, "Credentials") and gives
   up after 90 s, which includes the time that dialog is open. The row then
   says "Connected", "Authentication failed", "Timed out", "No credentials
-  entered." (the dialog was cancelled), "No credentials entered (timed out)."
-  or the first line of git's error. Test does not lock the repository.
+  entered." (the dialog was cancelled), "No credentials entered (timed out).",
+  "The username or token was not accepted.", "The SSH host was not trusted.",
+  "The saved credential was not accepted and was removed. Try again to enter
+  a new one." or the first line of git's error. Test does not lock the repository.
 - **Edit** turns the URL into a field with Save and Cancel (Enter, Escape).
   Pointing a remote elsewhere ends a background-fetch pause of that remote
   (see `05-remote-and-stash.md`).

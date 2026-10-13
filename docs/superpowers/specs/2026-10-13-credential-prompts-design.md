@@ -61,8 +61,10 @@ Everything else is unmarked and behaves exactly as today. In particular:
 - commit signing, hooks run by a local write, git-flow's local `fetch .` and
   every read are not marked. (A marked operation's *own* local git commands —
   a read, pull's merge and its signing — run with the same context and so
-  carry the prompt environment too; that is harmless, because the helper only
-  runs when git needs a credential, which a local command does not.)
+  carry the prompt environment too. That is harmless for credentials, because
+  the helper only runs when git needs one, which a local command does not;
+  but an ssh signing key with a passphrase does ask through askpass, so it
+  opens the "SSH key passphrase" dialog under the operation's context line.)
 
 ### Who answers first
 
@@ -114,8 +116,10 @@ Which helper the checkbox names:
 3. Else no checkbox, and the dialog says "Not saved: no credential helper
    is set up."
 
-What happens when the command succeeded — git then sends `store` to every
-helper, CommitTree's last, so the user's helpers have already stored:
+What happens when git accepted the credential — git then sends `store` to
+every helper, CommitTree's last, as soon as the server took it, so the user's
+helpers have already stored, even if the command then fails for another
+reason (a push rejected as non-fast-forward, a pull stopping on conflicts):
 
 | Remember | User helper (case 1) | CommitTree does |
 |---|---|---|
@@ -262,8 +266,9 @@ and the operation, so the user sees what is asking.
   - `COMMITREE_PROMPT_SOCK=<socket path>`, `COMMITREE_PROMPT_NONCE=<nonce>`.
 
   `End()` closes it: queued and shown requests of that session close with
-  `credential:closed`; after a successful `store` the Remember action runs
-  before the stored fields are emptied.
+  `credential:closed`; after git sent `store` for the credential CommitTree answered, the
+  Remember action runs (whether or not the command then succeeded) before
+  the stored fields are emptied.
 - **Helper mode** — `RunHelper(args, stdin, stdout) int`: with
   `credential-helper get|store|erase` it speaks git's credential protocol
   (key=value lines, blank line ends); otherwise its one argument is an
@@ -342,6 +347,9 @@ session after `Wait`. Unmarked contexts change nothing. Stdin for
     holds the entry; checked → it does;
   - Remember checked with no helper → `approve` reaches a fake platform
     helper;
+  - the same two cases when the push is then rejected as non-fast-forward
+    (git already sent `store`): unchecked still removes the entry, checked
+    still approves;
   - a wrong token → `erase`, message "The username or token was not
     accepted.";
   - timeout (short timeout in tests) and Cancel → their messages;
@@ -357,8 +365,8 @@ session after `Wait`. Unmarked contexts change nothing. Stdin for
   fine-grained PAT, Remember on and off (check Keychain Access); clone of a
   private repo; ssh key with a passphrase; first connection to a new ssh
   host; leave a dialog for a minute; a chat `push` that asks; under `make dev`
-type the token `SENTINEL-DEVLOG-12345` into a dialog and check that the
-`wails dev` output never contains it (`grep -c`, expect 0).
+  type the token `SENTINEL-DEVLOG-12345` into a dialog and check that the
+  `wails dev` output never contains it (`grep -c`, expect 0).
 
 ## Docs
 

@@ -9,8 +9,8 @@ type PromptSession interface {
 	// Env is appended to git's environment before the caller's own env, so
 	// a variable the caller sets with the same name beats the session's.
 	// That is entry by entry: NoPromptEnv, say, overrides the session's
-	// GIT_TERMINAL_PROMPT-style variables, but not its GIT_CONFIG_* helper
-	// entries, which NoPromptEnv does not set.
+	// GIT_ASKPASS, SSH_ASKPASS and SSH_ASKPASS_REQUIRE (and GCM_INTERACTIVE),
+	// but not its GIT_CONFIG_* helper entries, which NoPromptEnv does not set.
 	Env() []string
 	// End closes the session; failed says whether git exited unsuccessfully.
 	// A non-nil result is why it failed — the user cancelled or let the

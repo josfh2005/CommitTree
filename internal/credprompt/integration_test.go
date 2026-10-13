@@ -218,6 +218,46 @@ func TestRememberCheckedWithoutHelperApprovesIntoPlatform(t *testing.T) {
 	}
 }
 
+// rejectedPush runs a push that git refuses after the server accepted the
+// credential: the remote branch has a commit the local one lacks.
+func rejectedPush(t *testing.T, ctx context.Context, r *testrepo.Repo, rm remote) error {
+	t.Helper()
+	branch := r.Git("rev-parse", "--abbrev-ref", "HEAD")
+	other := testrepo.Clone(t, rm.bare)
+	other.Commit("ahead")
+	other.Git("push", "origin", "HEAD:refs/heads/"+branch)
+	r.Commit("local")
+	_, err := gitcmd.Run(ctx, r.Dir, gitcmd.NetworkTimeout, "push", "origin", "HEAD:refs/heads/"+branch)
+	if err == nil {
+		t.Fatal("the push should have been rejected")
+	}
+	return err
+}
+
+func TestRememberUncheckedUndoesUserHelperWhenCommandFails(t *testing.T) {
+	r, rm := pushSetup(t)
+	file := filepath.Join(t.TempDir(), "creds")
+	r.Git("config", "credential.helper", "store --file "+file)
+	s, _ := answering(t, Options{}, Answer{Username: "me", Secret: "tok", Remember: false})
+	rejectedPush(t, s.Allow(context.Background(), Info{Dir: r.Dir}), r, rm)
+	if rm.authed.Load() == 0 {
+		t.Fatal("the server never accepted the credential")
+	}
+	if b, _ := os.ReadFile(file); strings.Contains(string(b), "tok") {
+		t.Fatalf("still stored after a failed command: %q", b)
+	}
+}
+
+func TestRememberCheckedApprovesPlatformWhenCommandFails(t *testing.T) {
+	r, rm := pushSetup(t)
+	file := filepath.Join(t.TempDir(), "platform")
+	s, _ := answering(t, Options{Platform: "store --file " + file}, Answer{Username: "me", Secret: "tok", Remember: true})
+	rejectedPush(t, s.Allow(context.Background(), Info{Dir: r.Dir}), r, rm)
+	if b, _ := os.ReadFile(file); !strings.Contains(string(b), "me:tok@") {
+		t.Fatalf("platform helper got %q", b)
+	}
+}
+
 func TestWrongTokenMessage(t *testing.T) {
 	r, rm := pushSetup(t)
 	s, ui := answering(t, Options{}, Answer{Username: "me", Secret: "nope"})

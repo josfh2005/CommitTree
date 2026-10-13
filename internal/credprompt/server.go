@@ -496,8 +496,9 @@ func (ss *session) askpass(text string) wireResp {
 }
 
 // End closes the session (gitcmd calls it once git exited): pending
-// requests close, Remember runs after a success, and a failure's credential
-// outcome comes back.
+// requests close, Remember runs when git stored the credential (whether or
+// not the command then succeeded), and a failure's credential outcome comes
+// back.
 func (ss *session) End(failed bool) error {
 	s := ss.srv
 	s.mu.Lock()
@@ -516,16 +517,20 @@ func (ss *session) End(failed bool) error {
 		}
 		ss.stored = nil
 	}()
-	if !failed {
-		if ss.stored != nil && ss.target != nil {
-			ctx := context.Background()
-			switch {
-			case ss.remember && !ss.target.User:
-				_ = approve(ctx, ss.info.Dir, s.opts.Platform, ss.stored)
-			case !ss.remember && ss.target.User:
-				_ = reject(ctx, ss.info.Dir, ss.stored)
-			}
+	// Git sends store as soon as the server accepted the credential, even if
+	// the command then fails for another reason (a rejected push, a pull
+	// stopping on conflicts): the helpers already have it, so Remember applies
+	// whenever store arrived, whatever the final result.
+	if ss.stored != nil && ss.target != nil {
+		ctx := context.Background()
+		switch {
+		case ss.remember && !ss.target.User:
+			_ = approve(ctx, ss.info.Dir, s.opts.Platform, ss.stored)
+		case !ss.remember && ss.target.User:
+			_ = reject(ctx, ss.info.Dir, ss.stored)
 		}
+	}
+	if !failed {
 		return nil
 	}
 	if ss.outcome != nil {

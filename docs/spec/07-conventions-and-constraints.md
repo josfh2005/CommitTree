@@ -245,10 +245,12 @@ behaviours exist only because of it:
   may ask in CommitTree's own dialog, through the application's own binary
   relaunched as git's last credential helper and as git's and ssh's askpass
   program, talking to the running application over a private socket (see
-  "Credentials" in `05-remote-and-stash.md`). Reads, local writes, signing
-  and the background fetch never ask. A secret typed there goes to git and
-  nowhere else: never to the command log, an event, a toast, a
-  notification, the AI chat or a log line.
+  "Credentials" in `05-remote-and-stash.md`). Reads, local writes and the
+  background fetch never ask, nor does signing, except that a marked
+  operation's own local commands (a pull's merge) can open the SSH key
+  passphrase dialog for a passphrase-protected ssh signing key. A secret
+  typed there goes to git and nowhere else: never to the command log, an
+  event, a toast, a notification, the AI chat or a log line.
 - **A fixed locale for output.** Every invocation runs with `LC_ALL=C`, so
   git's messages are always in English and in their default wording. This
   is what lets the application match specific strings in git's output (for

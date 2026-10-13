@@ -325,9 +325,12 @@ enter a new one."; the next attempt shows the dialog.
 - the AI chat's fetch, push and pull, once the user accepted their cards
   (`06-ai.md`).
 
-Everything else behaves as before: reads, local writes, commit signing,
-hooks of a local write, git-flow's local fetch and the background fetch
-(below) never open a dialog. If the credential prompts could not be started
+Everything else behaves as before: reads, local writes, hooks of a local
+write, git-flow's local fetch and the background fetch (below) never open a
+dialog, and commit signing does not either, except that a marked operation's
+own local commands (a pull's merge, say) can open the "SSH key passphrase"
+dialog when the ssh signing key has a passphrase; it shows under that
+operation's context line. If the credential prompts could not be started
 (Windows, or no socket could be created) nothing asks, as before.
 
 **The HTTPS dialog.** Title "Sign in to `<host>`"; under it the context
@@ -356,7 +359,9 @@ open.
 3. Else no checkbox, and the dialog says "Not saved: no credential helper is
    set up."
 
-It is checked by default. When the command succeeds: checked with the
+It is checked by default. When git accepted the credential (it then sends
+`store`), even if the command fails afterwards for another reason, such as a
+rejected push or a pull stopping on conflicts: checked with the
 user's helper — git already stored it; unchecked with the user's helper —
 `git credential reject` removes what the helper stored; checked with the
 platform helper — `git credential approve` stores it there; unchecked with
