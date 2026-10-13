@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte'
   import { api } from '../lib/api'
+  import { credentialRequest, waitingText } from '../lib/credential'
   import {
     cancelClone, cloneCancelling, cloneDialogOpen, cloneForm, cloneView, editName, editURL, joinPath, nameError, startClone,
   } from '../lib/clone'
@@ -149,7 +150,7 @@
         {@const p = view.progress}
         <p class="url ellipsis" title={view.url}>{view.url}</p>
         <p class="preview ellipsis" title={view.dest}>→ {view.dest}</p>
-        <p class="phase">{p ? p.phase : 'Starting…'}</p>
+        <p class="phase">{waitingText({ kind: 'clone', repoId: '' }, $credentialRequest) || (p ? p.phase : 'Starting…')}</p>
         {#if p && p.percent >= 0}
           <progress max="100" value={p.percent} aria-label={p.phase}></progress>
         {:else}

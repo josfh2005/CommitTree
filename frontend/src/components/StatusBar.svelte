@@ -3,6 +3,7 @@
   import { api } from '../lib/api'
   import { openCloneDialog } from '../lib/actions'
   import { cancelClone, cloneCancelling } from '../lib/clone'
+  import { credentialRequest, waitingText } from '../lib/credential'
   import { settingsTab } from '../lib/settingsTabs'
   import { announcement, cancelTask, elapsedText, openAction, outcomeIcon } from '../lib/statusBar'
   import { commandsOpen, repos, selectRepo, selectedRepoId, settingsOpen } from '../lib/stores'
@@ -110,7 +111,7 @@
       <span class="spinner" aria-hidden="true"></span>
       <span class="label">{shown.label}</span>
       {#if shown.repoName}<span class="muted">· {shown.repoName}</span>{/if}
-      {#if shown.progress}<span class="muted">· {shown.progress}</span>{/if}
+      {#if waitingText(shown, $credentialRequest) || shown.progress}<span class="muted">· {waitingText(shown, $credentialRequest) || shown.progress}</span>{/if}
       {#if elapsedText(shown.start, now)}<span class="muted" aria-hidden="true">· {elapsedText(shown.start, now)}</span>{/if}
     </button>
     {#if canCancel(shown)}
@@ -137,7 +138,7 @@
             <span class="spinner" aria-hidden="true"></span>
             <span class="label">{t.label}</span>
             {#if t.repoName}<span class="muted">· {t.repoName}</span>{/if}
-            {#if t.progress}<span class="muted">· {t.progress}</span>{/if}
+            {#if waitingText(t, $credentialRequest) || t.progress}<span class="muted">· {waitingText(t, $credentialRequest) || t.progress}</span>{/if}
             {#if elapsedText(t.start, now)}<span class="muted">· {elapsedText(t.start, now)}</span>{/if}
           </button>
           {#if canCancel(t)}
