@@ -176,6 +176,10 @@ func classifyPushLine(l porcelainLine, branch string) (PushStatus, string) {
 // pushErrorText is the reason shown for every branch of a remote whose
 // push printed no ref line: git's own message, or "Cancelled".
 func pushErrorText(err error) string {
+	var pe *gitcmd.PromptError
+	if errors.As(err, &pe) {
+		return pe.Msg
+	}
 	if errors.Is(err, gitcmd.ErrCancelled) {
 		return "Cancelled"
 	}

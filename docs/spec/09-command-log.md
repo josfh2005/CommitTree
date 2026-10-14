@@ -105,3 +105,9 @@ Credentials never reach the log: a URL's password or bare token
 for an HTTP extra header or any key containing "token", "password" or
 "secret", and those same secrets wherever they appear in the output, are
 replaced by `***`.
+
+What a credential dialog collects (`05-remote-and-stash.md`, "Credentials")
+never reaches the log either: git gets it from CommitTree's helper through
+its own pipes, and the `git credential approve` / `reject` commands that
+save or remove it appear with their arguments only — the credential is fed on
+their standard input, which is never recorded.

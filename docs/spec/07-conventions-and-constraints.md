@@ -235,12 +235,22 @@ CommitTree has no embedded git implementation; every operation shells out to
 the system's `git` binary. This is not an incidental detail — several
 behaviours exist only because of it:
 
-- **No interactive prompts.** Every git invocation runs with
-  `GIT_TERMINAL_PROMPT=0`, so a command that would otherwise pause for
-  credentials or a yes/no answer fails immediately instead of hanging the
-  application. There is no way for git to ask the user anything through a
-  terminal; anything git needs must already be configured (a credential
-  helper, SSH agent, and so on) outside the application.
+- **No terminal prompts; only the user's network commands ask, through
+  CommitTree.** Every git invocation runs with `GIT_TERMINAL_PROMPT=0`, so a
+  command that would otherwise pause for credentials or a yes/no answer
+  fails immediately instead of hanging the application; there is no way for
+  git to ask the user anything through a terminal. The one exception is a
+  network command the user starts (fetch, pull, push, clone, submodule
+  update, a remote test, or the same from the AI chat after its card): it
+  may ask in CommitTree's own dialog, through the application's own binary
+  relaunched as git's last credential helper and as git's and ssh's askpass
+  program, talking to the running application over a private socket (see
+  "Credentials" in `05-remote-and-stash.md`). Reads, local writes and the
+  background fetch never ask, nor does signing, except that a marked
+  operation's own local commands (a pull's merge) can open the SSH key
+  passphrase dialog for a passphrase-protected ssh signing key. A secret
+  typed there goes to git and nowhere else: never to the command log, an
+  event, a toast, a notification, the AI chat or a log line.
 - **A fixed locale for output.** Every invocation runs with `LC_ALL=C`, so
   git's messages are always in English and in their default wording. This
   is what lets the application match specific strings in git's output (for

@@ -70,6 +70,15 @@ describe('notify', () => {
     await notify({ category: 'problem', repoID: 'gone', body: 'x', target: 'repo' })
     expect(vi.mocked(api.notify).mock.calls[0][0].title).toBe('CommitTree')
   })
+
+  it('titles a clone credential notification (no repository id) "CommitTree"', async () => {
+    windowFocused.set(false)
+    await notify({ category: 'problem', repoID: '', body: 'CommitTree needs credentials for github.com (Clone · github.com/o/r)', target: 'repo' })
+    expect(vi.mocked(api.notify).mock.calls[0][0].title).toBe('CommitTree')
+    vi.mocked(api.notify).mockRejectedValue('no notifications')
+    await notify({ category: 'problem', repoID: '', body: 'x', target: 'repo' })
+    expect(get(toasts).map((t) => t.message)).toEqual(['CommitTree: x'])
+  })
 })
 
 describe('openTarget', () => {

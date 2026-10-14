@@ -12,10 +12,14 @@ list.
 One row per remote, by name: its name, its URL (cut short; the full URL in
 the tooltip) and three buttons.
 
-- **Test** asks the remote for its branches, never prompting for a password
-  and giving up after 30 s. The row then says "Connected", "Authentication
-  failed", "Timed out" or the first line of git's error. Test does not lock
-  the repository.
+- **Test** asks the remote for its branches. It may ask for credentials in
+  the credential dialog (`05-remote-and-stash.md`, "Credentials") and gives
+  up after 90 s, which includes the time that dialog is open. The row then
+  says "Connected", "Authentication failed", "Timed out", "No credentials
+  entered." (the dialog was cancelled), "No credentials entered (timed out).",
+  "The username or token was not accepted.", "The SSH host was not trusted.",
+  "The saved credential was not accepted and was removed. Try again to enter
+  a new one." or the first line of git's error. Test does not lock the repository.
 - **Edit** turns the URL into a field with Save and Cancel (Enter, Escape).
   Pointing a remote elsewhere ends a background-fetch pause of that remote
   (see `05-remote-and-stash.md`).

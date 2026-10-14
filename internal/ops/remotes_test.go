@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"git-ui/internal/gitcmd"
 	"git-ui/internal/ops"
 	"git-ui/internal/testrepo"
 )
@@ -94,5 +95,30 @@ func TestRemoteTest(t *testing.T) {
 	res, err := ops.TestRemote(ctx, r.Dir, "gone")
 	if err != nil || res.OK || res.Message == "" || strings.Contains(res.Message, "\n") {
 		t.Errorf("gone: %+v, %v", res, err)
+	}
+}
+
+// failSession is a prompt session whose command failed for the user's own
+// reason, as credprompt reports it.
+type failSession struct{ msg string }
+
+func (failSession) Env() []string { return nil }
+func (f failSession) End(failed bool) error {
+	if failed {
+		return &gitcmd.PromptError{Msg: f.msg}
+	}
+	return nil
+}
+
+func TestRemoteTestSaysWhatThePromptOutcomeWas(t *testing.T) {
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	r := testrepo.New(t)
+	r.Commit("base")
+	r.Git("remote", "add", "gone", filepath.Join(t.TempDir(), "missing.git"))
+	ctx := gitcmd.WithPrompts(context.Background(), func() gitcmd.PromptSession { return failSession{"No credentials entered."} })
+	res, err := ops.TestRemote(ctx, r.Dir, "gone")
+	if err != nil || res.OK || res.Message != "No credentials entered." {
+		t.Fatalf("%+v, %v", res, err)
 	}
 }

@@ -24,7 +24,11 @@ From left to right:
    download its percentage; and the elapsed time ("12 s"), which appears
    once the task has run for a second and then counts every second. The
    label is cut with an ellipsis when the window is narrow; the full text
-   is in the tooltip.
+   is in the tooltip. While the task waits on a credential dialog
+   (`05-remote-and-stash.md`, "Credentials") its progress reads "Waiting for
+   credentials…" instead — for an operation, the one on the repository the
+   dialog is for; for a clone, the clone — and goes back when the dialog
+   closes. The same text shows in the "+N" list.
 2. **Cancel**, when the task can be cancelled at that moment. After a click
    it reads "Cancelling…" and is disabled until the task ends. A cancel
    that reaches a command which has just ended on its own ("command is not

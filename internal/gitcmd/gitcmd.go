@@ -41,6 +41,10 @@ type Error struct {
 }
 
 func (e *Error) Error() string {
+	var pe *PromptError
+	if errors.As(e.Err, &pe) {
+		return pe.Msg
+	}
 	// A cancel's stderr is whatever git or a hook printed before the signal
 	// reached it — hook output, or a shell's "Killed by signal 2." — which
 	// says nothing useful about why the command stopped; ErrCancelled's own
@@ -161,6 +165,14 @@ type runOpts struct {
 	env     []string
 	stall   time.Duration // 0: no watchdog
 	onLine  func(string)
+	stdin   string // fed to git's stdin; never recorded
+}
+
+// RunInput is RunEnv with stdin fed to git — for `git credential approve`
+// and `reject`, whose fields (a password among them) must never be args.
+// The command log records args, stdout and stderr only, never stdin.
+func RunInput(ctx context.Context, dir string, timeout time.Duration, env []string, stdin string, args ...string) (string, error) {
+	return run(ctx, dir, runOpts{timeout: timeout, env: env, stdin: stdin}, args)
 }
 
 // errStalled is the cancel cause of a command the stall watchdog stopped.
@@ -180,8 +192,18 @@ func run(ctx context.Context, dir string, o runOpts, args []string) (string, err
 	}
 
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
+	var ps PromptSession
+	if b := promptsFrom(caller); b != nil {
+		ps = b()
+	}
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "LC_ALL=C")
+	if ps != nil {
+		cmd.Env = append(cmd.Env, ps.Env()...)
+	}
 	cmd.Env = append(cmd.Env, o.env...)
+	if o.stdin != "" {
+		cmd.Stdin = strings.NewReader(o.stdin)
+	}
 	// On cancel or timeout, stop git as Ctrl+C in a terminal would: git
 	// removes its lock files, and its hooks and helpers get the signal too.
 	startInGroup(cmd)
@@ -207,6 +229,10 @@ func run(ctx context.Context, dir string, o runOpts, args []string) (string, err
 	id := begin(Start{Ctx: caller, Dir: dir, Args: args, Start: start, Cancel: func() { cancelCmd(ErrCancelled) }})
 	runErr := cmd.Run()
 	lines.flush()
+	var outcome error
+	if ps != nil {
+		outcome = ps.End(runErr != nil)
+	}
 	out, errOut := stdout.String(), stderr.String()
 	rec := Record{ID: id, Ctx: caller, Dir: dir, Args: args, Start: start, Duration: time.Since(start), Stdout: out, Stderr: errOut}
 	if runErr != nil {
@@ -220,6 +246,8 @@ func run(ctx context.Context, dir string, o runOpts, args []string) (string, err
 			gerr.Err = ErrCancelled
 		case errors.Is(context.Cause(cancellable), errStalled), errors.Is(ctx.Err(), context.DeadlineExceeded):
 			gerr.Err = ErrTimeout
+		case outcome != nil:
+			gerr.Err = outcome
 		}
 		rec.ExitCode, rec.Err = gerr.ExitCode, gerr
 		record(rec)

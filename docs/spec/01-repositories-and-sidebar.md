@@ -110,13 +110,18 @@ submits). Esc also cancels a pending lookup. Clicking a suggestion completes it 
 closes when the field loses focus, when Choose… is used and on Clone.
 
 **Clone** runs `git clone --progress --recurse-submodules -- <url> <dest>`
-from the parent folder. Credentials come only from what is already set up
-(credential helpers, the keychain, ssh-agent, Git Credential Manager); the
-application never asks for a password. The dialog shows the resolved
+from the parent folder. What is already set up answers first (credential
+helpers, the keychain, ssh-agent, Git Credential Manager); when none has a
+credential, CommitTree asks for it in its own dialog — a username and token,
+a key passphrase or a decision about an unknown SSH host, with a
+"Remember" choice for the token (see "Credentials" in
+`05-remote-and-stash.md`) — so a private repository needs no setup first. The
+dialog shows the resolved
 destination (a typed `~` expanded) and git's current phase
 (counting, compressing, receiving, resolving, updating files, each
-submodule), a bar with the phase's percentage when git gives one, and git's
-detail line. **Cancel** stops git as Ctrl+C would; **Continue in
+submodule) — "Waiting for credentials…" in place of the phase while the
+credential dialog is open — a bar with the phase's percentage when git gives
+one, and git's detail line. **Cancel** stops git as Ctrl+C would; **Continue in
 background** closes the dialog without stopping the clone. One clone runs at
 a time: **Clone…** during a clone reopens its progress. A clone continued in
 the background shows in the status bar (`13-status-bar.md`) with its phase and
@@ -127,9 +132,9 @@ There is no fixed time limit; the clone is stopped as stalled when git
 writes nothing for five minutes. When it succeeds, the repository is added
 as Open folder… would add it, and selected; with the dialog closed, a toast
 says "Cloned <name>". When it fails, the dialog returns to the form with its
-values and the reason — authentication, an untrusted SSH host key, a
-repository not found, a stall, or git's own message, with credentials
-hidden; with the dialog closed, an error toast offers **Show**. The progress
+values and the reason — authentication, "No credentials entered." or "No
+credentials entered (timed out).", an untrusted SSH host key, a repository not
+found, a stall, or git's own message, with credentials hidden; with the dialog closed, an error toast offers **Show**. The progress
 view shows the URL with its credentials hidden, and **Cancel** reads
 "Cancelling…" until git has stopped. When git fetched the repository but
 then failed on a submodule or the checkout, the folder is kept: the
@@ -251,6 +256,10 @@ applies here). When git's refusal does not name which submodule it
 refused, the message reads "A submodule has local changes that updating
 would overwrite. Commit or stash them inside the submodule first." instead
 of naming one.
+
+Initialise and Update, single or all, may need the network, so they may
+open the credential dialog like Fetch ("Submodule update · <repository>"; see
+"Credentials" in `05-remote-and-stash.md`).
 
 ### Missing repositories
 

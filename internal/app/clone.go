@@ -11,6 +11,7 @@ import (
 
 	"git-ui/internal/clone"
 	"git-ui/internal/cmdlog"
+	"git-ui/internal/credprompt"
 	"git-ui/internal/repos"
 )
 
@@ -61,6 +62,9 @@ func (a *App) CloneRepo(url, parent, name string) error {
 	shown, _ := cmdlog.RedactArgs([]string{url})
 	a.clone = CloneState{Running: true, URL: shown[0], Dest: dest}
 	a.cloneCancel = cancel
+	if a.creds != nil {
+		ctx = a.creds.Allow(ctx, credprompt.Info{Context: "Clone · " + shown[0]})
+	}
 	go a.runClone(ctx, cancel, url, dest)
 	return nil
 }

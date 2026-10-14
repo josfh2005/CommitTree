@@ -1,11 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { get } from 'svelte/store'
   import BlameView from './components/BlameView.svelte'
   import BottomDock from './components/BottomDock.svelte'
   import ChangesView from './components/ChangesView.svelte'
   import ChatPanel from './components/ChatPanel.svelte'
   import CloneDialog from './components/CloneDialog.svelte'
   import ContextMenu from './components/ContextMenu.svelte'
+  import CredentialDialog from './components/CredentialDialog.svelte'
   import DialogHost from './components/DialogHost.svelte'
   import LogView from './components/LogView.svelte'
   import SettingsDialog from './components/SettingsDialog.svelte'
@@ -17,7 +19,8 @@
   import Toasts from './components/Toasts.svelte'
   import { startFocusRefresh } from './lib/actions'
   import { nextChatRunRepo } from './lib/chat'
-  import { startNotifications } from './lib/notify'
+  import { notifyBody, onClosed, onRequest, type CredentialRequest } from './lib/credential'
+  import { notify, startNotifications, windowFocused } from './lib/notify'
   import { startAutoFetch } from './lib/autoFetch'
   import { startCloneEvents } from './lib/clone'
   import { isCommandsToggle } from './lib/cmdlog'
@@ -124,9 +127,25 @@
     // Running git writes of every repository, for the status bar — the
     // Commands panel keeps its own listener.
     const offCommands = EventsOn('cmdlog:entry', noteCommand)
+    // A git command needs a credential: the dialog shows it (see CredentialDialog);
+    // unfocused, a notification brings the user back. A re-send of the same
+    // request (only "waiting" changed) raises no second one. The body has the
+    // host and context only, never a username or anything typed.
+    let notifiedId = ''
+    const offCredReq = EventsOn('credential:request', (r: CredentialRequest) => {
+      onRequest(r)
+      if (r.id === notifiedId) return
+      notifiedId = r.id
+      if (!get(windowFocused)) void notify({ category: 'problem', repoID: r.repoId, target: 'repo', body: notifyBody(r) })
+    })
+    const offCredClosed = EventsOn('credential:closed', (p: { id: string }) => onClosed(p.id))
+    const offCredNotice = EventsOn('credential:notice', (p: { text: string }) => toast(p.text, 'info'))
     return () => {
       offClone()
       offCommands()
+      offCredReq()
+      offCredClosed()
+      offCredNotice()
       stopFocus()
       stopNotifications()
       stopAutoFetch()
@@ -187,6 +206,7 @@
 <RepoSettingsDialog />
 <CloneDialog />
 <DialogHost />
+<CredentialDialog />
 <Toasts />
 <SettingsDialog />
 

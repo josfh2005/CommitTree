@@ -267,6 +267,11 @@ func Explain(err error, url string) string {
 		return "Cloned, but some submodules or files could not be checked out: " +
 			cmdlog.MaskOutput(tail(lastMessage(gerr), 3), secrets)
 	}
+	// After ErrPartial: a partial clone keeps its own text.
+	var pe *gitcmd.PromptError
+	if errors.As(err, &pe) {
+		return pe.Msg
+	}
 	s := strings.ToLower(gerr.Stderr)
 	switch {
 	// Before IsAuthError, which counts this marker as an auth failure too.

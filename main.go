@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"log"
+	"os"
+	"path/filepath"
 	goruntime "runtime"
 
 	"github.com/wailsapp/wails/v2"
@@ -15,6 +18,7 @@ import (
 	"git-ui/internal/ai/prompts"
 	"git-ui/internal/ai/settings"
 	"git-ui/internal/app"
+	"git-ui/internal/credprompt"
 	"git-ui/internal/repos"
 )
 
@@ -22,6 +26,12 @@ import (
 var assets embed.FS
 
 func main() {
+	// Relaunched by git or ssh as the credential helper / askpass program:
+	// answer through the running app and exit, before any GUI start.
+	if os.Getenv(credprompt.EnvSock) != "" {
+		os.Exit(credprompt.RunHelper(os.Args[1:], os.Getenv, os.Stdin, os.Stdout))
+	}
+
 	app.FixPath()
 
 	path, err := repos.DefaultPath()
@@ -51,6 +61,20 @@ func main() {
 		Chats:        chatstore.New(chatsDir),
 		Prompts:      prompts.New(promptsDir),
 	})
+
+	// Credential prompts are optional: without them (Windows, no socket)
+	// network commands behave as before.
+	if exe, err := os.Executable(); err == nil {
+		if exe, err = filepath.EvalSymlinks(exe); err == nil {
+			err = app.WithCredentials(api, credprompt.Options{
+				Exe:      exe,
+				Platform: credprompt.DetectPlatformHelper(context.Background()),
+			})
+			if err != nil {
+				log.Printf("credential prompts off: %v", err)
+			}
+		}
+	}
 
 	// macOS gets a native menu bar with Settings… (⌘,). Linux gets none: a
 	// Wails menu there is a GTK bar inside the window, and the frontend

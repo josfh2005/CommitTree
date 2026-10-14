@@ -9,12 +9,14 @@ import (
 )
 
 func (a *App) Fetch(id string) error {
-	return a.write(id, func(ctx context.Context, dir string) error { return ops.Fetch(ctx, dir) })
+	return a.write(id, func(ctx context.Context, dir string) error { return ops.Fetch(a.prompting(ctx, id, dir, "Fetch"), dir) })
 }
 
 // FetchRemote fetches one remote, for the branch context menu's "Fetch <remote>".
 func (a *App) FetchRemote(id, remote string) error {
-	return a.write(id, func(ctx context.Context, dir string) error { return ops.FetchRemote(ctx, dir, remote) })
+	return a.write(id, func(ctx context.Context, dir string) error {
+		return ops.FetchRemote(a.prompting(ctx, id, dir, "Fetch "+remote), dir, remote)
+	})
 }
 
 // FastForwardBranch is the branch menu's Pull on a branch that is not
@@ -24,7 +26,7 @@ func (a *App) FastForwardBranch(id, branch string) (bool, error) {
 	var moved bool
 	err := a.write(id, func(ctx context.Context, dir string) error {
 		var ffErr error
-		moved, ffErr = ops.FastForwardBranch(ctx, dir, branch)
+		moved, ffErr = ops.FastForwardBranch(a.prompting(ctx, id, dir, "Pull "+branch), dir, branch)
 		return ffErr
 	})
 	return moved, err
@@ -37,14 +39,14 @@ func (a *App) PushBranch(id, branch string) (ops.BranchPushResult, error) {
 	var result ops.BranchPushResult
 	err := a.write(id, func(ctx context.Context, dir string) error {
 		var pushErr error
-		result, pushErr = ops.PushBranch(ctx, dir, branch)
+		result, pushErr = ops.PushBranch(a.prompting(ctx, id, dir, "Push "+branch), dir, branch)
 		return pushErr
 	})
 	return result, err
 }
 
 func (a *App) Push(id string) error {
-	return a.write(id, func(ctx context.Context, dir string) error { return ops.Push(ctx, dir) })
+	return a.write(id, func(ctx context.Context, dir string) error { return ops.Push(a.prompting(ctx, id, dir, "Push"), dir) })
 }
 
 // PushAll pushes the main (official) branches ahead of their
@@ -54,7 +56,7 @@ func (a *App) PushAll(id string) ([]ops.BranchPushResult, error) {
 	var results []ops.BranchPushResult
 	err := a.write(id, func(ctx context.Context, dir string) error {
 		var pushErr error
-		results, pushErr = ops.PushAll(ctx, dir)
+		results, pushErr = ops.PushAll(a.prompting(ctx, id, dir, "Push all"), dir)
 		return pushErr
 	})
 	return results, err
@@ -71,7 +73,7 @@ func (a *App) Pull(id string) (ops.Result, error) {
 	var result ops.Result
 	err = a.write(id, func(ctx context.Context, dir string) error {
 		var pullErr error
-		result, pullErr = ops.Pull(ctx, dir, cfg.PullStrategy)
+		result, pullErr = ops.Pull(a.prompting(ctx, id, dir, "Pull"), dir, cfg.PullStrategy)
 		// A pull that stopped on conflicts exits non-zero, but its fetch
 		// reached the remote: credentials work, so background fetches resume.
 		if pullErr == nil && result.Outcome == ops.Conflicted {

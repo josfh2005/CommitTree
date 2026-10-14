@@ -267,3 +267,23 @@ func TestSSHHostNeverEchoesCredentials(t *testing.T) {
 		t.Fatalf("sshHost = %q", got)
 	}
 }
+
+func promptErr(stderr string) error {
+	return &gitcmd.Error{Args: []string{"clone"}, Stderr: stderr, ExitCode: 128,
+		Err: &gitcmd.PromptError{Msg: "No credentials entered."}}
+}
+
+func TestExplainSaysWhatThePromptOutcomeWas(t *testing.T) {
+	err := promptErr("fatal: could not read Username for 'https://h': terminal prompts disabled\n")
+	if got := Explain(err, "https://h/x.git"); got != "No credentials entered." {
+		t.Fatalf("Explain = %q", got)
+	}
+}
+
+func TestExplainKeepsThePartialCloneTextOverAPromptOutcome(t *testing.T) {
+	err := fmt.Errorf("%w: %w", ErrPartial, promptErr("fatal: could not read Username for 'https://h/sub.git': terminal prompts disabled\n"))
+	got := Explain(err, "https://h/x.git")
+	if !strings.HasPrefix(got, "Cloned, but some submodules or files could not be checked out:") {
+		t.Fatalf("Explain = %q", got)
+	}
+}
