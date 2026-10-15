@@ -156,18 +156,20 @@ relative path refused with "Parent folder must be a full path (or start with
 successfully (remembered across launches), else the home folder, and nothing
 is scanned when the dialog opens. A scan runs on **Scan**, on Enter in the
 field when no suggestion is highlighted, and right after Choose… returns a
-folder; Scan is disabled while the field is empty and reads "Scanning…"
-while a scan runs. Editing the field clears the result, and only the latest
+folder; Scan is disabled while the field is empty or a scan runs, and then
+reads "Scanning…". Editing the field clears the result, and only the latest
 scan's answer is shown.
 
 Only the folder's **direct children** are considered; the scan never goes
 deeper and the folder itself is never offered. A child is listed when its
 name does not start with `.`, it is a folder (or a symlink to one) and its
 `.git` is a folder. A child whose `.git` is a file (a linked worktree or a
-submodule checkout) is not listed. Every other child that is not hidden
-counts as skipped, shown below the list as "N folders skipped (not git
-repositories)." ("1 folder skipped (not a git repository)."). The scan reads
-the file system only; it runs no git command.
+submodule checkout) is not listed but counts as skipped, like every other
+child whose name does not start with `.` and that is not listed (a plain
+folder, a file). The count is shown below the list as "N folders skipped (not
+git repositories)." ("1 folder skipped (not a git repository)."), also when no
+repository was found. The scan reads the file system only; it runs no git
+command.
 
 The list is sorted by name, ignoring case, one row per repository with a
 checkbox; the full path is the row's tooltip. Repositories not yet in the
@@ -181,12 +183,17 @@ reason.
 
 A **Group** select offers "No group" (the default), every group in use
 (sorted) and "New group…", which shows a name field prefilled with the
-scanned folder's name; Add is disabled while that name is empty.
+last path segment of the scanned folder (of the text in the field, trimmed,
+when nothing has been scanned yet). The name is filled in when "New group…" is
+chosen while the field is empty and is not changed by a later scan; Add is
+disabled while that name is empty.
 
 **Add N repositories** ("Add 1 repository"; "Add repositories", disabled,
 when nothing is ticked) adds the ticked rows in list order, each by the same
 rule as Open folder… (its top-level directory), with the chosen group, in a
-single write of the repository list; it reads "Adding…" meanwhile. A ticked
+single write of the repository list; it reads "Adding…" meanwhile, and the
+dialog cannot be closed until it finishes (Cancel is disabled; Esc and a
+click outside the dialog are ignored). A ticked
 repository already in the list by then is left as it is, group included, and
 two rows with the same top-level are added once. A row that can no longer be
 added (for example a folder deleted since the scan) does not stop the
@@ -198,9 +205,14 @@ others. Selection does not change. Afterwards:
   "Nothing added: those repositories are already in the list.";
 - some added, some failed: the dialog closes and an error toast says
   "Added N repositories; M couldn't be added: " followed by at most three
-  "name (reason)" entries, then ", and K more" when there are more;
-- none added and some failed, or the list could not be written: the dialog
-  stays open with the error; when the write fails nothing at all is added.
+  "name (reason)" entries separated by ", ", then ", and K more" when there
+  are more, and ending with "."; the name is the path's last element and the
+  reason is "not a git repository" (the folder is not inside a work tree);
+- none added and some failed: the dialog stays open with the inline error
+  "No repository could be added: " followed by the same list of "name
+  (reason)" entries (at most three, ", and K more", ending with ".");
+- the list could not be written: the dialog stays open with the error from
+  the write, and nothing at all is added.
 
 Adding takes no repository lock and leaves no command-log entry: only the
 repository list changes.

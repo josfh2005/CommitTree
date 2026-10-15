@@ -97,7 +97,8 @@
     else addReposDialogOpen.set(false)
   }
 
-  const close = () => addReposDialogOpen.set(false)
+  // Closing is refused while adding: the add can't be cancelled, and a late answer would reach a later opening.
+  const close = () => { if (!adding) addReposDialogOpen.set(false) }
   // Escape closes a confirm opened on top of this dialog first.
   const onKey = (e: KeyboardEvent) => { if ($addReposDialogOpen && e.key === 'Escape' && !$dialog && !e.defaultPrevented) close() }
 </script>
@@ -160,7 +161,7 @@
 
       {#if addError}<p class="problem" role="alert">{addError}</p>{/if}
       <div class="buttons">
-        <button type="button" class="btn" on:click={close}>Cancel</button>
+        <button type="button" class="btn" disabled={adding} on:click={close}>Cancel</button>
         <button type="button" class="btn primary" disabled={!canAdd} on:click={add}>
           {adding ? 'Adding…' : addLabel(paths.length)}
         </button>

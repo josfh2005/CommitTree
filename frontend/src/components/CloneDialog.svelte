@@ -16,9 +16,7 @@
   $: if ($cloneDialogOpen !== opened) {
     opened = $cloneDialogOpen
     if (opened) initParent()
-    else {
-      parent = ''
-    }
+    else parent = ''
   }
   async function initParent() {
     try {
