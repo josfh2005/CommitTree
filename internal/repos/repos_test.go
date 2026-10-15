@@ -388,3 +388,130 @@ func TestReorderPersists(t *testing.T) {
 		t.Fatalf("reopened order = %v, want %v", got, want)
 	}
 }
+
+func newRepo(t *testing.T) *testrepo.Repo {
+	t.Helper()
+	r := testrepo.New(t)
+	r.Commit("init")
+	return r
+}
+
+func openStore(t *testing.T) (*repos.Store, string) {
+	t.Helper()
+	file := filepath.Join(t.TempDir(), "cfg", "repos.json")
+	s, err := repos.Open(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s, file
+}
+
+func TestAddManyAddsInOrderWithGroupAndPersists(t *testing.T) {
+	a, b := newRepo(t), newRepo(t)
+	s, file := openStore(t)
+
+	added, failed, err := s.AddMany(ctx, []string{a.Dir, b.Dir}, "  Work ")
+	if err != nil || len(failed) != 0 || len(added) != 2 {
+		t.Fatalf("added %v failed %v err %v", added, failed, err)
+	}
+	if added[0].Path != realPath(t, a.Dir) || added[1].Path != realPath(t, b.Dir) {
+		t.Fatalf("order/paths: %+v", added)
+	}
+	for _, r := range added {
+		if r.Group != "Work" || r.ID == "" || r.Name != filepath.Base(r.Path) {
+			t.Fatalf("entry %+v", r)
+		}
+	}
+	reopened, err := repos.Open(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := reopened.List(); len(got) != 2 || got[0].Group != "Work" {
+		t.Fatalf("persisted %+v", got)
+	}
+}
+
+func TestAddManySkipsListedAndDuplicatesAndReportsFailures(t *testing.T) {
+	listed, fresh := newRepo(t), newRepo(t)
+	sub := filepath.Join(fresh.Dir, "sub")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	notRepo := t.TempDir()
+	s, _ := openStore(t)
+	before, err := s.Add(ctx, listed.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	added, failed, err := s.AddMany(ctx, []string{listed.Dir, fresh.Dir, sub, notRepo}, "G")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(added) != 1 || added[0].Path != realPath(t, fresh.Dir) {
+		t.Fatalf("added %+v", added)
+	}
+	if len(failed) != 1 || failed[0].Path != notRepo || failed[0].Name != filepath.Base(notRepo) || failed[0].Reason == "" {
+		t.Fatalf("failed %+v", failed)
+	}
+	// The already-listed entry is untouched: same ID, still ungrouped.
+	got, _ := s.Get(before.ID)
+	if got.Group != "" {
+		t.Fatalf("listed repo regrouped: %+v", got)
+	}
+	if n := len(s.List()); n != 2 {
+		t.Fatalf("list has %d entries, want 2", n)
+	}
+}
+
+func TestAddManyAllListed(t *testing.T) {
+	a := newRepo(t)
+	s, _ := openStore(t)
+	if _, err := s.Add(ctx, a.Dir); err != nil {
+		t.Fatal(err)
+	}
+	added, failed, err := s.AddMany(ctx, []string{a.Dir}, "")
+	if err != nil || added == nil || failed == nil || len(added) != 0 || len(failed) != 0 {
+		t.Fatalf("added %v failed %v err %v", added, failed, err)
+	}
+}
+
+func TestAddManyRollsBackWhenSaveFails(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores permissions")
+	}
+	a, b := newRepo(t), newRepo(t)
+	dir := t.TempDir()
+	s, err := repos.Open(filepath.Join(dir, "repos.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Add(ctx, a.Dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o755) })
+
+	added, failed, err := s.AddMany(ctx, []string{b.Dir}, "")
+	if err == nil || added != nil || failed != nil {
+		t.Fatalf("added %v failed %v err %v", added, failed, err)
+	}
+	if n := len(s.List()); n != 1 {
+		t.Fatalf("list has %d entries after rollback, want 1", n)
+	}
+}
+
+func TestAddStillReturnsExistingEntry(t *testing.T) {
+	a := newRepo(t)
+	s, _ := openStore(t)
+	first, err := s.Add(ctx, a.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := s.Add(ctx, a.Dir)
+	if err != nil || again.ID != first.ID || len(s.List()) != 1 {
+		t.Fatalf("again %+v err %v", again, err)
+	}
+}

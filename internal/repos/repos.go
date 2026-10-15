@@ -85,6 +85,14 @@ func (s *Store) Get(id string) (Repo, bool) {
 	return Repo{}, false
 }
 
+// AddFailure is a path AddMany could not add: Name is the path's last
+// element, Reason the error's text.
+type AddFailure struct {
+	Path   string `json:"path"`
+	Name   string `json:"name"`
+	Reason string `json:"reason"`
+}
+
 // Add registers the work tree containing path. Adding a repo twice returns
 // the existing entry.
 func (s *Store) Add(ctx context.Context, path string) (Repo, error) {
@@ -94,10 +102,8 @@ func (s *Store) Add(ctx context.Context, path string) (Repo, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, r := range s.repos {
-		if r.Path == top {
-			return r, nil
-		}
+	if r, ok := s.findPath(top); ok {
+		return r, nil
 	}
 	r := Repo{ID: s.uniqueID(top), Name: filepath.Base(top), Path: top}
 	s.repos = append(s.repos, r)
@@ -106,6 +112,55 @@ func (s *Store) Add(ctx context.Context, path string) (Repo, error) {
 		return Repo{}, err
 	}
 	return r, nil
+}
+
+// AddMany registers the work trees containing paths, in order, in group
+// (trimmed; "" is ungrouped), with a single persisted write. A path whose
+// work tree is already listed, or was already added earlier in this call, is
+// left as it is (its group untouched) and reported neither as added nor as
+// failed. A path that is not in a work tree is reported in failed and the
+// others are still added. When the write fails nothing is added: the list is
+// restored and only err is returned.
+func (s *Store) AddMany(ctx context.Context, paths []string, group string) ([]Repo, []AddFailure, error) {
+	group = strings.TrimSpace(group)
+	failed := []AddFailure{}
+	tops := make([]string, 0, len(paths))
+	// git runs outside the lock, as in Add.
+	for _, p := range paths {
+		top, err := toplevel(ctx, p)
+		if err != nil {
+			failed = append(failed, AddFailure{Path: p, Name: filepath.Base(p), Reason: err.Error()})
+			continue
+		}
+		tops = append(tops, top)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := len(s.repos)
+	for _, top := range tops {
+		if _, ok := s.findPath(top); ok {
+			continue
+		}
+		s.repos = append(s.repos, Repo{ID: s.uniqueID(top), Name: filepath.Base(top), Path: top, Group: group})
+	}
+	if len(s.repos) == n {
+		return []Repo{}, failed, nil
+	}
+	if err := s.save(); err != nil {
+		s.repos = s.repos[:n]
+		return nil, nil, err
+	}
+	return append([]Repo{}, s.repos[n:]...), failed, nil
+}
+
+// findPath is the entry whose path is top. Callers must hold s.mu.
+func (s *Store) findPath(top string) (Repo, bool) {
+	for _, r := range s.repos {
+		if r.Path == top {
+			return r, true
+		}
+	}
+	return Repo{}, false
 }
 
 // Relocate points an existing entry at a new path, keeping its ID.
