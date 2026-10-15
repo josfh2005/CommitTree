@@ -71,7 +71,7 @@ Empty and error states, shown in place of the list:
   (plus the skipped line when relevant).
 - Parent does not exist: "That folder doesn't exist."
 - Parent is not a folder: "That path isn't a folder."
-- Parent cannot be read: "That folder can't be read." followed by the
+- Parent cannot be read: "That folder can't be read: " followed by the
   system's reason.
 
 ### Adding

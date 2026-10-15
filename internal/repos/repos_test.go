@@ -451,7 +451,7 @@ func TestAddManySkipsListedAndDuplicatesAndReportsFailures(t *testing.T) {
 	if len(added) != 1 || added[0].Path != realPath(t, fresh.Dir) {
 		t.Fatalf("added %+v", added)
 	}
-	if len(failed) != 1 || failed[0].Path != notRepo || failed[0].Name != filepath.Base(notRepo) || failed[0].Reason == "" {
+	if len(failed) != 1 || failed[0].Path != notRepo || failed[0].Name != filepath.Base(notRepo) || failed[0].Reason != "not a git repository" {
 		t.Fatalf("failed %+v", failed)
 	}
 	// The already-listed entry is untouched: same ID, still ungrouped.

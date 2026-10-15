@@ -129,7 +129,11 @@ func (s *Store) AddMany(ctx context.Context, paths []string, group string) ([]Re
 	for _, p := range paths {
 		top, err := toplevel(ctx, p)
 		if err != nil {
-			failed = append(failed, AddFailure{Path: p, Name: filepath.Base(p), Reason: err.Error()})
+			reason := err.Error()
+			if errors.Is(err, ErrNotRepo) {
+				reason = ErrNotRepo.Error() // the path is already the failure's Path
+			}
+			failed = append(failed, AddFailure{Path: p, Name: filepath.Base(p), Reason: reason})
 			continue
 		}
 		tops = append(tops, top)
