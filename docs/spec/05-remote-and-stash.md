@@ -226,7 +226,7 @@ according to the configured strategy:
 
 | Strategy | Behaviour |
 |---|---|
-| Follow repository configuration | Integrates using whatever the repository's own settings resolve to, exactly as an unmodified pull typed at a terminal would. |
+| Follow repository configuration (the default; "Auto" in Settings) | Integrates using whatever the repository's own settings resolve to, exactly as an unmodified pull typed at a terminal would — except when neither `pull.rebase` nor `pull.ff` is set at any level: then it merges (a merge commit when the branch and its upstream have diverged) instead of git's refusal to pull a diverged branch. `branch.<name>.rebase` still decides when set, and `pull.ff=only` still refuses a diverged branch. |
 | Always merge | Integrates with a merge commit regardless of the repository's own configuration. |
 | Always rebase | Replays the local commits on top of the upstream regardless of the repository's own configuration. |
 
