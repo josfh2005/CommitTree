@@ -77,11 +77,11 @@ type homeUnknown struct{}
 func (homeUnknown) Error() string        { return "The home folder is unknown; type a full path." }
 func (homeUnknown) Is(target error) bool { return target == ErrParentMissing }
 
-// expandParent turns the parent folder as typed into an absolute path:
+// ExpandParent turns the parent folder as typed into an absolute path:
 // surrounding whitespace is trimmed and a leading "~" (alone or before a
 // separator) becomes the home folder. "~user" is not expanded, so it stays
 // relative and is refused.
-func expandParent(parent string) (string, error) {
+func ExpandParent(parent string) (string, error) {
 	parent = strings.TrimSpace(parent)
 	if parent == "~" || strings.HasPrefix(parent, "~/") {
 		home, err := os.UserHomeDir()
@@ -113,7 +113,7 @@ func ListDirs(partial string) []string {
 	none := []string{}
 	partial = strings.TrimSpace(partial)
 	if partial == "~" {
-		if _, err := expandParent(partial); err != nil {
+		if _, err := ExpandParent(partial); err != nil {
 			return none
 		}
 		return []string{"~/"}
@@ -123,7 +123,7 @@ func ListDirs(partial string) []string {
 		return none
 	}
 	typedDir, prefix := partial[:slash+1], partial[slash+1:]
-	dir, err := expandParent(typedDir)
+	dir, err := ExpandParent(typedDir)
 	if err != nil {
 		return none
 	}
@@ -164,7 +164,7 @@ func ListDirs(partial string) []string {
 // destination does not exist or is an empty directory. It returns the
 // destination path.
 func Validate(parent, name string) (string, error) {
-	parent, err := expandParent(parent)
+	parent, err := ExpandParent(parent)
 	if err != nil {
 		return "", err
 	}
