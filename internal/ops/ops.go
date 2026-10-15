@@ -163,14 +163,21 @@ func Fetch(ctx context.Context, dir string) error {
 
 // Pull fetches and integrates the upstream. "auto" runs a plain pull, so
 // git's own resolved pull.rebase config decides merge or rebase, same as a
-// pull typed at a terminal would; "merge"/"rebase" force this call's choice,
-// the one-shot -c pattern merge.Start already uses for merge.conflictStyle.
+// pull typed at a terminal would — except that when neither pull.rebase nor
+// pull.ff is set anywhere, it merges, instead of git's refusal to pull a
+// diverged branch ("Need to specify how to reconcile divergent branches").
+// branch.<name>.rebase still wins, since git reads it before pull.rebase.
+// "merge"/"rebase" force this call's choice, the one-shot -c pattern
+// merge.Start already uses for merge.conflictStyle.
 // A conflict is reported as Result, not returned as an error — the same
 // distinction merge.Start draws for a conflicted merge.
 func Pull(ctx context.Context, dir, strategy string) (Result, error) {
 	args := []string{"pull", "--"}
 	switch strategy {
 	case StrategyAuto:
+		if !configSet(ctx, dir, "pull.rebase") && !configSet(ctx, dir, "pull.ff") {
+			args = append([]string{"-c", "pull.rebase=false"}, args...)
+		}
 	case StrategyMerge:
 		args = append([]string{"-c", "pull.rebase=false"}, args...)
 	case StrategyRebase:
@@ -300,4 +307,12 @@ func head(ctx context.Context, dir string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(out), nil
+}
+
+// configSet reports whether key has a value in any config git reads for dir
+// (system, global, the repository's own). A failed read counts as unset: the
+// pull that follows reads the same config and reports any real problem.
+func configSet(ctx context.Context, dir, key string) bool {
+	_, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "config", "--get", key)
+	return err == nil
 }

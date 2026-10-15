@@ -314,7 +314,7 @@
               <label>
                 <span>Pull strategy</span>
                 <select bind:value={git.pullStrategy} on:change={saveGit}>
-                  <option value="auto">Auto — follow this repository's git config</option>
+                  <option value="auto">Auto — follow this repository's git config (merge if it doesn't say)</option>
                   <option value="merge">Always merge</option>
                   <option value="rebase">Always rebase</option>
                 </select>

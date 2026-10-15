@@ -98,6 +98,61 @@ func TestPullRebasesDivergedHistoryWithRebaseStrategy(t *testing.T) {
 	}
 }
 
+// divergedWithoutPullConfig returns a clone that has a commit its upstream
+// lacks and is behind it by one, with no global or system git config, so
+// only the repository's own config can say how to pull.
+func divergedWithoutPullConfig(t *testing.T) *testrepo.Repo {
+	t.Helper()
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	a, b := clones(t)
+	b.Commit("from b")
+	b.Git("push", "-q", "origin", "main")
+	a.Commit("local only")
+	return a
+}
+
+func TestPullAutoMergesDivergedHistoryWhenGitConfigDoesNotSay(t *testing.T) {
+	a := divergedWithoutPullConfig(t)
+
+	result, err := ops.Pull(ctx, a.Dir, ops.StrategyAuto)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Outcome != ops.Merged {
+		t.Fatalf("outcome = %v, want Merged", result.Outcome)
+	}
+	if got := a.Git("log", "-1", "--format=%P"); !strings.Contains(got, " ") {
+		t.Errorf("HEAD parents = %q, want two — a merge commit", got)
+	}
+}
+
+func TestPullAutoFollowsTheRepositorysPullRebase(t *testing.T) {
+	a := divergedWithoutPullConfig(t)
+	a.Git("config", "pull.rebase", "true")
+
+	result, err := ops.Pull(ctx, a.Dir, ops.StrategyAuto)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Outcome != ops.Rebased {
+		t.Fatalf("outcome = %v, want Rebased", result.Outcome)
+	}
+}
+
+func TestPullAutoFollowsTheRepositorysPullFFOnly(t *testing.T) {
+	a := divergedWithoutPullConfig(t)
+	a.Git("config", "pull.ff", "only")
+	before := a.Git("rev-parse", "HEAD")
+
+	if _, err := ops.Pull(ctx, a.Dir, ops.StrategyAuto); err == nil {
+		t.Fatal("Pull succeeded, want the fast-forward-only refusal")
+	}
+	if got := a.Git("rev-parse", "HEAD"); got != before {
+		t.Errorf("HEAD = %s, want it unmoved at %s", got, before)
+	}
+}
+
 func TestPullConflictLeavesTheRepositoryForTheConflictViewToShow(t *testing.T) {
 	a, b := clones(t)
 	a.WriteFile("file-1.txt", "a's change\n")
