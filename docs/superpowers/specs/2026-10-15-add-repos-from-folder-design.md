@@ -51,7 +51,8 @@ Title "Add repositories from a folder". From top to bottom:
    sidebar start ticked. Rows already in the sidebar are unticked, disabled
    and labelled "Already added". Above the list, **Select all** / **None**
    act on the enabled rows only. Below the list, when any were skipped: "N
-   folders skipped (not git repositories)." (singular "1 folder skipped").
+   folders skipped (not git repositories)." (singular "1 folder skipped (not a
+   git repository).").
 3. **Group**: a select with "No group" (default), every existing group name
    (sorted), and "New group…". Choosing "New group…" shows a text field
    prefilled with the parent folder's name; an empty (after trimming) name
@@ -85,7 +86,12 @@ Then:
   the sidebar reloads with the ones that were added, and an error toast says
   "Added N repositories; M couldn't be added: name (reason), …" (at most
   three named, then "and K more").
-- None added because all failed: the dialog stays open with the error inline.
+- Nothing new because every ticked repository was already listed: the
+  dialog closes, toast "Nothing added: those repositories are already in the
+  list."
+- None added because all failed: the dialog stays open with the error
+  inline: "No repository could be added: name (reason), …" (same naming
+  rule).
 - The store write itself fails: nothing is added (the batch is rolled back);
   the dialog stays open with the error inline.
 
@@ -136,9 +142,9 @@ var (
 func Scan(parent string) (Result, error)
 ```
 
-Parent expansion is shared with the Clone dialog: `clone.expandParent` moves
-to an exported helper both packages use (e.g. `internal/pathx.ExpandFolder`,
-same errors and messages as today — "Parent folder must be a full path (or
+Parent expansion is shared with the Clone dialog: `clone.expandParent` is
+exported as `clone.ExpandParent` and `scanrepos` calls it (same errors and
+messages as today — "Parent folder must be a full path (or
 start with ~)." and the home-unknown one). Clone's behaviour must not change.
 
 **`repos.Store.AddMany(ctx, paths []string, group string) (added []Repo, failed []AddFailure, err error)`**
