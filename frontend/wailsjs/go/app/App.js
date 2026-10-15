@@ -18,6 +18,10 @@ export function AddRepo() {
   return window['go']['app']['App']['AddRepo']();
 }
 
+export function AddRepos(arg1, arg2) {
+  return window['go']['app']['App']['AddRepos'](arg1, arg2);
+}
+
 export function AnswerCredential(arg1, arg2) {
   return window['go']['app']['App']['AnswerCredential'](arg1, arg2);
 }
@@ -124,6 +128,10 @@ export function CreateTag(arg1, arg2, arg3, arg4) {
 
 export function DefaultCloneParent() {
   return window['go']['app']['App']['DefaultCloneParent']();
+}
+
+export function DefaultReposParent() {
+  return window['go']['app']['App']['DefaultReposParent']();
 }
 
 export function DeleteBranch(arg1, arg2, arg3) {
@@ -370,6 +378,10 @@ export function PickCloneParent(arg1) {
   return window['go']['app']['App']['PickCloneParent'](arg1);
 }
 
+export function PickReposParent(arg1) {
+  return window['go']['app']['App']['PickReposParent'](arg1);
+}
+
 export function PlanFinish(arg1, arg2, arg3) {
   return window['go']['app']['App']['PlanFinish'](arg1, arg2, arg3);
 }
@@ -460,6 +472,10 @@ export function SaveGitSettings(arg1) {
 
 export function SaveRepoAISettings(arg1, arg2) {
   return window['go']['app']['App']['SaveRepoAISettings'](arg1, arg2);
+}
+
+export function ScanReposIn(arg1) {
+  return window['go']['app']['App']['ScanReposIn'](arg1);
 }
 
 export function SendChat(arg1, arg2, arg3) {

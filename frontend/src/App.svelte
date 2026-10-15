@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { get } from 'svelte/store'
+  import AddReposDialog from './components/AddReposDialog.svelte'
   import BlameView from './components/BlameView.svelte'
   import BottomDock from './components/BottomDock.svelte'
   import ChangesView from './components/ChangesView.svelte'
@@ -205,6 +206,7 @@
 <!-- Before DialogHost: a confirm opened from it must stack on top. -->
 <RepoSettingsDialog />
 <CloneDialog />
+<AddReposDialog />
 <DialogHost />
 <CredentialDialog />
 <Toasts />

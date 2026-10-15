@@ -46,6 +46,8 @@ export const detailsHeight = persisted('detailsHeight', 280)
 export const chatOpen = persisted('chatOpen', true)
 /** The parent folder the last clone went into; '' until the first clone. */
 export const cloneParent = persisted<string>('cloneParent', '')
+/** The folder "Add from folder…" last scanned successfully, as typed. */
+export const reposParent = persisted<string>('reposParent', '')
 /** Settings → Appearance → High contrast; main.ts applies it to the page. */
 export const highContrast = persisted('highContrast', false, (v): v is boolean => typeof v === 'boolean')
 const isBool = (v: unknown): v is boolean => typeof v === 'boolean'

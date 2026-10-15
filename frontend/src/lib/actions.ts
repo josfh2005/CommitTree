@@ -4,7 +4,7 @@ import { chatOpen, chatRunRepo, collapsedRepoGroups, expandedRepos, filters, foc
 import { beginOp } from './tasks'
 import { notifyStashConflicts, opError, track } from './notify'
 import { conflictsBody, type OpKind } from './notifyRules'
-import type { Branch, BranchPushResult, FileStatus, HunkAction, HunkPick, MergeState, RebasePreview, RegionChoice, Refs, Repo, ResetInfo, ResetMode, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
+import type { AddReposResult, Branch, BranchPushResult, FileStatus, HunkAction, HunkPick, MergeState, RebasePreview, RegionChoice, Refs, Repo, ResetInfo, ResetMode, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
 import { PULL_UP_TO_DATE, UP_TO_DATE } from './types'
 import { abortWarning, commitWarning, isEmptyStepError, skipWarning, staleMergeChoice, takeMessage } from './merge'
 import { doneMessage, rebaseMessage } from './rebase'
@@ -21,6 +21,7 @@ import { classifyGroupRename, renameCollapsedGroup } from './repoGroupRename'
 import { movedMessage, updateMessage } from './submodules'
 import { removeRepoTabs, terminalState } from './terminal'
 import { cloneDialogOpen, cloneView, viewFromStatus } from './clone'
+import { addReposDialogOpen, summarize } from './addRepos'
 
 export function branchRef(branch: Branch): string {
   return branch.remote ? `refs/remotes/${branch.remote}/${branch.name}` : `refs/heads/${branch.name}`
@@ -103,6 +104,31 @@ export async function openCloneDialog() {
     cloneView.set({ kind: 'form', error: errorMessage(e) })
   }
   cloneDialogOpen.set(true)
+}
+
+export function openAddReposDialog() {
+  addReposDialogOpen.set(true)
+}
+
+/** Adds the ticked repositories from Add from folder…. Returns '' when the
+ *  dialog may close (the toast says what happened), else the error to show
+ *  in it (the store write failed, or nothing could be added). */
+export async function addReposFromFolder(paths: string[], group: string): Promise<string> {
+  let result: AddReposResult
+  try {
+    result = await api.addRepos(paths, group)
+  } catch (e) {
+    return errorMessage(e)
+  }
+  const s = summarize(result)
+  if (s.keepOpen) return s.text
+  try {
+    await loadRepos()
+  } catch (e) {
+    toast(errorMessage(e), 'error')
+  }
+  toast(s.text, s.kind)
+  return ''
 }
 
 export async function removeRepo(repo: Repo) {
