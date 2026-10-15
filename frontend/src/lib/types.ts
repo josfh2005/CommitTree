@@ -547,3 +547,30 @@ export interface RepoAIInfo {
 export interface CloneProgress { phase: string; percent: number; detail: string }
 export interface CloneStatus { running: boolean; url: string; dest: string; progress: CloneProgress | null; lastError: string }
 export interface CloneDone { repo: Repo | null; error: string; cancelled: boolean }
+
+/** A repository directly inside the scanned folder (Add from folder…). */
+export interface ScanCandidate {
+  name: string
+  path: string
+  /** Already in the sidebar. */
+  added: boolean
+}
+
+export interface ScanResult {
+  /** The scanned folder, ~ expanded. */
+  parent: string
+  repos: ScanCandidate[]
+  /** Non-hidden children that are not repositories. */
+  skipped: number
+}
+
+export interface AddFailure {
+  path: string
+  name: string
+  reason: string
+}
+
+export interface AddReposResult {
+  added: Repo[]
+  failed: AddFailure[]
+}

@@ -1,5 +1,5 @@
 import * as Go from '../../wailsjs/go/app/App'
-import type { BranchPushResult, CloneStatus, RepoAIInfo, RepoAIOverride, AIMessage, AISettings, AIStatus, AheadBehind, AutoFetchResult, Blame, ChatConfirmEvent, CommandLogView, CommandOutput, CommitInfo, ConflictFile, Details, Filters, Flow, FlowConfig, FlowSettings, FlowFinishResult, FlowPlan, FlowStartResult, FlowType, GitSettings, HunkAction, HunkPick, Identity, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, RemoteConfig, RemoteTest, RegionChoice, RegionResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeDiff, WorktreeRemovalInfo, WorktreeState } from './types'
+import type { AddReposResult, ScanResult, BranchPushResult, CloneStatus, RepoAIInfo, RepoAIOverride, AIMessage, AISettings, AIStatus, AheadBehind, AutoFetchResult, Blame, ChatConfirmEvent, CommandLogView, CommandOutput, CommitInfo, ConflictFile, Details, Filters, Flow, FlowConfig, FlowSettings, FlowFinishResult, FlowPlan, FlowStartResult, FlowType, GitSettings, HunkAction, HunkPick, Identity, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, RemoteConfig, RemoteTest, RegionChoice, RegionResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeDiff, WorktreeRemovalInfo, WorktreeState } from './types'
 import type { NotifyTarget } from './notifyRules'
 import type { CredentialAnswer } from './credential'
 
@@ -18,6 +18,10 @@ export const api = {
   pickCloneParent: (start: string) => call<string>(Go.PickCloneParent(start)),
   defaultCloneParent: () => call<string>(Go.DefaultCloneParent()),
   listDirs: (partial: string) => call<string[]>(Go.ListDirs(partial)),
+  scanReposIn: (parent: string) => call<ScanResult>(Go.ScanReposIn(parent)),
+  addRepos: (paths: string[], group: string) => call<AddReposResult>(Go.AddRepos(paths, group)),
+  pickReposParent: (start: string) => call<string>(Go.PickReposParent(start)),
+  defaultReposParent: () => call<string>(Go.DefaultReposParent()),
   relocateRepo: (id: string) => call<Repo>(Go.RelocateRepo(id)),
   openRepoFolder: (id: string) => call<void>(Go.OpenRepoFolder(id)),
   openRepoTerminal: (id: string) => call<void>(Go.OpenRepoTerminal(id)),

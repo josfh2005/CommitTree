@@ -28,6 +28,8 @@ export function AddRemote(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function AddRepo():Promise<repos.Repo>;
 
+export function AddRepos(arg1:Array<string>,arg2:string):Promise<app.AddReposResult>;
+
 export function AnswerCredential(arg1:string,arg2:credprompt.Answer):Promise<void>;
 
 export function ApplyHunkSelection(arg1:string,arg2:string,arg3:boolean,arg4:string,arg5:Array<worktree.HunkPick>,arg6:string):Promise<void>;
@@ -81,6 +83,8 @@ export function CreateBranch(arg1:string,arg2:string,arg3:string,arg4:boolean):P
 export function CreateTag(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
 export function DefaultCloneParent():Promise<string>;
+
+export function DefaultReposParent():Promise<string>;
 
 export function DeleteBranch(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
@@ -204,6 +208,8 @@ export function OwedStashDrop(arg1:string):Promise<number>;
 
 export function PickCloneParent(arg1:string):Promise<string>;
 
+export function PickReposParent(arg1:string):Promise<string>;
+
 export function PlanFinish(arg1:string,arg2:string,arg3:Array<string>):Promise<gitflow.Plan>;
 
 export function Pull(arg1:string):Promise<ops.Result>;
@@ -249,6 +255,8 @@ export function SaveFlowSettings(arg1:string,arg2:gitflow.Config):Promise<void>;
 export function SaveGitSettings(arg1:gitsettings.Settings):Promise<void>;
 
 export function SaveRepoAISettings(arg1:string,arg2:reposettings.Override):Promise<void>;
+
+export function ScanReposIn(arg1:string):Promise<app.ScanResult>;
 
 export function SendChat(arg1:string,arg2:string,arg3:string):Promise<void>;
 
