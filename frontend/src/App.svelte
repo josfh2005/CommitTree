@@ -6,6 +6,7 @@
   import ChangesView from './components/ChangesView.svelte'
   import ChatPanel from './components/ChatPanel.svelte'
   import CloneDialog from './components/CloneDialog.svelte'
+  import AddReposDialog from './components/AddReposDialog.svelte'
   import ContextMenu from './components/ContextMenu.svelte'
   import CredentialDialog from './components/CredentialDialog.svelte'
   import DialogHost from './components/DialogHost.svelte'
@@ -205,6 +206,7 @@
 <!-- Before DialogHost: a confirm opened from it must stack on top. -->
 <RepoSettingsDialog />
 <CloneDialog />
+<AddReposDialog />
 <DialogHost />
 <CredentialDialog />
 <Toasts />

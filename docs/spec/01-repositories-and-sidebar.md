@@ -31,10 +31,10 @@ selected here.
 ## Repository list
 
 The sidebar lists every repository the user has added, above an "Add repo"
-control. "Add repo" opens a menu with **Open folder…** and **Clone…**. Open
-folder… opens a directory picker; the chosen directory must be a git working
-tree (checked with `git rev-parse --show-toplevel` from that directory) or the
-add is refused with an error. Given a
+control. "Add repo" opens a menu with **Open folder…**, **Add from folder…** and
+**Clone…**. Open folder… opens a directory picker; the chosen directory must
+be a git working tree (checked with `git rev-parse --show-toplevel` from that
+directory) or the add is refused with an error. Given a
 subdirectory of a working tree, the entry records the tree's top-level
 directory, not the subdirectory that was picked. The entry's display name is
 the top-level directory's own name.
@@ -145,6 +145,65 @@ cancel; an empty folder that existed before is left in place. Quitting the
 app cancels a running clone. The clone is recorded like any
 command but, belonging to no repository, does not appear in the Commands
 panel.
+
+### Adding repositories from a folder
+
+**Add from folder…** opens a dialog for adding several repositories at once
+from one parent folder. The parent folder field behaves like the Clone
+dialog's (typed or picked with Choose…; trimmed; a leading `~` expanded; a
+relative path refused with "Parent folder must be a full path (or start with
+~)."; folder suggestions while typing). It starts at the folder last scanned
+successfully (remembered across launches), else the home folder, and nothing
+is scanned when the dialog opens. A scan runs on **Scan**, on Enter in the
+field when no suggestion is highlighted, and right after Choose… returns a
+folder; Scan is disabled while the field is empty and reads "Scanning…"
+while a scan runs. Editing the field clears the result, and only the latest
+scan's answer is shown.
+
+Only the folder's **direct children** are considered; the scan never goes
+deeper and the folder itself is never offered. A child is listed when its
+name does not start with `.`, it is a folder (or a symlink to one) and its
+`.git` is a folder. A child whose `.git` is a file (a linked worktree or a
+submodule checkout) is not listed. Every other child that is not hidden
+counts as skipped, shown below the list as "N folders skipped (not git
+repositories)." ("1 folder skipped (not a git repository)."). The scan reads
+the file system only; it runs no git command.
+
+The list is sorted by name, ignoring case, one row per repository with a
+checkbox; the full path is the row's tooltip. Repositories not yet in the
+sidebar start ticked; those already in it (same path once symlinks are
+resolved) are unticked, disabled and labelled "Already added". **Select
+all** and **None** act on the enabled rows. With no repositories the dialog
+says "No git repositories in this folder.". A missing parent says "That
+folder doesn't exist.", a parent that is a file "That path isn't a folder.",
+and an unreadable one "That folder can't be read: " followed by the system's
+reason.
+
+A **Group** select offers "No group" (the default), every group in use
+(sorted) and "New group…", which shows a name field prefilled with the
+scanned folder's name; Add is disabled while that name is empty.
+
+**Add N repositories** ("Add 1 repository"; "Add repositories", disabled,
+when nothing is ticked) adds the ticked rows in list order, each by the same
+rule as Open folder… (its top-level directory), with the chosen group, in a
+single write of the repository list; it reads "Adding…" meanwhile. A ticked
+repository already in the list by then is left as it is, group included, and
+two rows with the same top-level are added once. A row that can no longer be
+added (for example a folder deleted since the scan) does not stop the
+others. Selection does not change. Afterwards:
+
+- everything added: the dialog closes and a toast says "Added N
+  repositories." ("Added 1 repository.");
+- nothing new (all already listed): the dialog closes and a toast says
+  "Nothing added: those repositories are already in the list.";
+- some added, some failed: the dialog closes and an error toast says
+  "Added N repositories; M couldn't be added: " followed by at most three
+  "name (reason)" entries, then ", and K more" when there are more;
+- none added and some failed, or the list could not be written: the dialog
+  stays open with the error; when the write fails nothing at all is added.
+
+Adding takes no repository lock and leaves no command-log entry: only the
+repository list changes.
 
 ### Worktrees
 

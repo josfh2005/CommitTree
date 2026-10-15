@@ -1,7 +1,7 @@
 <script lang="ts">
   import Icon from './Icon.svelte'
   import RepoRow from './RepoRow.svelte'
-  import { addRepo, dropRepoOnGroup, openCloneDialog, placeRepo, placeRepoGroup, renameGroup, setRepoSortOrder } from '../lib/actions'
+  import { addRepo, dropRepoOnGroup, openAddReposDialog, openCloneDialog, placeRepo, placeRepoGroup, renameGroup, setRepoSortOrder } from '../lib/actions'
   import { groupRepos } from '../lib/repoGroups'
   import { GROUP_DRAG_MIME, REPO_DRAG_MIME } from '../lib/repoDrop'
   import { busy, collapsedRepoGroups, repoSortOrder, repos, settingsOpen, toggleRepoGroupCollapsed } from '../lib/stores'
@@ -139,6 +139,7 @@
     class="row-item add"
     on:click={(e) => openMenu(e, [
       { label: 'Open folder…', action: addRepo },
+      { label: 'Add from folder…', action: openAddReposDialog },
       { label: 'Clone…', action: openCloneDialog },
     ])}
   ><Icon name="plus" /> Add repo</button>
