@@ -10,7 +10,7 @@
     "darwin/*": "../../scripts/mac-icon.sh ${bin}"
   },
   "info": {
-    "productVersion": "0.7.1"
+    "productVersion": "0.8.0"
   },
   "author": {
     "name": "Jose Fidalgo Hidalgo",
