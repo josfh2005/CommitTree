@@ -17,6 +17,8 @@
   export let depth = 0
   /** Shown under its main repository: a linked worktree. */
   export let child = false
+  /** Can be dragged to rearrange the list — off while the list is filtered. */
+  export let movable = true
 
   // Dragging state is purely visual and local: dragend always fires, even
   // when the drag is cancelled (dropped outside the window, Escape), so
@@ -110,7 +112,7 @@
   style="padding-left: calc(var(--row-base-indent) - var(--repo-row-inset) + {depth} * var(--row-indent-step))"
   role="group"
   aria-label={repo.name}
-  draggable={child ? 'false' : 'true'}
+  draggable={child || !movable ? 'false' : 'true'}
   on:contextmenu={repoMenu}
   on:dragstart={handleDragStart}
   on:dragend={handleDragEnd}

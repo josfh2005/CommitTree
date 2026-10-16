@@ -435,6 +435,24 @@ groups need to be remembered, and that memory is a plain list of collapsed
 group names, held for the whole application rather than scoped to any one
 repository.
 
+### Filter repos
+
+A "Filter repos" field sits under the "Repos" heading whenever the list has
+at least one repository. Typing in it narrows the list to the repositories
+whose display name contains the text, ignoring case, accents and spaces
+around it; the group name and the path are not searched. A matching
+repository is shown with all its worktrees; a repository that doesn't match
+is still shown when one of its worktrees' names does, with only the matching
+worktrees under it. Groups with no match are hidden, and every group with a
+match is shown expanded with its count of matching repositories — the
+remembered collapsed state is not changed, and clicking a group header does
+nothing while filtering. With no match the list says "No repositories match
+"<text>".". While filtering nothing can be dragged (repositories or group
+headers). A "×" button in the field, or Esc in it, clears the text and
+restores the full list. The text is not remembered across launches, and
+filtering never changes the selection, even when it hides the selected
+repository.
+
 ## Selection
 
 Clicking a repository row selects it and loads its log, without unfolding

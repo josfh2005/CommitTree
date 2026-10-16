@@ -2,7 +2,7 @@
   import Icon from './Icon.svelte'
   import RepoRow from './RepoRow.svelte'
   import { addRepo, dropRepoOnGroup, openAddReposDialog, openCloneDialog, placeRepo, placeRepoGroup, renameGroup, setRepoSortOrder } from '../lib/actions'
-  import { groupRepos } from '../lib/repoGroups'
+  import { filterRepos, groupRepos } from '../lib/repoGroups'
   import { GROUP_DRAG_MIME, REPO_DRAG_MIME } from '../lib/repoDrop'
   import { busy, collapsedRepoGroups, repoSortOrder, repos, settingsOpen, toggleRepoGroupCollapsed } from '../lib/stores'
   import { openMenu } from '../lib/ui'
@@ -32,6 +32,20 @@
   }
 
   $: manual = $repoSortOrder === 'manual'
+
+  // "Filter repos": the list shows only the matching names (filterRepos),
+  // every group with a match open, and nothing can be dragged — a drop among
+  // hidden rows would land somewhere the user can't see. Not remembered.
+  let query = ''
+  $: filtering = query.trim() !== ''
+  $: grouped = filterRepos(groupRepos($repos, $repoSortOrder), query)
+
+  function queryKey(event: KeyboardEvent) {
+    if (event.key === 'Escape' && query) {
+      event.stopPropagation()
+      query = ''
+    }
+  }
 
   // Manual order only: the repository row the pointer is over, which a drop
   // lands just above (null: the section's empty space, i.e. its end). A row's
@@ -150,12 +164,23 @@
       <Icon name="list" size={12} />
     </button>
   </div>
+  {#if $repos.length}
+    <label class="filter">
+      <Icon name="search" size={12} />
+      <input placeholder="Filter repos" aria-label="Filter repos" spellcheck="false" bind:value={query} on:keydown={queryKey} />
+      {#if query}
+        <button class="icon-btn clear" title="Clear filter" aria-label="Clear filter" on:click={() => (query = '')}><Icon name="x" size={12} /></button>
+      {/if}
+    </label>
+  {/if}
   <div class="list">
-    {#if $repos.length}
-      {@const grouped = groupRepos($repos, $repoSortOrder)}
+    {#if $repos.length && filtering && !grouped.loose.length && !grouped.groups.length}
+      <p class="empty">No repositories match "{query.trim()}".</p>
+    {:else if $repos.length}
       <div
         class="loose-section"
         role="group"
+        class:filtered-empty={filtering && !grouped.loose.length}
         class:drag-over={dragOverTarget === ''}
         on:dragover={(e) => handleDragOver(e, '')}
         on:dragleave={(e) => handleDragLeave(e, '')}
@@ -163,7 +188,7 @@
       >
         {#each grouped.loose as node (node.repo.id)}
           <div class="node" class:drop-before={manual && dragOverTarget === '' && dropBefore === node.repo.id} role="presentation" on:dragover={(e) => handleRowDragOver(e, node.repo.id)}>
-            <RepoRow repo={node.repo} />
+            <RepoRow repo={node.repo} movable={!filtering} />
             {#each node.children as child (child.id)}
               <RepoRow repo={child} depth={1} child />
             {/each}
@@ -174,7 +199,7 @@
         {/if}
       </div>
       {#each grouped.groups as group, gi (group.name)}
-        {@const collapsed = $collapsedRepoGroups.includes(group.name)}
+        {@const collapsed = !filtering && $collapsedRepoGroups.includes(group.name)}
         {@const next = grouped.groups[gi + 1]?.name ?? null}
         <div
           class="group-section"
@@ -191,9 +216,9 @@
         >
           <button
             class="row-item group-header"
-            draggable={manual ? 'true' : 'false'}
+            draggable={manual && !filtering ? 'true' : 'false'}
             on:dragstart={(e) => handleGroupDragStart(e, group.name)}
-            on:click={() => toggleRepoGroupCollapsed(group.name)}
+            on:click={() => { if (!filtering) toggleRepoGroupCollapsed(group.name) }}
             on:contextmenu={(e) => groupMenu(e, group.name)}
           >
             <span class="mark"><Icon name={collapsed ? 'chevron-right' : 'chevron-down'} size={12} /></span>
@@ -203,7 +228,7 @@
           {#if !collapsed}
             {#each group.repos as node (node.repo.id)}
               <div class="node" class:drop-before={manual && dragOverTarget === group.name && dropBefore === node.repo.id} role="presentation" on:dragover={(e) => handleRowDragOver(e, node.repo.id)}>
-                <RepoRow repo={node.repo} depth={1} />
+                <RepoRow repo={node.repo} depth={1} movable={!filtering} />
                 {#each node.children as child (child.id)}
                   <RepoRow repo={child} depth={2} child />
                 {/each}
@@ -239,6 +264,10 @@
      dragged back out of a group — an empty, heightless div can never
      receive a dragover. */
   .loose-section { min-height: 28px; }
+  .loose-section.filtered-empty { min-height: 0; }
+  .filter { display: flex; align-items: center; gap: 6px; margin: 0 4px 6px; padding: 0 4px 0 8px; height: 26px; border: 1px solid var(--border); border-radius: 7px; color: var(--muted); background: var(--surface); }
+  .filter input { flex: 1; min-width: 0; border: 0; padding: 0; height: 100%; background: transparent; font-size: 12px; }
+  .filter .clear { color: var(--muted); }
   .loose-section.drag-over, .group-section.drag-over { background: var(--selection); }
   .loose-placeholder { margin: 0; padding: 6px 10px; font-size: 12px; color: var(--faint); pointer-events: none; }
   .group-header { gap: 6px; }
