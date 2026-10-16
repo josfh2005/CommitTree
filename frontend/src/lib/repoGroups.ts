@@ -78,6 +78,32 @@ export function groupRepos(repos: Repo[], order: RepoSortOrder = 'name'): Groupe
   return { loose, groups: order === 'name' ? groups.sort((a, b) => a.name.localeCompare(b.name)) : groups }
 }
 
+/** Lower case without accents, so "Café" and "cafe" compare equal. */
+const fold = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
+
+/**
+ * filterRepos is the sidebar's "Filter repos": the repositories whose name
+ * contains query, ignoring case, accents and spaces around it. A matching
+ * repository keeps all its worktrees; one that doesn't is still shown when
+ * some worktree's name matches, with only those worktrees. Groups left
+ * without repositories are dropped. A blank query returns `grouped` as is.
+ */
+export function filterRepos(grouped: GroupedRepos, query: string): GroupedRepos {
+  const q = fold(query.trim())
+  if (!q) return grouped
+  const matches = (r: Repo) => fold(r.name).includes(q)
+  const keep = (nodes: RepoNode[]): RepoNode[] =>
+    nodes.flatMap((node) => {
+      if (matches(node.repo)) return [node]
+      const children = node.children.filter(matches)
+      return children.length ? [{ repo: node.repo, children }] : []
+    })
+  return {
+    loose: keep(grouped.loose),
+    groups: grouped.groups.map((g) => ({ name: g.name, repos: keep(g.repos) })).filter((g) => g.repos.length),
+  }
+}
+
 /** Where a dragged repository lands: in `group` ('' is the loose area),
  *  before `beforeId`, or at the end of that area when beforeId is null. */
 export interface RepoPlace {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compareRepos, groupRepos, moveGroup, moveRepo, nameOrder, type RepoNode } from './repoGroups'
+import { compareRepos, filterRepos, groupRepos, moveGroup, moveRepo, nameOrder, type RepoNode } from './repoGroups'
 import type { Repo } from './types'
 
 const r = (id: string, extra: Partial<Repo> = {}): Repo => ({
@@ -138,5 +138,63 @@ describe('nameOrder', () => {
   it('is the by-name display order, the start of a first manual arrangement', () => {
     const repos = [r('c'), r('b', { group: 'work' }), r('a'), r('z', { group: 'home' })]
     expect(nameOrder(repos)).toEqual(['a', 'c', 'z', 'b'])
+  })
+})
+
+describe('filterRepos', () => {
+  const repos = [
+    r('commit-tree'),
+    r('conflict-lab'),
+    r('api', { group: 'Work' }),
+    r('web', { group: 'Work' }),
+    r('notes', { group: 'Home' }),
+    r('commit-tree-review', { name: 'review', parentId: 'commit-tree' }),
+    r('commit-tree-hotfix', { name: 'hotfix', parentId: 'commit-tree' }),
+  ]
+  const grouped = () => groupRepos(repos)
+
+  it('keeps everything as it is for an empty or blank query', () => {
+    expect(filterRepos(grouped(), '')).toEqual(grouped())
+    expect(filterRepos(grouped(), '   ')).toEqual(grouped())
+  })
+
+  it('keeps the repos whose name contains the query, ignoring case and spaces around it', () => {
+    const { loose, groups } = filterRepos(grouped(), '  CON ')
+    expect(ids(loose)).toEqual(['conflict-lab'])
+    expect(groups).toEqual([])
+  })
+
+  it('ignores accents on either side', () => {
+    expect(ids(filterRepos(groupRepos([r('cafe', { name: 'Café' }), r('menu')]), 'cafe').loose)).toEqual(['cafe'])
+    expect(ids(filterRepos(groupRepos([r('cafe'), r('menu')]), 'café').loose)).toEqual(['cafe'])
+  })
+
+  it('drops the groups left without matches and keeps only the matches in the others', () => {
+    const { loose, groups } = filterRepos(grouped(), 'e')
+    expect(ids(loose)).toEqual(['commit-tree'])
+    expect(groups.map((g) => g.name)).toEqual(['Home', 'Work'])
+    expect(ids(groups[0].repos)).toEqual(['notes'])
+    expect(ids(groups[1].repos)).toEqual(['web'])
+  })
+
+  it('matches on the repo name only, not on the group name or the path', () => {
+    expect(filterRepos(grouped(), 'work').groups).toEqual([])
+    expect(filterRepos(grouped(), 'repos')).toEqual({ loose: [], groups: [] })
+  })
+
+  it('shows a matching repo with all its worktrees', () => {
+    const { loose } = filterRepos(grouped(), 'commit')
+    expect(ids(loose)).toEqual(['commit-tree'])
+    expect(loose[0].children.map((c) => c.id)).toEqual(['commit-tree-hotfix', 'commit-tree-review'])
+  })
+
+  it('shows a matching worktree under its repo, without the worktrees that do not match', () => {
+    const { loose } = filterRepos(grouped(), 'hotfix')
+    expect(ids(loose)).toEqual(['commit-tree'])
+    expect(loose[0].children.map((c) => c.id)).toEqual(['commit-tree-hotfix'])
+  })
+
+  it('finds nothing when no name contains the query', () => {
+    expect(filterRepos(grouped(), 'zzz')).toEqual({ loose: [], groups: [] })
   })
 })
