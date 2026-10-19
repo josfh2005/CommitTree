@@ -34,6 +34,13 @@ const (
 	SuggestAutoLocal = "auto-local"
 	SuggestAuto      = "auto"
 	SuggestOff       = "off"
+
+	// The tool calls one chat answer, and one "Resolve with AI" run, may
+	// make before the agent wraps up (agent.Run.MaxToolCalls). Resolving
+	// needs many more: several calls per conflicted file.
+	DefaultChatToolLimit    = 30
+	DefaultResolveToolLimit = 120
+	MaxToolLimit            = 500
 )
 
 var ErrInvalid = errors.New("invalid AI settings")
@@ -46,6 +53,10 @@ type Settings struct {
 	TaskModel      string `json:"taskModel"`
 	CommitMessage  string `json:"commitMessage"`
 	SuggestReplies string `json:"suggestReplies"`
+	// ChatToolLimit and ResolveToolLimit cap the tool calls of a chat
+	// answer and of a conflict resolution; 1 to MaxToolLimit (see limited).
+	ChatToolLimit    int `json:"chatToolLimit"`
+	ResolveToolLimit int `json:"resolveToolLimit"`
 }
 
 func DefaultPath() (string, error) {
@@ -65,7 +76,22 @@ func Defaults() Settings {
 		TaskModel:      DefaultModel,
 		CommitMessage:  CommitAutoLocal,
 		SuggestReplies: SuggestAutoLocal,
+
+		ChatToolLimit:    DefaultChatToolLimit,
+		ResolveToolLimit: DefaultResolveToolLimit,
 	}
+}
+
+// limited keeps a tool-call limit in range: 0 or less (unset, or a file
+// from before the limits) is the default, more than MaxToolLimit is capped.
+func limited(n, def int) int {
+	switch {
+	case n <= 0:
+		return def
+	case n > MaxToolLimit:
+		return MaxToolLimit
+	}
+	return n
 }
 
 // Load reads the settings file, returning defaults when it doesn't exist.
@@ -96,6 +122,8 @@ func Load(path string) (Settings, error) {
 	if s.SuggestReplies == "" {
 		s.SuggestReplies = SuggestAutoLocal
 	}
+	s.ChatToolLimit = limited(s.ChatToolLimit, DefaultChatToolLimit)
+	s.ResolveToolLimit = limited(s.ResolveToolLimit, DefaultResolveToolLimit)
 	return s, nil
 }
 
@@ -103,6 +131,8 @@ func Save(path string, s Settings) error {
 	if err := validate(s); err != nil {
 		return err
 	}
+	s.ChatToolLimit = limited(s.ChatToolLimit, DefaultChatToolLimit)
+	s.ResolveToolLimit = limited(s.ResolveToolLimit, DefaultResolveToolLimit)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}

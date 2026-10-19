@@ -13,11 +13,22 @@ import (
 )
 
 const (
-	MaxSteps          = 8
+	// DefaultMaxToolCalls is a run's tool-call limit when Run.MaxToolCalls
+	// is 0 (the chat's default setting).
+	DefaultMaxToolCalls = 30
+	// ExtraRounds bounds the model rounds beyond the tool-call limit, for
+	// rounds without a tool call (a merge resolution's "carry on" nudges).
+	ExtraRounds       = 10
 	HistoryLimit      = 40
 	KeepToolResults   = 10
 	OmittedToolResult = "[earlier tool result omitted]"
-	StepLimitNote     = "Step limit reached."
+	// NotRunNote answers a call past the limit: the API needs a result for
+	// every call of a response, even one that is not run.
+	NotRunNote = "not run: tool limit reached"
+	// WrapUpNote is added to the system prompt for the last round once the
+	// limit is reached, so the answer says what was found instead of
+	// stopping mid-task.
+	WrapUpNote = "You have reached the tool-call limit for this answer. Do not call any tools. Answer now with what you found so far, and say briefly what is still left to check."
 
 	EventStart       = "chat:start"
 	EventDelta       = "chat:delta"
@@ -82,6 +93,18 @@ type DoneEvent struct {
 	RunID  string `json:"runID"`
 	// At is when the answer finished, as stored on it (RFC 3339).
 	At string `json:"at,omitempty"`
+	// Limited is the tool-call limit the answer reached (ai.Message.Limited);
+	// 0 when it ended on its own.
+	Limited int `json:"limited,omitempty"`
+}
+
+// LimitOf is the tool-call limit the answer that ends msgs reached, 0 when
+// it ended on its own.
+func LimitOf(msgs []ai.Message) int {
+	if len(msgs) == 0 {
+		return 0
+	}
+	return msgs[len(msgs)-1].Limited
 }
 
 type ErrorEvent struct {
@@ -119,9 +142,11 @@ type Run struct {
 	// same assistant response without tracking it itself.
 	RunTool func(ctx context.Context, call ai.ToolCall, step int) string
 	Emit    func(name string, data any)
-	// MaxSteps caps the model/tool rounds for this run; 0 uses MaxSteps.
-	// Resolving a merge takes many more rounds than answering a question.
-	MaxSteps int
+	// MaxToolCalls caps the tool calls this run executes; 0 uses
+	// DefaultMaxToolCalls. Resolving a merge takes many more than answering
+	// a question. Reaching it ends the run with one last round without
+	// tools (WrapUpNote), its answer marked Limited.
+	MaxToolCalls int
 	// Continue, when set, is asked each time the model answers without a
 	// tool call. A non-empty reply is sent back as a user message and the
 	// run goes on: small models announce "next I will…" and stop there.
@@ -132,10 +157,11 @@ type Run struct {
 // Execute continues history (which ends with the user's message) and
 // returns the updated history.
 func Execute(ctx context.Context, r Run, history []ai.Message) ([]ai.Message, error) {
-	steps := r.MaxSteps
-	if steps <= 0 {
-		steps = MaxSteps
+	limit := r.MaxToolCalls
+	if limit <= 0 {
+		limit = DefaultMaxToolCalls
 	}
+	left := limit
 	msgs := append([]ai.Message(nil), history...)
 	used := map[string]bool{}
 	for _, m := range msgs {
@@ -143,50 +169,10 @@ func Execute(ctx context.Context, r Run, history []ai.Message) ([]ai.Message, er
 			used[c.ID] = true
 		}
 	}
-	for step := 0; step < steps; step++ {
-		stream, err := r.Provider.Chat(ctx, ai.Request{Model: r.Model, System: r.System, Messages: Trim(msgs), Tools: r.Tools})
+	for step := 0; step < limit+ExtraRounds && left > 0; step++ {
+		text, calls, usage, err := r.round(ctx, r.System, msgs)
 		if err != nil {
-			if ctx.Err() != nil {
-				return append(msgs, ai.Message{Role: ai.RoleAssistant, Stopped: true}), ctx.Err()
-			}
-			return msgs, err
-		}
-
-		var text strings.Builder
-		var calls []ai.ToolCall
-		var streamErr error
-		var usage *ai.Usage
-		done := false
-		for chunk := range stream {
-			if chunk.Err != nil {
-				streamErr = chunk.Err
-				continue
-			}
-			if chunk.Delta != "" {
-				text.WriteString(chunk.Delta)
-				r.Emit(EventDelta, DeltaEvent{RepoID: r.RepoID, RunID: r.RunID, Text: chunk.Delta})
-			}
-			calls = append(calls, chunk.ToolCalls...)
-			if chunk.Done {
-				done = true
-				usage = chunk.Usage
-			}
-		}
-
-		if ctx.Err() != nil {
-			return append(msgs, ai.Message{Role: ai.RoleAssistant, Content: text.String(), Stopped: true}), ctx.Err()
-		}
-		if streamErr != nil || !done {
-			if streamErr == nil {
-				streamErr = errors.New("agent: response ended unexpectedly")
-			}
-			if text.Len() > 0 {
-				msgs = append(msgs, ai.Message{Role: ai.RoleAssistant, Content: text.String()})
-			}
-			return msgs, streamErr
-		}
-		if usage != nil {
-			r.Emit(EventUsage, UsageEvent{RepoID: r.RepoID, RunID: r.RunID, Usage: *usage})
+			return endRound(ctx, msgs, text, err)
 		}
 
 		// Some models write a tool call into the text instead of returning
@@ -194,7 +180,7 @@ func Execute(ctx context.Context, r Run, history []ai.Message) ([]ai.Message, er
 		// calls at all - a structured call always wins over scanning the
 		// text.
 		if len(calls) == 0 {
-			if recovered, attempted := recoverCalls(text.String(), r.Tools); len(recovered) > 0 {
+			if recovered, attempted := recoverCalls(text, r.Tools); len(recovered) > 0 {
 				for i := range recovered {
 					recovered[i].ID = fmt.Sprintf("recovered_%s_%d_%d", r.RunID, step, i)
 				}
@@ -214,7 +200,7 @@ func Execute(ctx context.Context, r Run, history []ai.Message) ([]ai.Message, er
 			}
 			used[calls[i].ID] = true
 		}
-		msgs = append(msgs, ai.Message{Role: ai.RoleAssistant, Content: text.String(), ToolCalls: calls, Usage: usage})
+		msgs = append(msgs, ai.Message{Role: ai.RoleAssistant, Content: text, ToolCalls: calls, Usage: usage})
 		if len(calls) == 0 {
 			if r.Continue != nil {
 				if more := r.Continue(ctx); more != "" {
@@ -227,15 +213,88 @@ func Execute(ctx context.Context, r Run, history []ai.Message) ([]ai.Message, er
 		}
 
 		for _, call := range calls {
+			if left == 0 {
+				msgs = append(msgs, ai.Message{Role: ai.RoleTool, ToolName: call.Name, Content: NotRunNote})
+				continue
+			}
+			left--
 			r.Emit(EventTool, ToolEvent{RepoID: r.RepoID, RunID: r.RunID, ID: call.ID, Name: call.Name, Args: call.Args})
 			result := r.RunTool(ctx, call, step)
 			r.Emit(EventToolResult, ToolResultEvent{RepoID: r.RepoID, RunID: r.RunID, Name: call.Name, Summary: summarize(result)})
 			msgs = append(msgs, ai.Message{Role: ai.RoleTool, ToolName: call.Name, Content: result})
 		}
 	}
+	return r.wrapUp(ctx, msgs, limit)
+}
 
-	r.Emit(EventDelta, DeltaEvent{RepoID: r.RepoID, RunID: r.RunID, Text: StepLimitNote})
-	return append(msgs, ai.Message{Role: ai.RoleAssistant, Content: StepLimitNote}), nil
+// wrapUp is the last round once the tool-call limit (or the rounds cap) is
+// reached: the model is told to answer without tools, any tool call it
+// makes anyway is dropped, and the answer is marked Limited. A failed
+// wrap-up still ends with a Limited message, so the chat offers Continue.
+func (r Run) wrapUp(ctx context.Context, msgs []ai.Message, limit int) ([]ai.Message, error) {
+	text, _, usage, err := r.round(ctx, r.System+"\n\n"+WrapUpNote, msgs)
+	if err != nil && ctx.Err() != nil {
+		return endRound(ctx, msgs, text, err)
+	}
+	return append(msgs, ai.Message{Role: ai.RoleAssistant, Content: text, Usage: usage, Limited: limit}), nil
+}
+
+// round asks the model once, streaming its text as deltas. err is the
+// provider's or the stream's failure, or the context's when cancelled;
+// text holds what arrived before it.
+func (r Run) round(ctx context.Context, system string, msgs []ai.Message) (string, []ai.ToolCall, *ai.Usage, error) {
+	stream, err := r.Provider.Chat(ctx, ai.Request{Model: r.Model, System: system, Messages: Trim(msgs), Tools: r.Tools})
+	if err != nil {
+		if ctx.Err() != nil {
+			return "", nil, nil, ctx.Err()
+		}
+		return "", nil, nil, err
+	}
+	var text strings.Builder
+	var calls []ai.ToolCall
+	var streamErr error
+	var usage *ai.Usage
+	done := false
+	for chunk := range stream {
+		if chunk.Err != nil {
+			streamErr = chunk.Err
+			continue
+		}
+		if chunk.Delta != "" {
+			text.WriteString(chunk.Delta)
+			r.Emit(EventDelta, DeltaEvent{RepoID: r.RepoID, RunID: r.RunID, Text: chunk.Delta})
+		}
+		calls = append(calls, chunk.ToolCalls...)
+		if chunk.Done {
+			done = true
+			usage = chunk.Usage
+		}
+	}
+	if ctx.Err() != nil {
+		return text.String(), nil, nil, ctx.Err()
+	}
+	if streamErr != nil || !done {
+		if streamErr == nil {
+			streamErr = errors.New("agent: response ended unexpectedly")
+		}
+		return text.String(), nil, nil, streamErr
+	}
+	if usage != nil {
+		r.Emit(EventUsage, UsageEvent{RepoID: r.RepoID, RunID: r.RunID, Usage: *usage})
+	}
+	return text.String(), calls, usage, nil
+}
+
+// endRound ends a run on a failed round: a cancel keeps the partial answer
+// marked Stopped; any other failure keeps whatever text arrived.
+func endRound(ctx context.Context, msgs []ai.Message, text string, err error) ([]ai.Message, error) {
+	if ctx.Err() != nil {
+		return append(msgs, ai.Message{Role: ai.RoleAssistant, Content: text, Stopped: true}), ctx.Err()
+	}
+	if text != "" {
+		msgs = append(msgs, ai.Message{Role: ai.RoleAssistant, Content: text})
+	}
+	return msgs, err
 }
 
 // Trim returns the part of the history sent to the model: at most

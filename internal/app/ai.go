@@ -386,7 +386,8 @@ func (a *App) SendChat(repoID, text, runID string) error {
 		run := agent.Run{
 			RepoID: repoID, RunID: runID,
 			Provider: provider, Model: cfg.ChatModel, System: system,
-			Tools: append(tools.Specs(), writetools.Specs()...),
+			Tools:        append(tools.Specs(), writetools.Specs()...),
+			MaxToolCalls: cfg.ChatToolLimit,
 			RunTool: func(ctx context.Context, call ai.ToolCall, step int) string {
 				ctx = aiToolContext(ctx)
 				if !writetools.IsWrite(call.Name) {
@@ -416,7 +417,7 @@ func (a *App) SendChat(repoID, text, runID string) error {
 		case saveErr != nil:
 			a.emit(agent.EventError, agent.ErrorEvent{RepoID: repoID, RunID: runID, Message: saveErr.Error(), Code: "other"})
 		default:
-			a.emit(agent.EventDone, agent.DoneEvent{RepoID: repoID, RunID: runID, At: at})
+			a.emit(agent.EventDone, agent.DoneEvent{RepoID: repoID, RunID: runID, At: at, Limited: agent.LimitOf(updated)})
 			// A stopped answer also ends here, with context.Canceled.
 			if runErr == nil {
 				a.suggestReplies(repoID, runID, cfg, o)
