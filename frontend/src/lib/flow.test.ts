@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   conflictMessage, finishFields, finishMessage, finishPickItems, finishReleases, finishedMessage, finishingLine,
-  flowMenu, initConfig, initFields, planReleases, startBase, startFields, startedMessage,
+  flowMenu, initConfig, initFields, initMessage, planReleases, startBase, startFields, startedMessage,
 } from './flow'
 import type { Flow, FlowBranch, FlowPlan } from './types'
 
@@ -82,6 +82,16 @@ describe('start', () => {
     expect(startedMessage({ branch: 'feature/x', notes: [] }, 'develop')).toBe('Started feature/x from develop.')
     expect(startedMessage({ branch: 'feature/x', notes: ['develop fast-forwarded to origin/develop'] }, 'develop'))
       .toBe('Started feature/x from develop.\ndevelop fast-forwarded to origin/develop')
+  })
+
+  it('says a flow already on the remote was continued, not started from its base', () => {
+    expect(startedMessage({ branch: 'feature/x', notes: ['Continued feature/x from origin/feature/x'] }, 'develop'))
+      .toBe('Continued feature/x from origin/feature/x.')
+  })
+
+  it('adds what setting up took from the remote', () => {
+    expect(initMessage([])).toBe('git-flow initialised')
+    expect(initMessage(['develop created from origin/develop, tracking it'])).toBe('git-flow initialised\ndevelop created from origin/develop, tracking it')
   })
 })
 

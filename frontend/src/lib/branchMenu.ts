@@ -23,6 +23,9 @@ export interface BranchMenuOptions {
   rebaseWhy: string | null
   /** The repository's remote names. */
   remotes: string[]
+  /** For a local branch: its remote branch of the same name (twinOf), which
+   *  Pull tracks first when the branch has no upstream; '' or absent: none. */
+  twin?: string
 }
 
 /** The name the merge and rebase entries use: remote/name for a remote row. */
@@ -68,11 +71,12 @@ export function branchMenuGroups(b: Branch, o: BranchMenuOptions): BranchMenuEnt
   const del: BranchMenuEntry = { id: 'delete', label: b.remote ? 'Delete on remote…' : 'Delete…', danger: true, disabled: b.current || !!b.worktree }
   if (b.remote) return [[checkout], [fetch], integrate, create, [del]]
 
-  // Pull needs a live upstream and a branch no other worktree holds; a
-  // branch with none (or whose upstream was deleted) publishes instead.
+  // Pull needs a live upstream — or a remote branch of the same name, which
+  // it tracks first — and a branch no other worktree holds; a branch with
+  // none (or whose upstream was deleted) publishes instead.
   const pullWhy =
     syncReason(b, o) ??
-    (!b.upstream ? 'No upstream' : b.upstreamGone ? 'The upstream was deleted on the remote' : b.worktree ? 'Checked out in another worktree' : undefined)
+    (!b.upstream && !o.twin ? 'No upstream' : b.upstreamGone ? 'The upstream was deleted on the remote' : b.worktree ? 'Checked out in another worktree' : undefined)
   const publishes = !b.upstream || !!b.upstreamGone
   const pushWhy = syncReason(b, o) ?? (publishes && !remote ? 'No remote' : undefined)
   const pull: BranchMenuEntry = { id: 'pull', label: `Pull ${b.name}`, disabled: !!pullWhy, title: pullWhy }

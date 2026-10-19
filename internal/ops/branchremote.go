@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"git-ui/internal/gitcmd"
+	"git-ui/internal/refs"
 )
 
 // The branch context menu's Pull and Push work on a branch's upstream; these
@@ -63,6 +64,18 @@ func FastForwardBranch(ctx context.Context, dir, branch string) (bool, error) {
 	up, err := upstreamOf(ctx, dir, branch)
 	if err != nil {
 		return false, err
+	}
+	// No upstream yet: track the remote branch of the same name, when there
+	// is one, and pull from it (a diverged one is refused below as usual).
+	if up.remote == "" && !up.current {
+		if twin := refs.Twin(ctx, dir, branch); twin != "" {
+			if err := refs.SetUpstream(ctx, dir, branch, twin); err != nil {
+				return false, err
+			}
+			if up, err = upstreamOf(ctx, dir, branch); err != nil {
+				return false, err
+			}
+		}
 	}
 	switch {
 	case up.remote == ".":

@@ -2,7 +2,7 @@ import { get } from 'svelte/store'
 import { api } from './api'
 import {
   conflictMessage, finishFields, finishMessage, finishPickItems, finishReleases, finishedMessage, flowMenu,
-  initConfig, initFields, planReleases, startBase, startFields, startedMessage,
+  initConfig, initFields, initMessage, planReleases, startBase, startFields, startedMessage,
 } from './flow'
 import { mergeState, pendingFinish, refreshRepo, refs, selectedRepoId } from './stores'
 import { opError, track } from './notify'
@@ -62,8 +62,7 @@ async function initFlow(repoId: string, flow: Flow) {
   })
   if (!values) return
   await busyDo(repoId, 'Initialising git-flow…', async () => {
-    await api.initFlow(repoId, initConfig(values))
-    toast('git-flow initialised')
+    toast(initMessage(await api.initFlow(repoId, initConfig(values))))
   })
 }
 

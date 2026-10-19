@@ -11,6 +11,16 @@ the current working tree.
 - **Upstream**: the remote branch the current branch tracks. A branch can
   have no upstream, typically because it was created locally and never
   pushed.
+- **Remote twin**: the remote-tracking branch with the same name as a local
+  branch — `origin/<name>` when `origin` has it, else `<remote>/<name>` of
+  the only remote that has it; none when no remote has it, or several do and
+  none is `origin`. A branch without an upstream is tied to its twin when it
+  is created (New branch, git-flow set-up and Start — see
+  `01-repositories-and-sidebar.md` and `10-git-flow.md`) and when it is
+  pulled (below). Except on a pull, the tie is made only when the two have
+  not diverged (one contains the other); a diverged branch is left without
+  an upstream and the toast says "`<twin>` exists but has diverged from it,
+  so `<branch>` has no upstream".
 - **Ahead/behind**: how many commits the current branch has that its upstream
   lacks (ahead), and vice versa (behind), computed by comparing the two
   histories.
@@ -248,6 +258,14 @@ reported elsewhere (see Conflicts). Any other failure — network,
 authentication, a rejected push, and so on — is returned as an error instead
 of a result.
 
+When the current branch has no upstream and has a remote twin, Pull first
+makes it track the twin (`git branch --set-upstream-to`) — even a diverged
+one, since the user asked to pull and the strategy decides how to integrate
+— and then pulls as usual; a toast says "`<branch>` now tracks `<twin>`."
+(or "Now tracking `<twin>`." for a repository that isn't selected). Without
+an upstream or a twin the pull fails with git's own message, as before. The
+twin is looked up in the remote-tracking branches already fetched.
+
 A successful pull can leave a submodule pointing behind its recorded
 commit — git only moves a submodule's checkout along with the parent when
 `submodule.recurse` is set, which CommitTree honours (because git does) but does
@@ -277,8 +295,11 @@ badges) afterwards.
   "`<branch>` has diverged — check it out to pull". A branch that is only ahead
   of its upstream (the upstream is already in it) has nothing to pull and is
   not an error. A toast says "Pulled `<branch>`" when it moved and
-  "`<branch>` is up to date" when it did not. It is disabled, with a tooltip,
-  for a branch with no upstream ("No upstream"), one whose upstream was
+  "`<branch>` is up to date" when it did not. A branch with no upstream but
+  a remote twin first tracks the twin (kept even when the fast-forward is
+  then refused as diverged), and the toast adds "; `<branch>` now tracks
+  `<twin>`.". It is disabled, with a tooltip,
+  for a branch with neither an upstream nor a twin ("No upstream"), one whose upstream was
   deleted on the remote ("The upstream was deleted on the remote"), one that
   tracks a local branch ("Tracks a local branch") and one checked out in a
   linked worktree ("Checked out in another worktree").

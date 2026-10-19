@@ -1566,6 +1566,7 @@ export namespace ops {
 	export class Result {
 	    outcome: number;
 	    conflicts: string[];
+	    tracked: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Result(source);
@@ -1575,6 +1576,7 @@ export namespace ops {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.outcome = source["outcome"];
 	        this.conflicts = source["conflicts"];
+	        this.tracked = source["tracked"];
 	    }
 	}
 
@@ -1722,6 +1724,21 @@ export namespace refs {
 		}
 	}
 	
+	
+	export class Tracking {
+	    twin: string;
+	    tracked: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Tracking(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.twin = source["twin"];
+	        this.tracked = source["tracked"];
+	    }
+	}
 
 }
 

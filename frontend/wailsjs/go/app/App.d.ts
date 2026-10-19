@@ -7,12 +7,12 @@ import {worktree} from '../models';
 import {ops} from '../models';
 import {merge} from '../models';
 import {cmdlog} from '../models';
+import {refs} from '../models';
 import {gitflow} from '../models';
 import {settings} from '../models';
 import {gitlog} from '../models';
 import {ai} from '../models';
 import {gitsettings} from '../models';
-import {refs} from '../models';
 import {stash} from '../models';
 import {submodules} from '../models';
 import {prompts} from '../models';
@@ -78,7 +78,7 @@ export function CommitMerge(arg1:string,arg2:string):Promise<void>;
 
 export function ConfirmChatAction(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
-export function CreateBranch(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<void>;
+export function CreateBranch(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<refs.Tracking>;
 
 export function CreateTag(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
@@ -172,7 +172,7 @@ export function IgnoreRepoInstructions(arg1:string,arg2:string):Promise<void>;
 
 export function InitAllSubmodules(arg1:string):Promise<void>;
 
-export function InitFlow(arg1:string,arg2:gitflow.Config):Promise<void>;
+export function InitFlow(arg1:string,arg2:gitflow.Config):Promise<Array<string>>;
 
 export function InitSubmodule(arg1:string,arg2:string):Promise<void>;
 

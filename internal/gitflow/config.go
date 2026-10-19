@@ -310,20 +310,59 @@ func ending(f Flow, b FlowBranch, targets []string) string {
 	return f.Develop
 }
 
-// Init sets git-flow up: the production branch must exist, the development
-// branch is created from it when missing, and the keys are written.
-func Init(ctx context.Context, dir string, cfg Config) error {
+// Init sets git-flow up and writes the keys. Each of the production and
+// development branches is taken from the remote branch of the same name
+// when it is not local (created from it, tracking it) and, when it is local
+// without an upstream, given that remote branch as upstream unless they
+// diverged (refs.TrackTwin). A production branch found nowhere is an error;
+// a development branch found nowhere is created from the production branch.
+// The notes say what was taken from or tied to a remote.
+func Init(ctx context.Context, dir string, cfg Config) ([]string, error) {
 	cfg = trimmed(cfg)
-	if !branchExists(ctx, dir, cfg.Master) {
-		return fmt.Errorf("%s does not exist", cfg.Master)
-	}
 	if err := validate(ctx, dir, cfg); err != nil {
-		return err
+		return nil, err
 	}
-	if !branchExists(ctx, dir, cfg.Develop) {
-		if _, err := git(ctx, dir, "branch", cfg.Develop, cfg.Master); err != nil {
-			return err
+	notes := []string{}
+	for _, b := range []struct{ name, fallback string }{{cfg.Master, ""}, {cfg.Develop, cfg.Master}} {
+		note, err := ensureBranch(ctx, dir, b.name, b.fallback)
+		if err != nil {
+			return nil, err
+		}
+		if note != "" {
+			notes = append(notes, note)
 		}
 	}
-	return writeConfig(ctx, dir, cfg)
+	return notes, writeConfig(ctx, dir, cfg)
+}
+
+// ensureBranch makes the local branch name exist for Init, preferring the
+// remote branch of the same name (see Init); fallback is where to create it
+// when no remote has it, "" for "it must exist".
+func ensureBranch(ctx context.Context, dir, name, fallback string) (string, error) {
+	if branchExists(ctx, dir, name) {
+		t, err := refs.TrackTwin(ctx, dir, name)
+		switch {
+		case err != nil:
+			return "", err
+		case t.Tracked:
+			return name + " now tracks " + t.Twin, nil
+		case t.Twin != "":
+			return fmt.Sprintf("%s exists but %s has diverged from it, so %s has no upstream", t.Twin, name, name), nil
+		}
+		return "", nil
+	}
+	if twin := refs.Twin(ctx, dir, name); twin != "" {
+		if _, err := git(ctx, dir, "branch", "--no-track", name, "refs/remotes/"+twin); err != nil {
+			return "", err
+		}
+		if err := refs.SetUpstream(ctx, dir, name, twin); err != nil {
+			return "", err
+		}
+		return name + " created from " + twin + ", tracking it", nil
+	}
+	if fallback == "" {
+		return "", fmt.Errorf("%s does not exist", name)
+	}
+	_, err := git(ctx, dir, "branch", "--no-track", name, fallback)
+	return "", err
 }

@@ -166,7 +166,7 @@ func TestInitRefusesASpaceInAPrefix(t *testing.T) {
 	r := testrepo.New(t)
 	r.Commit("init")
 	cfg := Config{Master: "main", Develop: "develop", Prefixes: Prefixes{Feature: "my feat/", Release: "r/", Hotfix: "h/", Warmfix: "w/"}}
-	if err := Init(ctx, r.Dir, cfg); err == nil {
+	if _, err := Init(ctx, r.Dir, cfg); err == nil {
 		t.Fatal("want an error")
 	}
 }

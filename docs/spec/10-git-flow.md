@@ -27,7 +27,18 @@ The toolbar's Flow button (next to Merge) is disabled while an operation
 runs or a conflict is being resolved. When the repository has no git-flow
 config, or the config names a branch that does not exist, it opens the
 Initialise dialog: production branch (an existing local branch), development
-branch (created from production if missing) and the four prefixes.
+branch and the four prefixes.
+
+Setting up looks at each of the two branches in turn, production first. One
+that is not local but has a remote twin (`05-remote-and-stash.md`) is
+created from it and tracks it ("develop created from origin/develop,
+tracking it"); one that is local without an upstream tracks its twin unless
+they diverged ("master now tracks origin/master", or "origin/develop exists
+but develop has diverged from it, so develop has no upstream"). A production
+branch found nowhere is refused ("<branch> does not exist"); a development
+branch found nowhere is created from production, as before. The toast lists
+these notes under "git-flow initialised" ("git-flow set up" from the
+settings tab).
 
 The same names can be edited later, without creating or renaming a branch,
 in the Git-flow tab of Repository settings (`12-repository-settings.md`);
@@ -55,6 +66,12 @@ upstream when it is only behind, refuses when the base has diverged ("develop
 has diverged from origin/develop; pull it first"), creates and checks out
 the branch — uncommitted changes come along — and records
 `gitflow.branch.<branch>.base`.
+
+When, after the fetch, the new branch already has a remote twin (someone
+started it and pushed it), Start continues that branch instead: it creates
+the local branch from the twin, tracking it, checks it out and records the
+base as usual, without bringing the base up to date; the toast reads
+"Continued `<branch>` from `<twin>`.".
 
 ## Finish
 

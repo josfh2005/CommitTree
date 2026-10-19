@@ -22,6 +22,7 @@ import { movedMessage, updateMessage } from './submodules'
 import { removeRepoTabs, terminalState } from './terminal'
 import { cloneDialogOpen, cloneView, viewFromStatus } from './clone'
 import { addReposDialogOpen, summarize } from './addRepos'
+import { createdBranchMessage, nowTracksMessage } from './tracking'
 
 export function branchRef(branch: Branch): string {
   return branch.remote ? `refs/remotes/${branch.remote}/${branch.name}` : `refs/heads/${branch.name}`
@@ -448,7 +449,11 @@ export async function newBranch(id: string, target: string, targetLabel: string)
   })
   const name = result?.value.trim()
   if (!result || !name) return
-  await run(id, 'Creating branch…', () => api.createBranch(id, name, target, result.checked))
+  let message = ''
+  const ok = await run(id, 'Creating branch…', async () => {
+    message = createdBranchMessage(name, await api.createBranch(id, name, target, result.checked))
+  })
+  if (ok && message) toast(message, 'info')
 }
 
 // confirmForceDeleteBranch offers the same "not merged" confirmation the
@@ -912,6 +917,7 @@ export async function pull(id: string) {
   try {
     const result = await track(id, 'pull', () => api.pull(id), (r) => r.conflicts?.length ?? 0)
     conflicts = stoppedOn('pull', result.conflicts?.length ?? 0)
+    if (result.tracked) toast(nowTracksMessage(id === get(selectedRepoId) ? get(refs)?.head ?? '' : '', result.tracked), 'info')
     if (result.outcome === PULL_UP_TO_DATE) toast('Already up to date.', 'info')
     await warnMovedSubmodules(id)
   } catch (e) {
@@ -926,8 +932,9 @@ export async function pull(id: string) {
 // pullBranch is the branch menu's Pull: the current branch gets the ordinary
 // pull (configured strategy, conflicts); any other is only fast-forwarded to
 // its upstream, without a checkout (docs/spec/05-remote-and-stash.md), and a
-// toast says whether it moved.
-export async function pullBranch(id: string, branch: Branch) {
+// toast says whether it moved. twin is the remote branch of the same name
+// (twinOf): a branch with no upstream tracks it first, and the toast says so.
+export async function pullBranch(id: string, branch: Branch, twin = '') {
   if (branch.current) return pull(id)
   const name = repoLabel(id)
   const outcome: { moved?: boolean } = {}
@@ -935,7 +942,8 @@ export async function pullBranch(id: string, branch: Branch) {
     outcome.moved = await api.fastForwardBranch(id, branch.name)
   })
   if (ok) {
-    const message = outcome.moved ? `Pulled ${branch.name}` : `${branch.name} is up to date`
+    let message = outcome.moved ? `Pulled ${branch.name}` : `${branch.name} is up to date`
+    if (!branch.upstream && twin) message += `; ${nowTracksMessage(branch.name, twin)}`
     toast(id === get(selectedRepoId) ? message : `${name}: ${message}`, 'info')
   }
 }

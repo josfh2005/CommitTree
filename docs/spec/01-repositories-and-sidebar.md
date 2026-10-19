@@ -538,7 +538,12 @@ active repository's rows carry an accent background. The branch or tag the log i
 filter bar, or a tag row's click) is highlighted and carries a funnel icon
 whose tooltip says the log is filtered to it; only the selected
 repository's rows are marked, since the filter belongs to its log. A "+" control next to the section
-heading creates a new branch from `HEAD`. Local branches whose name does
+heading creates a new branch from `HEAD`. A new branch — from this control,
+"New branch from here…" or the chat — is created without git's own
+tracking (`git branch --no-track`) and then tracks its remote twin
+(`05-remote-and-stash.md`) unless the two have diverged; the toast says
+"Created `<branch>`, tracking `<twin>`." or why it doesn't track it, and
+nothing extra when there is no twin. Local branches whose name does
 contain a `/` are grouped by the first path segment (so `feature/x` and
 `feature/y` fall under a `feature` group, and a name only one level deep
 still gets a group of one); groups are listed after the loose branches,
@@ -563,7 +568,7 @@ Push").
 |---|---|
 | Check out | It is the current branch, it is checked out in a linked worktree, or a write is already running. |
 | Fetch `<remote>` | A write is already running. `<remote>` is the branch's upstream remote, a remote-tracking row's own remote, or, for a local branch with no upstream, `origin` (else the only remote; with neither it is disabled, "No remote"). |
-| Pull `<branch>` (local branches) | A write is running, a merge, rebase or cherry-pick is in progress, the branch has no upstream ("No upstream"), its upstream was deleted on the remote, it is checked out in a linked worktree, or it tracks a local branch ("Tracks a local branch"); each shows its reason as a tooltip. |
+| Pull `<branch>` (local branches) | A write is running, a merge, rebase or cherry-pick is in progress, the branch has neither an upstream nor a remote twin ("No upstream"; see `05-remote-and-stash.md`), its upstream was deleted on the remote, it is checked out in a linked worktree, or it tracks a local branch ("Tracks a local branch"); each shows its reason as a tooltip. |
 | Push `<branch>` / Publish `<branch>` to origin (local branches) | A write is running, a merge, rebase or cherry-pick is in progress, or the branch tracks a local branch ("Tracks a local branch"). The label is "Publish `<branch>` to `<remote>`" when the branch has no upstream or its upstream was deleted (the push re-creates it); with no remote to publish to it is disabled ("No remote"). |
 | Merge `<branch>` into `<head>` | It is the current branch, a write is running, the head is detached, or a merge is already in progress. The confirmation asks "Merge `<branch>` into `<head>`? A merge commit is always created." When `<branch>` is a local branch behind its upstream (counted from the last fetch; nothing is fetched), it becomes a choice instead: "Merge `<upstream>`" (the default) or "Merge `<branch>` as it is", with a message naming how many commits only the upstream has (and, when the branch also has commits of its own, that merging the upstream leaves those out); the chosen one is merged. A remote-tracking branch, a branch without an upstream or not behind it, or counts that cannot be read keep the plain confirmation. |
 | Rebase `<head>` onto `<branch>` | It is the current branch, the head already contains it, a write is running, the head is detached, or any conflicted operation is in progress. Uncommitted changes to tracked files refuse it on click ("Commit or stash your changes first"). The confirmation states how many commits are replayed and warns, without blocking, when some are already on the upstream (a force-push, which the application does not offer, would be needed) or when merge commits in the range will be flattened. |

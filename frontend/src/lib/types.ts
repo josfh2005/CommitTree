@@ -318,6 +318,8 @@ export const PULL_CONFLICTED = 3
 export interface PullResult {
   outcome: number
   conflicts: string[]
+  /** The remote branch the pull first made the current branch track ("origin/x"); '' when it had an upstream. */
+  tracked?: string
 }
 
 export type PushScope = 'ask' | 'current' | 'all'

@@ -2,17 +2,20 @@
   import { api } from '../lib/api'
   import { flowSettingsError, flowSettingsPanel } from '../lib/flowSettings'
   import { busy, expandedRepos, loadSideRefs, refreshRepo, selectedRepoId } from '../lib/stores'
+  import { initMessage } from '../lib/flow'
   import { beginOp } from '../lib/tasks'
   import { toast } from '../lib/ui'
   import { get } from 'svelte/store'
 
   export let repoID: string
 
+  // What the last set-up took from or tied to a remote, for its toast.
+  let initNotes: string[] = []
   const panel = flowSettingsPanel({
     get: (id) => api.getFlowSettings(id),
     save: (id, cfg) => api.saveFlowSettings(id, cfg),
     // The same Go path as "Initialize git-flow" in the toolbar's Flow button.
-    init: (id, cfg) => api.initFlow(id, cfg),
+    init: async (id, cfg) => { initNotes = await api.initFlow(id, cfg) },
     afterWrite: async (id) => {
       // The official-branch rule is read with the refs: reload the ones on screen.
       if (id === get(selectedRepoId)) await refreshRepo()
@@ -36,7 +39,7 @@
       const saved = await panel.save()
       // The panel keeps a failed write's message in its state instead of throwing.
       if (!saved) failure = get(state).error || 'git-flow was not saved'
-      if (saved && !wasSetUp) toast('git-flow set up')
+      if (saved && !wasSetUp) toast(initMessage(initNotes, 'git-flow set up'))
     } finally {
       end(failure)
     }

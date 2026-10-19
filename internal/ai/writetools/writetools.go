@@ -662,8 +662,13 @@ func preparePull(ctx context.Context, dir string, env Env) (Proposal, error) {
 		return Proposal{}, errors.New("HEAD is detached; check out a branch first")
 	}
 	upstream, hasUpstream := upstreamOf(ctx, dir)
+	tracks := ""
 	if !hasUpstream {
-		return Proposal{}, fmt.Errorf("%s has no upstream", branch)
+		// The pull itself makes the branch track its remote twin (ops.Pull).
+		if upstream = refs.Twin(ctx, dir, branch); upstream == "" {
+			return Proposal{}, fmt.Errorf("%s has no upstream", branch)
+		}
+		tracks = ", tracking it from now on"
 	}
 	count, err := revListCount(ctx, dir, "HEAD.."+upstream)
 	if err != nil {
@@ -672,7 +677,7 @@ func preparePull(ctx context.Context, dir string, env Env) (Proposal, error) {
 	if count == 0 {
 		return Proposal{}, fmt.Errorf("%s is up to date with %s", branch, upstream)
 	}
-	title := fmt.Sprintf("Pull %s into %s (%s)", upstream, branch, env.PullStrategy)
+	title := fmt.Sprintf("Pull %s into %s (%s)%s", upstream, branch, env.PullStrategy, tracks)
 	details, err := logDetails(ctx, dir, []string{"log", "--oneline", "-n", "5", "HEAD.." + upstream}, count)
 	if err != nil {
 		return Proposal{}, err

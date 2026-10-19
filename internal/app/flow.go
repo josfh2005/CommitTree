@@ -15,8 +15,16 @@ func (a *App) GetFlow(id string) (gitflow.Flow, error) {
 	return gitflow.Read(a.ctx, dir)
 }
 
-func (a *App) InitFlow(id string, cfg gitflow.Config) error {
-	return a.write(id, func(ctx context.Context, dir string) error { return gitflow.Init(ctx, dir, cfg) })
+// InitFlow sets git-flow up; the notes say which branches were taken from
+// or tied to a remote branch (gitflow.Init), for the toast.
+func (a *App) InitFlow(id string, cfg gitflow.Config) ([]string, error) {
+	var notes []string
+	err := a.write(id, func(ctx context.Context, dir string) error {
+		var err error
+		notes, err = gitflow.Init(ctx, dir, cfg)
+		return err
+	})
+	return notes, err
 }
 
 // GetFlowSettings is the Git-flow tab of Repository settings

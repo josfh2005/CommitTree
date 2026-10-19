@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"git-ui/internal/refs"
 )
 
 type StartResult struct {
@@ -55,6 +57,22 @@ func Start(ctx context.Context, dir, typ, name, base string) (StartResult, error
 		}
 	}
 	res.Notes = append(res.Notes, fetchNotes(ctx, dir)...)
+	// Someone already started it and pushed it: continue that branch rather
+	// than start a second one from the base. The base is still recorded.
+	if twin := refs.Twin(ctx, dir, branch); twin != "" {
+		if _, err := git(ctx, dir, "switch", "--no-track", "-c", branch, "refs/remotes/"+twin); err != nil {
+			return res, err
+		}
+		if err := refs.SetUpstream(ctx, dir, branch, twin); err != nil {
+			return res, err
+		}
+		if _, err := git(ctx, dir, "config", "gitflow.branch."+branch+".base", base); err != nil {
+			return res, err
+		}
+		res.Notes = append(res.Notes, "Continued "+branch+" from "+twin)
+		res.Branch = branch
+		return res, nil
+	}
 	note, err := syncBranch(ctx, dir, base)
 	if err != nil {
 		return res, err
