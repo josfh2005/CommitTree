@@ -10,6 +10,7 @@ import (
 
 	"git-ui/internal/gitcmd"
 	"git-ui/internal/merge"
+	"git-ui/internal/refs"
 )
 
 var (
@@ -38,6 +39,9 @@ const (
 type Result struct {
 	Outcome   Outcome  `json:"outcome"`
 	Conflicts []string `json:"conflicts"`
+	// Tracked is the remote branch a pull made the current branch track
+	// first, because it had no upstream ("origin/x"); "" when it had one.
+	Tracked string `json:"tracked"`
 }
 
 // AheadBehind is how far the current branch and its upstream have diverged.
@@ -171,7 +175,7 @@ func Fetch(ctx context.Context, dir string) error {
 // merge.Start already uses for merge.conflictStyle.
 // A conflict is reported as Result, not returned as an error — the same
 // distinction merge.Start draws for a conflicted merge.
-func Pull(ctx context.Context, dir, strategy string) (Result, error) {
+func Pull(ctx context.Context, dir, strategy string) (result Result, err error) {
 	args := []string{"pull", "--"}
 	switch strategy {
 	case StrategyAuto:
@@ -195,6 +199,19 @@ func Pull(ctx context.Context, dir, strategy string) (Result, error) {
 	if st, stErr := merge.Status(ctx, dir); stErr == nil && st.Merging {
 		return Result{}, fmt.Errorf("%w: %s", ErrResolutionInProgress, st.Kind)
 	}
+
+	// A current branch with no upstream tracks the remote branch of the same
+	// name first, when there is one (refs.Twin) — even a diverged one: the
+	// user asked to pull, and the strategy decides how to integrate.
+	tracked, err := trackTwinForPull(ctx, dir)
+	if err != nil {
+		return Result{}, err
+	}
+	defer func() {
+		if err == nil {
+			result.Tracked = tracked
+		}
+	}()
 
 	before, err := head(ctx, dir)
 	if err != nil {
@@ -307,6 +324,28 @@ func head(ctx context.Context, dir string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(out), nil
+}
+
+// trackTwinForPull makes the current branch track its remote twin when it
+// has no upstream, returning the twin ("" when nothing changed: detached,
+// already tracking, or no remote branch of that name).
+func trackTwinForPull(ctx context.Context, dir string) (string, error) {
+	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "symbolic-ref", "-q", "--short", "HEAD")
+	if err != nil {
+		return "", nil // detached: git pull reports that itself
+	}
+	branch := strings.TrimSpace(out)
+	if up, _ := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "for-each-ref", "--format=%(upstream)", "refs/heads/"+branch); strings.TrimSpace(up) != "" {
+		return "", nil
+	}
+	twin := refs.Twin(ctx, dir, branch)
+	if twin == "" {
+		return "", nil
+	}
+	if err := refs.SetUpstream(ctx, dir, branch, twin); err != nil {
+		return "", err
+	}
+	return twin, nil
 }
 
 // configSet reports whether key has a value in any config git reads for dir

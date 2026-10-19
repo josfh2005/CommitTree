@@ -402,6 +402,19 @@ func TestPullProposals(t *testing.T) {
 	if _, err := prep(r.Dir, "pull", nil); err == nil || !strings.Contains(err.Error(), "has no upstream") {
 		t.Fatalf("err = %v", err)
 	}
+
+	// A branch with no upstream whose remote twin has commits: the pull will
+	// track it, and the card says so.
+	r.Git("switch", "-q", "main")
+	r.Git("branch", "--unset-upstream")
+	r.Git("reset", "-q", "--hard", "origin/main~1")
+	p, err = prep(r.Dir, "pull", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Title != "Pull origin/main into main (merge), tracking it from now on" {
+		t.Fatalf("title = %q", p.Title)
+	}
 }
 
 func TestCreateBranchRejectsOptionLikeStart(t *testing.T) {
