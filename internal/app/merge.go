@@ -445,6 +445,12 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 			Emit: a.emit,
 		}
 		updated, runErr := agent.Execute(ctx, run, history)
+		// A resolution cut off by its limit is resumed by resolving again,
+		// not by a chat message: the chat has no merge tools.
+		limited := agent.LimitOf(updated[len(history):])
+		if limited > 0 {
+			updated[len(updated)-1].Resolve = true
+		}
 		at := answerTime()
 		stampAnswer(updated[len(history):], cfg.ChatProvider, cfg.ChatModel, at)
 		saveErr := a.ai.deps.Chats.Save(repoID, updated)
@@ -466,7 +472,7 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 		case saveErr != nil:
 			a.emit(agent.EventError, agent.ErrorEvent{RepoID: repoID, RunID: runID, Message: saveErr.Error(), Code: "other"})
 		default:
-			a.emit(agent.EventDone, agent.DoneEvent{RepoID: repoID, RunID: runID, At: at, Limited: agent.LimitOf(updated)})
+			a.emit(agent.EventDone, agent.DoneEvent{RepoID: repoID, RunID: runID, At: at, Limited: limited, Resolve: limited > 0})
 			// A stopped answer also ends here, with context.Canceled.
 			if runErr == nil {
 				a.suggestReplies(repoID, runID, cfg, o)

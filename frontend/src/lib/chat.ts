@@ -37,6 +37,24 @@ export interface ChatItem {
   at?: string
   // What the answer's model calls consumed; absent when none reported.
   usage?: TokenCount
+  // The tool-call limit the answer reached, and whether Continue resumes a
+  // conflict resolution rather than the chat; absent when it ended on its own.
+  limited?: number
+  resumeResolve?: boolean
+}
+
+/** The line under an answer cut off by its tool-call limit. */
+export const limitNote = (n: number) => `Tool limit reached (${n}).`
+
+/** What Continue sends to resume a chat answer cut off by its limit. */
+export const CONTINUE_TEXT = 'Continue where you left off.'
+
+/** What Continue does for the answer at index: only the last answer, cut
+ *  off by its limit, while nothing runs; null when there is no Continue. */
+export function continueKind(state: ChatState, index: number): 'chat' | 'resolve' | null {
+  const item = state.items[index]
+  if (state.runID || index !== state.items.length - 1 || !item?.limited) return null
+  return item.resumeResolve ? 'resolve' : 'chat'
 }
 
 // TokenCount is what the model calls of an answer (or a conversation)
@@ -153,6 +171,10 @@ export function fromMessages(repoID: string, messages: AIMessage[]): ChatState {
     if (m.usage) last.usage = addUsage(last.usage, m.usage)
     for (const call of m.toolCalls ?? []) last.tools.push({ id: call.id, name: call.name, args: call.args, at: last.text.length, seq: nextSeq() })
     if (m.stopped) last.stopped = true
+    if (m.limited) {
+      last.limited = m.limited
+      last.resumeResolve = !!m.resolve
+    }
   }
   return { repoID, runID: null, items }
 }
@@ -310,8 +332,12 @@ export function applyEvent(state: ChatState, name: string, payload: Payload): Ch
       last.usage = addUsage(last.usage, (payload as ChatUsageEvent).usage)
       return { ...state, items }
     case 'chat:done': {
-      const at = (payload as ChatDoneEvent).at
-      if (at) last.at = at
+      const p = payload as ChatDoneEvent
+      if (p.at) last.at = p.at
+      if (p.limited) {
+        last.limited = p.limited
+        last.resumeResolve = !!p.resolve
+      }
       return { ...state, runID: null, lastRunID: state.runID, items }
     }
     case 'chat:error': {

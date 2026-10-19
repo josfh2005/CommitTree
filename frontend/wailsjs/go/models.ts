@@ -40,6 +40,8 @@ export namespace ai {
 	    toolCalls?: ToolCall[];
 	    toolName?: string;
 	    stopped?: boolean;
+	    limited?: number;
+	    resolve?: boolean;
 	    provider?: string;
 	    model?: string;
 	    at?: string;
@@ -56,6 +58,8 @@ export namespace ai {
 	        this.toolCalls = this.convertValues(source["toolCalls"], ToolCall);
 	        this.toolName = source["toolName"];
 	        this.stopped = source["stopped"];
+	        this.limited = source["limited"];
+	        this.resolve = source["resolve"];
 	        this.provider = source["provider"];
 	        this.model = source["model"];
 	        this.at = source["at"];
@@ -1876,6 +1880,8 @@ export namespace settings {
 	    taskModel: string;
 	    commitMessage: string;
 	    suggestReplies: string;
+	    chatToolLimit: number;
+	    resolveToolLimit: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -1890,6 +1896,8 @@ export namespace settings {
 	        this.taskModel = source["taskModel"];
 	        this.commitMessage = source["commitMessage"];
 	        this.suggestReplies = source["suggestReplies"];
+	        this.chatToolLimit = source["chatToolLimit"];
+	        this.resolveToolLimit = source["resolveToolLimit"];
 	    }
 	}
 

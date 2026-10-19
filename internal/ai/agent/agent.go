@@ -96,6 +96,8 @@ type DoneEvent struct {
 	// Limited is the tool-call limit the answer reached (ai.Message.Limited);
 	// 0 when it ended on its own.
 	Limited int `json:"limited,omitempty"`
+	// Resolve says a Limited answer came from "Resolve with AI".
+	Resolve bool `json:"resolve,omitempty"`
 }
 
 // LimitOf is the tool-call limit the answer that ends msgs reached, 0 when
