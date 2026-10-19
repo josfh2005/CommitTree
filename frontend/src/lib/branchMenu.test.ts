@@ -50,6 +50,13 @@ describe('branchMenuGroups', () => {
     expect(find(groups, 'push').label).toBe('Publish main to origin')
   })
 
+  it('a branch with no upstream can pull when a remote has a branch of the same name', () => {
+    for (const current of [false, true]) {
+      const groups = branchMenuGroups(local({ current, upstream: '' }), opts({ twin: 'origin/feature' }))
+      expect(find(groups, 'pull')).toMatchObject({ label: 'Pull feature', disabled: false })
+    }
+  })
+
   it('a remote branch has Fetch but no Pull or Push', () => {
     expect(labels(branchMenuGroups(remote(), opts()))).toEqual([
       ['Check out'],

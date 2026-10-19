@@ -109,8 +109,14 @@ export function finishMessage(plan: FlowPlan, b: FlowBranch, values: FormValues)
 const withNotes = (text: string, notes: string[]) => [text, ...notes].join('\n')
 
 export function startedMessage(res: FlowStartResult, base: string): string {
+  // A flow already on the remote is continued from there, not started from base.
+  const continued = res.notes.find((n) => n.startsWith(`Continued ${res.branch} from `))
+  if (continued) return withNotes(`${continued}.`, res.notes.filter((n) => n !== continued))
   return withNotes(`Started ${res.branch} from ${base}.`, res.notes)
 }
+
+/** The toast after setting git-flow up: what was taken from or tied to a remote. */
+export const initMessage = (notes: string[], done = 'git-flow initialised') => withNotes(done, notes)
 
 export function finishedMessage(branch: string, res: FlowFinishResult): string {
   const what = res.merged.length ? `merged into ${res.merged.join(', ')}` : 'already merged'

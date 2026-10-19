@@ -6,6 +6,7 @@
   import { groupBranches, leafName, type BranchGroup } from '../lib/branches'
   import { branchLabel, branchMenuGroups, branchRemote, type BranchMenuId } from '../lib/branchMenu'
   import { rebaseBlocker } from '../lib/rebase'
+  import { twinOf } from '../lib/tracking'
   import { busy, expandedStashSections, repos, expandedTagSections, filters, loadSideRefs, mainView, mergeState, refs, selectRepo, selectStash, selectedRepoId, selectedStash, sideRefs, stashEntries, toggleStashExpanded, toggleTagsExpanded } from '../lib/stores'
   import { isFilterRow, refsView } from '../lib/repoRefs'
   import type { Branch, StashEntry, Tag } from '../lib/types'
@@ -80,6 +81,7 @@
   function branchMenu(event: MouseEvent, b: Branch) {
     const head = repoRefs?.head ?? ''
     const remotes = (repoRefs?.remotes ?? []).map((r) => r.name)
+    const twin = b.remote ? '' : twinOf(b.name, repoRefs?.remotes ?? [])
     openMenuAsync(event, async () => {
       const contained = b.current ? false : await api.isAncestorOfHead(repoId, branchLabel(b)).catch(() => false)
       const rebaseWhy = rebaseBlocker(
@@ -94,11 +96,12 @@
         merging: !!$mergeState?.merging,
         rebaseWhy,
         remotes,
+        twin,
       })
       const actions: Record<BranchMenuId, () => unknown> = {
         checkout: () => checkoutBranch(repoId, b),
         fetch: () => fetchBranchRemote(repoId, branchRemote(b, remotes)),
-        pull: () => pullBranch(repoId, b),
+        pull: () => pullBranch(repoId, b, twin),
         push: () => pushBranch(repoId, b),
         merge: () => mergeBranch(repoId, b, head),
         rebase: () => rebaseOnto(repoId, branchLabel(b), branchLabel(b), head),

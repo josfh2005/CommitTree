@@ -2,6 +2,7 @@ import * as Go from '../../wailsjs/go/app/App'
 import type { AddReposResult, ScanResult, BranchPushResult, CloneStatus, RepoAIInfo, RepoAIOverride, AIMessage, AISettings, AIStatus, AheadBehind, AutoFetchResult, Blame, ChatConfirmEvent, CommandLogView, CommandOutput, CommitInfo, ConflictFile, Details, Filters, Flow, FlowConfig, FlowSettings, FlowFinishResult, FlowPlan, FlowStartResult, FlowType, GitSettings, HunkAction, HunkPick, Identity, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, RemoteConfig, RemoteTest, RegionChoice, RegionResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeDiff, WorktreeRemovalInfo, WorktreeState } from './types'
 import type { NotifyTarget } from './notifyRules'
 import type { CredentialAnswer } from './credential'
+import type { Tracking } from './tracking'
 
 // The generated bindings use Wails model classes; the JSON is identical to our
 // interfaces, so cast at this single boundary.
@@ -93,7 +94,7 @@ export const api = {
   owedStashDrop: (id: string) => call<number>(Go.OwedStashDrop(id)),
 
   createBranch: (id: string, name: string, target: string, checkout: boolean) =>
-    call<void>(Go.CreateBranch(id, name, target, checkout)),
+    call<Tracking>(Go.CreateBranch(id, name, target, checkout)),
   deleteBranch: (id: string, name: string, force: boolean) => call<void>(Go.DeleteBranch(id, name, force)),
   deleteRemoteBranch: (id: string, remote: string, name: string) => call<void>(Go.DeleteRemoteBranch(id, remote, name)),
   createTag: (id: string, name: string, target: string, message: string) => call<void>(Go.CreateTag(id, name, target, message)),
@@ -103,7 +104,7 @@ export const api = {
   getFlow: (id: string) => call<Flow>(Go.GetFlow(id)),
   getFlowSettings: (id: string) => call<FlowSettings>(Go.GetFlowSettings(id)),
   saveFlowSettings: (id: string, cfg: FlowConfig) => call<void>(Go.SaveFlowSettings(id, cfg as any)),
-  initFlow: (id: string, cfg: FlowConfig) => call<void>(Go.InitFlow(id, cfg as any)),
+  initFlow: (id: string, cfg: FlowConfig) => call<string[]>(Go.InitFlow(id, cfg as any)),
   startFlow: (id: string, type: FlowType, name: string, base: string) => call<FlowStartResult>(Go.StartFlow(id, type, name, base)),
   planFinish: (id: string, branch: string, releases: string[]) => call<FlowPlan>(Go.PlanFinish(id, branch, releases)),
   finishFlow: (id: string, branch: string, releases: string[]) => call<FlowFinishResult>(Go.FinishFlow(id, branch, releases)),
