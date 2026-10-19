@@ -29,7 +29,7 @@ func TestFlowThroughTheApp(t *testing.T) {
 		t.Fatalf("before init: %+v, %v", f, err)
 	}
 	cfg := gitflow.Config{Master: "main", Develop: "develop", Prefixes: gitflow.Prefixes{Feature: "feature/", Release: "release/", Hotfix: "hotfix/", Warmfix: "warmfix/"}}
-	if err := a.InitFlow(repo.ID, cfg); err != nil {
+	if _, err := a.InitFlow(repo.ID, cfg); err != nil {
 		t.Fatal(err)
 	}
 	started, err := a.StartFlow(repo.ID, gitflow.Feature, "x", "")
@@ -60,7 +60,7 @@ func TestFlowSettingsThroughTheApp(t *testing.T) {
 	}
 
 	// Set up goes through InitFlow; afterwards Save only rewrites keys.
-	if err := a.InitFlow(id, cfg); err != nil {
+	if _, err := a.InitFlow(id, cfg); err != nil {
 		t.Fatal(err)
 	}
 	cfg.Develop, cfg.Prefixes.Release = "integration", "rel-"
@@ -91,7 +91,7 @@ func TestSavingFlowSettingsChangesTheMainBranchesPushed(t *testing.T) {
 	r.Git("branch", "develop")
 	r.Git("branch", "integration")
 	cfg := gitflow.Config{Master: "main", Develop: "develop", Prefixes: gitflow.Prefixes{Feature: "feature/", Release: "release/", Hotfix: "hotfix/", Warmfix: "warmfix/"}}
-	if err := a.InitFlow(id, cfg); err != nil {
+	if _, err := a.InitFlow(id, cfg); err != nil {
 		t.Fatal(err)
 	}
 	official := func() map[string]bool {

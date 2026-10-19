@@ -92,7 +92,7 @@ func TestInitWritesKeysAndCreatesDevelop(t *testing.T) {
 	r.Commit("init")
 	r.Git("config", "gitflow.prefix.bugfix", "bugfix/")
 	cfg := Config{Master: "main", Develop: "develop", Prefixes: Prefixes{Feature: "f/", Release: "r/", Hotfix: "h/", Warmfix: "w/"}}
-	if err := Init(ctx, r.Dir, cfg); err != nil {
+	if _, err := Init(ctx, r.Dir, cfg); err != nil {
 		t.Fatal(err)
 	}
 	if got := r.Git("config", "gitflow.prefix.warmfix"); got != "w/" {
@@ -109,7 +109,7 @@ func TestInitWritesKeysAndCreatesDevelop(t *testing.T) {
 func TestInitRejectsMissingMaster(t *testing.T) {
 	r := testrepo.New(t)
 	r.Commit("init")
-	err := Init(ctx, r.Dir, Config{Master: "nope", Develop: "develop", Prefixes: defaultPrefixes})
+	_, err := Init(ctx, r.Dir, Config{Master: "nope", Develop: "develop", Prefixes: defaultPrefixes})
 	if err == nil {
 		t.Fatal("want error")
 	}
