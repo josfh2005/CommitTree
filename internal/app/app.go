@@ -602,10 +602,16 @@ func (a *App) GetResetPreview(id, hash string) (ops.ResetInfo, error) {
 	return ops.ResetPreview(a.ctx, dir, hash)
 }
 
-func (a *App) CreateBranch(id, name, target string, checkout bool) error {
-	return a.write(id, func(ctx context.Context, dir string) error {
-		return refs.CreateBranch(ctx, dir, name, target, checkout)
+// CreateBranch creates a branch; the result says whether it tracks the
+// remote branch of the same name (see refs.TrackTwin), for the toast.
+func (a *App) CreateBranch(id, name, target string, checkout bool) (refs.Tracking, error) {
+	var tracking refs.Tracking
+	err := a.write(id, func(ctx context.Context, dir string) error {
+		var err error
+		tracking, err = refs.CreateBranch(ctx, dir, name, target, checkout)
+		return err
 	})
+	return tracking, err
 }
 
 func (a *App) DeleteBranch(id, name string, force bool) error {

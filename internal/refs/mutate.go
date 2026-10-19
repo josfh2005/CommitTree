@@ -15,18 +15,27 @@ var (
 	ErrInvalidName   = errors.New("invalid ref name")
 )
 
-func CreateBranch(ctx context.Context, dir, name, target string, checkout bool) error {
+// CreateBranch creates name at target (and switches to it with checkout).
+// --no-track keeps git's own branch.autoSetupMerge from choosing an
+// upstream; TrackTwin then decides — the remote branch of the same name,
+// when the two haven't diverged — and the result says what it did.
+func CreateBranch(ctx context.Context, dir, name, target string, checkout bool) (Tracking, error) {
 	if err := validateBranch(ctx, dir, name); err != nil {
-		return err
+		return Tracking{}, err
 	}
-	if _, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "branch", name, target); err != nil {
-		return err
+	if _, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "branch", "--no-track", name, target); err != nil {
+		return Tracking{}, err
+	}
+	tracking, err := TrackTwin(ctx, dir, name)
+	if err != nil {
+		return Tracking{}, err
 	}
 	if checkout {
-		_, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "switch", name)
-		return err
+		if _, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "switch", name); err != nil {
+			return tracking, err
+		}
 	}
-	return nil
+	return tracking, nil
 }
 
 func DeleteBranch(ctx context.Context, dir, name string, force bool) error {

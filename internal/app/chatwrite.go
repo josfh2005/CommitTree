@@ -17,6 +17,7 @@ import (
 	"git-ui/internal/gitcmd"
 	"git-ui/internal/merge"
 	"git-ui/internal/ops"
+	"git-ui/internal/refs"
 )
 
 const (
@@ -140,7 +141,8 @@ func (a *App) executeWrite(repoID, tool string, p writetools.Proposal) (string, 
 		}
 		return p.Title, nil
 	case "create_branch":
-		if err := a.CreateBranch(repoID, p.Name, p.Start, p.Checkout); err != nil {
+		tracking, err := a.CreateBranch(repoID, p.Name, p.Start, p.Checkout)
+		if err != nil {
 			// CreateBranch creates the branch, then (with Checkout) switches
 			// to it: a failure can be the switch alone, after the branch
 			// already exists. Say so, or "nothing happened" would be wrong.
@@ -149,7 +151,7 @@ func (a *App) executeWrite(repoID, tool string, p writetools.Proposal) (string, 
 			}
 			return "", err
 		}
-		return p.Title, nil
+		return p.Title + trackingNote(tracking), nil
 	case "checkout_branch":
 		if p.Remote == "" {
 			if err := a.Checkout(repoID, p.Name); err != nil {
@@ -226,6 +228,18 @@ func (a *App) branchExists(repoID, name string) bool {
 	}
 	_, err = gitcmd.Run(a.ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--verify", "--quiet", "refs/heads/"+name)
 	return err == nil
+}
+
+// trackingNote is what a new branch's tracking adds to the chat's answer:
+// the remote branch it now tracks, or why it doesn't track it.
+func trackingNote(t refs.Tracking) string {
+	switch {
+	case t.Tracked:
+		return ", tracking " + t.Twin
+	case t.Twin != "":
+		return "; " + t.Twin + " exists but has diverged from it, so it has no upstream"
+	}
+	return ""
 }
 
 // stagedSoFar reports a partial stage/unstage failure, naming the paths that

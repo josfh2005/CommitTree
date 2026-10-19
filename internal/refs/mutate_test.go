@@ -14,7 +14,7 @@ func TestCreateBranchAndCheckout(t *testing.T) {
 	first := r.Commit("first")
 	r.Commit("second")
 
-	if err := refs.CreateBranch(ctx, r.Dir, "feature/a", first, true); err != nil {
+	if _, err := refs.CreateBranch(ctx, r.Dir, "feature/a", first, true); err != nil {
 		t.Fatal(err)
 	}
 	if head := r.Git("rev-parse", "HEAD"); head != first {
@@ -29,7 +29,7 @@ func TestCreateBranchRejectsInvalidName(t *testing.T) {
 	r := testrepo.New(t)
 	r.Commit("first")
 	for _, name := range []string{"bad..name", "-x", ""} {
-		if err := refs.CreateBranch(ctx, r.Dir, name, "HEAD", false); !errors.Is(err, refs.ErrInvalidName) {
+		if _, err := refs.CreateBranch(ctx, r.Dir, name, "HEAD", false); !errors.Is(err, refs.ErrInvalidName) {
 			t.Errorf("%q: want ErrInvalidName, got %v", name, err)
 		}
 	}

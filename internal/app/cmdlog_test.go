@@ -17,7 +17,7 @@ import (
 
 func TestCommandLogRecordsAppCommands(t *testing.T) {
 	a, id := newTestApp(t)
-	if err := a.CreateBranch(id, "logged", "HEAD", false); err != nil {
+	if _, err := a.CreateBranch(id, "logged", "HEAD", false); err != nil {
 		t.Fatal(err)
 	}
 	view, err := a.CommandLog(id)
@@ -58,19 +58,19 @@ func TestCommandLogRecordsAppCommands(t *testing.T) {
 func TestWriteDuringAIExecutionIsAI(t *testing.T) {
 	a, id := newTestApp(t)
 	done := a.markAIWrite(id)
-	err := a.CreateBranch(id, "by-ai", "HEAD", false)
+	_, err := a.CreateBranch(id, "by-ai", "HEAD", false)
 	done()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := a.CreateBranch(id, "by-user", "HEAD", false); err != nil {
+	if _, err := a.CreateBranch(id, "by-user", "HEAD", false); err != nil {
 		t.Fatal(err)
 	}
 	view, _ := a.CommandLog(id)
 	origins := map[string]cmdlog.Origin{}
 	for _, e := range view.Entries {
-		if e.Kind == cmdlog.KindWrite && len(e.Args) > 1 && e.Args[0] == "branch" {
-			origins[e.Args[1]] = e.Origin // git branch <name> HEAD
+		if e.Kind == cmdlog.KindWrite && len(e.Args) > 2 && e.Args[0] == "branch" && e.Args[1] == "--no-track" {
+			origins[e.Args[2]] = e.Origin // git branch --no-track <name> HEAD
 		}
 	}
 	if origins["by-ai"] != cmdlog.OriginAI || origins["by-user"] != cmdlog.OriginYou {
@@ -182,7 +182,7 @@ func TestRunningEntryEmittedBeforeFinished(t *testing.T) {
 		mu.Unlock()
 	}
 	a.started.Store(true)
-	if err := a.CreateBranch(id, "running", "HEAD", false); err != nil {
+	if _, err := a.CreateBranch(id, "running", "HEAD", false); err != nil {
 		t.Fatal(err)
 	}
 	mu.Lock()
@@ -241,7 +241,7 @@ func TestAIWriteMarkAppliesWhileRunning(t *testing.T) {
 	}
 	a.started.Store(true)
 	done := a.markAIWrite(id)
-	err := a.CreateBranch(id, "by-ai-running", "HEAD", false)
+	_, err := a.CreateBranch(id, "by-ai-running", "HEAD", false)
 	done()
 	if err != nil {
 		t.Fatal(err)
@@ -259,7 +259,7 @@ func TestEmittedEntriesCarryRepoID(t *testing.T) {
 	var got []cmdlog.Entry
 	a.cmdEmit = func(e cmdlog.Entry) { mu.Lock(); got = append(got, e); mu.Unlock() }
 	a.started.Store(true)
-	if err := a.CreateBranch(id, "with-id", "HEAD", false); err != nil {
+	if _, err := a.CreateBranch(id, "with-id", "HEAD", false); err != nil {
 		t.Fatal(err)
 	}
 	mu.Lock()
@@ -276,7 +276,7 @@ func TestEmittedEntriesCarryRepoID(t *testing.T) {
 
 func TestCommandLogEntriesCarryRepoID(t *testing.T) {
 	a, id := newTestApp(t)
-	if err := a.CreateBranch(id, "listed", "HEAD", false); err != nil {
+	if _, err := a.CreateBranch(id, "listed", "HEAD", false); err != nil {
 		t.Fatal(err)
 	}
 	view, err := a.CommandLog(id)
