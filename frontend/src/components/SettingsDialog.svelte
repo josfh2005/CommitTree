@@ -426,6 +426,15 @@
                   </select>
                 {/if}
               </label>
+              <!-- Empty or out of range is fixed on save: the default, or 500 at most. -->
+              <label title="Tool calls one chat answer may make before it wraps up and offers Continue (1–500)">
+                <span>Max tool calls per answer</span>
+                <input class="count" type="number" min="1" max="500" bind:value={settings.chatToolLimit} on:change={save} />
+              </label>
+              <label title="Tool calls one Resolve with AI run may make before it wraps up and offers Continue (1–500)">
+                <span>Max tool calls when resolving conflicts</span>
+                <input class="count" type="number" min="1" max="500" bind:value={settings.resolveToolLimit} on:change={save} />
+              </label>
             </section>
 
             <section>
@@ -519,6 +528,7 @@
   section:last-of-type { border-bottom: 0; }
   label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
   label.row { flex-direction: row; align-items: center; }
+  input.count { width: 90px; }
   label.check { gap: 6px; color: var(--text); font-size: 13px; }
   .key-label { flex: none; width: 130px; }
   .row { display: flex; gap: 6px; }

@@ -24,7 +24,7 @@ func TestLoadMissingFileUsesDefaults(t *testing.T) {
 
 func TestSaveAndLoadRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "sub", "ai.json")
-	s := settings.Settings{OllamaURL: "http://10.0.0.5:11434", ChatProvider: "ollama", ChatModel: "llama3.1:8b", TaskProvider: "ollama", TaskModel: "qwen2.5:3b", CommitMessage: settings.CommitAutoLocal, SuggestReplies: settings.SuggestAutoLocal}
+	s := settings.Settings{OllamaURL: "http://10.0.0.5:11434", ChatProvider: "ollama", ChatModel: "llama3.1:8b", TaskProvider: "ollama", TaskModel: "qwen2.5:3b", CommitMessage: settings.CommitAutoLocal, SuggestReplies: settings.SuggestAutoLocal, ChatToolLimit: 12, ResolveToolLimit: 200}
 
 	if err := settings.Save(path, s); err != nil {
 		t.Fatal(err)
@@ -32,6 +32,35 @@ func TestSaveAndLoadRoundTrip(t *testing.T) {
 	got, err := settings.Load(path)
 	if err != nil || got != s {
 		t.Fatalf("got %+v, err %v", got, err)
+	}
+}
+
+func TestToolLimitsDefaultWhenMissingAndAreKeptInRange(t *testing.T) {
+	d := settings.Defaults()
+	if d.ChatToolLimit != settings.DefaultChatToolLimit || d.ResolveToolLimit != settings.DefaultResolveToolLimit {
+		t.Fatalf("defaults = %d, %d", d.ChatToolLimit, d.ResolveToolLimit)
+	}
+
+	// A file written before the limits existed.
+	path := filepath.Join(t.TempDir(), "ai.json")
+	if err := os.WriteFile(path, []byte(`{"ollamaURL":"http://localhost:11434","chatProvider":"ollama","chatModel":"m","taskProvider":"ollama","taskModel":"m"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := settings.Load(path)
+	if err != nil || got.ChatToolLimit != settings.DefaultChatToolLimit || got.ResolveToolLimit != settings.DefaultResolveToolLimit {
+		t.Fatalf("got %+v, err %v", got, err)
+	}
+
+	// Saving 0 or a negative number means the default; past the maximum is capped.
+	for _, c := range []struct{ in, want int }{{0, settings.DefaultChatToolLimit}, {-3, settings.DefaultChatToolLimit}, {1, 1}, {9999, settings.MaxToolLimit}} {
+		s := settings.Defaults()
+		s.ChatToolLimit = c.in
+		if err := settings.Save(path, s); err != nil {
+			t.Fatal(err)
+		}
+		if got, _ := settings.Load(path); got.ChatToolLimit != c.want {
+			t.Errorf("saved %d, loaded %d, want %d", c.in, got.ChatToolLimit, c.want)
+		}
 	}
 }
 

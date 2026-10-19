@@ -71,6 +71,8 @@ describe('settingsHaveModels', () => {
     taskModel: 'claude-opus-5',
     commitMessage: 'auto-local',
     suggestReplies: 'auto-local',
+    chatToolLimit: 30,
+    resolveToolLimit: 120,
     ...over,
   })
 

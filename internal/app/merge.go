@@ -312,10 +312,6 @@ type MergeChangedEvent struct {
 	RepoID string `json:"repoID"`
 }
 
-// MergeMaxSteps is generous because each conflicted file costs several tool
-// rounds; history trimming keeps the context bounded regardless.
-const MergeMaxSteps = 60
-
 // resolvable are the kinds the conflict agent works on. Each has a
 // fingerprint that changes when the operation (or, for a rebase, the step)
 // does, which is what keeps a run from reaching into the next one.
@@ -434,9 +430,9 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 		run := agent.Run{
 			RepoID: repoID, RunID: runID,
 			Provider: provider, Model: cfg.ChatModel, System: system,
-			Tools:    append(mergetools.Specs(), tools.Specs()...),
-			MaxSteps: MergeMaxSteps,
-			Continue: nudge.next,
+			Tools:        append(mergetools.Specs(), tools.Specs()...),
+			MaxToolCalls: cfg.ResolveToolLimit,
+			Continue:     nudge.next,
 			RunTool: func(ctx context.Context, call ai.ToolCall, step int) string {
 				nudge.saw(call)
 				if isMergeTool(call.Name) {
@@ -449,6 +445,12 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 			Emit: a.emit,
 		}
 		updated, runErr := agent.Execute(ctx, run, history)
+		// A resolution cut off by its limit is resumed by resolving again,
+		// not by a chat message: the chat has no merge tools.
+		limited := agent.LimitOf(updated[len(history):])
+		if limited > 0 {
+			updated[len(updated)-1].Resolve = true
+		}
 		at := answerTime()
 		stampAnswer(updated[len(history):], cfg.ChatProvider, cfg.ChatModel, at)
 		saveErr := a.ai.deps.Chats.Save(repoID, updated)
@@ -470,7 +472,7 @@ func (a *App) ResolveConflicts(repoID, runID string) error {
 		case saveErr != nil:
 			a.emit(agent.EventError, agent.ErrorEvent{RepoID: repoID, RunID: runID, Message: saveErr.Error(), Code: "other"})
 		default:
-			a.emit(agent.EventDone, agent.DoneEvent{RepoID: repoID, RunID: runID, At: at})
+			a.emit(agent.EventDone, agent.DoneEvent{RepoID: repoID, RunID: runID, At: at, Limited: limited, Resolve: limited > 0})
 			// A stopped answer also ends here, with context.Canceled.
 			if runErr == nil {
 				a.suggestReplies(repoID, runID, cfg, o)

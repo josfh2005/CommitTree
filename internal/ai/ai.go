@@ -24,6 +24,13 @@ type Message struct {
 	ToolCalls []ToolCall `json:"toolCalls,omitempty"`
 	ToolName  string     `json:"toolName,omitempty"`
 	Stopped   bool       `json:"stopped,omitempty"`
+	// Limited, on the last assistant message of an answer, is the tool-call
+	// limit the answer reached (so the chat shows "Tool limit reached (N)."
+	// and Continue); 0 when it ended on its own.
+	Limited int `json:"limited,omitempty"`
+	// Resolve marks a Limited answer that came from "Resolve with AI", so
+	// Continue resumes the resolution rather than the chat.
+	Resolve bool `json:"resolve,omitempty"`
 	// Provider and Model name what produced an assistant message, so the
 	// chat can show it; empty on other roles and on messages stored before
 	// they were recorded.

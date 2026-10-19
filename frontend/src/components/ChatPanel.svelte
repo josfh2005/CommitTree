@@ -4,7 +4,8 @@
   import Icon from './Icon.svelte'
   import ModelPicker from './ModelPicker.svelte'
   import { api } from '../lib/api'
-  import { answeredBy, appliedText, applyEvent, conversationTokens, tokensText, tokensTitle, choiceState, decisionCard, parts, CHAT_EVENTS, isWriteTool, confirmResultText, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, pendingCards, type ChatState } from '../lib/chat'
+  import { resolveConflicts } from '../lib/actions'
+  import { CONTINUE_TEXT, continueKind, limitNote, answeredBy, appliedText, applyEvent, conversationTokens, tokensText, tokensTitle, choiceState, decisionCard, parts, CHAT_EVENTS, isWriteTool, confirmResultText, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, pendingCards, type ChatState } from '../lib/chat'
   import { relativeDate } from '../lib/format'
   import { renderMarkdown } from '../lib/markdown'
   import { chatBlocker } from '../lib/providers'
@@ -122,6 +123,14 @@
 
   function stop() {
     if (state.repoID) api.stopChat(state.repoID).catch(() => {})
+  }
+
+  // resume is Continue under an answer cut off by its tool-call limit: a
+  // chat answer goes on through an ordinary message, a conflict resolution
+  // by resolving again (the chat has no merge tools).
+  function resume(kind: 'chat' | 'resolve' | null) {
+    if (kind === 'chat') sendText(CONTINUE_TEXT)
+    else if (kind === 'resolve' && state.repoID) resolveConflicts(state.repoID)
   }
 
   async function clear() {
@@ -276,6 +285,14 @@
             <div class="typing">Thinking…</div>
           {/if}
           {#if item.stopped}<div class="note">Stopped</div>{/if}
+          {#if item.limited}
+            <div class="note limit">
+              {limitNote(item.limited)}
+              {#if continueKind(state, i)}
+                <button class="btn" disabled={!ready} on:click={() => resume(continueKind(state, i))}>Continue</button>
+              {/if}
+            </div>
+          {/if}
           {#if item.error}<div class="error">{errorText(item.error)}</div>{/if}
           {#if item.text && !(running && i === state.items.length - 1)}
             <div class="answer-actions">
@@ -366,6 +383,8 @@
   .md :global(pre code) { padding: 0; background: none; }
   .md :global(a) { color: var(--accent); cursor: pointer; }
   .typing, .note { font-size: 12px; color: var(--faint); }
+  .note.limit { display: flex; align-items: center; gap: 8px; }
+  .note.limit .btn { height: 22px; padding: 0 8px; font-size: 12px; }
   /* The app's own word, not the model's: after the text, and marked apart. */
   .notice { margin-top: 6px; padding: 4px 8px; border-left: 2px solid var(--accent); font-size: 12px; color: var(--muted); }
   .error { font-size: 12px; color: var(--danger); }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { answeredBy, appliedText, pendingCards, trayIndexAfter, type PendingCard, conversationTokens, formatTokens, tokensText, tokensTitle, applyEvent, nextChatRunRepo, parts, isWriteTool, CHAT_EVENTS, confirmResultText, confirmState, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from './chat'
+import { CONTINUE_TEXT, continueKind, limitNote, answeredBy, appliedText, pendingCards, trayIndexAfter, type PendingCard, conversationTokens, formatTokens, tokensText, tokensTitle, applyEvent, nextChatRunRepo, parts, isWriteTool, CHAT_EVENTS, confirmResultText, confirmState, emptyChat, errorText, fromMessages, shouldReloadChat, startRun, toolLabel, withConfirmDecision, withPendingConfirm, type ChatState } from './chat'
 import type { AIMessage, ChatConfirmEvent } from './types'
 
 describe('fromMessages', () => {
@@ -555,5 +555,40 @@ describe('pending decision cards', () => {
     // nothing shown yet, or an id from another conversation
     expect(trayIndexAfter(null, list(), list('a', 'b'))).toBe(0)
     expect(trayIndexAfter('zz', list('a'), list('b', 'c'))).toBe(0)
+  })
+})
+
+describe('tool limit', () => {
+  const limitedChat = (m: Partial<AIMessage>): ChatState =>
+    fromMessages('r', [{ role: 'user', content: 'look' }, { role: 'assistant', content: 'Found this much.', ...m }])
+
+  it('keeps the limit a stored answer reached, and where it came from', () => {
+    expect(limitedChat({ limited: 30 }).items[1]).toMatchObject({ limited: 30, resumeResolve: false })
+    expect(limitedChat({ limited: 120, resolve: true }).items[1]).toMatchObject({ limited: 120, resumeResolve: true })
+    expect(limitedChat({}).items[1].limited).toBeUndefined()
+  })
+
+  it('marks a live answer from its done event', () => {
+    let s = startRun(emptyChat('r'), 'look', 'run1')
+    s = applyEvent(s, 'chat:done', { repoID: 'r', runID: 'run1', limited: 30 })
+    expect(s.items[1]).toMatchObject({ limited: 30, resumeResolve: false })
+  })
+
+  it('offers Continue only on the last answer, when it was cut off and nothing runs', () => {
+    expect(continueKind(limitedChat({ limited: 30 }), 1)).toBe('chat')
+    expect(continueKind(limitedChat({ limited: 120, resolve: true }), 1)).toBe('resolve')
+    expect(continueKind(limitedChat({}), 1)).toBeNull()
+    expect(continueKind(limitedChat({ limited: 30 }), 0)).toBeNull()
+    expect(continueKind({ ...limitedChat({ limited: 30 }), runID: 'busy' }, 1)).toBeNull()
+    const later = fromMessages('r', [
+      { role: 'user', content: 'look' }, { role: 'assistant', content: 'cut', limited: 30 },
+      { role: 'user', content: 'thanks' }, { role: 'assistant', content: 'ok' },
+    ])
+    expect(continueKind(later, 1)).toBeNull()
+  })
+
+  it('says which limit was reached', () => {
+    expect(limitNote(30)).toBe('Tool limit reached (30).')
+    expect(CONTINUE_TEXT).toBe('Continue where you left off.')
   })
 })

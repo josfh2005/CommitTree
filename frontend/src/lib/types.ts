@@ -193,6 +193,10 @@ export interface AIMessage {
   model?: string
   at?: string
   usage?: AIUsage
+  /** The tool-call limit this answer reached; absent when it ended on its own. */
+  limited?: number
+  /** A limited answer from "Resolve with AI" (Continue resolves again). */
+  resolve?: boolean
 }
 
 export interface AIUsage { input: number; output: number; cacheRead?: number; cacheWrite?: number }
@@ -217,6 +221,9 @@ export interface AISettings {
   taskModel: string
   commitMessage: CommitMessageMode
   suggestReplies: SuggestRepliesMode
+  /** Tool calls a chat answer, and a "Resolve with AI" run, may make (1–500). */
+  chatToolLimit: number
+  resolveToolLimit: number
 }
 
 export interface OllamaModel {
@@ -263,7 +270,7 @@ export interface ChatChoiceEvent { repoID: string; callID: string; summary: stri
 export interface ChatToolResultEvent { repoID: string; runID: string; name: string; summary: string }
 export interface ChatNoticeEvent { repoID: string; runID: string; text: string }
 export interface ChatSuggestionsEvent { repoID: string; runID: string; replies: string[] }
-export interface ChatDoneEvent { repoID: string; runID: string; at?: string }
+export interface ChatDoneEvent { repoID: string; runID: string; at?: string; limited?: number; resolve?: boolean }
 export interface ChatUsageEvent { repoID: string; runID: string; usage: AIUsage }
 export interface ChatErrorEvent { repoID: string; runID: string; message: string; code: string }
 export interface ChatConfirmEvent { repoID: string; runID: string; confirmID: string; tool: string; title: string; details: string[] }

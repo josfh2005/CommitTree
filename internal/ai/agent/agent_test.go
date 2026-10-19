@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 
@@ -102,23 +103,131 @@ func TestMissingToolCallIDsAreFilled(t *testing.T) {
 	}
 }
 
-func TestStepLimit(t *testing.T) {
-	p := &scripted{turns: [][]ai.Chunk{{{ToolCalls: []ai.ToolCall{{ID: "c", Name: "list_refs"}}}, {Done: true}}}}
-	rec := &recorder{}
+// toolTurn is a model response asking for n list_refs calls.
+func toolTurn(n int) []ai.Chunk {
+	calls := make([]ai.ToolCall, n)
+	for i := range calls {
+		calls[i] = ai.ToolCall{Name: "list_refs", Args: map[string]any{}}
+	}
+	return []ai.Chunk{{ToolCalls: calls}, {Done: true}}
+}
 
-	got, err := agent.Execute(context.Background(), baseRun(p, rec), user)
+// counting is baseRun with a RunTool that counts its calls.
+func counting(p ai.Provider, rec *recorder, ran *int) agent.Run {
+	run := baseRun(p, rec)
+	run.RunTool = func(ctx context.Context, call ai.ToolCall, step int) string {
+		*ran++
+		return "main"
+	}
+	return run
+}
+
+func TestToolLimitStopsAfterThatManyCallsAndWrapsUp(t *testing.T) {
+	p := &scripted{turns: [][]ai.Chunk{toolTurn(1), toolTurn(1), toolTurn(1), {{Delta: "Found main."}, {Done: true}}}}
+	var ran int
+	run := counting(p, &recorder{}, &ran)
+	run.MaxToolCalls = 3
+
+	got, err := agent.Execute(context.Background(), run, user)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(p.requests) != agent.MaxSteps {
-		t.Fatalf("requests = %d", len(p.requests))
+	if ran != 3 || len(p.requests) != 4 {
+		t.Fatalf("ran %d tools in %d requests, want 3 in 4 (the last one the wrap-up)", ran, len(p.requests))
+	}
+	wrap := p.requests[3]
+	if !strings.Contains(wrap.System, agent.WrapUpNote) || !strings.HasPrefix(wrap.System, "sys") {
+		t.Errorf("wrap-up system = %q, want sys + the wrap-up note", wrap.System)
 	}
 	last := got[len(got)-1]
-	if last.Role != ai.RoleAssistant || last.Content != agent.StepLimitNote {
+	if last.Role != ai.RoleAssistant || last.Content != "Found main." || last.Limited != 3 {
+		t.Fatalf("last = %#v, want the wrap-up answer marked Limited 3", last)
+	}
+}
+
+func TestToolLimitRunsOnlyWhatFitsFromABiggerRound(t *testing.T) {
+	p := &scripted{turns: [][]ai.Chunk{toolTurn(3), {{Delta: "Partial."}, {Done: true}}}}
+	var ran int
+	run := counting(p, &recorder{}, &ran)
+	run.MaxToolCalls = 2
+
+	got, err := agent.Execute(context.Background(), run, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ran != 2 {
+		t.Fatalf("ran %d tools, want 2", ran)
+	}
+	// Every call of the round has a result — the API requires one each.
+	var results []string
+	for _, m := range got {
+		if m.Role == ai.RoleTool {
+			results = append(results, m.Content)
+		}
+	}
+	if !reflect.DeepEqual(results, []string{"main", "main", agent.NotRunNote}) {
+		t.Fatalf("tool results = %q", results)
+	}
+	if last := got[len(got)-1]; last.Content != "Partial." || last.Limited != 2 {
 		t.Fatalf("last = %#v", last)
 	}
-	if rec.names[len(rec.names)-1] != agent.EventDelta {
-		t.Fatalf("step limit note not streamed: %v", rec.names)
+}
+
+func TestWrapUpToolCallsAreIgnored(t *testing.T) {
+	p := &scripted{turns: [][]ai.Chunk{toolTurn(1), {{Delta: "Done so far."}, {ToolCalls: []ai.ToolCall{{ID: "x", Name: "list_refs"}}}, {Done: true}}}}
+	var ran int
+	run := counting(p, &recorder{}, &ran)
+	run.MaxToolCalls = 1
+
+	got, err := agent.Execute(context.Background(), run, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := got[len(got)-1]
+	if ran != 1 || len(last.ToolCalls) != 0 || last.Content != "Done so far." || last.Limited != 1 {
+		t.Fatalf("ran %d, last = %#v; want the wrap-up text without its tool calls", ran, last)
+	}
+}
+
+func TestToolLimitDefaultsWhenUnset(t *testing.T) {
+	p := &scripted{turns: [][]ai.Chunk{toolTurn(1)}}
+	var ran int
+	run := counting(p, &recorder{}, &ran) // MaxToolCalls left at 0
+
+	got, err := agent.Execute(context.Background(), run, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ran != agent.DefaultMaxToolCalls || got[len(got)-1].Limited != agent.DefaultMaxToolCalls {
+		t.Fatalf("ran %d, limited %d; want the default %d", ran, got[len(got)-1].Limited, agent.DefaultMaxToolCalls)
+	}
+}
+
+func TestRoundsAreCappedEvenWithoutToolCalls(t *testing.T) {
+	// A model that never calls a tool, nudged on forever by Continue: only
+	// the round cap ends it.
+	p := &scripted{turns: [][]ai.Chunk{{{Delta: "next I will…"}, {Done: true}}}}
+	run := baseRun(p, &recorder{})
+	run.MaxToolCalls = 1
+	run.Continue = func(context.Context) string { return "carry on" }
+
+	got, err := agent.Execute(context.Background(), run, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := 1 + agent.ExtraRounds + 1; len(p.requests) != want {
+		t.Fatalf("requests = %d, want %d (rounds cap, then the wrap-up)", len(p.requests), want)
+	}
+	if got[len(got)-1].Limited != 1 {
+		t.Fatalf("last = %#v, want Limited", got[len(got)-1])
+	}
+}
+
+func TestAnswerWithinTheLimitIsNotMarked(t *testing.T) {
+	p := &scripted{turns: [][]ai.Chunk{toolTurn(1), {{Delta: "ok"}, {Done: true}}}}
+	got, err := agent.Execute(context.Background(), baseRun(p, &recorder{}), user)
+	if err != nil || got[len(got)-1].Limited != 0 {
+		t.Fatalf("last = %#v, err %v", got[len(got)-1], err)
 	}
 }
 
@@ -172,40 +281,6 @@ func TestStreamErrorIsReturned(t *testing.T) {
 	}
 	if last := got[len(got)-1]; last.Content != "part" || last.Stopped {
 		t.Fatalf("partial answer not kept: %#v", last)
-	}
-}
-
-func TestExecuteRespectsAPerRunStepLimit(t *testing.T) {
-	// A provider that always asks for another tool call, so only the step
-	// limit can end the run.
-	p := &scripted{turns: [][]ai.Chunk{
-		{{ToolCalls: []ai.ToolCall{{ID: "c", Name: "list_refs", Args: map[string]any{}}}}, {Done: true}},
-	}}
-	run := baseRun(p, &recorder{})
-	run.MaxSteps = 2
-
-	if _, err := agent.Execute(context.Background(), run, user); err != nil {
-		t.Fatal(err)
-	}
-	if len(p.requests) != 2 {
-		t.Fatalf("provider called %d times, want 2 (MaxSteps)", len(p.requests))
-	}
-}
-
-func TestExecuteDefaultsToTheGlobalStepLimit(t *testing.T) {
-	// A provider that always asks for another tool call, so only the step
-	// limit can end the run.
-	p := &scripted{turns: [][]ai.Chunk{
-		{{ToolCalls: []ai.ToolCall{{ID: "c", Name: "list_refs", Args: map[string]any{}}}}, {Done: true}},
-	}}
-	run := baseRun(p, &recorder{})
-	// MaxSteps left at 0
-
-	if _, err := agent.Execute(context.Background(), run, user); err != nil {
-		t.Fatal(err)
-	}
-	if len(p.requests) != agent.MaxSteps {
-		t.Fatalf("provider called %d times, want the default %d", len(p.requests), agent.MaxSteps)
 	}
 }
 
