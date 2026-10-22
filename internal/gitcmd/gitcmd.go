@@ -24,6 +24,9 @@ const (
 	// BlameTimeout covers git blame, which walks a file's whole history and
 	// can take far longer than an ordinary read on a long-lived file.
 	BlameTimeout = 30 * time.Second
+	// GCTimeout covers git gc, which repacks the whole object database and
+	// can take minutes on a large repository.
+	GCTimeout = 30 * time.Minute
 )
 
 var ErrTimeout = errors.New("git command timed out")

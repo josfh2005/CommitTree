@@ -49,6 +49,7 @@ var alwaysRead = map[string]bool{
 	"name-rev": true, "describe": true, "diff-tree": true, "diff-index": true,
 	"diff-files": true, "check-ignore": true, "check-attr": true, "var": true,
 	"version": true, "shortlog": true, "grep": true, "check-ref-format": true,
+	"count-objects": true,
 }
 
 // Classify says whether args (git's arguments after -C dir) only read.
