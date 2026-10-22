@@ -23,6 +23,7 @@ import { removeRepoTabs, terminalState } from './terminal'
 import { cloneDialogOpen, cloneView, viewFromStatus } from './clone'
 import { addReposDialogOpen, summarize } from './addRepos'
 import { createdBranchMessage, nowTracksMessage } from './tracking'
+import { gcDoneMessage } from './repoInfo'
 
 export function branchRef(branch: Branch): string {
   return branch.remote ? `refs/remotes/${branch.remote}/${branch.name}` : `refs/heads/${branch.name}`
@@ -833,6 +834,18 @@ export async function resolveConflicts(id: string) {
   } catch (e) {
     toast(errorMessage(e), 'error')
   }
+}
+
+// collectGarbage is the repository info popover's "Run garbage collection":
+// git gc under the write lock, then a toast with the size before and after.
+export async function collectGarbage(id: string) {
+  let message = ''
+  const ok = await run(id, 'Collecting garbage…', async () => {
+    const before = await api.repoInfo(id)
+    await api.collectGarbage(id)
+    message = gcDoneMessage(before, await api.repoInfo(id))
+  })
+  if (ok) toast(message, 'info')
 }
 
 export const stageFile = (id: string, path: string) => run(id, 'Staging…', () => api.stageFile(id, path))

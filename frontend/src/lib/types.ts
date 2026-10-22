@@ -112,6 +112,24 @@ export interface WorktreeRemovalInfo {
   merged: boolean
 }
 
+/** Go's repoinfo.Info: git count-objects -v in bytes, plus git's GC rule. */
+export interface RepoInfo {
+  loose: number
+  looseSize: number
+  packed: number
+  packs: number
+  packSize: number
+  prunePackable: number
+  garbage: number
+  garbageSize: number
+  /** loose + packs + garbage, in bytes. */
+  size: number
+  autoLimit: number
+  packLimit: number
+  /** Why a garbage collection is recommended; '' when it isn't. */
+  gcReason: string
+}
+
 export interface Remote {
   name: string
   branches: Branch[]
