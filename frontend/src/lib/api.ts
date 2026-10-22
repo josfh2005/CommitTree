@@ -3,6 +3,7 @@ import type { AddReposResult, ScanResult, BranchPushResult, CloneStatus, RepoAII
 import type { NotifyTarget } from './notifyRules'
 import type { CredentialAnswer } from './credential'
 import type { Tracking } from './tracking'
+import type { RepoInfo } from './types'
 
 // The generated bindings use Wails model classes; the JSON is identical to our
 // interfaces, so cast at this single boundary.
@@ -79,6 +80,9 @@ export const api = {
   pushAll: (id: string) => call<BranchPushResult[]>(Go.PushAll(id)),
   pull: (id: string) => call<PullResult>(Go.Pull(id)),
   getRemoteInfo: (id: string) => call<AheadBehind>(Go.GetRemoteInfo(id)),
+  repoInfo: (id: string) => call<RepoInfo>(Go.RepoInfo(id)),
+  worktreeSize: (id: string) => call<number>(Go.WorktreeSize(id)),
+  collectGarbage: (id: string) => call<void>(Go.CollectGarbage(id)),
   branchCounts: (id: string, branch: string) => call<AheadBehind>(Go.BranchCounts(id, branch)),
   getGitSettings: () => call<GitSettings>(Go.GetGitSettings()),
   saveGitSettings: (s: GitSettings) => call<void>(Go.SaveGitSettings(s as any)),

@@ -17,6 +17,7 @@ import {stash} from '../models';
 import {submodules} from '../models';
 import {prompts} from '../models';
 import {menu} from '../models';
+import {repoinfo} from '../models';
 import {reposettings} from '../models';
 import {worktrees} from '../models';
 
@@ -67,6 +68,8 @@ export function ClearCommandLog(arg1:string):Promise<void>;
 export function CloneRepo(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function CloneStatus():Promise<app.CloneState>;
+
+export function CollectGarbage(arg1:string):Promise<void>;
 
 export function CommandLog(arg1:string):Promise<app.CommandLogView>;
 
@@ -236,6 +239,8 @@ export function RenameRepoGroup(arg1:string,arg2:string):Promise<void>;
 
 export function ReorderRepos(arg1:Array<string>):Promise<void>;
 
+export function RepoInfo(arg1:string):Promise<repoinfo.Info>;
+
 export function ResetBranch(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function ResetPrompt(arg1:string):Promise<void>;
@@ -311,3 +316,5 @@ export function UpdateAllSubmodules(arg1:string):Promise<void>;
 export function UpdateSubmodule(arg1:string,arg2:string):Promise<void>;
 
 export function WorktreeRemovalInfo(arg1:string):Promise<worktrees.RemovalInfo>;
+
+export function WorktreeSize(arg1:string):Promise<number>;

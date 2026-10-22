@@ -22,9 +22,10 @@ func TestClassify(t *testing.T) {
 		"reflog", "reflog show HEAD",
 		"remote", "remote -v", "remote get-url origin",
 		"check-ref-format --branch x",
+		"count-objects -v", "config --type=int --get gc.auto",
 	}
 	writes := []string{
-		"commit -m x", "push", "fetch --all", "pull --rebase", "checkout main", "switch -c b",
+		"gc", "commit -m x", "push", "fetch --all", "pull --rebase", "checkout main", "switch -c b",
 		"merge feature", "rebase main", "cherry-pick abc", "reset --hard", "add f", "restore --staged f",
 		"stash push -m x", "stash pop", "stash drop", "branch new", "branch -d old", "branch -m a b",
 		"branch --set-upstream-to=origin/main", "tag v1", "tag -d v1", "symbolic-ref HEAD refs/heads/x",

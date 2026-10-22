@@ -1746,6 +1746,45 @@ export namespace refs {
 
 }
 
+export namespace repoinfo {
+	
+	export class Info {
+	    loose: number;
+	    looseSize: number;
+	    packed: number;
+	    packs: number;
+	    packSize: number;
+	    prunePackable: number;
+	    garbage: number;
+	    garbageSize: number;
+	    size: number;
+	    autoLimit: number;
+	    packLimit: number;
+	    gcReason: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Info(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.loose = source["loose"];
+	        this.looseSize = source["looseSize"];
+	        this.packed = source["packed"];
+	        this.packs = source["packs"];
+	        this.packSize = source["packSize"];
+	        this.prunePackable = source["prunePackable"];
+	        this.garbage = source["garbage"];
+	        this.garbageSize = source["garbageSize"];
+	        this.size = source["size"];
+	        this.autoLimit = source["autoLimit"];
+	        this.packLimit = source["packLimit"];
+	        this.gcReason = source["gcReason"];
+	    }
+	}
+
+}
+
 export namespace repos {
 	
 	export class AddFailure {

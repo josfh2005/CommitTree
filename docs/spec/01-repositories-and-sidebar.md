@@ -467,6 +467,42 @@ branch, tag or stash entry that belongs to a repository other than the one
 currently on screen selects that repository first (as if its row had been
 clicked), then performs the row's own action.
 
+### Repository info
+
+The log header shows the selected repository's name with its path under it.
+After the path (not for a submodule, whose header is a breadcrumb, nor a
+missing repository) comes a line in the path's colour: the size of the
+object database and its object count, "9.8 MB · 6,343 objects", plus
+"· GC recommended" in the warning colour when git would garbage-collect it.
+It is read with `git count-objects -v` (a read, hidden in the Commands panel
+like the others) when the repository is selected and after every operation
+that refreshes it. Sizes are whole B and KB, one decimal from MB up.
+
+Clicking the line opens a popover ("Repository"; Esc or a click outside
+closes it) with:
+
+| Row | Value |
+|---|---|
+| Size on disk (.git) | loose objects + packs + garbage |
+| Files (working tree) | every regular file under the work tree, ignored ones included, no `.git` directory at any depth and no symlink followed; "…" while it is measured — only when the popover opens, since it walks the whole tree — and "unavailable" if that fails |
+| Objects | "N packed · N loose · N packs" |
+| Garbage | "none", or "N files · size" (files in the object database git doesn't recognise) |
+| Status | "No GC needed", or why a GC is recommended |
+
+A GC is recommended by git's own `gc --auto` rule: more loose objects than
+`gc.auto` (default 6,700) — "6,912 loose objects (git suggests GC above
+6,700)" — or more packs than `gc.autoPackLimit` (default 50) — "53 packs
+(git suggests GC above 50)". `gc.auto=0` turns both off and
+`gc.autoPackLimit=0` the second, as in git.
+
+**Run garbage collection** (highlighted when a GC is recommended, disabled
+while an operation runs) closes the popover and runs a plain `git gc` — not
+aggressive, git's default retention for unreachable objects — under the
+repository's write lock, shown as "Collecting garbage…" in the status bar
+and in the Commands panel, where it can be cancelled; it may take up to 30
+minutes. When it finishes a toast says "Garbage collected: 9.8 MB → 7.1 MB."
+or "Garbage collected: 9.8 MB, nothing to reclaim.".
+
 ## Per-repository sections
 
 Once expanded, a repository's row is followed by its own sections, in this

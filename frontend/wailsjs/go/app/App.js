@@ -98,6 +98,10 @@ export function CloneStatus() {
   return window['go']['app']['App']['CloneStatus']();
 }
 
+export function CollectGarbage(arg1) {
+  return window['go']['app']['App']['CollectGarbage'](arg1);
+}
+
 export function CommandLog(arg1) {
   return window['go']['app']['App']['CommandLog'](arg1);
 }
@@ -434,6 +438,10 @@ export function ReorderRepos(arg1) {
   return window['go']['app']['App']['ReorderRepos'](arg1);
 }
 
+export function RepoInfo(arg1) {
+  return window['go']['app']['App']['RepoInfo'](arg1);
+}
+
 export function ResetBranch(arg1, arg2, arg3) {
   return window['go']['app']['App']['ResetBranch'](arg1, arg2, arg3);
 }
@@ -584,4 +592,8 @@ export function UpdateSubmodule(arg1, arg2) {
 
 export function WorktreeRemovalInfo(arg1) {
   return window['go']['app']['App']['WorktreeRemovalInfo'](arg1);
+}
+
+export function WorktreeSize(arg1) {
+  return window['go']['app']['App']['WorktreeSize'](arg1);
 }

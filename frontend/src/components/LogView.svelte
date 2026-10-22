@@ -4,6 +4,7 @@
   import FilterBar from './FilterBar.svelte'
   import LogList from './LogList.svelte'
   import MergeView from './MergeView.svelte'
+  import RepoInfoLine from './RepoInfoLine.svelte'
   import Splitter from './Splitter.svelte'
   import Toolbar from './Toolbar.svelte'
   import { conflictOwnsScreen } from '../lib/remote'
@@ -32,7 +33,10 @@
         <span class="path ellipsis">{$selectedRepo.path}</span>
       {:else if $selectedRepo}
         <span class="name ellipsis">{$selectedRepo.name}</span>
-        <span class="path ellipsis">{$selectedRepo.path}</span>
+        <div class="path-row">
+          <span class="path ellipsis">{$selectedRepo.path}</span>
+          {#if !$selectedRepo.missing}<RepoInfoLine repoId={$selectedRepo.id} />{/if}
+        </div>
       {/if}
     </div>
     {#if $selectedRepo && !$selectedRepo.missing}
@@ -72,6 +76,9 @@
   .title > * { max-width: 100%; }
   .crumbs { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
   .path { font-weight: 400; font-size: 12px; color: var(--faint); }
+  /* The path shrinks first; the info line after it keeps its width. */
+  .path-row { display: flex; align-items: baseline; min-width: 0; }
+  .path-row .path { min-width: 0; }
   .crumb { background: none; border: none; padding: 0; font: inherit; font-weight: 500; color: var(--text); cursor: pointer; }
   .crumb:hover { text-decoration: underline; }
   .sep { color: var(--faint); }
