@@ -202,9 +202,10 @@ ended without the user asking.
   on a supported host with a connected account; otherwise nothing is
   watched and nothing is asked. Every way of pushing counts: the toolbar,
   the branch menu, Push all (each branch it pushed) and the chat's push
-  tool. A push that fails, or one that finds the branch already up to date
-  through the branch menu or Push all, starts nothing. Pushing from a
-  detached HEAD watches nothing. A new branch is included.
+  tool. A push that fails, or that finds the branch already up to
+  date (from any of these), starts nothing, since nothing was pushed. A
+  push counts when it moved the branch's upstream; a new branch is
+  included. Pushing from a detached HEAD watches nothing.
 - **No waiting.** The watch starts after the push has returned and its
   repository lock is released; the push never waits for it, and no network
   call is made while the lock is held.

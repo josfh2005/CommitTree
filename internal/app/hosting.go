@@ -625,16 +625,26 @@ func (a *App) watchFetch(ctx context.Context, id, hash string) (hosting.CommitSt
 	return st, nil
 }
 
-// currentBranch is the checked-out branch of repository id, "" on a detached
-// HEAD or when it cannot be read.
-func (a *App) currentBranch(id string) string {
-	dir, err := a.dir(id)
+// currentBranch is the checked-out branch in dir, "" on a detached HEAD or
+// when it cannot be read.
+func currentBranch(ctx context.Context, dir string) string {
+	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "symbolic-ref", "-q", "--short", "HEAD")
 	if err != nil {
 		return ""
 	}
-	out, err := gitcmd.Run(a.ctx, dir, gitcmd.ReadTimeout, "symbolic-ref", "-q", "--short", "HEAD")
-	if err != nil {
-		return ""
+	return strings.TrimSpace(out)
+}
+
+// upstreamHash is where branch's upstream points, "none" when it has no
+// upstream or it cannot be read. Comparing it before and after a push tells
+// whether the push moved anything.
+func upstreamHash(ctx context.Context, dir, branch string) string {
+	if branch == "" {
+		return "none"
+	}
+	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--verify", "--quiet", branch+"@{upstream}")
+	if err != nil || strings.TrimSpace(out) == "" {
+		return "none"
 	}
 	return strings.TrimSpace(out)
 }

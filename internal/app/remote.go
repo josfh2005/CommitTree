@@ -48,14 +48,25 @@ func (a *App) PushBranch(id, branch string) (ops.BranchPushResult, error) {
 	return result, err
 }
 
-// Push pushes the current branch. Its pipeline is watched afterwards
-// (docs/spec/14-hosting.md); the chat's push tool comes through here too.
+// Push pushes the current branch. When it moved the branch's upstream (a new
+// branch counts), the pushed tip's pipeline is watched afterwards
+// (docs/spec/14-hosting.md); the chat's push tool comes through here too. The
+// branch is read under the write lock, so a later switch cannot change it.
 func (a *App) Push(id string) error {
-	err := a.write(id, func(ctx context.Context, dir string) error { return ops.Push(a.prompting(ctx, id, dir, "Push"), dir) })
-	if err == nil {
-		if branch := a.currentBranch(id); branch != "" {
-			a.watchPushed(id, []string{branch})
+	var pushed string
+	err := a.write(id, func(ctx context.Context, dir string) error {
+		branch := currentBranch(ctx, dir)
+		before := upstreamHash(ctx, dir, branch)
+		if err := ops.Push(a.prompting(ctx, id, dir, "Push"), dir); err != nil {
+			return err
 		}
+		if branch != "" && upstreamHash(ctx, dir, branch) != before {
+			pushed = branch
+		}
+		return nil
+	})
+	if err == nil && pushed != "" {
+		a.watchPushed(id, []string{pushed})
 	}
 	return err
 }

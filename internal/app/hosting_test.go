@@ -828,13 +828,13 @@ func watchApp(t *testing.T) (*App, *testrepo.Repo, string, *watchSpy) {
 func TestPushBranchStartsWatch(t *testing.T) {
 	a, r, id, spy := watchApp(t)
 	r.Git("switch", "-q", "-c", "topic")
-	tip := r.Commit("on topic")
+	r.Commit("on topic")
 	res, err := a.PushBranch(id, "topic")
 	if err != nil || res.Status != ops.PushPushed {
 		t.Fatalf("push: %+v %v", res, err)
 	}
 	got := spy.next(t)
-	if got != [4]string{id, "topic", r.Git("rev-parse", "topic"), "Checks"} || tip == "" {
+	if got != [4]string{id, "topic", r.Git("rev-parse", "topic"), "Checks"} {
 		t.Fatalf("watch started with %v", got)
 	}
 	// Up to date: nothing was pushed, so nothing to watch.
@@ -846,7 +846,7 @@ func TestPushBranchStartsWatch(t *testing.T) {
 	spy.none(t)
 }
 
-func TestPushWatchesTheCurrentBranchOnceUntilItEnds(t *testing.T) {
+func TestPushWatchesTheCurrentBranch(t *testing.T) {
 	a, r, id, spy := watchApp(t)
 	r.Git("switch", "-q", "-c", "topic")
 	r.Commit("on topic")
@@ -854,21 +854,71 @@ func TestPushWatchesTheCurrentBranchOnceUntilItEnds(t *testing.T) {
 		t.Fatal(err)
 	}
 	first := spy.next(t)
-	if first[1] != "topic" || first[2] != r.Git("rev-parse", "topic") {
+	if first != [4]string{id, "topic", r.Git("rev-parse", "topic"), "Checks"} {
 		t.Fatalf("watch started with %v", first)
 	}
-	// The same tip again while the watch is running: still one watch.
+	// Pushing again moves nothing: no watch of the old tip.
 	if err := a.Push(id); err != nil {
 		t.Fatal(err)
 	}
 	spy.none(t)
-	// A new tip is a new watch.
+	// A new commit pushed is a new watch of the new tip.
 	r.Commit("more")
 	if err := a.Push(id); err != nil {
 		t.Fatal(err)
 	}
-	if second := spy.next(t); second[2] == first[2] {
-		t.Fatalf("second watch is for the old tip: %v", second)
+	if second := spy.next(t); second[2] != r.Git("rev-parse", "topic") || second[2] == first[2] {
+		t.Fatalf("second watch %v, want the new tip", second)
+	}
+}
+
+func TestPushOfAnUpToDateBranchStartsNoWatch(t *testing.T) {
+	a, r, id, spy := watchApp(t)
+	r.Git("push", "-q", "-u", "origin", "main")
+	if err := a.Push(id); err != nil {
+		t.Fatal(err)
+	}
+	spy.none(t)
+}
+
+func TestPushFromDetachedHeadWatchesNothing(t *testing.T) {
+	a, r, id, spy := watchApp(t)
+	r.Git("push", "-q", "-u", "origin", "main")
+	r.Git("switch", "-q", "--detach")
+	r.Commit("detached")
+	if err := a.Push(id); err == nil {
+		t.Log("push from a detached HEAD succeeded")
+	}
+	spy.none(t)
+}
+
+func TestWatchPushedOncePerTipUntilItEnds(t *testing.T) {
+	a, r, id, spy := watchApp(t)
+	r.Git("switch", "-q", "-c", "topic")
+	r.Commit("on topic")
+	tip := r.Git("rev-parse", "topic")
+	a.watchPushed(id, []string{"topic"})
+	if got := spy.next(t); got[2] != tip {
+		t.Fatalf("watch started with %v", got)
+	}
+	a.watchPushed(id, []string{"topic"})
+	spy.none(t) // the same tip is already being watched
+	spy.release <- struct{}{}
+	// Once the watch has ended the tip can be watched again.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		a.watchPushed(id, []string{"topic"})
+		select {
+		case got := <-spy.started:
+			if got[2] != tip {
+				t.Fatalf("watch started with %v", got)
+			}
+			return
+		case <-time.After(50 * time.Millisecond):
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the tip was never watched again after its watch ended")
+		}
 	}
 }
 
