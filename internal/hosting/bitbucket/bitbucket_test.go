@@ -513,6 +513,29 @@ func TestPullRequestDetail(t *testing.T) {
 	}
 }
 
+func TestPullRequestDetailSurvivesChecksFailure(t *testing.T) {
+	h := detailHandler(t)
+	status := http.StatusForbidden
+	_, c := newFake(t, func(f *fake, w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == base+"/commit/"+hashA+"/statuses" {
+			http.Error(w, `{"error":{"message":"no scope"}}`, status)
+			return
+		}
+		h(f, w, r)
+	})
+	d, err := c.PullRequest(context.Background(), repo, 7)
+	if err != nil {
+		t.Fatalf("a failing statuses call must not fail the detail: %v", err)
+	}
+	if d.Number != 7 || len(d.Commits) != 2 || d.Checks.State != hosting.None || d.Checks.Hash != hashA || len(d.Checks.Checks) != 0 {
+		t.Errorf("detail = %+v", d)
+	}
+	status = http.StatusUnauthorized
+	if _, err := c.PullRequest(context.Background(), repo, 7); !errors.Is(err, hosting.ErrRejected) {
+		t.Errorf("a rejected token must still fail: %v", err)
+	}
+}
+
 func TestPullRequestCommentsCap(t *testing.T) {
 	_, c := newFake(t, func(f *fake, w http.ResponseWriter, r *http.Request) {
 		if !strings.HasSuffix(r.URL.Path, "/comments") {

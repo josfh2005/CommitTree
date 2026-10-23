@@ -569,8 +569,15 @@ func (c *client) PullRequest(ctx context.Context, r hosting.Repo, number int) (h
 	}
 	sort.SliceStable(d.Comments, func(i, j int) bool { return d.Comments[i].Created.Before(d.Comments[j].Created) })
 
-	if d.Checks, err = c.Checks(ctx, r, w.Source.Commit.Hash); err != nil {
-		return hosting.PullRequestDetail{}, err
+	// A failing checks call (no pipeline scope, rate limit, network) must not
+	// hide the pull request: the section is left empty (none). A rejected token
+	// is still an error.
+	head := w.Source.Commit.Hash
+	if d.Checks, err = c.Checks(ctx, r, head); err != nil {
+		if errors.Is(err, hosting.ErrRejected) {
+			return hosting.PullRequestDetail{}, err
+		}
+		d.Checks = hosting.CommitStatus{Hash: head, State: hosting.None}
 	}
 	return d, nil
 }
