@@ -769,3 +769,213 @@ func TestCheckoutPullRequestPassesErrorsThrough(t *testing.T) {
 		t.Fatalf("no access: %v", err)
 	}
 }
+
+// watchSpy stands in for hostingState.watch: it records each watch started
+// and holds it open until release is closed.
+type watchSpy struct {
+	started chan [4]string // repoID, branch, hash, noun
+	release chan struct{}
+}
+
+func newWatchSpy() *watchSpy {
+	return &watchSpy{started: make(chan [4]string, 16), release: make(chan struct{})}
+}
+
+func (s *watchSpy) watch(_ context.Context, repoID, branch, hash, noun string) {
+	s.started <- [4]string{repoID, branch, hash, noun}
+	<-s.release
+}
+
+func (s *watchSpy) none(t *testing.T) {
+	t.Helper()
+	select {
+	case got := <-s.started:
+		t.Fatalf("a watch started: %v", got)
+	case <-time.After(150 * time.Millisecond):
+	}
+}
+
+func (s *watchSpy) next(t *testing.T) [4]string {
+	t.Helper()
+	select {
+	case got := <-s.started:
+		return got
+	case <-time.After(5 * time.Second):
+		t.Fatal("no watch started")
+		return [4]string{}
+	}
+}
+
+// watchApp is a GitHub-hosted repository (github.com/o/r) whose pushes go to a
+// local bare repository, with a connected account.
+func watchApp(t *testing.T) (*App, *testrepo.Repo, string, *watchSpy) {
+	t.Helper()
+	t.Cleanup(keys.UseStore(&fakeKeys{items: map[string]string{}}))
+	a, r, id := newPlainApp(t)
+	a.hosting.newClient = func(hosting.Host, authFunc) hosting.Client { return &fakeHost{} }
+	bare := testrepo.NewBareFrom(t, r)
+	r.Git("remote", "add", "origin", "https://github.com/o/r")
+	r.Git("config", "url."+bare+".pushInsteadOf", "https://github.com/o/r")
+	if _, err := a.SaveGitHubAccount("token", "ghp_x"); err != nil {
+		t.Fatal(err)
+	}
+	spy := newWatchSpy()
+	a.hosting.watch = spy.watch
+	t.Cleanup(func() { close(spy.release) })
+	return a, r, id, spy
+}
+
+func TestPushBranchStartsWatch(t *testing.T) {
+	a, r, id, spy := watchApp(t)
+	r.Git("switch", "-q", "-c", "topic")
+	tip := r.Commit("on topic")
+	res, err := a.PushBranch(id, "topic")
+	if err != nil || res.Status != ops.PushPushed {
+		t.Fatalf("push: %+v %v", res, err)
+	}
+	got := spy.next(t)
+	if got != [4]string{id, "topic", r.Git("rev-parse", "topic"), "Checks"} || tip == "" {
+		t.Fatalf("watch started with %v", got)
+	}
+	// Up to date: nothing was pushed, so nothing to watch.
+	r.Git("switch", "-q", "main")
+	res, err = a.PushBranch(id, "topic")
+	if err != nil || res.Status != ops.PushUpToDate {
+		t.Fatalf("second push: %+v %v", res, err)
+	}
+	spy.none(t)
+}
+
+func TestPushWatchesTheCurrentBranchOnceUntilItEnds(t *testing.T) {
+	a, r, id, spy := watchApp(t)
+	r.Git("switch", "-q", "-c", "topic")
+	r.Commit("on topic")
+	if err := a.Push(id); err != nil {
+		t.Fatal(err)
+	}
+	first := spy.next(t)
+	if first[1] != "topic" || first[2] != r.Git("rev-parse", "topic") {
+		t.Fatalf("watch started with %v", first)
+	}
+	// The same tip again while the watch is running: still one watch.
+	if err := a.Push(id); err != nil {
+		t.Fatal(err)
+	}
+	spy.none(t)
+	// A new tip is a new watch.
+	r.Commit("more")
+	if err := a.Push(id); err != nil {
+		t.Fatal(err)
+	}
+	if second := spy.next(t); second[2] == first[2] {
+		t.Fatalf("second watch is for the old tip: %v", second)
+	}
+}
+
+func TestPushAllWatchesEveryPushedBranch(t *testing.T) {
+	a, r, id, spy := watchApp(t)
+	r.Git("push", "-q", "-u", "origin", "main")
+	r.Commit("ahead")
+	results, err := a.PushAll(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pushed := 0
+	for _, res := range results {
+		if res.Status == ops.PushPushed {
+			pushed++
+		}
+	}
+	if pushed != 1 {
+		t.Fatalf("results %+v, want main pushed", results)
+	}
+	if got := spy.next(t); got[1] != "main" || got[2] != r.Git("rev-parse", "main") {
+		t.Fatalf("watch started with %v", got)
+	}
+	spy.none(t)
+}
+
+func TestPushDoesNotWatchUnsupported(t *testing.T) {
+	t.Cleanup(keys.UseStore(&fakeKeys{items: map[string]string{}}))
+	a, r, id := newPlainApp(t)
+	spy := newWatchSpy()
+	a.hosting.watch = spy.watch
+	t.Cleanup(func() { close(spy.release) })
+	bare := testrepo.NewBareFrom(t, r)
+	r.Git("remote", "add", "origin", bare)
+	r.Git("switch", "-q", "-c", "topic")
+	r.Commit("on topic")
+	if err := a.Push(id); err != nil {
+		t.Fatal(err)
+	}
+	spy.none(t)
+}
+
+func TestPushDoesNotWatchWithoutAnAccount(t *testing.T) {
+	a, r, id, spy := watchApp(t)
+	if err := a.RemoveHostingAccount("github"); err != nil {
+		t.Fatal(err)
+	}
+	r.Git("switch", "-q", "-c", "topic")
+	r.Commit("on topic")
+	if err := a.Push(id); err != nil {
+		t.Fatal(err)
+	}
+	spy.none(t)
+}
+
+func TestFailedPushDoesNotWatch(t *testing.T) {
+	a, r, id, spy := watchApp(t)
+	r.Git("config", "remote.origin.pushurl", filepath.Join(t.TempDir(), "missing.git"))
+	r.Git("switch", "-q", "-c", "topic")
+	r.Commit("on topic")
+	if err := a.Push(id); err == nil {
+		t.Fatal("push to a missing remote succeeded")
+	}
+	spy.none(t)
+}
+
+func TestWatchFetchCachesTheNewStateAndStopsOnRejection(t *testing.T) {
+	a, id, fake, _ := newHostingApp(t)
+	a.AddRemote(id, "origin", "https://github.com/o/r")
+	if _, err := a.SaveGitHubAccount("token", "ghp_x"); err != nil {
+		t.Fatal(err)
+	}
+	fake.checks = func(h string) (hosting.CommitStatus, error) {
+		return hosting.CommitStatus{Hash: h, State: hosting.Failed}, nil
+	}
+	st, err := a.watchFetch(context.Background(), id, hashA)
+	if err != nil || st.State != hosting.Failed {
+		t.Fatalf("watchFetch: %+v %v", st, err)
+	}
+	if _, err := a.CommitStatuses(id, []string{hashA}); err != nil || fake.statusCallCount() != 0 {
+		t.Fatalf("the log should read the watched state from the cache: calls=%d err=%v", fake.statusCallCount(), err)
+	}
+	fake.checks = func(string) (hosting.CommitStatus, error) { return hosting.CommitStatus{}, hosting.ErrRejected }
+	if _, err := a.watchFetch(context.Background(), id, hashB); !errors.Is(err, hosting.ErrRejected) {
+		t.Fatalf("a rejected token should come back as ErrRejected: %v", err)
+	}
+	if err := a.RemoveHostingAccount("github"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.watchFetch(context.Background(), id, hashB); !errors.Is(err, hosting.ErrNoAccount) {
+		t.Fatalf("no account should come back as ErrNoAccount: %v", err)
+	}
+}
+
+func TestRunWatchEmitsHostingStatus(t *testing.T) {
+	a, id, fake, ev := newHostingApp(t)
+	a.AddRemote(id, "origin", "https://github.com/o/r")
+	if _, err := a.SaveGitHubAccount("token", "ghp_x"); err != nil {
+		t.Fatal(err)
+	}
+	fake.checks = func(h string) (hosting.CommitStatus, error) {
+		return hosting.CommitStatus{Hash: h, State: hosting.Success}, nil
+	}
+	a.runWatch(context.Background(), id, "main", hashA, "Checks")
+	got, ok := ev.wait(t, EventHostingStatus).data.(hosting.WatchEvent)
+	want := hosting.WatchEvent{RepoID: id, Branch: "main", Hash: hashA, State: hosting.Success, Final: true, Noun: "Checks"}
+	if !ok || got != want {
+		t.Fatalf("event %+v, want %+v", got, want)
+	}
+}

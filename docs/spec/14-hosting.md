@@ -7,10 +7,10 @@ the user connects in Settings. Every other repository looks and behaves
 exactly as before: no icons, no extra rows, nothing in the status bar.
 
 This document grows with the feature. It now covers detecting the host,
-accounts, commit statuses with their cache and rate limits, and the pull
-request data and checkout behind the Pull requests view. The log icons, the
-commit details, the view itself and the notifications are described here as
-they land.
+accounts, commit statuses with their cache and rate limits, the pull
+request data and checkout behind the Pull requests view, and the watch of a
+pushed commit. The log icons, the commit details, the view itself and the
+notifications are described here as they land.
 
 The section is called **Pipelines** for a Bitbucket repository and **Checks**
 for a GitHub one, everywhere it appears.
@@ -155,11 +155,11 @@ Bitbucket or GitHub), and no request is sent.
   updated first; the answer says whether the host has more. An empty list is
   an empty list, not an error.
 - **Row data.** Number, title, draft, author, `source → target`, the head
-  commit, link, whether it comes from a fork, approvals, comment count (`commentCount`, since a
-  pull request's detail has its own `comments` thread) and update time. On GitHub the state of the head commit comes with the list.
-  On Bitbucket it is filled only from the status cache (the one the log
-  uses); a head commit the cache does not hold fresh has no state, and the
-  list never makes extra requests for it.
+  commit, link, whether it comes from a fork, approvals, the comment count
+  and update time. On GitHub the state of the head commit comes with the
+  list. On Bitbucket it is filled only from the status cache (the one the
+  log uses); a head commit the cache does not hold fresh has no state, and
+  the list never makes extra requests for it.
 - **Count.** The number of open pull requests for the sidebar badge, from
   the cheapest call the host has; it says when the real number is larger.
 - **Detail.** One pull request: description, dates, reviewers with their
@@ -191,3 +191,39 @@ Checks out the source branch of a pull request in the local repository.
 
 The fetch and the checkout take the repository's write lock themselves; the
 request to the host does not.
+
+## Watching a push
+
+After a push from CommitTree the pipeline or checks of the pushed commit are
+followed until they finish, so the log and a notification can say how it
+ended without the user asking.
+
+- **What is watched.** The tip of each branch just pushed, in a repository
+  on a supported host with a connected account; otherwise nothing is
+  watched and nothing is asked. Every way of pushing counts: the toolbar,
+  the branch menu, Push all (each branch it pushed) and the chat's push
+  tool. A push that fails, or one that finds the branch already up to date
+  through the branch menu or Push all, starts nothing. Pushing from a
+  detached HEAD watches nothing. A new branch is included.
+- **No waiting.** The watch starts after the push has returned and its
+  repository lock is released; the push never waits for it, and no network
+  call is made while the lock is held.
+- **One watch per commit.** Pushing a tip that is already being watched in
+  the same repository starts no second watch; once it ends, a later push of
+  the same tip starts a new one.
+- **Polling.** Every 30 seconds the commit's checks are read from the host,
+  the way the commit details read them, and the answer goes into the status
+  cache, so the log shows the new state at once. The remotes and the account
+  are read again on every poll.
+- **Events.** Each change of state is announced to the frontend as a
+  `hosting:status` event with the repository, the branch, the commit, the new
+  state and the section's name ("Pipelines" or "Checks"). The first answer
+  of "no checks yet" is not a change. When the state reaches success, failed
+  or stopped the event is marked final, and it is the last one, sent once.
+- **When it stops.** At a final state; after 60 minutes; after 5 minutes
+  with no checks at all (counted from the last time there were none); when
+  the host rejects the token or the account is removed; and when the app
+  quits. Stopping for any reason but a final state sends nothing.
+- **Errors are not changes.** A lost connection, a request limit or "no
+  access" while polling is not announced and does not end the watch; the next
+  poll tries again.

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"git-ui/internal/ai/settings"
+	"git-ui/internal/gitcmd"
 	"git-ui/internal/hosting"
 	"git-ui/internal/hosting/accounts"
 	"git-ui/internal/hosting/bitbucket"
@@ -48,6 +49,12 @@ type hostingState struct {
 	// source to use instead of the saved account (nil: the saved one); it is
 	// how an account is verified before it is stored. Tests replace it.
 	newClient func(h hosting.Host, auth authFunc) hosting.Client
+	// watching is the pushed commits being watched, by watchKey. At most one
+	// watch runs per repository and commit.
+	watching map[string]bool
+	// watch runs one watch of a pushed commit until it ends (blocking). Tests
+	// replace it.
+	watch func(ctx context.Context, repoID, branch, hash, noun string)
 }
 
 func (a *App) initHosting() {
@@ -55,8 +62,10 @@ func (a *App) initHosting() {
 		limits:    hosting.NewLimits(nil),
 		cache:     hosting.NewCache(nil),
 		announced: map[hosting.Host]bool{},
+		watching:  map[string]bool{},
 	}
 	a.hosting.newClient = a.defaultHostingClient
+	a.hosting.watch = a.runWatch
 }
 
 // accountStore returns the accounts, creating them on first use next to
@@ -587,4 +596,88 @@ func (a *App) CheckoutPullRequest(id string, number int) (string, error) {
 		return "", err
 	}
 	return a.CheckoutRemote(id, r.Remote, pr.Source)
+}
+
+// runWatch is the default hostingState.watch: it polls the commit's checks
+// every 30 s and emits EventHostingStatus on each change.
+func (a *App) runWatch(ctx context.Context, repoID, branch, hash, noun string) {
+	w := &hosting.Watcher{
+		Fetch: a.watchFetch,
+		Emit:  func(e hosting.WatchEvent) { a.emitUnlessShutdown(EventHostingStatus, e) },
+	}
+	w.Watch(ctx, repoID, branch, hash, noun)
+}
+
+// watchFetch reads one commit's checks for a watch and caches the answer, so
+// the log shows the new state at once. The remotes and the account are read
+// on every poll: an edited remote or a rejected token is noticed.
+func (a *App) watchFetch(ctx context.Context, id, hash string) (hosting.CommitStatus, error) {
+	r, client, err := a.hostedClient(id)
+	if err != nil {
+		return hosting.CommitStatus{}, err
+	}
+	st, err := client.Checks(ctx, r, hash)
+	a.announceLimit(r.Host)
+	if err != nil {
+		return hosting.CommitStatus{}, err
+	}
+	a.hosting.cache.Put(hosting.RepoKey(r), map[string]hosting.CommitStatus{hash: st})
+	return st, nil
+}
+
+// currentBranch is the checked-out branch of repository id, "" on a detached
+// HEAD or when it cannot be read.
+func (a *App) currentBranch(id string) string {
+	dir, err := a.dir(id)
+	if err != nil {
+		return ""
+	}
+	out, err := gitcmd.Run(a.ctx, dir, gitcmd.ReadTimeout, "symbolic-ref", "-q", "--short", "HEAD")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
+}
+
+// watchPushed starts watching the pipeline of each pushed branch's tip, when
+// the repository is on a supported host with a connected account (spec 14,
+// Watching a push). It is called after the push returned and the write lock
+// was released, and it does not wait for the watches. A second push of a tip
+// already being watched starts nothing.
+func (a *App) watchPushed(id string, branches []string) {
+	if len(branches) == 0 || a.ctx.Err() != nil {
+		return
+	}
+	info, err := a.HostingInfo(id)
+	if err != nil || !info.Supported || info.Account != "connected" {
+		return
+	}
+	dir, err := a.dir(id)
+	if err != nil {
+		return
+	}
+	for _, branch := range branches {
+		out, err := gitcmd.Run(a.ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch)
+		hash := strings.TrimSpace(out)
+		if err != nil || !isHex(hash) {
+			continue
+		}
+		key := id + "\x00" + hash
+		a.hosting.mu.Lock()
+		dup := a.hosting.watching[key]
+		a.hosting.watching[key] = true
+		watch := a.hosting.watch
+		a.hosting.mu.Unlock()
+		if dup {
+			continue
+		}
+		go func(branch, hash string) {
+			defer func() {
+				a.hosting.mu.Lock()
+				delete(a.hosting.watching, key)
+				a.hosting.mu.Unlock()
+			}()
+			watch(a.ctx, id, branch, hash, info.Noun)
+		}(branch, hash)
+	}
 }

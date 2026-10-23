@@ -42,11 +42,22 @@ func (a *App) PushBranch(id, branch string) (ops.BranchPushResult, error) {
 		result, pushErr = ops.PushBranch(a.prompting(ctx, id, dir, "Push "+branch), dir, branch)
 		return pushErr
 	})
+	if err == nil && result.Status == ops.PushPushed {
+		a.watchPushed(id, []string{result.Branch})
+	}
 	return result, err
 }
 
+// Push pushes the current branch. Its pipeline is watched afterwards
+// (docs/spec/14-hosting.md); the chat's push tool comes through here too.
 func (a *App) Push(id string) error {
-	return a.write(id, func(ctx context.Context, dir string) error { return ops.Push(a.prompting(ctx, id, dir, "Push"), dir) })
+	err := a.write(id, func(ctx context.Context, dir string) error { return ops.Push(a.prompting(ctx, id, dir, "Push"), dir) })
+	if err == nil {
+		if branch := a.currentBranch(id); branch != "" {
+			a.watchPushed(id, []string{branch})
+		}
+	}
+	return err
 }
 
 // PushAll pushes the main (official) branches ahead of their
@@ -59,6 +70,15 @@ func (a *App) PushAll(id string) ([]ops.BranchPushResult, error) {
 		results, pushErr = ops.PushAll(a.prompting(ctx, id, dir, "Push all"), dir)
 		return pushErr
 	})
+	if err == nil {
+		var pushed []string
+		for _, r := range results {
+			if r.Status == ops.PushPushed {
+				pushed = append(pushed, r.Branch)
+			}
+		}
+		a.watchPushed(id, pushed)
+	}
 	return results, err
 }
 
