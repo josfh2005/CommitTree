@@ -396,3 +396,195 @@ func (a *App) RemoveHostingAccount(host string) error {
 	}
 	return store.Remove(h)
 }
+
+// errFork is what checking out a pull request from a fork says: its branch
+// is not in this repository's remote.
+var errFork = errors.New("From a fork. Open it in the browser.")
+
+// PullRequestList is a page of the pull request list. More is set when the
+// host has more than the 100 shown.
+type PullRequestList struct {
+	Items []hosting.PullRequest `json:"items"`
+	More  bool                  `json:"more"`
+}
+
+func hostLabel(h hosting.Host) string {
+	if h == hosting.GitHub {
+		return "GitHub"
+	}
+	return "Bitbucket"
+}
+
+// hostedClient is the hosted repository behind id and the client for its
+// host. A repository that is not on a supported host, or whose host has no
+// account or a rejected one, is an error the frontend shows.
+func (a *App) hostedClient(id string) (hosting.Repo, hosting.Client, error) {
+	r, ok, err := a.detectHosting(id)
+	if err != nil {
+		return hosting.Repo{}, nil, err
+	}
+	if !ok {
+		return hosting.Repo{}, nil, errors.New("this repository is not on Bitbucket or GitHub")
+	}
+	acc, err := a.accountState(r.Host)
+	if err != nil {
+		return hosting.Repo{}, nil, err
+	}
+	switch acc {
+	case "none":
+		return hosting.Repo{}, nil, fmt.Errorf("%s: %w", hostLabel(r.Host), hosting.ErrNoAccount)
+	case "rejected":
+		return hosting.Repo{}, nil, fmt.Errorf("%s %w", hostLabel(r.Host), hosting.ErrRejected)
+	}
+	return r, a.hostingClient(r.Host), nil
+}
+
+// hostCallErr announces a changed request limit after a host call and names
+// the repository in a "no access" error.
+func (a *App) hostCallErr(r hosting.Repo, err error) error {
+	a.announceLimit(r.Host)
+	var na *hosting.NoAccessError
+	if errors.As(err, &na) && na.Repo == "" {
+		na.Repo = r.FullName()
+	}
+	return err
+}
+
+// ListPullRequests returns the open pull requests of the repository for a
+// filter: "open", "mine" or "review". On Bitbucket each row's State comes
+// from the status cache only, never from extra requests.
+func (a *App) ListPullRequests(id, filter string) (PullRequestList, error) {
+	f := hosting.Filter(filter)
+	switch f {
+	case hosting.FilterOpen, hosting.FilterMine, hosting.FilterReview:
+	default:
+		return PullRequestList{}, fmt.Errorf("unknown pull request filter %q", filter)
+	}
+	r, client, err := a.hostedClient(id)
+	if err != nil {
+		return PullRequestList{}, err
+	}
+	me, err := a.hostingMe(r.Host)
+	if err != nil {
+		return PullRequestList{}, err
+	}
+	prs, more, err := client.PullRequests(a.ctx, r, f, me)
+	if err != nil {
+		return PullRequestList{}, a.hostCallErr(r, err)
+	}
+	a.announceLimit(r.Host)
+	if prs == nil {
+		prs = []hosting.PullRequest{}
+	}
+	if r.Host == hosting.Bitbucket {
+		key := hosting.RepoKey(r)
+		for i := range prs {
+			if prs[i].HeadHash == "" {
+				continue
+			}
+			if st, ok := a.hosting.cache.Get(key, prs[i].HeadHash); ok {
+				prs[i].State = st.State
+			}
+		}
+	}
+	return PullRequestList{Items: prs, More: more}, nil
+}
+
+// hostingMe is the signed-in user of a host as saved in hosting.json, for the
+// Mine and Review filters.
+func (a *App) hostingMe(h hosting.Host) (hosting.Account, error) {
+	store, err := a.accountStore()
+	if err != nil {
+		return hosting.Account{}, err
+	}
+	cfg, err := store.Config()
+	if err != nil {
+		return hosting.Account{}, err
+	}
+	if h == hosting.GitHub {
+		return hosting.Account{ID: cfg.GitHubLogin, Name: cfg.GitHubLogin, Login: cfg.GitHubLogin}, nil
+	}
+	return hosting.Account{ID: cfg.BitbucketID, Name: cfg.BitbucketName}, nil
+}
+
+// PullRequestCount is the number of open pull requests, for the sidebar
+// badge. It is a lower bound when More is set.
+func (a *App) PullRequestCount(id string) (hosting.Count, error) {
+	r, client, err := a.hostedClient(id)
+	if err != nil {
+		return hosting.Count{}, err
+	}
+	n, err := client.PullRequestCount(a.ctx, r)
+	if err != nil {
+		return hosting.Count{}, a.hostCallErr(r, err)
+	}
+	a.announceLimit(r.Host)
+	return n, nil
+}
+
+// GetPullRequest returns one pull request with its description, reviewers,
+// commits, comments and the checks of its last commit.
+func (a *App) GetPullRequest(id string, number int) (hosting.PullRequestDetail, error) {
+	_, d, err := a.pullRequestDetail(id, number)
+	return d, err
+}
+
+// pullRequestDetail is GetPullRequest with the repository it was read from.
+func (a *App) pullRequestDetail(id string, number int) (hosting.Repo, hosting.PullRequestDetail, error) {
+	if number <= 0 {
+		return hosting.Repo{}, hosting.PullRequestDetail{}, fmt.Errorf("%d is not a pull request number", number)
+	}
+	r, client, err := a.hostedClient(id)
+	if err != nil {
+		return hosting.Repo{}, hosting.PullRequestDetail{}, err
+	}
+	d, err := client.PullRequest(a.ctx, r, number)
+	if err != nil {
+		return hosting.Repo{}, hosting.PullRequestDetail{}, a.hostCallErr(r, err)
+	}
+	a.announceLimit(r.Host)
+	return r, d, nil
+}
+
+// GetPullRequestFiles returns the changed files of a pull request with their
+// diffs, as the host gives them.
+func (a *App) GetPullRequestFiles(id string, number int) ([]hosting.PRFile, error) {
+	if number <= 0 {
+		return nil, fmt.Errorf("%d is not a pull request number", number)
+	}
+	r, client, err := a.hostedClient(id)
+	if err != nil {
+		return nil, err
+	}
+	files, err := client.PullRequestFiles(a.ctx, r, number)
+	if err != nil {
+		return nil, a.hostCallErr(r, err)
+	}
+	a.announceLimit(r.Host)
+	if files == nil {
+		files = []hosting.PRFile{}
+	}
+	return files, nil
+}
+
+// CheckoutPullRequest fetches the pull request's remote and checks out its
+// source branch the way the sidebar does (CheckoutRemote), returning that
+// call's outcome. A pull request from a fork is refused. The pull request is
+// read from the host first, with no lock held; FetchRemote and CheckoutRemote
+// take the repository's write lock themselves.
+func (a *App) CheckoutPullRequest(id string, number int) (string, error) {
+	r, pr, err := a.pullRequestDetail(id, number)
+	if err != nil {
+		return "", err
+	}
+	if pr.Fork {
+		return "", errFork
+	}
+	if pr.Source == "" {
+		return "", errors.New("this pull request has no source branch")
+	}
+	if err := a.FetchRemote(id, r.Remote); err != nil {
+		return "", err
+	}
+	return a.CheckoutRemote(id, r.Remote, pr.Source)
+}

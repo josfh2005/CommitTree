@@ -5,7 +5,9 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -15,6 +17,7 @@ import (
 	"git-ui/internal/hosting"
 	"git-ui/internal/hosting/accounts"
 	"git-ui/internal/hosting/bitbucket"
+	"git-ui/internal/ops"
 	"git-ui/internal/testrepo"
 )
 
@@ -27,6 +30,13 @@ type fakeHost struct {
 	statuses    func(hashes []string) (map[string]hosting.CommitStatus, error)
 	user        func() (hosting.Account, error)
 	checks      func(hash string) (hosting.CommitStatus, error)
+
+	pulls       func(f hosting.Filter, me hosting.Account) ([]hosting.PullRequest, bool, error)
+	pullCount   func() (hosting.Count, error)
+	pull        func(number int) (hosting.PullRequestDetail, error)
+	pullFiles   func(number int) ([]hosting.PRFile, error)
+	pullFilters []hosting.Filter
+	pullMe      []hosting.Account
 }
 
 func (f *fakeHost) User(context.Context) (hosting.Account, error) {
@@ -63,16 +73,32 @@ func (f *fakeHost) Checks(_ context.Context, _ hosting.Repo, hash string) (hosti
 	return hosting.CommitStatus{Hash: hash, State: hosting.Success, Checks: []hosting.Check{{Name: "build", State: hosting.Success}}}, nil
 }
 
-func (f *fakeHost) PullRequests(context.Context, hosting.Repo, hosting.Filter, hosting.Account) ([]hosting.PullRequest, bool, error) {
+func (f *fakeHost) PullRequests(_ context.Context, _ hosting.Repo, fl hosting.Filter, me hosting.Account) ([]hosting.PullRequest, bool, error) {
+	f.mu.Lock()
+	f.pullFilters = append(f.pullFilters, fl)
+	f.pullMe = append(f.pullMe, me)
+	f.mu.Unlock()
+	if f.pulls != nil {
+		return f.pulls(fl, me)
+	}
 	return nil, false, nil
 }
 func (f *fakeHost) PullRequestCount(context.Context, hosting.Repo) (hosting.Count, error) {
+	if f.pullCount != nil {
+		return f.pullCount()
+	}
 	return hosting.Count{}, nil
 }
-func (f *fakeHost) PullRequest(context.Context, hosting.Repo, int) (hosting.PullRequestDetail, error) {
+func (f *fakeHost) PullRequest(_ context.Context, _ hosting.Repo, n int) (hosting.PullRequestDetail, error) {
+	if f.pull != nil {
+		return f.pull(n)
+	}
 	return hosting.PullRequestDetail{}, nil
 }
-func (f *fakeHost) PullRequestFiles(context.Context, hosting.Repo, int) ([]hosting.PRFile, error) {
+func (f *fakeHost) PullRequestFiles(_ context.Context, _ hosting.Repo, n int) ([]hosting.PRFile, error) {
+	if f.pullFiles != nil {
+		return f.pullFiles(n)
+	}
 	return nil, nil
 }
 
@@ -489,5 +515,257 @@ func TestHostingFileSitsNextToAISettings(t *testing.T) {
 	want := accounts.PathNextTo(a.ai.deps.SettingsPath)
 	if a.hosting.path != want {
 		t.Fatalf("path = %q, want %q", a.hosting.path, want)
+	}
+}
+
+// withBitbucketOrigin makes id's origin fetch from a local bare repository
+// that has the branches of src, while HostingInfo sees acme/api on Bitbucket.
+// `git remote -v` shows insteadOf-rewritten URLs, so the Bitbucket URL is the
+// push URL: the detection reads it when the fetch URL is not on a supported
+// host, and a fetch only uses the fetch URL.
+func withBitbucketOrigin(t *testing.T, a *App, id string, src *testrepo.Repo) {
+	t.Helper()
+	dir, err := a.dir(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// newTestApp's local branch "feature" would block a branch feature/x.
+	gitC(t, dir, "branch", "-q", "-D", "feature")
+	gitC(t, dir, "remote", "add", "origin", testrepo.NewBareFrom(t, src))
+	gitC(t, dir, "remote", "set-url", "--push", "origin", "git@bitbucket.org:acme/api.git")
+	if info, err := a.HostingInfo(id); err != nil || info.Host != hosting.Bitbucket || info.Remote != "origin" || info.Name != "api" {
+		t.Fatalf("the test remote is not detected as Bitbucket: %+v %v", info, err)
+	}
+}
+
+// remoteWithBranch is a repository with a branch feature/x ahead of main.
+func remoteWithBranch(t *testing.T) *testrepo.Repo {
+	t.Helper()
+	src := testrepo.New(t)
+	src.Commit("base")
+	src.Git("switch", "-q", "-c", "feature/x")
+	src.WriteFile("file-1.txt", "changed on the remote\n")
+	src.Git("commit", "-q", "-am", "x work")
+	src.Git("switch", "-q", "main")
+	return src
+}
+
+func TestListPullRequestsFillsStateFromCache(t *testing.T) {
+	a, id, fake, _ := newHostingApp(t)
+	a.AddRemote(id, "origin", "git@bitbucket.org:acme/api.git")
+	connectBitbucket(t, a)
+	a.hosting.cache.Put("bitbucket:acme/api", map[string]hosting.CommitStatus{hashA: {Hash: hashA, State: hosting.Failed}})
+	fake.pulls = func(hosting.Filter, hosting.Account) ([]hosting.PullRequest, bool, error) {
+		return []hosting.PullRequest{
+			{Number: 1, Title: "cached", HeadHash: hashA},
+			{Number: 2, Title: "unknown", HeadHash: hashB},
+			{Number: 3, Title: "no head"},
+		}, true, nil
+	}
+	got, err := a.ListPullRequests(id, "mine")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.More || len(got.Items) != 3 {
+		t.Fatalf("list = %+v", got)
+	}
+	if got.Items[0].State != hosting.Failed || got.Items[1].State != "" || got.Items[2].State != "" {
+		t.Fatalf("states = %q %q %q", got.Items[0].State, got.Items[1].State, got.Items[2].State)
+	}
+	if fake.statusCallCount() != 0 || len(fake.checkCalls) != 0 {
+		t.Fatalf("extra requests: statuses %v checks %v", fake.statusCalls, fake.checkCalls)
+	}
+	// The saved account is who "mine" and "review" are about.
+	if fake.pullFilters[0] != hosting.FilterMine || fake.pullMe[0].ID != "{u}" {
+		t.Fatalf("asked %v as %+v", fake.pullFilters, fake.pullMe)
+	}
+}
+
+func TestListPullRequestsGitHubKeepsTheHostsState(t *testing.T) {
+	a, id, fake, _ := newHostingApp(t)
+	a.AddRemote(id, "origin", "https://github.com/o/r")
+	if _, err := a.SaveGitHubAccount("token", "ghp_x"); err != nil {
+		t.Fatal(err)
+	}
+	a.hosting.cache.Put("github:o/r", map[string]hosting.CommitStatus{hashA: {Hash: hashA, State: hosting.Failed}})
+	fake.pulls = func(_ hosting.Filter, me hosting.Account) ([]hosting.PullRequest, bool, error) {
+		if me.ID != "ada" {
+			t.Errorf("me = %+v", me)
+		}
+		return []hosting.PullRequest{{Number: 1, HeadHash: hashA, State: hosting.Success}}, false, nil
+	}
+	got, err := a.ListPullRequests(id, "review")
+	if err != nil || got.Items[0].State != hosting.Success {
+		t.Fatalf("%+v %v", got, err)
+	}
+}
+
+func TestListPullRequestsEmptyIsAnEmptyList(t *testing.T) {
+	a, id, _, _ := newHostingApp(t)
+	a.AddRemote(id, "origin", "git@bitbucket.org:acme/api.git")
+	connectBitbucket(t, a)
+	got, err := a.ListPullRequests(id, "open")
+	if err != nil || got.Items == nil || len(got.Items) != 0 || got.More {
+		t.Fatalf("%+v %v", got, err)
+	}
+}
+
+func TestListPullRequestsNoAccount(t *testing.T) {
+	a, id, fake, _ := newHostingApp(t)
+	a.AddRemote(id, "origin", "git@bitbucket.org:acme/api.git")
+	_, err := a.ListPullRequests(id, "open")
+	if !errors.Is(err, hosting.ErrNoAccount) {
+		t.Fatalf("err = %v", err)
+	}
+	if len(fake.pullFilters) != 0 {
+		t.Fatal("the host was asked without an account")
+	}
+	store, _ := a.accountStore()
+	connectBitbucket(t, a)
+	store.OnReject(hosting.Bitbucket)()
+	if _, err := a.ListPullRequests(id, "open"); !errors.Is(err, hosting.ErrRejected) || len(fake.pullFilters) != 0 {
+		t.Fatalf("rejected: %v", err)
+	}
+}
+
+func TestListPullRequestsErrors(t *testing.T) {
+	a, id, fake, _ := newHostingApp(t)
+	if _, err := a.ListPullRequests(id, "open"); err == nil {
+		t.Fatal("a repository with no host listed pull requests")
+	}
+	a.AddRemote(id, "origin", "git@bitbucket.org:acme/api.git")
+	connectBitbucket(t, a)
+	if _, err := a.ListPullRequests(id, "everything"); err == nil {
+		t.Fatal("an unknown filter was accepted")
+	}
+	fake.pulls = func(hosting.Filter, hosting.Account) ([]hosting.PullRequest, bool, error) {
+		return nil, false, &hosting.NoAccessError{}
+	}
+	_, err := a.ListPullRequests(id, "open")
+	var na *hosting.NoAccessError
+	if !errors.As(err, &na) || na.Repo != "acme/api" {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestPullRequestCountDetailAndFiles(t *testing.T) {
+	a, id, fake, _ := newHostingApp(t)
+	a.AddRemote(id, "origin", "git@bitbucket.org:acme/api.git")
+	connectBitbucket(t, a)
+	fake.pullCount = func() (hosting.Count, error) { return hosting.Count{N: 100, More: true}, nil }
+	fake.pull = func(n int) (hosting.PullRequestDetail, error) {
+		return hosting.PullRequestDetail{PullRequest: hosting.PullRequest{Number: n}, Description: "d"}, nil
+	}
+	fake.pullFiles = func(n int) ([]hosting.PRFile, error) { return []hosting.PRFile{{Path: "a.go"}}, nil }
+	if c, err := a.PullRequestCount(id); err != nil || c.N != 100 || !c.More {
+		t.Fatalf("count %+v %v", c, err)
+	}
+	if d, err := a.GetPullRequest(id, 7); err != nil || d.Number != 7 || d.Description != "d" {
+		t.Fatalf("detail %+v %v", d, err)
+	}
+	if fs, err := a.GetPullRequestFiles(id, 7); err != nil || len(fs) != 1 {
+		t.Fatalf("files %+v %v", fs, err)
+	}
+	if _, err := a.GetPullRequest(id, 0); err == nil {
+		t.Fatal("pull request 0 accepted")
+	}
+	fake.pull = func(int) (hosting.PullRequestDetail, error) {
+		return hosting.PullRequestDetail{}, &hosting.NoAccessError{}
+	}
+	var na *hosting.NoAccessError
+	if _, err := a.GetPullRequest(id, 7); !errors.As(err, &na) || na.Repo != "acme/api" {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestCheckoutPullRequestFork(t *testing.T) {
+	a, id, fake, _ := newHostingApp(t)
+	withBitbucketOrigin(t, a, id, remoteWithBranch(t))
+	connectBitbucket(t, a)
+	fake.pull = func(n int) (hosting.PullRequestDetail, error) {
+		return hosting.PullRequestDetail{PullRequest: hosting.PullRequest{Number: n, Source: "feature/x", Fork: true}}, nil
+	}
+	_, err := a.CheckoutPullRequest(id, 4)
+	if err == nil || err.Error() != "From a fork. Open it in the browser." {
+		t.Fatalf("err = %v", err)
+	}
+	dir, _ := a.dir(id)
+	if out := gitC(t, dir, "for-each-ref", "refs/remotes/origin"); strings.TrimSpace(out) != "" {
+		t.Fatalf("a fork pull request fetched the remote: %s", out)
+	}
+}
+
+func TestCheckoutPullRequestSameRepo(t *testing.T) {
+	a, id, fake, _ := newHostingApp(t)
+	withBitbucketOrigin(t, a, id, remoteWithBranch(t))
+	connectBitbucket(t, a)
+	fake.pull = func(n int) (hosting.PullRequestDetail, error) {
+		// The host is asked with no repository lock held.
+		unlock, err := a.lockWrite(id)
+		if err != nil {
+			t.Errorf("the write lock was held while asking the host: %v", err)
+		} else {
+			unlock()
+		}
+		return hosting.PullRequestDetail{PullRequest: hosting.PullRequest{Number: n, Source: "feature/x"}}, nil
+	}
+	outcome, err := a.CheckoutPullRequest(id, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcome != string(ops.CheckoutCreated) {
+		t.Fatalf("outcome = %q", outcome)
+	}
+	dir, _ := a.dir(id)
+	if got := strings.TrimSpace(gitC(t, dir, "rev-parse", "--abbrev-ref", "HEAD")); got != "feature/x" {
+		t.Fatalf("HEAD = %q", got)
+	}
+	if got := strings.TrimSpace(gitC(t, dir, "rev-parse", "--abbrev-ref", "feature/x@{upstream}")); got != "origin/feature/x" {
+		t.Fatalf("upstream = %q", got)
+	}
+	// A second checkout of the same branch reuses it.
+	gitC(t, dir, "switch", "-q", "main")
+	if outcome, err := a.CheckoutPullRequest(id, 4); err != nil || outcome != string(ops.CheckoutSwitched) {
+		t.Fatalf("again: %q %v", outcome, err)
+	}
+}
+
+func TestCheckoutPullRequestDirtyTree(t *testing.T) {
+	a, id, fake, _ := newHostingApp(t)
+	withBitbucketOrigin(t, a, id, remoteWithBranch(t))
+	connectBitbucket(t, a)
+	fake.pull = func(n int) (hosting.PullRequestDetail, error) {
+		return hosting.PullRequestDetail{PullRequest: hosting.PullRequest{Number: n, Source: "feature/x"}}, nil
+	}
+	dir, _ := a.dir(id)
+	if err := os.WriteFile(filepath.Join(dir, "file-1.txt"), []byte("local edit\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := a.CheckoutPullRequest(id, 4)
+	if err == nil {
+		t.Fatal("a dirty tree was switched away from")
+	}
+	_, want := a.CheckoutRemote(id, "origin", "feature/x")
+	if want == nil || err.Error() != want.Error() {
+		t.Fatalf("err = %v, want CheckoutRemote's %v", err, want)
+	}
+	if got := strings.TrimSpace(gitC(t, dir, "rev-parse", "--abbrev-ref", "HEAD")); got != "main" {
+		t.Fatalf("HEAD = %q", got)
+	}
+}
+
+func TestCheckoutPullRequestPassesErrorsThrough(t *testing.T) {
+	a, id, fake, _ := newHostingApp(t)
+	a.AddRemote(id, "origin", "git@bitbucket.org:acme/api.git")
+	if _, err := a.CheckoutPullRequest(id, 4); !errors.Is(err, hosting.ErrNoAccount) {
+		t.Fatalf("no account: %v", err)
+	}
+	connectBitbucket(t, a)
+	fake.pull = func(int) (hosting.PullRequestDetail, error) {
+		return hosting.PullRequestDetail{}, &hosting.NoAccessError{}
+	}
+	var na *hosting.NoAccessError
+	if _, err := a.CheckoutPullRequest(id, 4); !errors.As(err, &na) {
+		t.Fatalf("no access: %v", err)
 	}
 }

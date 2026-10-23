@@ -161,7 +161,7 @@ type PullRequest struct {
 	URL       string    `json:"url"`
 	Fork      bool      `json:"fork"`
 	Approvals int       `json:"approvals"`
-	Comments  int       `json:"comments"`
+	Comments  int       `json:"commentCount"` // not "comments": the detail's thread has that name
 	Updated   time.Time `json:"updated"`
 	State     State     `json:"state"` // head commit's aggregate; "" when unknown
 }

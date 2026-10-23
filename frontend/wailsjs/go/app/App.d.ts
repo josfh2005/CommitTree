@@ -56,6 +56,8 @@ export function Checkout(arg1:string,arg2:string):Promise<void>;
 
 export function CheckoutDetached(arg1:string,arg2:string):Promise<void>;
 
+export function CheckoutPullRequest(arg1:string,arg2:number):Promise<string>;
+
 export function CheckoutRemote(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function CherryPick(arg1:string,arg2:string):Promise<merge.Result>;
@@ -154,6 +156,10 @@ export function GetMergeMessage(arg1:string):Promise<string>;
 
 export function GetMergeState(arg1:string):Promise<merge.State>;
 
+export function GetPullRequest(arg1:string,arg2:number):Promise<hosting.PullRequestDetail>;
+
+export function GetPullRequestFiles(arg1:string,arg2:number):Promise<Array<hosting.PRFile>>;
+
 export function GetRebasePreview(arg1:string,arg2:string):Promise<merge.Preview>;
 
 export function GetRefs(arg1:string):Promise<refs.Refs>;
@@ -198,6 +204,8 @@ export function ListModels(arg1:string):Promise<Array<string>>;
 
 export function ListPrompts():Promise<Array<prompts.Info>>;
 
+export function ListPullRequests(arg1:string,arg2:string):Promise<app.PullRequestList>;
+
 export function ListRemotes(arg1:string):Promise<Array<ops.Remote>>;
 
 export function ListRepos():Promise<Array<app.RepoItem>>;
@@ -227,6 +235,8 @@ export function PlanFinish(arg1:string,arg2:string,arg3:Array<string>):Promise<g
 export function Pull(arg1:string):Promise<ops.Result>;
 
 export function PullModel(arg1:string):Promise<void>;
+
+export function PullRequestCount(arg1:string):Promise<hosting.Count>;
 
 export function Push(arg1:string):Promise<void>;
 

@@ -70,6 +70,10 @@ export function CheckoutDetached(arg1, arg2) {
   return window['go']['app']['App']['CheckoutDetached'](arg1, arg2);
 }
 
+export function CheckoutPullRequest(arg1, arg2) {
+  return window['go']['app']['App']['CheckoutPullRequest'](arg1, arg2);
+}
+
 export function CheckoutRemote(arg1, arg2, arg3) {
   return window['go']['app']['App']['CheckoutRemote'](arg1, arg2, arg3);
 }
@@ -266,6 +270,14 @@ export function GetMergeState(arg1) {
   return window['go']['app']['App']['GetMergeState'](arg1);
 }
 
+export function GetPullRequest(arg1, arg2) {
+  return window['go']['app']['App']['GetPullRequest'](arg1, arg2);
+}
+
+export function GetPullRequestFiles(arg1, arg2) {
+  return window['go']['app']['App']['GetPullRequestFiles'](arg1, arg2);
+}
+
 export function GetRebasePreview(arg1, arg2) {
   return window['go']['app']['App']['GetRebasePreview'](arg1, arg2);
 }
@@ -354,6 +366,10 @@ export function ListPrompts() {
   return window['go']['app']['App']['ListPrompts']();
 }
 
+export function ListPullRequests(arg1, arg2) {
+  return window['go']['app']['App']['ListPullRequests'](arg1, arg2);
+}
+
 export function ListRemotes(arg1) {
   return window['go']['app']['App']['ListRemotes'](arg1);
 }
@@ -412,6 +428,10 @@ export function Pull(arg1) {
 
 export function PullModel(arg1) {
   return window['go']['app']['App']['PullModel'](arg1);
+}
+
+export function PullRequestCount(arg1) {
+  return window['go']['app']['App']['PullRequestCount'](arg1);
 }
 
 export function Push(arg1) {

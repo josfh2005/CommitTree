@@ -542,6 +542,38 @@ export namespace app {
 	}
 	
 	
+	export class PullRequestList {
+	    items: hosting.PullRequest[];
+	    more: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new PullRequestList(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.items = this.convertValues(source["items"], hosting.PullRequest);
+	        this.more = source["more"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	
 	export class RegionResult {
 	    left: number;
@@ -1367,6 +1399,51 @@ export namespace hosting {
 		    return a;
 		}
 	}
+	export class Comment {
+	    id: string;
+	    parent: string;
+	    author: string;
+	    // Go type: time
+	    created: any;
+	    body: string;
+	    path: string;
+	    line: number;
+	    verdict: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Comment(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.parent = source["parent"];
+	        this.author = source["author"];
+	        this.created = this.convertValues(source["created"], null);
+	        this.body = source["body"];
+	        this.path = source["path"];
+	        this.line = source["line"];
+	        this.verdict = source["verdict"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class CommitStatus {
 	    hash: string;
 	    state: string;
@@ -1381,6 +1458,201 @@ export namespace hosting {
 	        this.hash = source["hash"];
 	        this.state = source["state"];
 	        this.checks = this.convertValues(source["checks"], Check);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Count {
+	    n: number;
+	    more: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Count(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.n = source["n"];
+	        this.more = source["more"];
+	    }
+	}
+	export class PRCommit {
+	    hash: string;
+	    short: string;
+	    subject: string;
+	    author: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PRCommit(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hash = source["hash"];
+	        this.short = source["short"];
+	        this.subject = source["subject"];
+	        this.author = source["author"];
+	    }
+	}
+	export class PRFile {
+	    path: string;
+	    oldPath: string;
+	    status: string;
+	    patch: string;
+	    noDiff: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new PRFile(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.oldPath = source["oldPath"];
+	        this.status = source["status"];
+	        this.patch = source["patch"];
+	        this.noDiff = source["noDiff"];
+	    }
+	}
+	export class PullRequest {
+	    number: number;
+	    title: string;
+	    draft: boolean;
+	    author: string;
+	    authorID: string;
+	    source: string;
+	    target: string;
+	    headHash: string;
+	    url: string;
+	    fork: boolean;
+	    approvals: number;
+	    commentCount: number;
+	    // Go type: time
+	    updated: any;
+	    state: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PullRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.number = source["number"];
+	        this.title = source["title"];
+	        this.draft = source["draft"];
+	        this.author = source["author"];
+	        this.authorID = source["authorID"];
+	        this.source = source["source"];
+	        this.target = source["target"];
+	        this.headHash = source["headHash"];
+	        this.url = source["url"];
+	        this.fork = source["fork"];
+	        this.approvals = source["approvals"];
+	        this.commentCount = source["commentCount"];
+	        this.updated = this.convertValues(source["updated"], null);
+	        this.state = source["state"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Reviewer {
+	    name: string;
+	    verdict: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Reviewer(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.verdict = source["verdict"];
+	    }
+	}
+	export class PullRequestDetail {
+	    number: number;
+	    title: string;
+	    draft: boolean;
+	    author: string;
+	    authorID: string;
+	    source: string;
+	    target: string;
+	    headHash: string;
+	    url: string;
+	    fork: boolean;
+	    approvals: number;
+	    commentCount: number;
+	    // Go type: time
+	    updated: any;
+	    state: string;
+	    description: string;
+	    // Go type: time
+	    created: any;
+	    reviewers: Reviewer[];
+	    commits: PRCommit[];
+	    comments: Comment[];
+	    commentsMore: boolean;
+	    checks: CommitStatus;
+	
+	    static createFrom(source: any = {}) {
+	        return new PullRequestDetail(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.number = source["number"];
+	        this.title = source["title"];
+	        this.draft = source["draft"];
+	        this.author = source["author"];
+	        this.authorID = source["authorID"];
+	        this.source = source["source"];
+	        this.target = source["target"];
+	        this.headHash = source["headHash"];
+	        this.url = source["url"];
+	        this.fork = source["fork"];
+	        this.approvals = source["approvals"];
+	        this.commentCount = source["commentCount"];
+	        this.updated = this.convertValues(source["updated"], null);
+	        this.state = source["state"];
+	        this.description = source["description"];
+	        this.created = this.convertValues(source["created"], null);
+	        this.reviewers = this.convertValues(source["reviewers"], Reviewer);
+	        this.commits = this.convertValues(source["commits"], PRCommit);
+	        this.comments = this.convertValues(source["comments"], Comment);
+	        this.commentsMore = source["commentsMore"];
+	        this.checks = this.convertValues(source["checks"], CommitStatus);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

@@ -7,9 +7,10 @@ the user connects in Settings. Every other repository looks and behaves
 exactly as before: no icons, no extra rows, nothing in the status bar.
 
 This document grows with the feature. It now covers detecting the host,
-accounts, and commit statuses with their cache and rate limits. The log
-icons, the commit details, the Pull requests view and the notifications are
-described here as they land.
+accounts, commit statuses with their cache and rate limits, and the pull
+request data and checkout behind the Pull requests view. The log icons, the
+commit details, the view itself and the notifications are described here as
+they land.
 
 The section is called **Pipelines** for a Bitbucket repository and **Checks**
 for a GitHub one, everywhere it appears.
@@ -138,3 +139,55 @@ One state per host, shared by every repository.
 - No network connection is not announced per row; the next cycle tries again.
 
 No network call is made while a repository's write lock is held.
+
+## Pull requests: data and checkout
+
+What the app asks of the host for the Pull requests view. All of it needs
+the repository to be on a supported host and an account for it that is
+connected; otherwise each call fails with the host's reason ("Bitbucket: no
+account", "Bitbucket rejected the token", or a repository that is not on
+Bitbucket or GitHub), and no request is sent.
+
+- **List.** Open pull requests by one of three filters: **open** (all),
+  **mine** (the account is the author) and **review** (the account is a
+  reviewer and has not approved). "Mine" and "review" use the user saved with
+  the account. Any other filter is an error. At most 100 rows, most recently
+  updated first; the answer says whether the host has more. An empty list is
+  an empty list, not an error.
+- **Row data.** Number, title, draft, author, `source → target`, the head
+  commit, link, whether it comes from a fork, approvals, comment count (`commentCount`, since a
+  pull request's detail has its own `comments` thread) and update time. On GitHub the state of the head commit comes with the list.
+  On Bitbucket it is filled only from the status cache (the one the log
+  uses); a head commit the cache does not hold fresh has no state, and the
+  list never makes extra requests for it.
+- **Count.** The number of open pull requests for the sidebar badge, from
+  the cheapest call the host has; it says when the real number is larger.
+- **Detail.** One pull request: description, dates, reviewers with their
+  verdict, commits, comments (up to 500, with a flag when there are more)
+  and the checks of the last commit.
+- **Files.** The changed files with status, old path and the host's diff for
+  each; a file the host gave no diff for is marked so. Everything comes from
+  the host's API, so no fetch is needed to read a pull request.
+- Pull request numbers must be positive. A repository the account cannot see
+  is "No access to <owner>/<repo> with this account"; rate-limit state is
+  announced as for statuses.
+
+### Checkout branch
+
+Checks out the source branch of a pull request in the local repository.
+
+1. The pull request is read from the host first, with no repository lock
+   held.
+2. A pull request from a fork (Bitbucket: its source repository differs from
+   the target; GitHub: cross-repository, or the head repository is gone) is
+   refused with "From a fork. Open it in the browser." Nothing is fetched.
+3. Otherwise the detected remote (see Detecting the host) is fetched, then
+   the existing checkout of a remote branch runs with that remote and the
+   source branch (`05-remote-and-stash.md`): the local branch of the same
+   name is created tracking it, or reused. Its outcome comes back unchanged.
+   Errors from the fetch and the checkout (a dirty working tree, a diverged
+   local branch, a busy repository, credentials) pass through unchanged and
+   nothing is forced.
+
+The fetch and the checkout take the repository's write lock themselves; the
+request to the host does not.
