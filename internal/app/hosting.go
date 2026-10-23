@@ -288,8 +288,8 @@ func (a *App) CommitChecks(id, hash string) (hosting.CommitStatus, error) {
 // started or ended, comparing with what it was last told. A limit that ends
 // by the clock is announced by the first call that notices.
 func (a *App) announceLimit(h hosting.Host) {
-	rl, blocked := a.hosting.limits.Blocked(h)
 	a.hosting.mu.Lock()
+	rl, blocked := a.hosting.limits.Blocked(h) // lock order: hosting.mu, then limits
 	was := a.hosting.announced[h]
 	a.hosting.announced[h] = blocked
 	a.hosting.mu.Unlock()

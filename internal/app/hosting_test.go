@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -312,9 +313,9 @@ func TestCommitStatusesEmitsLimitOnTransitionsOnly(t *testing.T) {
 	clk := &testClock{t: time.Unix(1_800_000_000, 0)}
 	a.hosting.limits = hosting.NewLimits(clk.Now)
 	status := http.StatusTooManyRequests
-	var hits int
+	var hits atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		hits++
+		hits.Add(1)
 		if status == http.StatusOK {
 			w.Write([]byte(`{"values":[]}`))
 			return
@@ -348,10 +349,10 @@ func TestCommitStatusesEmitsLimitOnTransitionsOnly(t *testing.T) {
 		t.Fatalf("after the 429: %+v", evs)
 	}
 	// Still blocked: no network call, no second event.
-	before := hits
+	before := hits.Load()
 	a.CommitStatuses(id, []string{hashA})
-	if hits != before || len(limitEvents()) != 1 {
-		t.Fatalf("hits %d->%d, events %+v", before, hits, limitEvents())
+	if hits.Load() != before || len(limitEvents()) != 1 {
+		t.Fatalf("hits %d->%d, events %+v", before, hits.Load(), limitEvents())
 	}
 	// The block ends: the next call announces it.
 	clk.Advance(31 * time.Second)

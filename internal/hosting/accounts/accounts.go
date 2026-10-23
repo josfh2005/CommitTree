@@ -399,10 +399,17 @@ func (s *Store) ProbeGitHub(source, token string) (func(ctx context.Context) (st
 		v := "Bearer " + token
 		return func(context.Context) (string, error) { return v, nil }, nil
 	case SourceGH:
+		// Runs gh directly and keeps nothing: a token GitHub then rejects
+		// must not be reused by the retry after `gh auth login`.
 		return func(ctx context.Context) (string, error) {
-			t, err := s.ghTokenFor(ctx)
-			if err != nil {
-				return "", err
+			gh, ok := findGH()
+			if !ok {
+				return "", errGHNotLoggedIn
+			}
+			t, err := RunGH(ctx, gh)
+			t = strings.TrimSpace(t)
+			if err != nil || t == "" {
+				return "", errGHNotLoggedIn
 			}
 			return "Bearer " + t, nil
 		}, nil

@@ -399,3 +399,35 @@ func TestProbeDoesNotStoreAnything(t *testing.T) {
 		t.Fatalf("something was stored: %v %v", statErr, kc.items)
 	}
 }
+
+// A token the CLI handed over and GitHub rejected must not stick: after
+// `gh auth login` the retry asks gh again.
+func TestProbeGitHubCLIDoesNotCacheTheToken(t *testing.T) {
+	s, _, _ := newStore(t)
+	oldFind, oldRun := findGH, RunGH
+	t.Cleanup(func() { findGH, RunGH = oldFind, oldRun })
+	findGH = func() (string, bool) { return "/fake/gh", true }
+	token := "old-token"
+	runs := 0
+	RunGH = func(context.Context, string) (string, error) { runs++; return token + "\n", nil }
+
+	probe, err := s.ProbeGitHub(SourceGH, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := probe(context.Background()); v != "Bearer old-token" {
+		t.Fatalf("first = %q", v)
+	}
+	// GitHub rejected it; the user logs in again and retries.
+	token = "new-token"
+	probe, _ = s.ProbeGitHub(SourceGH, "")
+	if v, err := probe(context.Background()); err != nil || v != "Bearer new-token" {
+		t.Fatalf("retry = %q, %v", v, err)
+	}
+	if runs != 2 {
+		t.Fatalf("gh ran %d times, want 2", runs)
+	}
+	if s.ghToken != "" {
+		t.Fatal("the probe cached a token")
+	}
+}
