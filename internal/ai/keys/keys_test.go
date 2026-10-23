@@ -106,3 +106,15 @@ func TestMask(t *testing.T) {
 		}
 	}
 }
+
+func TestKnownAcceptsHostingAccounts(t *testing.T) {
+	withFake(t, &fake{items: map[string]string{}})
+	for _, name := range []string{"bitbucket", "github"} {
+		if err := keys.Set(name, "t"); err != nil {
+			t.Errorf("Set(%q): %v", name, err)
+		}
+	}
+	if err := keys.Set("gitlab", "t"); err == nil {
+		t.Error("want an error for gitlab")
+	}
+}
