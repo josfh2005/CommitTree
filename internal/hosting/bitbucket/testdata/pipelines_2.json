@@ -1,0 +1,40 @@
+{
+  "pagelen": 100,
+  "page": 2,
+  "next": "HOST/2.0/repositories/acme/api/pipelines?page=3&pagelen=100&sort=-created_on",
+  "values": [
+    {
+      "type": "pipeline",
+      "uuid": "{pl-5}",
+      "build_number": 5,
+      "created_on": "2026-10-19T08:00:00.000000+00:00",
+      "completed_on": "2026-10-19T08:00:00.000000+00:00",
+      "duration_in_seconds": 0,
+      "state": {
+        "name": "COMPLETED",
+        "type": "pipeline_state_completed",
+        "result": {
+          "name": "EXPIRED",
+          "type": "pipeline_state_completed_expired"
+        }
+      },
+      "target": {
+        "type": "pipeline_ref_target",
+        "ref_type": "branch",
+        "ref_name": "release",
+        "selector": {
+          "type": "custom",
+          "pattern": "deploy"
+        },
+        "commit": {
+          "type": "commit",
+          "hash": "cccccccccccccccccccccccccccccccccccccccc"
+        }
+      },
+      "trigger": {
+        "name": "PUSH",
+        "type": "pipeline_trigger_push"
+      }
+    }
+  ]
+}

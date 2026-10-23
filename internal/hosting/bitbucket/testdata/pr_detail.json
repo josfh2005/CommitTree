@@ -1,0 +1,97 @@
+{
+  "type": "pullrequest",
+  "id": 7,
+  "title": "Add pipelines client",
+  "draft": false,
+  "state": "OPEN",
+  "comment_count": 3,
+  "created_on": "2026-10-18T08:00:00.000000+00:00",
+  "updated_on": "2026-10-21T10:00:00.000000+00:00",
+  "author": {
+    "type": "user",
+    "display_name": "Bo",
+    "uuid": "{bbbb-2222}"
+  },
+  "source": {
+    "branch": {
+      "name": "feature/x"
+    },
+    "commit": {
+      "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "repository": {
+      "full_name": "acme/api"
+    }
+  },
+  "destination": {
+    "branch": {
+      "name": "main"
+    },
+    "commit": {
+      "hash": "9999999999999999999999999999999999999999"
+    },
+    "repository": {
+      "full_name": "acme/api"
+    }
+  },
+  "participants": [
+    {
+      "type": "participant",
+      "user": {
+        "type": "user",
+        "display_name": "Bo",
+        "uuid": "{bbbb-2222}"
+      },
+      "role": "PARTICIPANT",
+      "approved": false,
+      "state": null,
+      "participated_on": null
+    },
+    {
+      "type": "participant",
+      "user": {
+        "type": "user",
+        "display_name": "Cy",
+        "uuid": "{cccc-3333}"
+      },
+      "role": "REVIEWER",
+      "approved": true,
+      "state": "approved",
+      "participated_on": null
+    },
+    {
+      "type": "participant",
+      "user": {
+        "type": "user",
+        "display_name": "Di",
+        "uuid": "{dddd-4444}"
+      },
+      "role": "REVIEWER",
+      "approved": false,
+      "state": "changes_requested",
+      "participated_on": null
+    },
+    {
+      "type": "participant",
+      "user": {
+        "type": "user",
+        "display_name": "Ed",
+        "uuid": "{eeee-5555}"
+      },
+      "role": "REVIEWER",
+      "approved": false,
+      "state": null,
+      "participated_on": null
+    }
+  ],
+  "links": {
+    "html": {
+      "href": "https://bitbucket.org/acme/api/pull-requests/7"
+    }
+  },
+  "description": "",
+  "summary": {
+    "raw": "Adds the **client**.",
+    "markup": "markdown"
+  }
+}

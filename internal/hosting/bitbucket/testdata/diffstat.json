@@ -1,0 +1,60 @@
+{
+  "pagelen": 500,
+  "page": 1,
+  "values": [
+    {
+      "type": "diffstat",
+      "status": "modified",
+      "lines_added": 3,
+      "lines_removed": 1,
+      "old": {
+        "path": "src/a.go"
+      },
+      "new": {
+        "path": "src/a.go"
+      }
+    },
+    {
+      "type": "diffstat",
+      "status": "added",
+      "lines_added": 2,
+      "lines_removed": 0,
+      "old": null,
+      "new": {
+        "path": "docs/new.md"
+      }
+    },
+    {
+      "type": "diffstat",
+      "status": "removed",
+      "lines_added": 0,
+      "lines_removed": 2,
+      "old": {
+        "path": "old.txt"
+      },
+      "new": null
+    },
+    {
+      "type": "diffstat",
+      "status": "renamed",
+      "lines_added": 0,
+      "lines_removed": 0,
+      "old": {
+        "path": "lib/x.go"
+      },
+      "new": {
+        "path": "lib/y.go"
+      }
+    },
+    {
+      "type": "diffstat",
+      "status": "added",
+      "lines_added": 0,
+      "lines_removed": 0,
+      "old": null,
+      "new": {
+        "path": "img/logo.png"
+      }
+    }
+  ]
+}

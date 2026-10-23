@@ -1,0 +1,135 @@
+{
+  "pagelen": 100,
+  "page": 1,
+  "next": "HOST/2.0/repositories/acme/api/pipelines?page=2&pagelen=100&sort=-created_on",
+  "values": [
+    {
+      "type": "pipeline",
+      "uuid": "{pl-13}",
+      "build_number": 13,
+      "created_on": "2026-10-20T11:00:00.000000+00:00",
+      "completed_on": null,
+      "duration_in_seconds": 0,
+      "state": {
+        "name": "IN_PROGRESS",
+        "type": "pipeline_state_in_progress"
+      },
+      "target": {
+        "type": "pipeline_ref_target",
+        "ref_type": "branch",
+        "ref_name": "main",
+        "selector": {
+          "type": "branches",
+          "pattern": "main"
+        },
+        "commit": {
+          "type": "commit",
+          "hash": "dddddddddddddddddddddddddddddddddddddddd"
+        }
+      },
+      "trigger": {
+        "name": "PUSH",
+        "type": "pipeline_trigger_push"
+      }
+    },
+    {
+      "type": "pipeline",
+      "uuid": "{pl-12}",
+      "build_number": 12,
+      "created_on": "2026-10-20T10:05:00.123456+00:00",
+      "completed_on": "2026-10-20T10:05:00.123456+00:00",
+      "duration_in_seconds": 95,
+      "state": {
+        "name": "COMPLETED",
+        "type": "pipeline_state_completed",
+        "result": {
+          "name": "SUCCESSFUL",
+          "type": "pipeline_state_completed_successful"
+        }
+      },
+      "target": {
+        "type": "pipeline_ref_target",
+        "ref_type": "branch",
+        "ref_name": "main",
+        "selector": {
+          "type": "branches",
+          "pattern": "main"
+        },
+        "commit": {
+          "type": "commit",
+          "hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      },
+      "trigger": {
+        "name": "PUSH",
+        "type": "pipeline_trigger_push"
+      }
+    },
+    {
+      "type": "pipeline",
+      "uuid": "{pl-11}",
+      "build_number": 11,
+      "created_on": "2026-10-20T09:30:00.000000+00:00",
+      "completed_on": "2026-10-20T09:30:00.000000+00:00",
+      "duration_in_seconds": 120,
+      "state": {
+        "name": "COMPLETED",
+        "type": "pipeline_state_completed",
+        "result": {
+          "name": "SUCCESSFUL",
+          "type": "pipeline_state_completed_successful"
+        }
+      },
+      "target": {
+        "type": "pipeline_ref_target",
+        "ref_type": "branch",
+        "ref_name": "feature/x",
+        "selector": {
+          "type": "branches",
+          "pattern": "feature/x"
+        },
+        "commit": {
+          "type": "commit",
+          "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "trigger": {
+        "name": "PUSH",
+        "type": "pipeline_trigger_push"
+      }
+    },
+    {
+      "type": "pipeline",
+      "uuid": "{pl-10}",
+      "build_number": 10,
+      "created_on": "2026-10-20T09:00:00.000000+00:00",
+      "completed_on": "2026-10-20T09:00:00.000000+00:00",
+      "duration_in_seconds": 40,
+      "state": {
+        "name": "COMPLETED",
+        "type": "pipeline_state_completed",
+        "result": {
+          "name": "FAILED",
+          "type": "pipeline_state_completed_failed"
+        }
+      },
+      "target": {
+        "type": "pipeline_ref_target",
+        "ref_type": "branch",
+        "ref_name": "feature/x",
+        "selector": {
+          "type": "branches",
+          "pattern": "feature/x"
+        },
+        "commit": {
+          "type": "commit",
+          "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "trigger": {
+        "name": "PUSH",
+        "type": "pipeline_trigger_push"
+      }
+    }
+  ]
+}

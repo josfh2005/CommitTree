@@ -1,0 +1,199 @@
+{
+  "pagelen": 50,
+  "page": 1,
+  "size": 3,
+  "values": [
+    {
+      "type": "pullrequest",
+      "id": 31,
+      "title": "Already approved by me",
+      "draft": false,
+      "state": "OPEN",
+      "comment_count": 2,
+      "created_on": "2026-10-18T08:00:00.000000+00:00",
+      "updated_on": "2026-10-21T10:00:00.000000+00:00",
+      "author": {
+        "type": "user",
+        "display_name": "Bo",
+        "uuid": "{bbbb-2222}"
+      },
+      "source": {
+        "branch": {
+          "name": "f/a"
+        },
+        "commit": {
+          "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "repository": {
+          "full_name": "acme/api"
+        }
+      },
+      "destination": {
+        "branch": {
+          "name": "main"
+        },
+        "commit": {
+          "hash": "9999999999999999999999999999999999999999"
+        },
+        "repository": {
+          "full_name": "acme/api"
+        }
+      },
+      "participants": [
+        {
+          "type": "participant",
+          "user": {
+            "type": "user",
+            "display_name": "Ana Dev",
+            "uuid": "{aaaa-1111}"
+          },
+          "role": "REVIEWER",
+          "approved": true,
+          "state": "approved",
+          "participated_on": null
+        },
+        {
+          "type": "participant",
+          "user": {
+            "type": "user",
+            "display_name": "Bo",
+            "uuid": "{bbbb-2222}"
+          },
+          "role": "PARTICIPANT",
+          "approved": false,
+          "state": null,
+          "participated_on": null
+        }
+      ],
+      "links": {
+        "html": {
+          "href": "https://bitbucket.org/acme/api/pull-requests/31"
+        }
+      }
+    },
+    {
+      "type": "pullrequest",
+      "id": 30,
+      "title": "Needs my review",
+      "draft": false,
+      "state": "OPEN",
+      "comment_count": 1,
+      "created_on": "2026-10-18T08:00:00.000000+00:00",
+      "updated_on": "2026-10-21T09:00:00.000000+00:00",
+      "author": {
+        "type": "user",
+        "display_name": "Bo",
+        "uuid": "{bbbb-2222}"
+      },
+      "source": {
+        "branch": {
+          "name": "f/b"
+        },
+        "commit": {
+          "hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "repository": {
+          "full_name": "acme/api"
+        }
+      },
+      "destination": {
+        "branch": {
+          "name": "main"
+        },
+        "commit": {
+          "hash": "9999999999999999999999999999999999999999"
+        },
+        "repository": {
+          "full_name": "acme/api"
+        }
+      },
+      "participants": [
+        {
+          "type": "participant",
+          "user": {
+            "type": "user",
+            "display_name": "Ana Dev",
+            "uuid": "{aaaa-1111}"
+          },
+          "role": "REVIEWER",
+          "approved": false,
+          "state": null,
+          "participated_on": null
+        },
+        {
+          "type": "participant",
+          "user": {
+            "type": "user",
+            "display_name": "Cy",
+            "uuid": "{cccc-3333}"
+          },
+          "role": "REVIEWER",
+          "approved": true,
+          "state": "approved",
+          "participated_on": null
+        }
+      ],
+      "links": {
+        "html": {
+          "href": "https://bitbucket.org/acme/api/pull-requests/30"
+        }
+      }
+    },
+    {
+      "type": "pullrequest",
+      "id": 29,
+      "title": "Changes requested by me",
+      "draft": true,
+      "state": "OPEN",
+      "comment_count": 0,
+      "created_on": "2026-10-18T08:00:00.000000+00:00",
+      "updated_on": "2026-10-20T09:00:00.000000+00:00",
+      "author": {
+        "type": "user",
+        "display_name": "Cy",
+        "uuid": "{cccc-3333}"
+      },
+      "source": {
+        "branch": {
+          "name": "f/c"
+        },
+        "commit": {
+          "hash": "cccccccccccccccccccccccccccccccccccccccc"
+        },
+        "repository": {
+          "full_name": "acme/api"
+        }
+      },
+      "destination": {
+        "branch": {
+          "name": "main"
+        },
+        "commit": {
+          "hash": "9999999999999999999999999999999999999999"
+        },
+        "repository": {
+          "full_name": "acme/api"
+        }
+      },
+      "participants": [
+        {
+          "type": "participant",
+          "user": {
+            "type": "user",
+            "display_name": "Ana Dev",
+            "uuid": "{aaaa-1111}"
+          },
+          "role": "REVIEWER",
+          "approved": false,
+          "state": "changes_requested",
+          "participated_on": null
+        }
+      ],
+      "links": {
+        "html": {
+          "href": "https://bitbucket.org/acme/api/pull-requests/29"
+        }
+      }
+    }
+  ]
+}
