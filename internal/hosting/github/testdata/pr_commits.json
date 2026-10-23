@@ -1,0 +1,4 @@
+[
+ {"sha": "1111111111111111111111111111111111111111", "commit": {"message": "Add retry loop\n\nlong body", "author": {"name": "Ana Dev"}}, "author": {"login": "ana-dev"}},
+ {"sha": "2222222222222222222222222222222222222222", "commit": {"message": "Tests", "author": {"name": "Ana D."}}, "author": null}
+]
