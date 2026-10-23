@@ -24,6 +24,7 @@ import (
 	"git-ui/internal/ai/tools"
 	"git-ui/internal/ai/writetools"
 	"git-ui/internal/gitlog"
+	"git-ui/internal/hosting/accounts"
 	"git-ui/internal/refs"
 )
 
@@ -104,6 +105,12 @@ type ModelDone struct {
 // renderer cannot invoke it with empty or arbitrary deps.
 func WithAI(a *App, d AIDeps) {
 	a.ai = &aiState{deps: d, runs: map[string]context.CancelFunc{}, confirms: map[string]*pendingConfirm{}, suggestions: map[string]*pendingSuggestion{}, commits: map[string]*commitRun{}}
+	// hosting.json sits next to ai.json.
+	a.hosting.mu.Lock()
+	if a.hosting.path == "" && a.hosting.store == nil {
+		a.hosting.path = accounts.PathNextTo(d.SettingsPath)
+	}
+	a.hosting.mu.Unlock()
 }
 
 func (a *App) emit(name string, data any) {

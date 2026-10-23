@@ -2,6 +2,7 @@ package accounts
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"os"
 	"path/filepath"
@@ -357,4 +358,44 @@ func TestConcurrentUse(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+}
+
+func TestProbeRefusesBlankBeforeAnythingElse(t *testing.T) {
+	s, kc, _ := newStore(t)
+	for _, c := range [][2]string{{"", "tok"}, {"  ", "tok"}, {"a@b.c", ""}, {"a@b.c", " \t"}} {
+		if _, err := s.ProbeBitbucket(c[0], c[1]); err == nil {
+			t.Errorf("ProbeBitbucket(%q, %q) accepted", c[0], c[1])
+		}
+	}
+	if _, err := s.ProbeGitHub(SourceToken, "  "); err == nil {
+		t.Error("ProbeGitHub accepted a blank token")
+	}
+	if _, err := s.ProbeGitHub("nope", "x"); err == nil {
+		t.Error("ProbeGitHub accepted an unknown source")
+	}
+	if len(kc.items) != 0 {
+		t.Errorf("keychain touched: %v", kc.items)
+	}
+}
+
+func TestProbeDoesNotStoreAnything(t *testing.T) {
+	s, kc, path := newStore(t)
+	auth, err := s.ProbeBitbucket(" a@b.c ", " tok ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err := auth(context.Background())
+	if err != nil || v != "Basic "+base64.StdEncoding.EncodeToString([]byte("a@b.c:tok")) {
+		t.Fatalf("auth = %q, %v", v, err)
+	}
+	gh, err := s.ProbeGitHub(SourceToken, "ghp_x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := gh(context.Background()); v != "Bearer ghp_x" {
+		t.Fatalf("gh auth = %q", v)
+	}
+	if _, statErr := os.Stat(path); statErr == nil || len(kc.items) != 0 {
+		t.Fatalf("something was stored: %v %v", statErr, kc.items)
+	}
 }

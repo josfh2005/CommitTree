@@ -371,3 +371,41 @@ func (s *Store) Remove(h hosting.Host) error {
 	delete(s.rejected, h)
 	return nil
 }
+
+// ProbeBitbucket is the Authorization source for checking an email and token
+// before they are saved. Blank values are refused here, before anything is
+// sent.
+func (s *Store) ProbeBitbucket(email, token string) (func(ctx context.Context) (string, error), error) {
+	email, token = strings.TrimSpace(email), strings.TrimSpace(token)
+	if email == "" {
+		return nil, errors.New("the Bitbucket email is empty")
+	}
+	if token == "" {
+		return nil, errors.New("the Bitbucket token is empty")
+	}
+	v := "Basic " + base64.StdEncoding.EncodeToString([]byte(email+":"+token))
+	return func(context.Context) (string, error) { return v, nil }, nil
+}
+
+// ProbeGitHub is the Authorization source for checking a GitHub token (source
+// "token") or the GitHub CLI's (source "gh") before the account is saved.
+func (s *Store) ProbeGitHub(source, token string) (func(ctx context.Context) (string, error), error) {
+	switch source {
+	case SourceToken:
+		token = strings.TrimSpace(token)
+		if token == "" {
+			return nil, errors.New("the GitHub token is empty")
+		}
+		v := "Bearer " + token
+		return func(context.Context) (string, error) { return v, nil }, nil
+	case SourceGH:
+		return func(ctx context.Context) (string, error) {
+			t, err := s.ghTokenFor(ctx)
+			if err != nil {
+				return "", err
+			}
+			return "Bearer " + t, nil
+		}, nil
+	}
+	return nil, fmt.Errorf("unknown GitHub source %q", source)
+}

@@ -114,8 +114,16 @@ export function CommitChanges(arg1, arg2, arg3) {
   return window['go']['app']['App']['CommitChanges'](arg1, arg2, arg3);
 }
 
+export function CommitChecks(arg1, arg2) {
+  return window['go']['app']['App']['CommitChecks'](arg1, arg2);
+}
+
 export function CommitMerge(arg1, arg2) {
   return window['go']['app']['App']['CommitMerge'](arg1, arg2);
+}
+
+export function CommitStatuses(arg1, arg2) {
+  return window['go']['app']['App']['CommitStatuses'](arg1, arg2);
 }
 
 export function ConfirmChatAction(arg1, arg2, arg3) {
@@ -238,6 +246,10 @@ export function GetGitSettings() {
   return window['go']['app']['App']['GetGitSettings']();
 }
 
+export function GetHostingAccounts() {
+  return window['go']['app']['App']['GetHostingAccounts']();
+}
+
 export function GetIdentity(arg1) {
   return window['go']['app']['App']['GetIdentity'](arg1);
 }
@@ -300,6 +312,10 @@ export function GetWorktreeDiff(arg1, arg2, arg3) {
 
 export function GetWorktreeState(arg1) {
   return window['go']['app']['App']['GetWorktreeState'](arg1);
+}
+
+export function HostingInfo(arg1) {
+  return window['go']['app']['App']['HostingInfo'](arg1);
 }
 
 export function IgnoreRepoInstructions(arg1, arg2) {
@@ -418,6 +434,10 @@ export function RelocateRepo(arg1) {
   return window['go']['app']['App']['RelocateRepo'](arg1);
 }
 
+export function RemoveHostingAccount(arg1) {
+  return window['go']['app']['App']['RemoveHostingAccount'](arg1);
+}
+
 export function RemoveRemote(arg1, arg2) {
   return window['go']['app']['App']['RemoveRemote'](arg1, arg2);
 }
@@ -470,8 +490,16 @@ export function SaveAISettings(arg1) {
   return window['go']['app']['App']['SaveAISettings'](arg1);
 }
 
+export function SaveBitbucketAccount(arg1, arg2) {
+  return window['go']['app']['App']['SaveBitbucketAccount'](arg1, arg2);
+}
+
 export function SaveFlowSettings(arg1, arg2) {
   return window['go']['app']['App']['SaveFlowSettings'](arg1, arg2);
+}
+
+export function SaveGitHubAccount(arg1, arg2) {
+  return window['go']['app']['App']['SaveGitHubAccount'](arg1, arg2);
 }
 
 export function SaveGitSettings(arg1) {

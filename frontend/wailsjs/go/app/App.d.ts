@@ -7,6 +7,7 @@ import {worktree} from '../models';
 import {ops} from '../models';
 import {merge} from '../models';
 import {cmdlog} from '../models';
+import {hosting} from '../models';
 import {refs} from '../models';
 import {gitflow} from '../models';
 import {settings} from '../models';
@@ -77,7 +78,11 @@ export function CommandLogOutput(arg1:string,arg2:number):Promise<cmdlog.Output>
 
 export function CommitChanges(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
+export function CommitChecks(arg1:string,arg2:string):Promise<hosting.CommitStatus>;
+
 export function CommitMerge(arg1:string,arg2:string):Promise<void>;
+
+export function CommitStatuses(arg1:string,arg2:Array<string>):Promise<Record<string, hosting.CommitStatus>>;
 
 export function ConfirmChatAction(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
@@ -139,6 +144,8 @@ export function GetFlowSettings(arg1:string):Promise<gitflow.Settings>;
 
 export function GetGitSettings():Promise<gitsettings.Settings>;
 
+export function GetHostingAccounts():Promise<Array<app.HostingAccount>>;
+
 export function GetIdentity(arg1:string):Promise<app.Identity>;
 
 export function GetLog(arg1:string,arg2:gitlog.Filters,arg3:string,arg4:number,arg5:number):Promise<app.LogPage>;
@@ -170,6 +177,8 @@ export function GetSubmodules(arg1:string):Promise<Array<submodules.Submodule>>;
 export function GetWorktreeDiff(arg1:string,arg2:string,arg3:boolean):Promise<app.WorktreeDiff>;
 
 export function GetWorktreeState(arg1:string):Promise<worktree.State>;
+
+export function HostingInfo(arg1:string):Promise<app.HostingInfo>;
 
 export function IgnoreRepoInstructions(arg1:string,arg2:string):Promise<void>;
 
@@ -229,6 +238,8 @@ export function RebaseOnto(arg1:string,arg2:string):Promise<merge.Result>;
 
 export function RelocateRepo(arg1:string):Promise<repos.Repo>;
 
+export function RemoveHostingAccount(arg1:string):Promise<void>;
+
 export function RemoveRemote(arg1:string,arg2:string):Promise<void>;
 
 export function RemoveRepo(arg1:string):Promise<void>;
@@ -255,7 +266,11 @@ export function RestartConflictFile(arg1:string,arg2:string):Promise<void>;
 
 export function SaveAISettings(arg1:settings.Settings):Promise<void>;
 
+export function SaveBitbucketAccount(arg1:string,arg2:string):Promise<app.HostingAccount>;
+
 export function SaveFlowSettings(arg1:string,arg2:gitflow.Config):Promise<void>;
+
+export function SaveGitHubAccount(arg1:string,arg2:string):Promise<app.HostingAccount>;
 
 export function SaveGitSettings(arg1:gitsettings.Settings):Promise<void>;
 

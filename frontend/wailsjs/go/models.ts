@@ -364,6 +364,58 @@ export namespace app {
 		    return a;
 		}
 	}
+	export class HostingAccount {
+	    host: string;
+	    connected: boolean;
+	    rejected: boolean;
+	    name: string;
+	    email: string;
+	    source: string;
+	    ghAvailable: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new HostingAccount(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.host = source["host"];
+	        this.connected = source["connected"];
+	        this.rejected = source["rejected"];
+	        this.name = source["name"];
+	        this.email = source["email"];
+	        this.source = source["source"];
+	        this.ghAvailable = source["ghAvailable"];
+	    }
+	}
+	export class HostingInfo {
+	    supported: boolean;
+	    host: string;
+	    owner: string;
+	    name: string;
+	    remote: string;
+	    webURL: string;
+	    pullsURL: string;
+	    noun: string;
+	    account: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new HostingInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.supported = source["supported"];
+	        this.host = source["host"];
+	        this.owner = source["owner"];
+	        this.name = source["name"];
+	        this.remote = source["remote"];
+	        this.webURL = source["webURL"];
+	        this.pullsURL = source["pullsURL"];
+	        this.noun = source["noun"];
+	        this.account = source["account"];
+	    }
+	}
 	export class Identity {
 	    name: string;
 	    email: string;
@@ -1265,6 +1317,89 @@ export namespace graph {
 	        this.kind = source["kind"];
 	        this.target = source["target"];
 	    }
+	}
+
+}
+
+export namespace hosting {
+	
+	export class Check {
+	    key: string;
+	    name: string;
+	    state: string;
+	    url: string;
+	    // Go type: time
+	    started: any;
+	    durationSec: number;
+	    // Go type: time
+	    created: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new Check(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.name = source["name"];
+	        this.state = source["state"];
+	        this.url = source["url"];
+	        this.started = this.convertValues(source["started"], null);
+	        this.durationSec = source["durationSec"];
+	        this.created = this.convertValues(source["created"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class CommitStatus {
+	    hash: string;
+	    state: string;
+	    checks: Check[];
+	
+	    static createFrom(source: any = {}) {
+	        return new CommitStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hash = source["hash"];
+	        this.state = source["state"];
+	        this.checks = this.convertValues(source["checks"], Check);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }
