@@ -58,6 +58,7 @@ export const notifyDone = persisted('notifyDone', true, isBool)
 export const notifyAi = persisted('notifyAi', true, isBool)
 export const notifyProblem = persisted('notifyProblem', true, isBool)
 export const notifyRemote = persisted('notifyRemote', true, isBool)
+export const notifyPipelines = persisted('notifyPipelines', true, isBool)
 
 /** Settings → General → Fetch in the background, in minutes; 0 is Off
  *  (docs/spec/05-remote-and-stash.md). */

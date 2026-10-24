@@ -11,7 +11,8 @@ import (
 )
 
 // EventNotifyOpen asks the frontend to show what a clicked OS notification
-// was about: select RepoID and, for Target "chat", open its chat.
+// was about: select RepoID, select Hash in its log when set and, for Target "chat",
+// open its chat.
 const EventNotifyOpen = "notify:open"
 
 var (
@@ -27,6 +28,8 @@ type Notification struct {
 	Body   string `json:"body"`
 	RepoID string `json:"repoID"`
 	Target string `json:"target"`
+	// Hash is the commit a click selects in the log; empty for none.
+	Hash string `json:"hash,omitempty"`
 }
 
 // On Linux the system reports a click on a notification and a close by the
@@ -41,6 +44,7 @@ const (
 type NotifyOpenEvent struct {
 	RepoID string `json:"repoID"`
 	Target string `json:"target"`
+	Hash   string `json:"hash,omitempty"`
 }
 
 // notifier is the part of the Wails runtime notifications use; tests pass
@@ -122,8 +126,9 @@ func (a *App) startNotifications(n notifier) {
 		}
 		repoID, _ := r.Response.UserInfo["repoID"].(string)
 		target, _ := r.Response.UserInfo["target"].(string)
+		hash, _ := r.Response.UserInfo["hash"].(string)
 		n.ShowWindow()
-		a.emit(EventNotifyOpen, NotifyOpenEvent{RepoID: repoID, Target: target})
+		a.emit(EventNotifyOpen, NotifyOpenEvent{RepoID: repoID, Target: target, Hash: hash})
 	})
 }
 
@@ -172,7 +177,7 @@ func (a *App) Notify(n Notification) error {
 		ID:    n.ID,
 		Title: n.Title,
 		Body:  n.Body,
-		Data:  map[string]interface{}{"repoID": n.RepoID, "target": n.Target},
+		Data:  map[string]interface{}{"repoID": n.RepoID, "target": n.Target, "hash": n.Hash},
 	}
 	a.notes.mu.Lock()
 	defer a.notes.mu.Unlock()

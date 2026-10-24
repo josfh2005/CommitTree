@@ -54,7 +54,7 @@ export const api = {
 
   commandLog: (id: string) => call<CommandLogView>(Go.CommandLog(id)),
   commandLogOutput: (id: string, entryId: number) => call<CommandOutput>(Go.CommandLogOutput(id, entryId)),
-  notify: (n: { id: string; title: string; body: string; repoID: string; target: NotifyTarget }) => call<void>(Go.Notify(n as any)),
+  notify: (n: { id: string; title: string; body: string; repoID: string; target: NotifyTarget; hash?: string }) => call<void>(Go.Notify(n as any)),
   notificationStatus: () => call<string>(Go.NotificationStatus()),
   clearCommandLog: (id: string) => call<void>(Go.ClearCommandLog(id)),
   cancelCommand: (id: string, entryId: number) => call<void>(Go.CancelCommand(id, entryId)),

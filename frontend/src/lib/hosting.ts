@@ -57,6 +57,9 @@ async function infoFor(repoID: string): Promise<HostingInfo> {
 // asked for, by repository; and the repository the log shows now.
 let pending = new Map<string, Set<string>>()
 const lastVisible = new Map<string, string[]>()
+// The checked-out commit of each repository, which the status bar shows
+// whether or not the log has it on screen.
+const heads = new Map<string, string>()
 let current = ''
 let timer: ReturnType<typeof setTimeout> | undefined
 const reported = new Set<string>()
@@ -84,6 +87,20 @@ export function requestStatuses(repoID: string, hashes: string[]): void {
   enqueue(repoID, hashes)
 }
 
+/** Asks for the status of a repository's HEAD commit for the status bar. It
+ *  joins the log's set in refreshes and polling but never replaces it. */
+export function requestHeadStatus(repoID: string, hash: string): void {
+  if (!repoID || !hash) return
+  heads.set(repoID, hash)
+  enqueue(repoID, [hash])
+}
+
+/** What a repository's refreshes and polling cover: the log's set and HEAD. */
+function watched(repoID: string): string[] {
+  const head = heads.get(repoID)
+  return [...(lastVisible.get(repoID) ?? []), ...(head ? [head] : [])]
+}
+
 async function fetchStatuses(repoID: string, hashes: string[]) {
   try {
     const info = await infoFor(repoID)
@@ -108,8 +125,8 @@ async function fetchStatuses(repoID: string, hashes: string[]) {
 
 /** Forgets the repository's unfinished statuses and asks for the last visible set again. */
 export function refreshStatuses(repoID: string): void {
-  const last = lastVisible.get(repoID)
-  if (!repoID || !last) return
+  const last = watched(repoID)
+  if (!repoID || !last.length) return
   commitStatuses.update((m) => {
     const kept: Record<string, CommitStatus> = {}
     for (const [h, st] of Object.entries(m[repoID] ?? {})) if (isFinal(st.state)) kept[h] = st
@@ -126,7 +143,7 @@ export function startHostingPolling(): () => void {
   const id = setInterval(() => {
     if (!current) return
     const statuses = get(commitStatuses)[current] ?? {}
-    const running = (lastVisible.get(current) ?? []).filter((h) => statuses[h]?.state === 'running')
+    const running = watched(current).filter((h) => statuses[h]?.state === 'running')
     if (running.length) enqueue(current, running)
   }, POLL_MS)
   return () => clearInterval(id)
@@ -142,11 +159,22 @@ export function applyLimit(l: HostingLimit): void {
   })
 }
 
+/** The notice shown while a host's request limit is in force. */
+export function hostingLimitText(l: HostingLimit): string {
+  const name = l.host === 'github' ? 'GitHub' : 'Bitbucket'
+  const until = l.until ? new Date(l.until) : null
+  if (!l.known || !until || Number.isNaN(until.getTime())) return `${name}: request limit reached, retrying shortly`
+  const hh = String(until.getHours()).padStart(2, '0')
+  const mm = String(until.getMinutes()).padStart(2, '0')
+  return `${name}: request limit reached, retrying at ${hh}:${mm}`
+}
+
 /** Puts the state of a watched push into the log's statuses. */
 export function applyWatchEvent(e: WatchEvent): void {
   commitStatuses.update((m) => {
     const prev = m[e.repoID]?.[e.hash]
-    const st: CommitStatus = { hash: e.hash, state: e.state, checks: prev?.checks ?? null }
+    // Checks of another state would contradict it; the next ask brings them.
+    const st: CommitStatus = { hash: e.hash, state: e.state, checks: prev && prev.state === e.state ? prev.checks : null }
     return { ...m, [e.repoID]: { ...m[e.repoID], [e.hash]: st } }
   })
 }
@@ -199,6 +227,12 @@ export function statusTooltip(noun: string, st: CommitStatus, now: Date): string
   const count = (s: HostState) => checks.filter((c) => c.state === s).length
   if (st.state === 'success') return `${checks.length} ${word} passed`
   return `${count(st.state)} of ${checks.length} ${word} ${VERB[st.state]}`
+}
+
+/** The status bar's words for HEAD: "Pipeline passed", "Checks failed"; nothing for none. */
+export function headStatusText(noun: string, s: HostState): string {
+  if (s === 'none') return ''
+  return `${noun === 'Checks' ? 'Checks' : 'Pipeline'} ${VERB[s]}`
 }
 
 export interface StateIcon {

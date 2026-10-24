@@ -55,7 +55,7 @@ func (f *fakeNotifier) OnResponse(cb func(runtime.NotificationResult)) { f.respo
 func (f *fakeNotifier) ShowWindow()                                    { f.shown++ }
 func (f *fakeNotifier) Cleanup()                                       { f.cleaned++ }
 
-var note = Notification{ID: "r1:done", Title: "repo", Body: "Push finished · 14 s", RepoID: "r1", Target: "repo"}
+var note = Notification{ID: "r1:done", Title: "repo", Body: "Push finished · 14 s", RepoID: "r1", Target: "repo", Hash: "abc123"}
 
 func TestNotifyBeforeStartupFails(t *testing.T) {
 	a, _ := newTestApp(t)
@@ -82,7 +82,7 @@ func TestNotifyAsksOnceThenSends(t *testing.T) {
 		t.Fatalf("requests=%d sent=%d", f.requests, len(f.sent))
 	}
 	s := f.sent[0]
-	if s.ID != "r1:done" || s.Title != "repo" || s.Body != note.Body || s.Data["repoID"] != "r1" || s.Data["target"] != "repo" {
+	if s.ID != "r1:done" || s.Title != "repo" || s.Body != note.Body || s.Data["repoID"] != "r1" || s.Data["target"] != "repo" || s.Data["hash"] != "abc123" {
 		t.Fatalf("sent %+v", s)
 	}
 	if got := a.NotificationStatus(); got != "allowed" {
@@ -143,11 +143,11 @@ func TestNotificationClickOpensTheRepo(t *testing.T) {
 	}})
 	f.respond(runtime.NotificationResult{Response: runtime.NotificationResponse{
 		ActionIdentifier: "DEFAULT_ACTION",
-		UserInfo:         map[string]interface{}{"repoID": "r1", "target": "chat"},
+		UserInfo:         map[string]interface{}{"repoID": "r1", "target": "chat", "hash": "abc123"},
 	}})
 	mu.Lock()
 	defer mu.Unlock()
-	if f.shown != 1 || len(got) != 1 || got[0] != (NotifyOpenEvent{RepoID: "r1", Target: "chat"}) {
+	if f.shown != 1 || len(got) != 1 || got[0] != (NotifyOpenEvent{RepoID: "r1", Target: "chat", Hash: "abc123"}) {
 		t.Fatalf("shown=%d events=%+v", f.shown, got)
 	}
 	a.stopNotifications()

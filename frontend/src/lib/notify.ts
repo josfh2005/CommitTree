@@ -1,7 +1,8 @@
 import { get, writable } from 'svelte/store'
 import { api } from './api'
-import { conflictsBody, decide, doneBody, failureBody, notificationId, type Delivery, type NotifyEvent, type NotifyTarget, type OpKind } from './notifyRules'
-import { chatOpen, mergeState, notifyAi, notifyDone, notifyEnabled, notifyProblem, notifyRemote, repos, selectRepo, selectedRepoId } from './stores'
+import { conflictsBody, decide, doneBody, failureBody, notificationId, pipelineBody, type Delivery, type NotifyEvent, type NotifyTarget, type OpKind } from './notifyRules'
+import { chatOpen, mergeState, notifyAi, notifyDone, notifyEnabled, notifyPipelines, notifyProblem, notifyRemote, repos, selectRepo, selectedRepoId, showCommitInLog } from './stores'
+import type { WatchEvent } from './types'
 import { errorMessage, toast } from './ui'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { CHAT_WATCH_EVENTS, emptyWatch, watchChat } from './notifyChat'
@@ -12,31 +13,38 @@ export const windowFocused = writable(typeof document !== 'undefined' && documen
 const repoName = (id: string) => get(repos).find((r) => r.id === id)?.name ?? 'CommitTree'
 
 /** What View or a notification click opens; a repository removed since is ignored. */
-export function openTarget(repoID: string, target: NotifyTarget) {
+export function openTarget(repoID: string, target: NotifyTarget, hash?: string) {
   if (!get(repos).some((r) => r.id === repoID)) return
   selectRepo(repoID)
+  if (hash) showCommitInLog(hash)
   if (target === 'chat') chatOpen.set(true)
 }
 
-const viewAction = (repoID: string, target: NotifyTarget) => ({ label: 'View', run: () => openTarget(repoID, target) })
+const viewAction = (repoID: string, target: NotifyTarget, hash?: string) => ({ label: 'View', run: () => openTarget(repoID, target, hash) })
 
 /** notify applies the rules and delivers: an OS notification, or a toast
  *  (also when the OS one cannot be shown). Resolves to what was decided. */
 export async function notify(e: NotifyEvent): Promise<Delivery> {
   const d = decide(e, {
-    enabled: get(notifyEnabled), done: get(notifyDone), ai: get(notifyAi), problem: get(notifyProblem), remote: get(notifyRemote),
+    enabled: get(notifyEnabled), done: get(notifyDone), ai: get(notifyAi), problem: get(notifyProblem), remote: get(notifyRemote), pipelines: get(notifyPipelines),
     focused: get(windowFocused), activeRepoID: get(selectedRepoId), chatOpen: get(chatOpen),
   })
   if (d === 'system') {
     try {
-      await api.notify({ id: notificationId(e), title: repoName(e.repoID), body: e.body, repoID: e.repoID, target: e.target })
+      await api.notify({ id: notificationId(e), title: repoName(e.repoID), body: e.body, repoID: e.repoID, target: e.target, hash: e.hash })
       return d
     } catch {
       // Not allowed or not available: the toast below is seen on return.
     }
   }
-  if (d !== 'none' && !e.toasted) toast(`${repoName(e.repoID)}: ${e.body}`, 'info', viewAction(e.repoID, e.target))
+  if (d !== 'none' && !e.toasted) toast(`${repoName(e.repoID)}: ${e.body}`, 'info', viewAction(e.repoID, e.target, e.hash))
   return d
+}
+
+/** A watched push's pipeline or checks reached a final state: say so, once. */
+export function notifyPipelineEvent(e: WatchEvent) {
+  if (!e.final) return
+  void notify({ category: 'pipelines', repoID: e.repoID, body: pipelineBody(e), target: 'repo', hash: e.hash })
 }
 
 /** The error toast of a failed operation: as before for the selected
@@ -88,7 +96,9 @@ export function startNotifications(on: typeof EventsOn = EventsOn): () => void {
   windowFocused.set(document.hasFocus())
   window.addEventListener('focus', focus)
   window.addEventListener('blur', blur)
-  const offOpen = on('notify:open', (p: { repoID: string; target: NotifyTarget }) => openTarget(p.repoID, p.target === 'chat' ? 'chat' : 'repo'))
+  const offOpen = on('notify:open', (p: { repoID: string; target: NotifyTarget; hash?: string }) =>
+    openTarget(p.repoID, p.target === 'chat' ? 'chat' : 'repo', p.hash || undefined),
+  )
   let watch = emptyWatch()
   const offChat = CHAT_WATCH_EVENTS.map((name) =>
     on(name, (payload: unknown) => {

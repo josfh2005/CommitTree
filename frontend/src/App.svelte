@@ -21,7 +21,7 @@
   import { startFocusRefresh } from './lib/actions'
   import { nextChatRunRepo } from './lib/chat'
   import { notifyBody, onClosed, onRequest, type CredentialRequest } from './lib/credential'
-  import { notify, startNotifications, windowFocused } from './lib/notify'
+  import { notify, notifyPipelineEvent, startNotifications, windowFocused } from './lib/notify'
   import { startAutoFetch } from './lib/autoFetch'
   import { applyLimit, applyWatchEvent, refreshStatuses, startHostingPolling } from './lib/hosting'
   import { startCloneEvents } from './lib/clone'
@@ -102,7 +102,14 @@
     // A host's request limit started or ended, and a watched push changed
     // state: both feed lib/hosting.ts, which the log and the status bar read.
     const offLimit = EventsOn('hosting:limit', (payload: HostingLimit) => applyLimit(payload))
-    const offHostingStatus = EventsOn('hosting:status', (payload: WatchEvent) => applyWatchEvent(payload))
+    const offHostingStatus = EventsOn('hosting:status', (payload: WatchEvent) => {
+      applyWatchEvent(payload)
+      // A final state is said once, and the checks behind it are asked again.
+      if (payload.final) {
+        notifyPipelineEvent(payload)
+        refreshStatuses(payload.repoID)
+      }
+    })
     // Closing Settings: an account may have been connected or removed.
     const offSettingsClosed = settingsOpen.subscribe((open) => {
       if (!open) refreshStatuses(get(selectedRepoId))

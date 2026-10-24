@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { conflictsBody, decide, doneBody, failureBody, firstLine, formatSeconds, notificationId, remoteBody, statusText, type NotifyContext, type NotifyEvent } from './notifyRules'
+import { conflictsBody, decide, doneBody, failureBody, firstLine, formatSeconds, notificationId, pipelineBody, remoteBody, statusText, type NotifyContext, type NotifyEvent } from './notifyRules'
+
+import type { WatchEvent } from './types'
 
 const ctx = (over: Partial<NotifyContext> = {}): NotifyContext => ({
-  enabled: true, done: true, ai: true, problem: true, remote: true, focused: false, activeRepoID: 'a', chatOpen: true, ...over,
+  enabled: true, done: true, ai: true, problem: true, remote: true, pipelines: true, focused: false, activeRepoID: 'a', chatOpen: true, ...over,
 })
 const ev = (over: Partial<NotifyEvent> = {}): NotifyEvent => ({ category: 'problem', repoID: 'a', body: 'x', target: 'repo', ...over })
 
@@ -34,6 +36,30 @@ describe('decide', () => {
   it('toasts when focused but out of sight', () => {
     expect(decide(ev({ repoID: 'b' }), ctx({ focused: true }))).toBe('toast')
     expect(decide(ev({ category: 'ai', target: 'chat' }), ctx({ focused: true, chatOpen: false }))).toBe('toast')
+  })
+})
+
+describe('pipelines', () => {
+  it('honours its switch like remote', () => {
+    const e = ev({ category: 'pipelines', hash: 'h1' })
+    expect(decide(e, ctx({ pipelines: false }))).toBe('none')
+    expect(decide(e, ctx({ enabled: false }))).toBe('none')
+    expect(decide(e, ctx({ focused: false }))).toBe('system')
+    expect(decide(e, ctx({ focused: true, activeRepoID: 'a' }))).toBe('none')
+    expect(decide(e, ctx({ focused: true, activeRepoID: 'b' }))).toBe('toast')
+  })
+
+  const we = (over: Partial<WatchEvent> = {}): WatchEvent => ({ repoID: 'a', branch: 'feature/x', hash: 'h1', state: 'success', final: true, noun: 'Pipelines', ...over })
+
+  it('pipelineBody names the branch and the outcome', () => {
+    expect(pipelineBody(we())).toBe('Pipeline passed on feature/x')
+    expect(pipelineBody(we({ state: 'failed' }))).toBe('Pipeline failed on feature/x')
+    expect(pipelineBody(we({ state: 'stopped' }))).toBe('Pipeline stopped on feature/x')
+  })
+
+  it('pipelineBody uses the Checks wording for GitHub', () => {
+    expect(pipelineBody(we({ noun: 'Checks', state: 'failed' }))).toBe('Checks failed on feature/x')
+    expect(pipelineBody(we({ noun: 'Checks' }))).toBe('Checks passed on feature/x')
   })
 })
 

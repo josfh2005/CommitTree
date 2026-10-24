@@ -526,6 +526,7 @@ export namespace app {
 	    body: string;
 	    repoID: string;
 	    target: string;
+	    hash?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Notification(source);
@@ -538,6 +539,7 @@ export namespace app {
 	        this.body = source["body"];
 	        this.repoID = source["repoID"];
 	        this.target = source["target"];
+	        this.hash = source["hash"];
 	    }
 	}
 	

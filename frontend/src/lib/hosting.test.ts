@@ -10,8 +10,8 @@ vi.mock('./api', () => ({
 
 import { api } from './api'
 import {
-  applyLimit, applyWatchEvent, commitStatuses, hostingInfo, hostingLimits, isHttps, refreshStatuses, requestStatuses,
-  startHostingPolling, stateIcon, statusTooltip,
+  applyLimit, applyWatchEvent, commitStatuses, headStatusText, hostingInfo, hostingLimitText, hostingLimits, isHttps, refreshStatuses,
+  requestHeadStatus, requestStatuses, startHostingPolling, stateIcon, statusTooltip,
 } from './hosting'
 import type { Check, CommitStatus, HostingInfo, HostState } from './types'
 
@@ -144,8 +144,16 @@ describe('events', () => {
     applyWatchEvent({ repoID: 'B', branch: 'main', hash: 'h9', state: 'failed', final: true, noun: 'Checks' })
     const all = get(commitStatuses)
     expect(all.A.h1.state).toBe('success')
-    expect(all.A.h1.checks).toHaveLength(1)
     expect(all.B.h9.state).toBe('failed')
+  })
+
+  it('applyWatchEvent drops the cached checks when the state changes, and keeps them when it does not', () => {
+    commitStatuses.set({ A: { h1: st('h1', 'running', [check()]), h2: st('h2', 'failed', [check()]) } })
+    applyWatchEvent({ repoID: 'A', branch: 'main', hash: 'h1', state: 'failed', final: true, noun: 'Pipelines' })
+    applyWatchEvent({ repoID: 'A', branch: 'main', hash: 'h2', state: 'failed', final: false, noun: 'Pipelines' })
+    const all = get(commitStatuses)
+    expect(all.A.h1).toEqual({ hash: 'h1', state: 'failed', checks: null })
+    expect(all.A.h2.checks).toHaveLength(1)
   })
 
   it('applyLimit stores the limit by host and removes it when until is null', () => {
@@ -201,5 +209,54 @@ describe('isHttps', () => {
     expect(isHttps('http://example.com')).toBe(false)
     expect(isHttps('javascript:alert(1)')).toBe(false)
     expect(isHttps('')).toBe(false)
+  })
+})
+
+describe('hostingLimitText', () => {
+  it('says the time for a limit the host gave', () => {
+    const until = new Date(2026, 9, 24, 9, 5).toISOString()
+    expect(hostingLimitText({ host: 'github', until, known: true })).toBe('GitHub: request limit reached, retrying at 09:05')
+  })
+
+  it('says shortly for a guess', () => {
+    const until = new Date(2026, 9, 24, 9, 5).toISOString()
+    expect(hostingLimitText({ host: 'bitbucket', until, known: false })).toBe('Bitbucket: request limit reached, retrying shortly')
+  })
+})
+
+describe('headStatusText', () => {
+  it('uses Pipeline for Pipelines and Checks for Checks, nothing for none', () => {
+    expect(headStatusText('Pipelines', 'success')).toBe('Pipeline passed')
+    expect(headStatusText('Pipelines', 'failed')).toBe('Pipeline failed')
+    expect(headStatusText('Pipelines', 'running')).toBe('Pipeline running')
+    expect(headStatusText('Checks', 'failed')).toBe('Checks failed')
+    expect(headStatusText('Checks', 'running')).toBe('Checks running')
+    expect(headStatusText('Checks', 'none')).toBe('')
+  })
+})
+
+describe('requestHeadStatus', () => {
+  it('asks for HEAD without replacing the log set, and refresh asks for both', async () => {
+    statuses.mockResolvedValue({})
+    requestStatuses('A', ['h1', 'h2'])
+    requestHeadStatus('A', 'head')
+    await vi.advanceTimersByTimeAsync(500)
+    expect(statuses.mock.calls[0][1].sort()).toEqual(['h1', 'h2', 'head'])
+    statuses.mockClear()
+    refreshStatuses('A')
+    await vi.advanceTimersByTimeAsync(500)
+    expect(statuses.mock.calls[0][1].sort()).toEqual(['h1', 'h2', 'head'])
+  })
+
+  it('polls HEAD while it runs, though it is not in the log set', async () => {
+    commitStatuses.set({ A: { head: st('head', 'running') } })
+    requestStatuses('A', ['h1'])
+    requestHeadStatus('A', 'head')
+    await vi.advanceTimersByTimeAsync(500)
+    statuses.mockReset().mockResolvedValue({})
+    const stop = startHostingPolling()
+    await vi.advanceTimersByTimeAsync(30_000 + 500)
+    stop()
+    expect(statuses.mock.calls[0][1]).toEqual(['head'])
   })
 })

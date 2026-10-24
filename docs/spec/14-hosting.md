@@ -287,8 +287,19 @@ nothing is asked and nothing is drawn, and the rows have no reserved space.
 - **Watch events.** A `hosting:status` event puts the state of the watched
   commit into the log at once, whatever repository is selected.
 - **Rate limits.** A `hosting:limit` event is kept by host until the event
-  that ends it (the notice itself is shown by the status bar). Nothing is
-  asked of the host meanwhile by the backend; the log keeps what it has.
+  that ends it. While a host is blocked, the status bar shows "GitHub:
+  request limit reached, retrying at HH:MM" (the local time the host gave) or
+  "Bitbucket: request limit reached, retrying shortly" (no time known) in
+  place of HEAD's pipeline, for a repository on that host. Nothing is asked
+  of the host meanwhile by the backend; the log keeps what it has.
+- **Status bar.** The selected repository's HEAD is asked for with the
+  visible rows (and again with them on every refresh and poll), and its state
+  shows at the right of the status bar (`13-status-bar.md`).
+- **Final events.** A final `hosting:status` event notifies once ("Pipeline
+  passed on <branch>", `11-notifications.md`) and asks the repository's
+  statuses again. The cached checks of a commit whose state changed are
+  dropped, so the details and tooltips never show checks that disagree with
+  the state.
 - **Commit details.** Under the commit's author and date, a **Pipelines** or
   **Checks** section lists every pipeline or check of the commit, always asked
   of the host: state icon, name, state, duration when known and an **Open**

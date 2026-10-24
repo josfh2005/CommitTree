@@ -2,7 +2,9 @@
 /** The rules behind notifications (docs/spec/11-notifications.md): pure, so
  *  every combination of settings, focus and what is on screen is testable. */
 
-export type NotifyCategory = 'done' | 'ai' | 'problem' | 'remote'
+import type { WatchEvent } from './types'
+
+export type NotifyCategory = 'done' | 'ai' | 'problem' | 'remote' | 'pipelines'
 export type NotifyTarget = 'repo' | 'chat'
 export type Delivery = 'none' | 'toast' | 'system'
 
@@ -18,6 +20,8 @@ export interface NotifyEvent {
   /** The caller already showed it as an error toast (a failed operation),
    *  so the toast path must not add a second one. */
   toasted?: boolean
+  /** A commit to select in the log when the notification is opened. */
+  hash?: string
 }
 
 export interface NotifyContext {
@@ -26,6 +30,7 @@ export interface NotifyContext {
   ai: boolean
   problem: boolean
   remote: boolean
+  pipelines: boolean
   focused: boolean
   activeRepoID: string
   chatOpen: boolean
@@ -64,6 +69,13 @@ export const conflictsBody = (op: OpKind, files: number) =>
 
 export const remoteBody = (count: number, upstream: string) =>
   `${count} new commit${count === 1 ? '' : 's'} on ${upstream}`
+
+/** "Pipeline passed on feature/x"; Checks wording for GitHub. */
+export function pipelineBody(e: WatchEvent): string {
+  const what = e.noun === 'Checks' ? 'Checks' : 'Pipeline'
+  const verb = e.state === 'success' ? 'passed' : e.state === 'failed' ? 'failed' : e.state === 'stopped' ? 'stopped' : 'finished'
+  return `${what} ${verb} on ${e.branch}`
+}
 
 export const notificationId = (e: NotifyEvent) => `${e.repoID}:${e.category}`
 
