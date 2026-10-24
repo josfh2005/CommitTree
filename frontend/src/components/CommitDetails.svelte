@@ -1,11 +1,13 @@
 <script lang="ts">
+  import ChecksList from './ChecksList.svelte'
   import Icon from './Icon.svelte'
   import SubmoduleDiffView from './SubmoduleDiff.svelte'
   import { api } from '../lib/api'
   import { blameBlocker } from '../lib/blame'
+  import { isHosted, loadHostingInfo } from '../lib/hosting'
   import { jumpTo, openBlame, repos, selectRepo } from '../lib/stores'
   import { parseSubmoduleDiff, submoduleRepoId } from '../lib/submodules'
-  import type { Details, FileChange } from '../lib/types'
+  import type { CommitStatus, Details, FileChange } from '../lib/types'
   import { copyText, errorMessage, openMenu } from '../lib/ui'
 
   export let repoId: string
@@ -19,9 +21,18 @@
   let diff = ''
   let request = 0
 
-
+  // The commit's pipelines or checks, asked of the host once the repository
+  // is known to be on one with a connected account.
+  let checks: CommitStatus | null = null
+  let checksNoun = ''
+  let checksLoading = false
+  let checksError = ''
+  let checksRequest = 0
+  // Nothing to show for a commit with no pipelines or checks.
+  $: showChecks = checksLoading || !!checksError || (!!checks && (checks.state !== 'none' || !!checks.checks?.length))
 
   $: load(repoId, hash)
+  $: loadChecks(repoId, hash)
   $: lines = diff.split('\n')
   $: sub = file?.submodule ? parseSubmoduleDiff(diff) : null
   $: subRepoId = file?.submodule ? submoduleRepoId($repos, repoId, file.path) : undefined
@@ -39,6 +50,25 @@
       if (d.files.length) openFile(d.files[0])
     } catch (e) {
       if (current === request) error = errorMessage(e)
+    }
+  }
+
+  async function loadChecks(id: string, h: string) {
+    const current = ++checksRequest
+    checks = null
+    checksError = ''
+    checksLoading = false
+    try {
+      const info = await loadHostingInfo(id)
+      if (current !== checksRequest || !isHosted(info)) return
+      checksNoun = info.noun
+      checksLoading = true
+      const answer = await api.commitChecks(id, h)
+      if (current === checksRequest) checks = answer
+    } catch (e) {
+      if (current === checksRequest) checksError = errorMessage(e)
+    } finally {
+      if (current === checksRequest) checksLoading = false
     }
   }
 
@@ -90,6 +120,9 @@
           {/each}
         </span>
       </div>
+      {#if showChecks}
+        <ChecksList status={checks} noun={checksNoun} loading={checksLoading} error={checksError} onRetry={() => loadChecks(repoId, hash)} />
+      {/if}
       <div class="files">
         {#each details.files as f (f.path)}
           <button

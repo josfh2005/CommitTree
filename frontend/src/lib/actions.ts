@@ -1,6 +1,7 @@
 import { get } from 'svelte/store'
 import { api } from './api'
 import { chatOpen, chatRunRepo, collapsedRepoGroups, expandedRepos, filters, focusCommitBox, gitSettings, loadIdentity, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, refs, repoManualSeeded, repos, repoSortOrder, selectRepo, selectUncommitted, selectedHash, selectedRepoId, stashConflictDismissed } from './stores'
+import { refreshStatuses } from './hosting'
 import { beginOp } from './tasks'
 import { notifyStashConflicts, opError, track } from './notify'
 import { conflictsBody, type OpKind } from './notifyRules'
@@ -571,6 +572,7 @@ export async function checkExternalChanges() {
   if (!id) return
   loadMergeState()
   loadWorktreeState()
+  refreshStatuses(id)
   // user.name/user.email can be changed in a terminal at any time.
   loadIdentity()
   try {

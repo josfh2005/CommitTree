@@ -738,3 +738,11 @@ export interface WatchEvent {
   final: boolean
   noun: 'Pipelines' | 'Checks'
 }
+
+/** Payload of the hosting:limit event: a host's request limit started, or ended (until null). */
+export interface HostingLimit {
+  host: HostName
+  until: string | null
+  /** The host gave the time (GitHub's reset); false means a guess. */
+  known: boolean
+}

@@ -23,6 +23,7 @@
   import { notifyBody, onClosed, onRequest, type CredentialRequest } from './lib/credential'
   import { notify, startNotifications, windowFocused } from './lib/notify'
   import { startAutoFetch } from './lib/autoFetch'
+  import { applyLimit, applyWatchEvent, refreshStatuses, startHostingPolling } from './lib/hosting'
   import { startCloneEvents } from './lib/clone'
   import { isCommandsToggle } from './lib/cmdlog'
   import { isSettingsShortcut } from './lib/shortcuts'
@@ -31,7 +32,7 @@
   import { blameTarget, chatOpen, chatRunRepo, chatWidth, closeBlame, commandsOpen, dockHeight, loadAISettings, loadGitSettings, loadRefs, loadRepos, loadWorktreeState, mainView, mergeState, platform, refreshRepo, selectRepo, selectedHash, selectedRepo, selectedRepoId, selectedStash, settingsOpen, sidebarWidth, stashConflictDismissed, stashEntries, terminalOpen, uncommittedSelected } from './lib/stores'
   import { noteCommand } from './lib/tasks'
   import { toast } from './lib/ui'
-  import type { RepoChangedEvent, WorktreeChangedEvent } from './lib/types'
+  import type { HostingLimit, RepoChangedEvent, WatchEvent, WorktreeChangedEvent } from './lib/types'
   import { Environment, EventsOn } from '../wailsjs/runtime/runtime'
 
   // A merge in progress always wins: neither the Changes view nor a stash
@@ -97,6 +98,15 @@
     const stopFocus = startFocusRefresh()
     const stopNotifications = startNotifications()
     const stopAutoFetch = startAutoFetch()
+    const stopHostingPolling = startHostingPolling()
+    // A host's request limit started or ended, and a watched push changed
+    // state: both feed lib/hosting.ts, which the log and the status bar read.
+    const offLimit = EventsOn('hosting:limit', (payload: HostingLimit) => applyLimit(payload))
+    const offHostingStatus = EventsOn('hosting:status', (payload: WatchEvent) => applyWatchEvent(payload))
+    // Closing Settings: an account may have been connected or removed.
+    const offSettingsClosed = settingsOpen.subscribe((open) => {
+      if (!open) refreshStatuses(get(selectedRepoId))
+    })
     // Every view of the working tree follows $worktreeState — the Changes
     // view and the log's "Uncommitted changes" row alike — so one app-wide
     // listener keeps them fresh whether or not a Changes pane is mounted.
@@ -150,6 +160,10 @@
       stopFocus()
       stopNotifications()
       stopAutoFetch()
+      stopHostingPolling()
+      offLimit()
+      offHostingStatus()
+      offSettingsClosed()
       offWorktree()
       offRepoChanged()
       offSettings()

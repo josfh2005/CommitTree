@@ -9,8 +9,8 @@ exactly as before: no icons, no extra rows, nothing in the status bar.
 This document grows with the feature. It now covers detecting the host,
 accounts, commit statuses with their cache and rate limits, the pull
 request data and checkout behind the Pull requests view, and the watch of a
-pushed commit. The log icons, the commit details, the view itself and the
-notifications are described here as they land.
+pushed commit, and the status icons in the log and the commit details. The
+view itself and the notifications are described here as they land.
 
 The section is called **Pipelines** for a Bitbucket repository and **Checks**
 for a GitHub one, everywhere it appears.
@@ -254,3 +254,47 @@ ended without the user asking.
 - **Errors are not changes.** A lost connection, a request limit or "no
   access" while polling is not announced and does not end the watch; the next
   poll tries again.
+
+## Statuses in the log and the commit details
+
+What the frontend does with the statuses above. Everything here needs a
+supported host and a connected account (see Detecting the host); otherwise
+nothing is asked and nothing is drawn, and the rows have no reserved space.
+
+- **Log icon.** A 12 px icon left of the short hash of each row: check
+  (success), cross (failed), turning arrow (running), square (stopped), none
+  for a commit without checks. The tooltip reads, for one pipeline,
+  "Pipeline #412 passed · 3 min" (name, outcome, duration when known), or
+  "Pipeline running · started 2 min ago" while it runs; for several,
+  "2 of 3 checks failed", "3 checks passed" or "1 of 2 checks running" (the
+  noun in lower case: "pipelines" on Bitbucket). Durations read "42 s",
+  "3 min" or "1 h 5 min".
+- **What is asked.** The rows on screen plus one screen of rows above and
+  below, 500 ms after the last change of the visible range; calls inside that
+  window are one request carrying every hash. Commits already known as
+  success, failed or stopped are not asked again in the session; none and
+  running ones are.
+- **Which repository.** An answer is filed under the repository it was asked
+  for. Switching repositories while a request is in flight never paints its
+  answer into the other repository's log.
+- **Asking again.** On window focus, after a Refresh, fetch, pull, push or
+  any other write to the selected repository, and when Settings closes (an
+  account may have been connected or removed), the unfinished statuses
+  (running and none) of that repository are forgotten and the visible set is
+  asked again; the backend's cache (see Cache) decides what goes to the
+  network. Every 30 seconds the visible commits still running are asked
+  again.
+- **Watch events.** A `hosting:status` event puts the state of the watched
+  commit into the log at once, whatever repository is selected.
+- **Rate limits.** A `hosting:limit` event is kept by host until the event
+  that ends it (the notice itself is shown by the status bar). Nothing is
+  asked of the host meanwhile by the backend; the log keeps what it has.
+- **Commit details.** Under the commit's author and date, a **Pipelines** or
+  **Checks** section lists every pipeline or check of the commit, always asked
+  of the host: state icon, name, state, duration when known and an **Open**
+  link, which opens the host's page in the system browser and only for an
+  `https:` address. While loading it reads "Loading…"; a failure shows its
+  message with **Retry**. A commit with no pipelines or checks hides the
+  section.
+- Only a "No access to <owner>/<repo> with this account" answer is said (as a
+  message, once per repository); other failures show what is already known.

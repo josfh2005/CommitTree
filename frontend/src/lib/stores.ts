@@ -8,6 +8,7 @@ import { emptyFilters, type AISettings, type AheadBehind, type Filters, type Git
 import { isLogOrder } from './logOrder'
 import { isRepoSortOrder, type RepoSortOrder } from './repoGroups'
 import { coalesce } from './coalesce'
+import { refreshStatuses } from './hosting'
 import type { RepoRefsData } from './repoRefs'
 import { removeRepoTabs, terminalState } from './terminal'
 import { isThemePref, resolveTheme, type ThemePref } from './theme'
@@ -550,6 +551,9 @@ export const refreshRepo = coalesce(async () => {
   await loadStashEntries()
   await loadOwedStashDrop()
   logVersion.update((v) => v + 1)
+  // Refresh, fetch, push and every other write end here: pipelines may have
+  // started or finished since the log was last drawn.
+  refreshStatuses(get(selectedRepoId))
 })
 
 export function selectRepo(id: string) {
