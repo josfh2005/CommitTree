@@ -6,12 +6,11 @@ shows the state of the pipelines or checks of each commit, using an account
 the user connects in Settings. Every other repository looks and behaves
 exactly as before: no icons, no extra rows, nothing in the status bar.
 
-This document grows with the feature. It now covers detecting the host,
-accounts, commit statuses with their cache and rate limits, the pull
-request data and checkout behind the Pull requests view, and the watch of a
-pushed commit, the status icons in the log and the commit details, and the
-Pull requests row and list. The pull request detail and the notifications are
-described here as they land.
+This document covers detecting the host, accounts, commit statuses with their
+cache and rate limits, the pull request data and checkout behind the Pull
+requests view, the watch of a pushed commit and its notification, the status
+icons in the log and the commit details, and the Pull requests row, list and
+detail.
 
 The section is called **Pipelines** for a Bitbucket repository and **Checks**
 for a GitHub one, everywhere it appears.
@@ -320,10 +319,11 @@ that opens it is described in `01-repositories-and-sidebar.md`.
 - **Layout.** The view has a header (**Pull requests** with the repository's
   name), three tabs, **Refresh** and **Open in browser**, then the list, and
   below it, behind a splitter dragged like the log's, the pull request that is
-  selected (a click on a row selects it), described under Pull request detail
-  below. When the view cannot be shown (the repository is not on a supported
-  host, is missing, or a merge in progress owns the screen) the main pane goes
-  back to the log and stays there.
+  selected (a click on a row selects it; the choice is remembered per repository
+  while the app runs), described under Pull request detail below. When the
+  view cannot be shown (the repository is not on a supported host, is missing,
+  or a merge in progress owns the screen) the main pane goes back to the log
+  and stays there.
 - **Tabs.** **Open** (all), **Mine** (the account is the author) and **Review
   requested** (the account is a reviewer and has not approved): the three
   filters of the data calls. **Open in browser** opens the host's pull

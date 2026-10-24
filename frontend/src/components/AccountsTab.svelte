@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { BrowserOpenURL } from '../../wailsjs/runtime/runtime'
+  import { canSaveBitbucket, canSaveGitHub, githubSourceFor, type GitHubSource } from '../lib/accounts'
   import { api } from '../lib/api'
   import type { HostingAccount, HostName } from '../lib/types'
   import { errorMessage } from '../lib/ui'
@@ -15,7 +16,7 @@
 
   let bbEmail = ''
   let bbToken = ''
-  let ghSource: 'gh' | 'token' = 'token'
+  let ghSource: GitHubSource = 'token'
   let ghToken = ''
 
   // Why the last Save or Remove of a block failed. The fields keep what was typed.
@@ -26,9 +27,7 @@
   // The radio follows the saved account, else offers the CLI when it exists.
   function applyGitHub(acc: HostingAccount) {
     github = acc
-    ghSource = acc.source === 'gh' || acc.source === 'token' ? acc.source : acc.ghAvailable ? 'gh' : 'token'
-    // Never keep the CLI choice when gh is gone.
-    if (ghSource === 'gh' && !acc.ghAvailable) ghSource = 'token'
+    ghSource = githubSourceFor(acc)
   }
 
   function applyBitbucket(acc: HostingAccount) {
@@ -96,8 +95,8 @@
   }
 
   // The backend refuses a blank email or token too; the button just says so early.
-  $: bbCanSave = !!bbEmail.trim() && !!bbToken.trim() && busy === ''
-  $: ghCanSave = (ghSource === 'gh' || !!ghToken.trim()) && busy === ''
+  $: bbCanSave = canSaveBitbucket(bbEmail, bbToken, busy)
+  $: ghCanSave = canSaveGitHub(ghSource, ghToken, busy)
 </script>
 
 <section class="bitbucket">
