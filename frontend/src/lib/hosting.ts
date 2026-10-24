@@ -63,6 +63,8 @@ const heads = new Map<string, string>()
 let current = ''
 let timer: ReturnType<typeof setTimeout> | undefined
 const reported = new Set<string>()
+// Commits whose state a watch event changed, so their checks are not known.
+const unchecked = new Set<string>()
 
 function enqueue(repoID: string, hashes: string[]) {
   const set = pending.get(repoID) ?? new Set<string>()
@@ -92,6 +94,8 @@ export function requestStatuses(repoID: string, hashes: string[]): void {
 export function requestHeadStatus(repoID: string, hash: string): void {
   if (!repoID || !hash) return
   heads.set(repoID, hash)
+  // The poll follows the repository shown, with or without the log mounted.
+  current = repoID
   enqueue(repoID, [hash])
 }
 
@@ -106,12 +110,14 @@ async function fetchStatuses(repoID: string, hashes: string[]) {
     const info = await infoFor(repoID)
     if (!isHosted(info)) return
     const known = get(commitStatuses)[repoID] ?? {}
-    const ask = hashes.filter((h) => !known[h] || !isFinal(known[h].state))
+    // A final state a watch event put in has no checks yet: it is asked once more.
+    const ask = hashes.filter((h) => !known[h] || !isFinal(known[h].state) || unchecked.has(`${repoID}|${h}`))
     if (!ask.length) return
     const got = await api.commitStatuses(repoID, ask)
     // repoID was captured when the request was made, so a repository switched
     // to meanwhile never receives this answer.
     commitStatuses.update((m) => ({ ...m, [repoID]: { ...m[repoID], ...got } }))
+    ask.forEach((h) => unchecked.delete(`${repoID}|${h}`))
   } catch (e) {
     // "No access to …" is the one error worth saying, once per repository and text.
     const message = errorMessage(e)
@@ -174,7 +180,9 @@ export function applyWatchEvent(e: WatchEvent): void {
   commitStatuses.update((m) => {
     const prev = m[e.repoID]?.[e.hash]
     // Checks of another state would contradict it; the next ask brings them.
-    const st: CommitStatus = { hash: e.hash, state: e.state, checks: prev && prev.state === e.state ? prev.checks : null }
+    const same = !!prev && prev.state === e.state
+    if (!same) unchecked.add(`${e.repoID}|${e.hash}`)
+    const st: CommitStatus = { hash: e.hash, state: e.state, checks: same ? prev.checks : null }
     return { ...m, [e.repoID]: { ...m[e.repoID], [e.hash]: st } }
   })
 }

@@ -298,8 +298,8 @@ nothing is asked and nothing is drawn, and the rows have no reserved space.
 - **Final events.** A final `hosting:status` event notifies once ("Pipeline
   passed on <branch>", `11-notifications.md`) and asks the repository's
   statuses again. The cached checks of a commit whose state changed are
-  dropped, so the details and tooltips never show checks that disagree with
-  the state.
+  dropped and that commit is asked for once more, even when its state is
+  final, so tooltips never show checks that disagree with the state.
 - **Commit details.** Under the commit's author and date, a **Pipelines** or
   **Checks** section lists every pipeline or check of the commit, always asked
   of the host: state icon, name, state, duration when known and an **Open**

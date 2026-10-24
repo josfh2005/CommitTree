@@ -236,6 +236,34 @@ describe('headStatusText', () => {
 })
 
 describe('requestHeadStatus', () => {
+  it('polls a running HEAD with no log ever asking, and follows the repository it was last asked for', async () => {
+    statuses.mockResolvedValue({})
+    requestStatuses('Old', ['o1'])
+    commitStatuses.set({ Old: { o1: st('o1', 'running') }, New: { head: st('head', 'running') } })
+    requestHeadStatus('New', 'head')
+    await vi.advanceTimersByTimeAsync(500)
+    statuses.mockClear()
+    const stop = startHostingPolling()
+    await vi.advanceTimersByTimeAsync(30_000 + 500)
+    stop()
+    expect(statuses).toHaveBeenCalledTimes(1)
+    expect(statuses.mock.calls[0][0]).toBe('New')
+    expect(statuses.mock.calls[0][1]).toEqual(['head'])
+  })
+
+  it('asks again for a final state that a watch event left without checks', async () => {
+    statuses.mockResolvedValue({ head: st('head', 'success', [check()]) })
+    commitStatuses.set({ A: { head: st('head', 'running', [check({ state: 'running' })]) } })
+    applyWatchEvent({ repoID: 'A', branch: 'main', hash: 'head', state: 'success', final: true, noun: 'Pipelines' })
+    requestHeadStatus('A', 'head')
+    await vi.advanceTimersByTimeAsync(500)
+    expect(statuses).toHaveBeenCalledTimes(1)
+    expect(get(commitStatuses).A.head.checks).toHaveLength(1)
+    requestHeadStatus('A', 'head')
+    await vi.advanceTimersByTimeAsync(500)
+    expect(statuses).toHaveBeenCalledTimes(1)
+  })
+
   it('asks for HEAD without replacing the log set, and refresh asks for both', async () => {
     statuses.mockResolvedValue({})
     requestStatuses('A', ['h1', 'h2'])
