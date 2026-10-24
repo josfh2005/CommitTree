@@ -3,7 +3,7 @@ import type { AddReposResult, ScanResult, BranchPushResult, CloneStatus, RepoAII
 import type { NotifyTarget } from './notifyRules'
 import type { CredentialAnswer } from './credential'
 import type { Tracking } from './tracking'
-import type { RepoInfo } from './types'
+import type { CommitStatus, HostingAccount, HostingInfo, HostCount, HostName, PRFile, PRFilter, PullRequestDetail, PullRequestList, RepoInfo } from './types'
 
 // The generated bindings use Wails model classes; the JSON is identical to our
 // interfaces, so cast at this single boundary.
@@ -167,6 +167,19 @@ export const api = {
   listPrompts: () => call<PromptInfo[]>(Go.ListPrompts()),
   openPromptsFolder: () => call<void>(Go.OpenPromptsFolder()),
   resetPrompt: (name: string) => call<void>(Go.ResetPrompt(name)),
+
+  hostingInfo: (id: string) => call<HostingInfo>(Go.HostingInfo(id)),
+  getHostingAccounts: () => call<HostingAccount[]>(Go.GetHostingAccounts()),
+  saveBitbucketAccount: (email: string, token: string) => call<HostingAccount>(Go.SaveBitbucketAccount(email, token)),
+  saveGitHubAccount: (source: 'gh' | 'token', token: string) => call<HostingAccount>(Go.SaveGitHubAccount(source, token)),
+  removeHostingAccount: (host: HostName) => call<void>(Go.RemoveHostingAccount(host)),
+  commitStatuses: (id: string, hashes: string[]) => call<Record<string, CommitStatus>>(Go.CommitStatuses(id, hashes)),
+  commitChecks: (id: string, hash: string) => call<CommitStatus>(Go.CommitChecks(id, hash)),
+  listPullRequests: (id: string, filter: PRFilter) => call<PullRequestList>(Go.ListPullRequests(id, filter)),
+  pullRequestCount: (id: string) => call<HostCount>(Go.PullRequestCount(id)),
+  getPullRequest: (id: string, number: number) => call<PullRequestDetail>(Go.GetPullRequest(id, number)),
+  getPullRequestFiles: (id: string, number: number) => call<PRFile[]>(Go.GetPullRequestFiles(id, number)),
+  checkoutPullRequest: (id: string, number: number) => call<string>(Go.CheckoutPullRequest(id, number)),
 
   getSubmodules: (id: string) => call<Submodule[]>(Go.GetSubmodules(id)),
   initSubmodule: (id: string, path: string) => call<void>(Go.InitSubmodule(id, path)),

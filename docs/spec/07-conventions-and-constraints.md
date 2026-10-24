@@ -182,6 +182,8 @@ Settings.
 The Settings dialog has a fixed size, with tabs in a column on the left:
 
 - **General**: Appearance, the Git pull strategy and what Push does (ask, current branch, main branches).
+- **Accounts**: the Bitbucket and GitHub accounts of the code hosting
+  integration (`14-hosting.md`). It does not need the AI settings.
 - **Providers**: Anthropic and OpenAI, each with its API key (Save, or the
   stored key's hint and Remove), and Ollama with its status, URL (Test), the
   warning when the URL is not this machine, the installed models (name, size,
@@ -197,8 +199,8 @@ It opens on the tab last used; a remembered API keys tab, from before
 Providers replaced it, opens on Providers. Only the tab's own content
 scrolls. The note on where AI requests are processed shows on the Providers
 and AI models tabs.
-If the AI settings cannot be loaded, the General tab still works and the AI
-tabs show the error.
+If the AI settings cannot be loaded, the General and Accounts tabs still work
+and the AI tabs show the error.
 
 ### Appearance
 

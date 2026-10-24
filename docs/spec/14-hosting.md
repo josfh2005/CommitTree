@@ -64,6 +64,32 @@ is verified with the host's "current user" call; success reads "Connected as
 - A pasted token goes to the keychain; switching to the CLI removes it.
 - Success reads "Connected as <login>".
 
+**The Accounts tab** (Settings, after General) has one block per host. It
+does not need the AI settings, so it opens even when those cannot be loaded.
+
+- **Bitbucket block.** An email field and an API token field (a password
+  field), Save, and Remove once an account is connected. Save is enabled only
+  with a non-blank email and token. A link, opened in the system browser, goes
+  to `https://id.atlassian.com/manage-profile/security/api-tokens`, with the
+  scopes the token needs: `read:user:bitbucket`, `read:repository:bitbucket`,
+  `read:pullrequest:bitbucket` and `read:pipeline:bitbucket` (names as in
+  Atlassian's "API token permissions" page).
+- **GitHub block.** Two choices: "Use GitHub CLI login", disabled with "gh not
+  found" beside it when no `gh` program is found, and "Personal access token",
+  which shows the token field (a password field) and a link, opened in the
+  system browser, to `https://github.com/settings/personal-access-tokens`.
+  The choice follows the saved account; with none saved, the CLI is chosen when
+  `gh` exists. Save, and Remove once connected; Save with a token needs a
+  non-blank one.
+- **Status line** under each block: "Connected as <name>", or "Bitbucket
+  rejected the token" / "GitHub rejected the token" when the account is
+  marked rejected. A block with no account shows none.
+- **Errors.** A failed Save or Remove shows its message under its block and
+  leaves the fields as typed. A successful Save empties the token field (a
+  token is never shown again) and refreshes the status. Remove asks no
+  confirmation and only forgets the credential and the stored email, name
+  and login.
+
 **A blank or whitespace-only email or token is refused** before the keychain
 or the network is touched.
 

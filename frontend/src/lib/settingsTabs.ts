@@ -1,12 +1,13 @@
 import { persisted } from './stores'
 
-export type SettingsTab = 'general' | 'providers' | 'models' | 'prompts'
+export type SettingsTab = 'general' | 'accounts' | 'providers' | 'models' | 'prompts'
 
 /** The Settings dialog's tabs, in the order the left column lists them.
- *  `ai` marks the tabs that need the AI settings loaded; General does not,
- *  so it opens even when those fail. */
+ *  `ai` marks the tabs that need the AI settings loaded; General and
+ *  Accounts do not, so they open even when those fail. */
 export const SETTINGS_TABS: { id: SettingsTab; label: string; ai: boolean }[] = [
   { id: 'general', label: 'General', ai: false },
+  { id: 'accounts', label: 'Accounts', ai: false },
   { id: 'providers', label: 'Providers', ai: true },
   { id: 'models', label: 'AI models', ai: true },
   { id: 'prompts', label: 'Prompts', ai: true },

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte'
   import { EventsOn } from '../../wailsjs/runtime/runtime'
+  import AccountsTab from './AccountsTab.svelte'
   import Icon from './Icon.svelte'
   import { api } from '../lib/api'
   import { formatBytes, percent } from '../lib/format'
@@ -329,6 +330,8 @@
               </label>
               <p class="hint push-hint">main, master, develop and release/*, or your git-flow names.</p>
             </section>
+          {:else if $tab === 'accounts'}
+            <AccountsTab />
           {:else if tabUsesAI($tab) && !settings}
             <p class={aiError ? 'warn' : 'hint'}>{aiError || 'Loading…'}</p>
           {:else if settings && $tab === 'providers'}

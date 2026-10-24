@@ -601,3 +601,140 @@ export interface AddReposResult {
   added: Repo[]
   failed: AddFailure[]
 }
+
+// Bitbucket / GitHub integration: mirrors internal/hosting and internal/app/hosting.go.
+
+export type HostName = 'bitbucket' | 'github'
+/** A commit's pipeline or checks state; 'none' draws nothing. */
+export type HostState = 'success' | 'failed' | 'running' | 'stopped' | 'none'
+export type PRFilter = 'open' | 'mine' | 'review'
+
+/** What the app knows about a repository's code host. Empty (supported false) off Bitbucket and GitHub. */
+export interface HostingInfo {
+  supported: boolean
+  host: HostName
+  owner: string
+  name: string
+  /** The git remote it was found through. */
+  remote: string
+  webURL: string
+  pullsURL: string
+  /** "Pipelines" on Bitbucket, "Checks" on GitHub. */
+  noun: 'Pipelines' | 'Checks'
+  account: 'none' | 'connected' | 'rejected'
+}
+
+/** One host's account, for Settings → Accounts. */
+export interface HostingAccount {
+  host: HostName
+  connected: boolean
+  rejected: boolean
+  /** Bitbucket display name or GitHub login. */
+  name: string
+  /** Bitbucket only. */
+  email: string
+  /** GitHub: 'gh' | 'token'; Bitbucket: 'token'; '' when not connected. */
+  source: 'gh' | 'token' | ''
+  ghAvailable: boolean
+}
+
+/** One pipeline or check run of a commit. Times are RFC 3339. */
+export interface Check {
+  key: string
+  name: string
+  state: HostState
+  url: string
+  started: string
+  durationSec: number
+  created: string
+}
+
+export interface CommitStatus {
+  hash: string
+  state: HostState
+  checks: Check[] | null
+}
+
+/** One row of the pull request list. */
+export interface PullRequest {
+  number: number
+  title: string
+  draft: boolean
+  author: string
+  authorID: string
+  source: string
+  target: string
+  headHash: string
+  url: string
+  fork: boolean
+  approvals: number
+  commentCount: number
+  updated: string
+  /** The head commit's aggregate; '' when unknown. */
+  state: HostState | ''
+}
+
+export interface PullRequestList {
+  items: PullRequest[]
+  /** The host has more than the 100 shown. */
+  more: boolean
+}
+
+export interface Reviewer {
+  name: string
+  verdict: 'approved' | 'changes' | 'pending'
+}
+
+export interface Comment {
+  id: string
+  parent: string
+  author: string
+  created: string
+  body: string
+  /** Empty for a general comment. */
+  path: string
+  line: number
+  verdict: string
+}
+
+export interface PRCommit {
+  hash: string
+  short: string
+  subject: string
+  author: string
+}
+
+export interface PullRequestDetail extends PullRequest {
+  description: string
+  created: string
+  reviewers: Reviewer[] | null
+  commits: PRCommit[] | null
+  comments: Comment[] | null
+  commentsMore: boolean
+  checks: CommitStatus
+}
+
+export interface PRFile {
+  path: string
+  oldPath: string
+  status: string
+  patch: string
+  /** The host gave no patch for this file. */
+  noDiff: boolean
+}
+
+/** Go's hosting.Count: a number that is a lower bound when more is set. */
+export interface HostCount {
+  n: number
+  more: boolean
+}
+
+/** Payload of the hosting:status event: a watched push changed state. */
+export interface WatchEvent {
+  repoID: string
+  branch: string
+  hash: string
+  state: HostState
+  final: boolean
+  noun: 'Pipelines' | 'Checks'
+}
