@@ -1,6 +1,6 @@
 import { get, writable, type Writable } from 'svelte/store'
 import { api } from './api'
-import type { CommitStatus, HostingInfo, HostingLimit, HostName, HostState, WatchEvent } from './types'
+import type { CommitStatus, HostCount, HostingInfo, HostingLimit, HostName, HostState, WatchEvent } from './types'
 import { errorMessage, toast } from './ui'
 
 /** Visible-row requests wait this long for more rows to be added to them. */
@@ -14,6 +14,10 @@ export const hostingInfo: Writable<Record<string, HostingInfo>> = writable({})
 export const commitStatuses: Writable<Record<string, Record<string, CommitStatus>>> = writable({})
 /** The hosts whose request limit is in force now, by host. */
 export const hostingLimits: Writable<Record<string, HostingLimit>> = writable({})
+
+/** The open pull requests of each repository, for the sidebar badge, by
+ *  repository ID. A repository without an entry shows no badge. */
+export const pullCounts: Writable<Record<string, HostCount>> = writable({})
 
 const FINAL: HostState[] = ['success', 'failed', 'stopped']
 const isFinal = (s: HostState) => FINAL.includes(s)
@@ -47,6 +51,26 @@ export function loadHostingInfo(repoID: string): Promise<HostingInfo> {
     .finally(() => inflightInfo.delete(repoID))
   inflightInfo.set(repoID, p)
   return p
+}
+
+/** Asks the host how many pull requests are open and keeps the answer under
+ *  the repository it was asked for. With no connected account, or when the
+ *  host cannot answer, the repository has no count. */
+export async function refreshPullCount(repoID: string): Promise<void> {
+  const set = (c: HostCount | null) =>
+    pullCounts.update((m) => {
+      const next = { ...m }
+      if (c) next[repoID] = c
+      else delete next[repoID]
+      return next
+    })
+  try {
+    const info = await infoFor(repoID)
+    if (!isHosted(info)) return set(null)
+    set(await api.pullRequestCount(repoID))
+  } catch {
+    set(null)
+  }
 }
 
 async function infoFor(repoID: string): Promise<HostingInfo> {

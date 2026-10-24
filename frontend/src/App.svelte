@@ -11,6 +11,7 @@
   import CredentialDialog from './components/CredentialDialog.svelte'
   import DialogHost from './components/DialogHost.svelte'
   import LogView from './components/LogView.svelte'
+  import PullRequestsView from './components/PullRequestsView.svelte'
   import SettingsDialog from './components/SettingsDialog.svelte'
   import RepoSettingsDialog from './components/RepoSettingsDialog.svelte'
   import Sidebar from './components/Sidebar.svelte'
@@ -23,7 +24,7 @@
   import { notifyBody, onClosed, onRequest, type CredentialRequest } from './lib/credential'
   import { notify, notifyPipelineEvent, startNotifications, windowFocused } from './lib/notify'
   import { startAutoFetch } from './lib/autoFetch'
-  import { applyLimit, applyWatchEvent, refreshStatuses, startHostingPolling } from './lib/hosting'
+  import { applyLimit, applyWatchEvent, hostingInfo, refreshStatuses, startHostingPolling } from './lib/hosting'
   import { startCloneEvents } from './lib/clone'
   import { isCommandsToggle } from './lib/cmdlog'
   import { isSettingsShortcut } from './lib/shortcuts'
@@ -53,6 +54,7 @@
   $: selectedStashEntry = $stashEntries.find((e) => e.hash === $selectedStash?.hash) ?? null
   $: showStash = $mainView === 'stash' && !conflictWins && !!$selectedRepo && !$selectedRepo.missing && !!selectedStashEntry
   $: showBlame = $mainView === 'blame' && !conflictWins && !!$selectedRepo && !$selectedRepo.missing && !!$blameTarget
+  $: showPulls = $mainView === 'pulls' && !conflictWins && !!$selectedRepo && !$selectedRepo.missing && !!$hostingInfo[$selectedRepo.id]?.supported
   // Selecting a commit — or the log's uncommitted row — means the user
   // wants the log pane, so switch the main pane back.
   $: if ($selectedHash || $uncommittedSelected) mainView.set('log')
@@ -204,6 +206,8 @@
           <StashView repoId={$selectedRepo.id} entry={selectedStashEntry} />
         {:else if showBlame && $selectedRepo}
           <BlameView repoId={$selectedRepo.id} />
+        {:else if showPulls && $selectedRepo}
+          <PullRequestsView repoId={$selectedRepo.id} />
         {:else}
           <LogView />
         {/if}

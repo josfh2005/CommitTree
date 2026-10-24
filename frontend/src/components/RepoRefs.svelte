@@ -7,7 +7,9 @@
   import { branchLabel, branchMenuGroups, branchRemote, type BranchMenuId } from '../lib/branchMenu'
   import { rebaseBlocker } from '../lib/rebase'
   import { twinOf } from '../lib/tracking'
-  import { busy, expandedStashSections, repos, expandedTagSections, filters, loadSideRefs, mainView, mergeState, refs, selectRepo, selectStash, selectedRepoId, selectedStash, sideRefs, stashEntries, toggleStashExpanded, toggleTagsExpanded } from '../lib/stores'
+  import { loadHostingInfo, hostingInfo, pullCounts, refreshPullCount } from '../lib/hosting'
+  import { countLabel } from '../lib/prs'
+  import { busy, expandedStashSections, repos, expandedTagSections, filters, loadSideRefs, logVersion, mainView, mergeState, openPullRequests, refs, selectRepo, selectStash, selectedRepoId, selectedStash, sideRefs, stashEntries, toggleStashExpanded, toggleTagsExpanded } from '../lib/stores'
   import { isFilterRow, refsView } from '../lib/repoRefs'
   import type { Branch, StashEntry, Tag } from '../lib/types'
   import { openMenu, openMenuAsync, SEPARATOR, type MenuEntry, type MenuItem } from '../lib/ui'
@@ -34,6 +36,27 @@
   // git keeps one stash per repository, shared by all of its worktrees.
   $: isWorktree = !!$repos.find((r) => r.id === repoId)?.worktree
   $: parentId = $repos.find((r) => r.id === repoId)?.parentId ?? ''
+  // The Pull requests row needs to know whether the repository is on a
+  // supported host; the repository list is re-read after an action, a fetch
+  // or a focus, and an edited remote shows up then. Reading it never reaches
+  // the network.
+  $: loadInfo(repoId, $repos)
+  function loadInfo(id: string, _list: unknown) {
+    loadHostingInfo(id).catch(() => undefined)
+  }
+  // Primitives, so a re-read of the same info does not ask for the count again.
+  $: pullsHosted = !!$hostingInfo[repoId]?.supported
+  $: account = $hostingInfo[repoId]?.account
+  // The badge is asked for the selected repository only: on selection, on
+  // window focus and after a refresh (logVersion), and only with an account.
+  $: if (repoId === $selectedRepoId && pullsHosted) askCount(repoId, account, $logVersion)
+  function askCount(id: string, _account: unknown, _version: unknown) {
+    void refreshPullCount(id)
+  }
+  function onFocus() {
+    if (repoId === $selectedRepoId && pullsHosted) void refreshPullCount(repoId)
+  }
+  $: count = account === 'connected' ? $pullCounts[repoId] : undefined
   let openRemotes: Record<string, boolean> = {}
   let openGroups: Record<string, boolean> = {}
 
@@ -140,11 +163,25 @@
   }
 </script>
 
+<svelte:window on:focus={onFocus} />
+
 {#if repoRefs}
   <div class="refs">
     {#if submodulePath}
       <button class="row-item ref breadcrumb" title="Back to the repository" on:click={() => selectRepo(parentId)}>
         <span class="ellipsis">↳ {submodulePath}</span>
+      </button>
+    {/if}
+    {#if pullsHosted}
+      <button
+        class="row-item ref pulls"
+        class:active={repoId === $selectedRepoId && $mainView === 'pulls'}
+        title="Pull requests"
+        on:click={() => openPullRequests(repoId)}
+      >
+        <span class="mark"><Icon name="pull-request" size={12} /></span>
+        <span class="ellipsis">Pull requests</span>
+        {#if count}<span class="badge">{countLabel(count)}</span>{/if}
       </button>
     {/if}
     <div class="section">
@@ -325,6 +362,7 @@
   .detached { color: var(--muted); }
   .filtered { margin-left: auto; flex: none; display: inline-grid; place-items: center; color: var(--muted); }
   .breadcrumb { color: var(--muted); }
+  .pulls .badge { margin-left: auto; font-size: 11px; color: var(--faint); }
   .group .count { margin-left: auto; font-size: 11px; color: var(--faint); }
   /* Empty-state lines stand in for the rows they describe (one step in
      from the heading above them), so they align with that row TEXT - no

@@ -507,7 +507,9 @@ or "Garbage collected: 9.8 MB, nothing to reclaim.".
 
 Once expanded, a repository's row is followed by its own sections, in this
 fixed order: **Branches**, **Remotes**, **Tags**, **Stash**, and, last and
-only when the repository has at least one submodule, **Submodules**. Each
+only when the repository has at least one submodule, **Submodules**. Before
+them, only for a repository on Bitbucket or GitHub (`14-hosting.md`), comes
+the **Pull requests** row. Each
 section heading starts exactly under the repository's name, whether the
 repository is loose or inside a group; its rows sit one step further in.
 Branches/Remotes/Tags/Stash render only once refs
@@ -541,6 +543,24 @@ only the selected repository's working tree is read. The changes themselves
 are reached from the log's "Uncommitted changes" row or the toolbar's
 **Commit** (see `02-log-and-history.md` and `05-remote-and-stash.md`); there
 is no separate Changes row in the sidebar.
+
+### Pull requests
+
+The first row under an expanded repository, before Branches, and only when
+the repository's remote is on a supported host (Bitbucket or GitHub); every
+other repository has no such row. It has a pull request icon, the words
+"Pull requests" and, at the right, a badge with the number of open pull
+requests ("100+" when the host says there are more than it counted).
+
+- **Opening.** A click selects the repository and shows its Pull requests
+  view in the main pane (`14-hosting.md`); the row is highlighted while that
+  view is on screen. Selecting a repository again, by clicking its row,
+  shows its log instead; so does switching to another repository.
+- **The badge** is asked of the host for the selected repository only: when
+  it is selected, when the window gets focus and after every refresh of the
+  repository (Refresh, fetch, pull, push and the like), and each time the view's
+  open list is read. A repository with no connected account has no badge, and
+  neither has one the host could not answer for; no request is made for it.
 
 ### Branches
 

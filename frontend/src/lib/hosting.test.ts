@@ -5,12 +5,13 @@ vi.mock('./api', () => ({
   api: {
     hostingInfo: vi.fn(),
     commitStatuses: vi.fn(),
+    pullRequestCount: vi.fn(),
   },
 }))
 
 import { api } from './api'
 import {
-  applyLimit, applyWatchEvent, commitStatuses, headStatusText, hostingInfo, hostingLimitText, hostingLimits, isHttps, refreshStatuses,
+  applyLimit, applyWatchEvent, commitStatuses, headStatusText, hostingInfo, hostingLimitText, hostingLimits, isHttps, pullCounts, refreshPullCount, refreshStatuses,
   requestHeadStatus, requestStatuses, startHostingPolling, stateIcon, statusTooltip,
 } from './hosting'
 import type { Check, CommitStatus, HostingInfo, HostState } from './types'
@@ -40,6 +41,7 @@ beforeEach(() => {
   hostingInfo.set({})
   commitStatuses.set({})
   hostingLimits.set({})
+  pullCounts.set({})
 })
 afterEach(() => {
   vi.useRealTimers()
@@ -286,5 +288,46 @@ describe('requestHeadStatus', () => {
     await vi.advanceTimersByTimeAsync(30_000 + 500)
     stop()
     expect(statuses.mock.calls[0][1]).toEqual(['head'])
+  })
+})
+
+describe('refreshPullCount', () => {
+  const count = vi.mocked(api.pullRequestCount)
+  beforeEach(() => {
+    count.mockReset()
+  })
+
+  it('keeps the count under the repository it asked about', async () => {
+    count.mockResolvedValue({ n: 7, more: false })
+    await refreshPullCount('A')
+    expect(get(pullCounts)).toEqual({ A: { n: 7, more: false } })
+    expect(count).toHaveBeenCalledWith('A')
+  })
+
+  it('asks nothing and shows no badge without a connected account', async () => {
+    pullCounts.set({ A: { n: 3, more: false } })
+    infoCall.mockResolvedValue(info({ account: 'none' }))
+    await refreshPullCount('A')
+    expect(count).not.toHaveBeenCalled()
+    expect(get(pullCounts)).toEqual({})
+  })
+
+  it('drops the count when the host cannot answer', async () => {
+    pullCounts.set({ A: { n: 3, more: false } })
+    count.mockImplementation(async () => {
+      throw new Error('Bitbucket rejected the token')
+    })
+    await refreshPullCount('A')
+    expect(get(pullCounts)).toEqual({})
+  })
+
+  it('a late answer for A does not touch B', async () => {
+    const a = deferred<{ n: number; more: boolean }>()
+    count.mockImplementation((id) => (id === 'A' ? a.promise : Promise.resolve({ n: 2, more: true })))
+    const first = refreshPullCount('A')
+    await refreshPullCount('B')
+    a.resolve({ n: 9, more: false })
+    await first
+    expect(get(pullCounts)).toEqual({ A: { n: 9, more: false }, B: { n: 2, more: true } })
   })
 })

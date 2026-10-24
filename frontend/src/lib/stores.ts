@@ -165,10 +165,21 @@ export const repoAI = writable<RepoAIInfo | null>(null)
 /** The selected repository has the AI off (or its settings can't be read). */
 export const aiOff = derived(repoAI, (r) => !!r?.aiOff)
 /** Which view the main pane shows: the log (with commit details / the merge
- *  view below it), the Changes view, a stash preview, or a file's blame. A
+ *  view below it), the Changes view, a stash preview, a file's blame, or the repository's
+ *  Pull requests. A
  *  merge in progress always wins over either — see conflictOwnsScreen in
  *  remote.ts, which App.svelte applies on top of this. */
-export const mainView = writable<'log' | 'changes' | 'stash' | 'blame'>('log')
+export const mainView = writable<'log' | 'changes' | 'stash' | 'blame' | 'pulls'>('log')
+
+/** The pull request open in the Pull requests view's detail, by repository ID
+ *  (in memory; a repository without an entry has none open). */
+export const selectedPR = writable<Record<string, number>>({})
+
+/** Shows a repository's Pull requests view (selecting the repository first). */
+export function openPullRequests(repoID: string) {
+  selectRepo(repoID)
+  mainView.set('pulls')
+}
 
 /** The file the Blame view shows, and the targets Blame previous revision
  *  left behind, newest last, for Back to return to. */
@@ -558,6 +569,8 @@ export const refreshRepo = coalesce(async () => {
 })
 
 export function selectRepo(id: string) {
+  // Selecting a repository shows its log, also from its Pull requests view.
+  if (get(mainView) === 'pulls') mainView.set('log')
   if (get(selectedRepoId) !== id) {
     filters.set(emptyFilters())
     selectedHash.set('')

@@ -9,8 +9,9 @@ exactly as before: no icons, no extra rows, nothing in the status bar.
 This document grows with the feature. It now covers detecting the host,
 accounts, commit statuses with their cache and rate limits, the pull
 request data and checkout behind the Pull requests view, and the watch of a
-pushed commit, and the status icons in the log and the commit details. The
-view itself and the notifications are described here as they land.
+pushed commit, the status icons in the log and the commit details, and the
+Pull requests row and list. The pull request detail and the notifications are
+described here as they land.
 
 The section is called **Pipelines** for a Bitbucket repository and **Checks**
 for a GitHub one, everywhere it appears.
@@ -309,3 +310,58 @@ nothing is asked and nothing is drawn, and the rows have no reserved space.
   section.
 - Only a "No access to <owner>/<repo> with this account" answer is said (as a
   message, once per repository); other failures show what is already known.
+
+## Pull requests: sidebar row and list
+
+The Pull requests view (the main pane) shows the open pull requests of the
+selected repository. Everything here needs a supported host; the sidebar row
+that opens it is described in `01-repositories-and-sidebar.md`.
+
+- **Layout.** The view has a header (**Pull requests** with the repository's
+  name), three tabs, **Refresh** and **Open in browser**, then the list, and
+  below it, behind a splitter dragged like the log's, the pull request that is
+  selected (a click on a row selects it). The detail pane is described with
+  the detail, as it lands; until then it names the selected number.
+- **Tabs.** **Open** (all), **Mine** (the account is the author) and **Review
+  requested** (the account is a reviewer and has not approved): the three
+  filters of the data calls. **Open in browser** opens the host's pull
+  request list for the repository, in the system browser and only for an
+  `https:` address.
+- **Rows.** Newest update first, as the host gave them. Each row shows the
+  status icon of the head commit (the pull request's own state, as for the
+  log; nothing when it is unknown or has no checks), `#<number>` and the
+  title with a **Draft** label when it is one, below it the author and
+  `source → target`, and at the right "✓ <approvals>", a speech bubble with
+  the comment count, and when it was last updated ("just now", "5m ago",
+  "3h ago", "2d ago", then the date). The status icon's tooltip is "Pipeline
+  passed", "Checks failed" and so on, as in the status bar.
+- **More than 100.** The last line reads "Showing 100. Open the rest in the
+  browser" and is a link that opens the same list.
+- **Empty and error states** replace the rows with one line. No account:
+  "Connect your Bitbucket account to see pull requests" (GitHub likewise)
+  with **Open Settings**, which opens Settings on the Accounts tab. A
+  rejected token: "Bitbucket rejected the token" (GitHub likewise). A failed
+  load: its message with **Retry** (a failed refresh with rows on screen
+  shows the message above the rows). A filter with nothing: "No open pull
+  requests", "No open pull requests of yours" or "No open pull requests
+  waiting for your review". While the first answer is awaited the list reads
+  "Loading…".
+- **When it is read.** When the view opens, when a tab is chosen, on
+  **Refresh**, when the window gets focus while the view is shown, after a
+  fetch or any other refresh of the repository, and when Settings changes the
+  account. A refresh keeps the rows on screen until the new answer is in;
+  switching tab or repository clears them. An answer for a repository or tab
+  that is no longer shown is dropped. Nothing is requested without a
+  connected account. A list read for **Open** also sets the sidebar badge.
+- **The sidebar badge** is the open pull request count (`Count` of the data
+  calls: the number, with "+" when the host has more), asked for the selected
+  repository on selection, on window focus and after each refresh.
+- **Text from the host is untrusted.** A pull request's description and
+  comments are shown as escaped text: HTML in them is never interpreted (no
+  images, no handlers), a Markdown link becomes a link only when its address
+  is `https:` and otherwise reads as its text, and an image reads as a link
+  with its alt text. Links open in the system browser, `https:` addresses
+  only. This is one rule for every place the detail shows host text.
+- **Comment order.** Comments read oldest first, each followed by its replies
+  (oldest first), indented by depth up to 4 levels; a reply whose parent is
+  not among the comments reads as a first-level one.
