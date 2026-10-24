@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from './Icon.svelte'
+  import PullRequestDetail from './PullRequestDetail.svelte'
   import Splitter from './Splitter.svelte'
   import StatusIcon from './StatusIcon.svelte'
   import { api } from '../lib/api'
@@ -154,9 +155,11 @@
   {#if selected}
     <Splitter direction="horizontal" on:drag={(e) => detailsHeight.set(Math.min(720, Math.max(120, $detailsHeight - e.detail)))} />
     <div class="details" style="height: {$detailsHeight}px">
-      <!-- SLOT (Task 13): PullRequestDetail for pull request #{selected} of this
-           repository goes here, keyed on $selectedPR[repoId]. -->
-      <div class="note">Pull request #{selected}</div>
+      {#if info}
+        {#key `${repoId}#${selected}`}
+          <PullRequestDetail {repoId} number={selected} {info} />
+        {/key}
+      {/if}
     </div>
   {/if}
 </div>

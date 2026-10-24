@@ -55,6 +55,10 @@
   $: showStash = $mainView === 'stash' && !conflictWins && !!$selectedRepo && !$selectedRepo.missing && !!selectedStashEntry
   $: showBlame = $mainView === 'blame' && !conflictWins && !!$selectedRepo && !$selectedRepo.missing && !!$blameTarget
   $: showPulls = $mainView === 'pulls' && !conflictWins && !!$selectedRepo && !$selectedRepo.missing && !!$hostingInfo[$selectedRepo.id]?.supported
+  // The Pull requests view hidden because it cannot be shown (the repository
+  // is unsupported, missing or in a merge) falls back to the log for good, or
+  // it would come back later with the sidebar row still highlighted.
+  $: if ($mainView === 'pulls' && !showPulls) mainView.set('log')
   // Selecting a commit — or the log's uncommitted row — means the user
   // wants the log pane, so switch the main pane back.
   $: if ($selectedHash || $uncommittedSelected) mainView.set('log')

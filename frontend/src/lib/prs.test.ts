@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { commentTree, countLabel, emptyMessage, hostLabel, renderUntrusted, safeHref } from './prs'
-import type { Comment, HostingInfo } from './types'
+import { commentTree, countLabel, emptyMessage, fileSections, hostLabel, renderUntrusted, safeHref } from './prs'
+import type { Comment, HostingInfo, PRFile } from './types'
 
 const info = (over: Partial<HostingInfo> = {}): HostingInfo => ({
   supported: true, host: 'bitbucket', owner: 'o', name: 'n', remote: 'origin', webURL: '', pullsURL: '',
@@ -118,5 +118,30 @@ describe('renderUntrusted', () => {
   })
   it('does not turn commit-like words into dead links', () => {
     expect(renderUntrusted('fixed in 1a2b3c4d')).not.toContain('<a')
+  })
+})
+
+describe('fileSections', () => {
+  const file = (path: string, status: string, oldPath = ''): PRFile => ({ path, oldPath, status, patch: '', noDiff: false })
+  it('lists the files in one Changed files section, with the glyph statuses', () => {
+    expect(
+      fileSections([file('a', 'added'), file('b', 'removed'), file('c', 'modified'), file('d', 'renamed', 'old-d')]),
+    ).toEqual([
+      {
+        title: 'Changed files',
+        files: [
+          { path: 'a', status: 'A', oldPath: '' },
+          { path: 'b', status: 'D', oldPath: '' },
+          { path: 'c', status: 'M', oldPath: '' },
+          { path: 'd', status: 'R', oldPath: 'old-d' },
+        ],
+      },
+    ])
+  })
+  it('reads an unknown status as a modification', () => {
+    expect(fileSections([file('x', 'changed')])[0].files[0].status).toBe('M')
+  })
+  it('keeps the section when there are no files', () => {
+    expect(fileSections([])).toEqual([{ title: 'Changed files', files: [] }])
   })
 })

@@ -1,5 +1,6 @@
 <script lang="ts">
   import ChecksList from './ChecksList.svelte'
+  import DiffText from './DiffText.svelte'
   import Icon from './Icon.svelte'
   import SubmoduleDiffView from './SubmoduleDiff.svelte'
   import { api } from '../lib/api'
@@ -12,8 +13,6 @@
 
   export let repoId: string
   export let hash: string
-
-  const MAX_LINES = 5000
 
   let details: Details | null = null
   let error = ''
@@ -33,7 +32,6 @@
 
   $: load(repoId, hash)
   $: loadChecks(repoId, hash)
-  $: lines = diff.split('\n')
   $: sub = file?.submodule ? parseSubmoduleDiff(diff) : null
   $: subRepoId = file?.submodule ? submoduleRepoId($repos, repoId, file.path) : undefined
 
@@ -92,15 +90,6 @@
     const why = blameBlocker(f)
     openMenu(event, [{ label: 'Blame', action: () => openBlame(f.path, hash), disabled: why !== null, title: why ?? undefined }])
   }
-
-  function lineClass(line: string): string {
-    if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('diff ') || line.startsWith('index ')) return 'meta'
-    if (line.startsWith('@@')) return 'hunk'
-    if (line.startsWith('+')) return 'add'
-    if (line.startsWith('-')) return 'del'
-    return ''
-  }
-
 </script>
 
 <div class="details">
@@ -145,12 +134,7 @@
       {#if sub}
         <SubmoduleDiffView diff={sub} onOpen={subRepoId ? () => selectRepo(subRepoId) : null} />
       {:else}
-        {#each lines.slice(0, MAX_LINES) as line}
-          <div class="line {lineClass(line)}">{line || ' '}</div>
-        {/each}
-        {#if lines.length > MAX_LINES}
-          <div class="line meta">… diff truncated after {MAX_LINES} lines</div>
-        {/if}
+        <DiffText text={diff} />
       {/if}
     </div>
   {/if}
@@ -173,10 +157,6 @@
   .s-R, .s-C { color: #3f7fbf; }
   .none { padding: 4px 10px; color: var(--faint); font-size: 12px; }
   .diff { overflow: auto; padding: 8px 0; -webkit-user-select: text; user-select: text; }
-  .line { padding: 0 12px; white-space: pre; line-height: 18px; }
-  .add { background: var(--add-bg); }
-  .del { background: var(--del-bg); }
-  .hunk { color: #3f7fbf; }
   .meta { color: var(--faint); }
   .error { padding: 12px; color: var(--danger); white-space: pre-wrap; }
   .explanation :global(p) { margin: 0 0 6px; }

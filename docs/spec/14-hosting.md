@@ -320,8 +320,10 @@ that opens it is described in `01-repositories-and-sidebar.md`.
 - **Layout.** The view has a header (**Pull requests** with the repository's
   name), three tabs, **Refresh** and **Open in browser**, then the list, and
   below it, behind a splitter dragged like the log's, the pull request that is
-  selected (a click on a row selects it). The detail pane is described with
-  the detail, as it lands; until then it names the selected number.
+  selected (a click on a row selects it), described under Pull request detail
+  below. When the view cannot be shown (the repository is not on a supported
+  host, is missing, or a merge in progress owns the screen) the main pane goes
+  back to the log and stays there.
 - **Tabs.** **Open** (all), **Mine** (the account is the author) and **Review
   requested** (the account is a reviewer and has not approved): the three
   filters of the data calls. **Open in browser** opens the host's pull
@@ -365,3 +367,51 @@ that opens it is described in `01-repositories-and-sidebar.md`.
 - **Comment order.** Comments read oldest first, each followed by its replies
   (oldest first), indented by depth up to 4 levels; a reply whose parent is
   not among the comments reads as a first-level one.
+
+## Pull request detail
+
+The pane below the list shows the selected pull request: a left column with
+the information and a right column with its files. Everything is read from the
+host (see Pull requests: data and checkout); nothing needs to be fetched.
+Switching to another pull request or repository drops what was loading.
+
+**Left column**, top to bottom:
+
+1. **Header.** Title and `#<number>`, **Open** or **Draft** with the author,
+   `source → target`, and when it was created and last updated (the tooltip
+   has the full date).
+2. **Checkout branch** and **Open in browser**. Open in browser opens the pull
+   request on the host, only for an `https:` address. For a pull request from
+   a fork Checkout branch is disabled, and the pane says "From a fork. Open it
+   in the browser."
+3. **Description**, as untrusted text (see the Pull requests list).
+4. **Reviewers**, each with the verdict: Approved, Changes requested or
+   Pending.
+5. **Pipelines** or **Checks** of the last commit, as in the commit details
+   (hidden when there are none).
+6. **Commits**, short hash and subject. A click selects the commit in the log
+   (the main pane goes back to the log) when the commit is in the local
+   repository; otherwise the row says "Not fetched" and nothing else happens.
+7. **Comments**, oldest first with replies under their parent, indented one
+   step per level (up to 4). A comment on a file shows `path:line` above its
+   text; a review verdict is shown beside the author. When the host has more
+   than the 500 shown, the last line reads "Showing 500. Open the rest in the
+   browser" and is a link that opens the pull request.
+
+**Right column.** A **Changed files** list (status letter A, D, M or R, and
+the path) and below it the diff of the selected file, the first one on
+opening, coloured as in the commit details (cut after 5000 lines). A file the
+host gave no diff for shows "No diff available here. Open in browser" with
+the link to the pull request.
+
+**Links in host text.** A click on a link inside a description or a comment
+never navigates the app: it opens the system browser when the address is
+`https:` and does nothing otherwise.
+
+**Checkout.** **Checkout branch** runs as a task in the status bar, "Checkout
+<source branch>" (`13-status-bar.md`): the remote is fetched and the branch
+checked out as in the sidebar (see Checkout branch above). When it ends the
+repository is refreshed. On success the notices of a branch checkout (a
+fast-forward, a diverged local branch) are shown, the main pane goes back to
+the log and selects the branch's tip commit. On failure the task ends failed
+and git's message is its tooltip; the log stays as it was.

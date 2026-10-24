@@ -1,5 +1,5 @@
 import { escapeHtml, renderMarkdown } from './markdown'
-import type { Comment, HostCount, HostingInfo, PRFilter } from './types'
+import type { Comment, HostCount, HostingInfo, PRFile, PRFilter } from './types'
 
 export type { PRFilter }
 
@@ -109,4 +109,18 @@ export function renderUntrusted(md: string): string {
   return renderMarkdown(linked)
     .replace(/<a href="#" data-hash="[0-9a-f]+">([0-9a-f]+)<\/a>/g, '$1')
     .replace(new RegExp(`${OPEN}(\\d+)${CLOSE}`, 'g'), (_m, i: string) => table[Number(i)] ?? '')
+}
+
+
+const STATUS_GLYPH: Record<string, string> = { added: 'A', removed: 'D', modified: 'M', renamed: 'R' }
+
+/** The changed files as FileList's one section, each status as its glyph
+ *  (a status the app does not know reads as a modification). */
+export function fileSections(files: PRFile[]): { title: string; files: { path: string; status: string; oldPath: string }[] }[] {
+  return [
+    {
+      title: 'Changed files',
+      files: files.map((f) => ({ path: f.path, status: STATUS_GLYPH[f.status] ?? 'M', oldPath: f.oldPath })),
+    },
+  ]
 }
