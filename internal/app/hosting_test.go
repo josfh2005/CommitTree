@@ -730,6 +730,25 @@ func TestCheckoutPullRequestSameRepo(t *testing.T) {
 	}
 }
 
+func TestCheckoutPullRequestRefusesABadBranchName(t *testing.T) {
+	a, id, fake, _ := newHostingApp(t)
+	withBitbucketOrigin(t, a, id, remoteWithBranch(t))
+	connectBitbucket(t, a)
+	dir, _ := a.dir(id)
+	for _, name := range []string{"feature/..x", "has space", "-x", "@{-1}", "a~b", "x.lock", "ends/"} {
+		fake.pull = func(n int) (hosting.PullRequestDetail, error) {
+			return hosting.PullRequestDetail{PullRequest: hosting.PullRequest{Number: n, Source: name}}, nil
+		}
+		_, err := a.CheckoutPullRequest(id, 4)
+		if !errors.Is(err, ops.ErrInvalidRef) {
+			t.Errorf("%q: err = %v, want ErrInvalidRef", name, err)
+		}
+	}
+	if out := gitC(t, dir, "for-each-ref", "refs/remotes/origin"); strings.TrimSpace(out) != "" {
+		t.Fatalf("a bad branch name fetched the remote: %s", out)
+	}
+}
+
 func TestCheckoutPullRequestDirtyTree(t *testing.T) {
 	a, id, fake, _ := newHostingApp(t)
 	withBitbucketOrigin(t, a, id, remoteWithBranch(t))

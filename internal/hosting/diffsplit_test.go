@@ -53,3 +53,22 @@ func TestSplitUnifiedDiffPathWithSpacesAndBPrefix(t *testing.T) {
 		t.Errorf("got %v", got)
 	}
 }
+
+func TestPatchShowsChanges(t *testing.T) {
+	cases := map[string]struct {
+		patch string
+		want  bool
+	}{
+		"hunk":        {"diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1 +1 @@\n-x\n+y\n", true},
+		"binary":      {"diff --git a/i.png b/i.png\nnew file mode 100644\nBinary files /dev/null and b/i.png differ\n", false},
+		"git binary":  {"diff --git a/i.png b/i.png\nindex 1..2\nGIT binary patch\nliteral 3\n", false},
+		"pure rename": {"diff --git a/x b/y\nsimilarity index 100%\nrename from x\nrename to y\n", true},
+		"mode only":   {"diff --git a/x b/x\nold mode 100644\nnew mode 100755\n", false},
+		"empty":       {"", false},
+	}
+	for name, c := range cases {
+		if got := PatchShowsChanges(c.patch); got != c.want {
+			t.Errorf("%s: got %v, want %v", name, got, c.want)
+		}
+	}
+}

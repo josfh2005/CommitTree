@@ -38,8 +38,10 @@ func RepoKey(r Repo) string { return string(r.Host) + ":" + r.FullName() }
 
 func (e entry) fresh(now time.Time) bool {
 	switch {
-	case e.st.State.Final():
+	case e.st.Settled():
 		return true
+	case e.st.State.Final(): // failed while a sibling check still runs
+		return now.Sub(e.got) < runningTTL
 	case e.st.State == None:
 		return now.Sub(e.got) < noneTTL
 	case e.st.State == Running:

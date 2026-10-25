@@ -60,3 +60,27 @@ func TestCacheKeysAreSeparateAndUnknownIsMissing(t *testing.T) {
 		t.Fatalf("RepoKey = %q", got)
 	}
 }
+
+func TestCacheFailedWithRunningSiblingIsAskedAgain(t *testing.T) {
+	// The aggregate is failed while a sibling still runs: it is not final.
+	c, clk := newTestCache()
+	c.Put("k", map[string]CommitStatus{"a": {Hash: "a", State: Failed, Checks: []Check{
+		{Key: "x", State: Failed}, {Key: "y", State: Running},
+	}}})
+	clk.Advance(29 * time.Second)
+	if have, _ := c.Split("k", []string{"a"}); len(have) != 1 {
+		t.Fatalf("at 29s: have %v", have)
+	}
+	clk.Advance(2 * time.Second)
+	if _, missing := c.Split("k", []string{"a"}); len(missing) != 1 {
+		t.Fatalf("at 31s: missing %v", missing)
+	}
+	// Once the sibling is done the entry is final again.
+	c.Put("k", map[string]CommitStatus{"a": {Hash: "a", State: Failed, Checks: []Check{
+		{Key: "x", State: Failed}, {Key: "y", State: Success},
+	}}})
+	clk.Advance(24 * time.Hour)
+	if have, _ := c.Split("k", []string{"a"}); len(have) != 1 {
+		t.Fatalf("settled failed must never expire: have %v", have)
+	}
+}

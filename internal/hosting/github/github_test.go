@@ -148,6 +148,18 @@ func TestUser(t *testing.T) {
 	}
 }
 
+func TestUserForbiddenIsAnAccountMessage(t *testing.T) {
+	_, c := newFake(t, func(f *fake, w http.ResponseWriter, r *http.Request, body string) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"message":"Resource not accessible by personal access token"}`))
+	})
+	_, err := c.User(context.Background())
+	if err == nil || strings.Contains(err.Error(), "No access to") ||
+		!strings.HasPrefix(err.Error(), "GitHub token can't read your account: Resource not accessible") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestHeaders(t *testing.T) {
 	f, c := newFake(t, func(f *fake, w http.ResponseWriter, r *http.Request, _ string) {
 		switch {
@@ -320,6 +332,23 @@ func TestCheckStateMapping(t *testing.T) {
 		if ok != tc.ok || ck.State != tc.want {
 			t.Errorf("%+v: got (%s, %v), want (%s, %v)", tc.n, ck.State, ok, tc.want, tc.ok)
 		}
+	}
+}
+
+func TestQueuedCheckRunHasNoStartTime(t *testing.T) {
+	// startedAt is null until a run starts: no invented start, and a queued
+	// re-run beats the older finished run of the same check.
+	var n gqlContext
+	if err := json.Unmarshal([]byte(`{"__typename":"CheckRun","name":"build","status":"QUEUED","conclusion":null,"detailsUrl":"","startedAt":null,"completedAt":null}`), &n); err != nil {
+		t.Fatal(err)
+	}
+	queued, ok := n.toCheck()
+	if !ok || queued.State != hosting.Running || !queued.Started.IsZero() || !queued.Created.IsZero() {
+		t.Fatalf("queued = %+v ok=%v", queued, ok)
+	}
+	old := hosting.Check{Key: "build", Name: "build", State: hosting.Failed, Created: time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)}
+	if st := hosting.Aggregate([]hosting.Check{old, queued}); st != hosting.Running {
+		t.Fatalf("aggregate = %s, want running", st)
 	}
 }
 

@@ -92,6 +92,7 @@ func effectivePort(u *url.URL) string {
 type wirePipeline struct {
 	BuildNumber int       `json:"build_number"`
 	CreatedOn   time.Time `json:"created_on"`
+	StartedOn   time.Time `json:"started_on"`
 	Duration    int       `json:"duration_in_seconds"`
 	State       struct {
 		Name   string `json:"name"`
@@ -117,6 +118,7 @@ type wireStatus struct {
 	Name      string    `json:"name"`
 	State     string    `json:"state"`
 	URL       string    `json:"url"`
+	CreatedOn time.Time `json:"created_on"`
 	UpdatedOn time.Time `json:"updated_on"`
 }
 
@@ -208,7 +210,7 @@ func (w wirePR) toPR() hosting.PullRequest {
 func (c *client) User(ctx context.Context) (hosting.Account, error) {
 	var u wireUser
 	if _, err := c.d.JSON(ctx, "GET", "/user", nil, &u); err != nil {
-		return hosting.Account{}, err
+		return hosting.Account{}, hosting.AccountError(hosting.Bitbucket, err)
 	}
 	return hosting.Account{ID: u.UUID, Name: u.DisplayName}, nil
 }
@@ -242,11 +244,17 @@ func pipelineCheck(r hosting.Repo, p wirePipeline) (hosting.Check, bool) {
 	}
 	t := p.Target
 	n := strconv.Itoa(p.BuildNumber)
+	// A pipeline that has not started yet counts from its creation.
+	started := p.StartedOn
+	if started.IsZero() {
+		started = p.CreatedOn
+	}
 	return hosting.Check{
 		Key:         t.Type + "|" + t.RefName + "|" + t.Selector.Type + ":" + t.Selector.Pattern,
 		Name:        "Pipeline #" + n,
 		State:       st,
 		URL:         "https://bitbucket.org/" + r.FullName() + "/pipelines/results/" + n,
+		Started:     started,
 		DurationSec: p.Duration,
 		Created:     p.CreatedOn,
 	}, true
@@ -370,7 +378,7 @@ func (c *client) Checks(ctx context.Context, r hosting.Repo, hash string) (hosti
 			}
 			seen[k] = true
 		}
-		checks = append(checks, hosting.Check{Key: s.Key, Name: s.Name, State: st, URL: s.URL, Created: s.UpdatedOn})
+		checks = append(checks, hosting.Check{Key: s.Key, Name: s.Name, State: st, URL: s.URL, Started: s.CreatedOn, Created: s.UpdatedOn})
 	}
 	return summarize(hash, checks), nil
 }
@@ -625,7 +633,7 @@ func (c *client) PullRequestFiles(ctx context.Context, r hosting.Repo, number in
 		if f.Path == "" {
 			f.Path = f.OldPath
 		}
-		if p, ok := patches[f.Path]; ok {
+		if p, ok := patches[f.Path]; ok && hosting.PatchShowsChanges(p) {
 			f.Patch = p
 		} else {
 			f.NoDiff = true

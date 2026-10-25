@@ -81,16 +81,21 @@ func (a *App) PushAll(id string) ([]ops.BranchPushResult, error) {
 		results, pushErr = ops.PushAll(a.prompting(ctx, id, dir, "Push all"), dir)
 		return pushErr
 	})
-	if err == nil {
-		var pushed []string
-		for _, r := range results {
-			if r.Status == ops.PushPushed {
-				pushed = append(pushed, r.Branch)
-			}
-		}
-		a.watchPushed(id, pushed)
-	}
+	// The branches that did move their upstream are watched even when the
+	// call as a whole reports an error.
+	a.watchPushed(id, pushedBranches(results))
 	return results, err
+}
+
+// pushedBranches are the branches whose upstream a Push all moved.
+func pushedBranches(results []ops.BranchPushResult) []string {
+	var pushed []string
+	for _, r := range results {
+		if r.Status == ops.PushPushed {
+			pushed = append(pushed, r.Branch)
+		}
+	}
+	return pushed
 }
 
 // Pull reads the configured strategy once per call and runs it under the

@@ -42,3 +42,18 @@ func (e *RateLimitError) Error() string {
 	}
 	return "Bitbucket: request limit reached, retrying shortly"
 }
+
+// AccountError rewrites the "no access" answer to the account's own call
+// (/user), which has no repository to name, into a message about the token.
+// Any other error passes through.
+func AccountError(h Host, err error) error {
+	var na *NoAccessError
+	if errors.As(err, &na) && na.Repo == "" {
+		s := h.label() + " token can't read your account"
+		if na.Detail != "" {
+			s += ": " + na.Detail
+		}
+		return errors.New(s)
+	}
+	return err
+}

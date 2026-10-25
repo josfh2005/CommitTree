@@ -198,7 +198,7 @@ func (c *client) User(ctx context.Context) (hosting.Account, error) {
 		Name  string `json:"name"`
 	}
 	if _, err := c.d.JSON(ctx, "GET", "/user", nil, &u); err != nil {
-		return hosting.Account{}, err
+		return hosting.Account{}, hosting.AccountError(hosting.GitHub, err)
 	}
 	name := u.Name
 	if name == "" {

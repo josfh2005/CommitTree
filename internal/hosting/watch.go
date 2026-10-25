@@ -59,7 +59,9 @@ func orDefault(d, def time.Duration) time.Duration {
 
 // Watch blocks, so run it in a goroutine. It emits when the commit's state
 // changes (starting from "no checks yet", which is not a change) and, once,
-// with Final set, when it reaches a final state, then returns. It also
+// with Final set, when it reaches a final state with no check of the commit
+// still running (a failed commit with a sibling running is announced, not
+// final, and the watch goes on), then returns. It also
 // returns, with nothing final emitted, when ctx ends, when the host rejects
 // the token or there is no account, after MaxAge, or when the commit has had
 // no checks for NoCheckAge. A failed fetch (network, request limit) is not a
@@ -86,12 +88,13 @@ func (w *Watcher) Watch(ctx context.Context, repoID, branch, hash, noun string) 
 		case errors.Is(err, ErrRejected) || errors.Is(err, ErrNoAccount):
 			return
 		case err == nil:
-			if st.State != last {
+			settled := st.Settled()
+			if st.State != last || settled {
 				last = st.State
 				if w.Emit != nil {
-					w.Emit(WatchEvent{RepoID: repoID, Branch: branch, Hash: hash, State: st.State, Final: st.State.Final(), Noun: noun})
+					w.Emit(WatchEvent{RepoID: repoID, Branch: branch, Hash: hash, State: st.State, Final: settled, Noun: noun})
 				}
-				if st.State.Final() {
+				if settled {
 					return
 				}
 			}

@@ -3,6 +3,7 @@ package hosting
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -179,5 +180,30 @@ func TestWatchDefaults(t *testing.T) {
 	w.Watch(context.Background(), "r", "b", "h", "Checks") // zero fields: real clock, first poll is final
 	if len(got) != 1 || !got[0].Final {
 		t.Fatalf("events %+v", got)
+	}
+}
+
+func TestWatchKeepsGoingWhileASiblingRuns(t *testing.T) {
+	// failed arrives while another check still runs: the state is announced,
+	// but not as final, and the watch goes on until everything has finished.
+	r := newWatchRig(Running)
+	failedRunning := CommitStatus{State: Failed, Checks: []Check{{Key: "a", State: Failed}, {Key: "b", State: Running}}}
+	failedDone := CommitStatus{State: Failed, Checks: []Check{{Key: "a", State: Failed}, {Key: "b", State: Success}}}
+	answers := []CommitStatus{{State: Running}, failedRunning, failedRunning, failedDone}
+	r.w.Fetch = func(_ context.Context, _, hash string) (CommitStatus, error) {
+		i := r.calls
+		r.calls++
+		return answers[i], nil
+	}
+	r.run()
+	if r.calls != 4 {
+		t.Fatalf("Fetch called %d times, want 4", r.calls)
+	}
+	var got []string
+	for _, e := range r.events {
+		got = append(got, string(e.State)+map[bool]string{true: "!", false: ""}[e.Final])
+	}
+	if want := "running failed failed!"; strings.Join(got, " ") != want {
+		t.Fatalf("events %v, want %s", got, want)
 	}
 }

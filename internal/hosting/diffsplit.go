@@ -55,3 +55,22 @@ func splitHeaderPaths(rest string) (oldP, newP string) {
 	}
 	return rest, rest
 }
+
+// PatchShowsChanges reports whether a file's section of a unified diff has
+// something to show: at least one hunk, or a pure rename or copy (its header
+// is the whole story). A binary file's section is only a header and "Binary
+// files … differ", which is not a diff.
+func PatchShowsChanges(section string) bool {
+	renamed, binary := false, false
+	for _, l := range strings.Split(section, "\n") {
+		switch {
+		case strings.HasPrefix(l, "@@"):
+			return true
+		case strings.HasPrefix(l, "rename from "), strings.HasPrefix(l, "copy from "):
+			renamed = true
+		case strings.HasPrefix(l, "Binary files "), strings.HasPrefix(l, "GIT binary patch"):
+			binary = true
+		}
+	}
+	return renamed && !binary
+}

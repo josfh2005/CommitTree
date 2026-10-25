@@ -31,6 +31,8 @@ no stale owner or name.
   - `git@bitbucket.org:<workspace>/<repo>`
   - `ssh://git@bitbucket.org/<workspace>/<repo>`
   - the same three for `github.com/<owner>/<repo>`.
+  - `http://` and `git://` forms of the same address are read too (they name
+    the same repository; the host's own redirect does the rest).
 - SSH host aliases from `~/.ssh/config` (such as `git@bitbucket-work:…`) are
   not resolved: a repository reached through one has no host.
 - A linked worktree uses its main repository's remotes. A submodule uses its
@@ -109,20 +111,29 @@ refused.
 "Bitbucket rejected the token" (or "GitHub rejected the token") and no
 further request goes to that host until the account is saved again, which
 clears the mark at once with no restart. A repository the account cannot see
-(403 or 404) is "No access to <owner>/<repo> with this account", followed by
-the host's own text when it names a missing scope; the log shows nothing
-else.
+(403 or 404) is "No access to <owner>/<repo> with this account", followed
+by the host's own text when a 403 carries one; the log shows nothing else.
+The account's own call (reading who the token belongs to) has no repository
+to name: a 403 there reads "<Host> token can't read your account", followed
+by the host's text when it gave one.
 
 ## Statuses
 
 Each commit has a state: **success**, **failed**, **running**, **stopped** or
 **none** (none draws nothing), and the list of checks behind it, each with a
-name, state, link and, when the host gives them, start and duration.
+name, state, link and, when the host gives them, start and duration. A time
+the host did not give is left out, never invented: a Bitbucket pipeline
+starts at its `started_on`, or at its creation while it has not started, a
+Bitbucket build status at its `created_on`, and a queued GitHub check run has
+no start at all.
 
 - Only the latest run of each check counts, so a pipeline that failed and
   was re-run green is green. Aggregation over those: any failed gives
   failed; else any running gives running; else any stopped gives stopped;
-  else success; no checks give none.
+  else success; no checks give none. A queued re-run (running, no time yet)
+  counts as the newest run of its check.
+- **Settled.** A state is final only when no check of the commit is still
+  running: failed with a sibling running is shown as failed but is not final.
 - The visible rows of the log (plus a margin) are asked for; the
   uncommitted-changes row, and anything that is not a commit id, never are.
   A commit the host does not know, or one with no checks, is none.
@@ -141,7 +152,9 @@ name, state, link and, when the host gives them, start and duration.
 In memory, per host and `owner/name` (so editing a remote starts afresh), for
 the session; nothing is written to disk.
 
-- final states (success, failed, stopped) never expire;
+- final states (success, failed, stopped) never expire, provided no check of
+  the commit is still running (failed with a running sibling is asked again
+  after 30 seconds, like running);
 - none is asked again after 10 minutes, since a pipeline may still start;
 - running is asked again after 30 seconds.
 
@@ -192,7 +205,9 @@ Bitbucket or GitHub), and no request is sent.
   verdict, commits, comments (up to 500, with a flag when there are more)
   and the checks of the last commit.
 - **Files.** The changed files with status, old path and the host's diff for
-  each; a file the host gave no diff for is marked so. Everything comes from
+  each; a file the host gave no diff for is marked so. On Bitbucket that
+  includes a binary file (its section has only a header and "Binary files …
+  differ", no hunk); a pure rename keeps its header as its patch. Everything comes from
   the host's API, so no fetch is needed to read a pull request.
 - Pull request numbers must be positive. A repository the account cannot see
   is "No access to <owner>/<repo> with this account"; rate-limit state is
@@ -204,10 +219,13 @@ Checks out the source branch of a pull request in the local repository.
 
 1. The pull request is read from the host first, with no repository lock
    held.
-2. A pull request from a fork (Bitbucket: its source repository differs from
+2. The source branch's name, which the host supplied, must be one git accepts
+   as a branch name (`git check-ref-format --branch`, and unchanged by it);
+   otherwise the checkout is refused before anything is fetched.
+3. A pull request from a fork (Bitbucket: its source repository differs from
    the target; GitHub: cross-repository, or the head repository is gone) is
    refused with "From a fork. Open it in the browser." Nothing is fetched.
-3. Otherwise the detected remote (see Detecting the host) is fetched, then
+4. Otherwise the detected remote (see Detecting the host) is fetched, then
    the existing checkout of a remote branch runs with that remote and the
    source branch (`05-remote-and-stash.md`): the local branch of the same
    name is created tracking it, or reused. Its outcome comes back unchanged.
@@ -227,7 +245,8 @@ ended without the user asking.
 - **What is watched.** The tip of each branch just pushed, in a repository
   on a supported host with a connected account; otherwise nothing is
   watched and nothing is asked. Every way of pushing counts: the toolbar,
-  the branch menu, Push all (each branch it pushed) and the chat's push
+  the branch menu, Push all (each branch it pushed, even when the call as a
+  whole reports an error) and the chat's push
   tool. A push that fails, or that finds the branch already up to
   date (from any of these), starts nothing, since nothing was pushed. A
   push counts when it moved the branch's upstream; a new branch is
@@ -246,7 +265,10 @@ ended without the user asking.
   `hosting:status` event with the repository, the branch, the commit, the new
   state and the section's name ("Pipelines" or "Checks"). The first answer
   of "no checks yet" is not a change. When the state reaches success, failed
-  or stopped the event is marked final, and it is the last one, sent once.
+  or stopped and no check of the commit is still running, the event is marked
+  final, and it is the last one, sent once. A failed commit with a check still
+  running is announced as failed, not final; the watch goes on and sends the
+  final event when the rest have finished.
 - **When it stops.** At a final state; after 60 minutes; after 5 minutes
   with no checks at all (counted from the last time there were none); when
   the host rejects the token or the account is removed; and when the app

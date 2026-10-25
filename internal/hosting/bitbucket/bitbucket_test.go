@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"git-ui/internal/hosting"
 )
@@ -122,6 +123,23 @@ func TestUser(t *testing.T) {
 	}
 }
 
+func TestUserForbiddenIsAnAccountMessage(t *testing.T) {
+	_, c := newFake(t, func(f *fake, w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"error":{"message":"Your credentials lack one or more required privilege scopes."}}`))
+	})
+	_, err := c.User(context.Background())
+	if err == nil || strings.Contains(err.Error(), "No access to") ||
+		!strings.HasPrefix(err.Error(), "Bitbucket token can't read your account") ||
+		!strings.Contains(err.Error(), "privilege scopes") {
+		t.Fatalf("err = %v", err)
+	}
+	var na *hosting.NoAccessError
+	if errors.As(err, &na) {
+		t.Fatalf("still a NoAccessError: %v", err)
+	}
+}
+
 func TestStatusesFromPipelines(t *testing.T) {
 	f, c := newFake(t, pipelinesHandler(t))
 	got, err := c.Statuses(context.Background(), repo, []string{hashA, hashB, hashC, hashD, hashZ})
@@ -155,8 +173,29 @@ func TestStatusesFromPipelines(t *testing.T) {
 		b.Created.IsZero() {
 		t.Errorf("check B = %+v", b)
 	}
+	// A running pipeline has a start time (its creation) so the tooltip can say
+	// how long ago; Duration is not known yet.
+	if d := got[hashD].Checks[0]; d.Started.IsZero() || !d.Started.Equal(d.Created) {
+		t.Errorf("running pipeline Started = %v, Created = %v", d.Started, d.Created)
+	}
 	if k := got[hashC].Checks[0].Key; k != "pipeline_ref_target|release|custom:deploy" {
 		t.Errorf("custom pipeline key = %q", k)
+	}
+}
+
+func TestPipelineStartedPrefersStartedOn(t *testing.T) {
+	p := wirePipeline{BuildNumber: 4}
+	p.State.Name = "IN_PROGRESS"
+	p.CreatedOn = time.Date(2026, 10, 20, 11, 0, 0, 0, time.UTC)
+	p.StartedOn = time.Date(2026, 10, 20, 11, 0, 30, 0, time.UTC)
+	ck, ok := pipelineCheck(repo, p)
+	if !ok || !ck.Started.Equal(p.StartedOn) || !ck.Created.Equal(p.CreatedOn) {
+		t.Fatalf("check = %+v", ck)
+	}
+	p.StartedOn = time.Time{}
+	ck, _ = pipelineCheck(repo, p)
+	if !ck.Started.Equal(p.CreatedOn) {
+		t.Fatalf("without started_on, Started = %v, want created_on", ck.Started)
 	}
 }
 
@@ -243,6 +282,14 @@ func TestChecksMergesStatusesAndPipelines(t *testing.T) {
 		t.Errorf("aggregate = %+v", got)
 	}
 	for _, ck := range got.Checks {
+		// A build status carries its creation time; the one without leaves
+		// Started zero rather than inventing a moment.
+		if ck.Name == "SonarCloud" && (ck.Started.IsZero() || ck.Started.Year() != 2026) {
+			t.Errorf("SonarCloud Started = %v, want its created_on", ck.Started)
+		}
+		if ck.Name == "Jenkins build" && !ck.Started.IsZero() {
+			t.Errorf("Jenkins Started = %v, want zero (no created_on)", ck.Started)
+		}
 		if ck.Name == "Jenkins build" && (ck.Key != "jenkins-build" || ck.URL != "https://ci.example.com/job/api/42/" || ck.Created.IsZero()) {
 			t.Errorf("status check = %+v", ck)
 		}
@@ -658,5 +705,32 @@ func TestPullRequestFilesTooLarge(t *testing.T) {
 		if !f.NoDiff || f.Patch != "" {
 			t.Errorf("%s: want NoDiff, got %+v", f.Path, f)
 		}
+	}
+}
+
+func TestPullRequestFilesBinarySectionIsNoDiff(t *testing.T) {
+	// A binary file's section is a header and "Binary files … differ": no
+	// hunk, nothing to show. A pure rename also has no hunk but its header is
+	// the whole story, so it keeps its patch.
+	_, c := newFake(t, filesHandler(t, func(f *fake, w http.ResponseWriter) {
+		b, _ := os.ReadFile("testdata/pr.diff")
+		_, _ = w.Write(append(b, []byte("diff --git a/img/logo.png b/img/logo.png\nnew file mode 100644\nindex 0000000..555\nBinary files /dev/null and b/img/logo.png differ\n")...))
+	}))
+	files, err := c.PullRequestFiles(context.Background(), repo, 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	by := map[string]hosting.PRFile{}
+	for _, f := range files {
+		by[f.Path] = f
+	}
+	if f := by["img/logo.png"]; !f.NoDiff || f.Patch != "" {
+		t.Errorf("binary = %+v, want NoDiff and no patch", f)
+	}
+	if f := by["lib/y.go"]; f.NoDiff || f.Patch == "" {
+		t.Errorf("pure rename = %+v, want its header kept", f)
+	}
+	if f := by["src/a.go"]; f.NoDiff {
+		t.Errorf("a.go = %+v", f)
 	}
 }

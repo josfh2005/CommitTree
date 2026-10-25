@@ -592,6 +592,14 @@ func (a *App) CheckoutPullRequest(id string, number int) (string, error) {
 	if pr.Source == "" {
 		return "", errors.New("this pull request has no source branch")
 	}
+	// The name comes from the host: defence in depth before it reaches git.
+	dir, err := a.dir(id)
+	if err != nil {
+		return "", err
+	}
+	if err := ops.CheckBranchName(a.ctx, dir, pr.Source); err != nil {
+		return "", err
+	}
 	if err := a.FetchRemote(id, r.Remote); err != nil {
 		return "", err
 	}

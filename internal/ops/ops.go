@@ -313,6 +313,20 @@ func checkRef(ref string) error {
 	return nil
 }
 
+// CheckBranchName refuses a name git would not accept as a branch name (or
+// would expand, like "@{-1}"), on top of checkRef. It is for names that come
+// from outside, such as a code host's pull request.
+func CheckBranchName(ctx context.Context, dir, name string) error {
+	if err := checkRef(name); err != nil {
+		return err
+	}
+	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "check-ref-format", "--branch", name)
+	if err != nil || strings.TrimSpace(out) != name {
+		return fmt.Errorf("%w: %q", ErrInvalidRef, name)
+	}
+	return nil
+}
+
 // head returns the current commit, or "" in a repository with no commits.
 func head(ctx context.Context, dir string) (string, error) {
 	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--verify", "--quiet", "HEAD")

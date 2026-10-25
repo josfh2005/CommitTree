@@ -28,9 +28,9 @@ type Check struct {
 	Name        string    `json:"name"`
 	State       State     `json:"state"`
 	URL         string    `json:"url"`
-	Started     time.Time `json:"started"`
+	Started     time.Time `json:"started,omitzero"`
 	DurationSec int       `json:"durationSec"`
-	Created     time.Time `json:"created"`
+	Created     time.Time `json:"created,omitzero"`
 }
 
 // CommitStatus is a commit's aggregate state and the checks behind it.
@@ -40,9 +40,25 @@ type CommitStatus struct {
 	Checks []Check `json:"checks"`
 }
 
+// Settled reports whether nothing about the commit will change on its own: the
+// aggregate is final and no check is still running. A commit can be failed
+// while another of its checks runs; that is not settled.
+func (s CommitStatus) Settled() bool {
+	if !s.State.Final() {
+		return false
+	}
+	for _, c := range s.Checks {
+		if c.State == Running {
+			return false
+		}
+	}
+	return true
+}
+
 // Latest keeps the newest check (by Created) of each Key, so a run that
-// failed and was re-run green counts once, as green. Checks without a Key are
-// keyed by their Name. The result is ordered by Name, then Key.
+// failed and was re-run green counts once, as green. A running check with no
+// time yet (a queued re-run) is the newest. Checks without a Key are keyed by
+// their Name. The result is ordered by Name, then Key.
 func Latest(checks []Check) []Check {
 	keyOf := func(c Check) string {
 		if c.Key != "" {
@@ -53,7 +69,7 @@ func Latest(checks []Check) []Check {
 	newest := map[string]Check{}
 	for _, c := range checks {
 		k := keyOf(c)
-		if old, ok := newest[k]; !ok || c.Created.After(old.Created) {
+		if old, ok := newest[k]; !ok || newer(c, old) {
 			newest[k] = c
 		}
 	}
@@ -96,4 +112,13 @@ func Aggregate(checks []Check) State {
 		return Success
 	}
 	return None
+}
+
+// newer reports whether check a is a later run than b. A running check
+// without a time is a queued run, later than any dated one.
+func newer(a, b Check) bool {
+	if a.Created.IsZero() != b.Created.IsZero() {
+		return a.Created.IsZero() && a.State == Running
+	}
+	return a.Created.After(b.Created)
 }
