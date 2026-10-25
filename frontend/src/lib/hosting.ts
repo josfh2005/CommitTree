@@ -19,8 +19,33 @@ export const hostingLimits: Writable<Record<string, HostingLimit>> = writable({}
  *  repository ID. A repository without an entry shows no badge. */
 export const pullCounts: Writable<Record<string, HostCount>> = writable({})
 
+/** How long the commit details wait after a selection before asking the host
+ *  for the commit's checks, so arrow-keying through the log asks for the last
+ *  commit only. */
+export const CHECKS_DEBOUNCE_MS = 300
+
 const FINAL: HostState[] = ['success', 'failed', 'stopped']
-const isFinal = (s: HostState) => FINAL.includes(s)
+const hasRunningCheck = (st: CommitStatus) => (st.checks ?? []).some((c) => c.state === 'running')
+/** A final state with no check still running: failed with a running sibling
+ *  is shown as failed but may still change. */
+const isFinal = (st: CommitStatus) => FINAL.includes(st.state) && !hasRunningCheck(st)
+/** Running, or final with a check still running: worth asking again. */
+const isBusy = (st: CommitStatus) => st.state === 'running' || (FINAL.includes(st.state) && hasRunningCheck(st))
+
+/** True for a time the host really gave. The backend leaves out times it does
+ *  not know, but a zero time ("0001-01-01…") is also read as missing. */
+export function validTime(iso: string | undefined): iso is string {
+  if (!iso) return false
+  const t = new Date(iso).getTime()
+  return Number.isFinite(t) && t > 0
+}
+
+/** Waits out the details' debounce and says whether the caller is still the
+ *  latest request. */
+export async function settleChecks(stillCurrent: () => boolean): Promise<boolean> {
+  await new Promise((r) => setTimeout(r, CHECKS_DEBOUNCE_MS))
+  return stillCurrent()
+}
 
 /** True when the repository is on a supported host and its account is connected. */
 export function isHosted(info: HostingInfo | undefined): boolean {
@@ -45,7 +70,10 @@ export function loadHostingInfo(repoID: string): Promise<HostingInfo> {
   const p = api
     .hostingInfo(repoID)
     .then((info) => {
+      const old = get(hostingInfo)[repoID]
       hostingInfo.update((m) => ({ ...m, [repoID]: info }))
+      // A remote edited to another hosted repository: the old answers are not its.
+      if (old && (old.host !== info.host || old.owner !== info.owner || old.name !== info.name)) forget(repoID)
       return info
     })
     .finally(() => inflightInfo.delete(repoID))
@@ -71,6 +99,15 @@ export async function refreshPullCount(repoID: string): Promise<void> {
   } catch {
     set(null)
   }
+}
+
+function forget(repoID: string) {
+  commitStatuses.update((m) => {
+    const next = { ...m }
+    delete next[repoID]
+    return next
+  })
+  for (const k of [...unchecked]) if (k.startsWith(`${repoID}|`)) unchecked.delete(k)
 }
 
 async function infoFor(repoID: string): Promise<HostingInfo> {
@@ -135,7 +172,7 @@ async function fetchStatuses(repoID: string, hashes: string[]) {
     if (!isHosted(info)) return
     const known = get(commitStatuses)[repoID] ?? {}
     // A final state a watch event put in has no checks yet: it is asked once more.
-    const ask = hashes.filter((h) => !known[h] || !isFinal(known[h].state) || unchecked.has(`${repoID}|${h}`))
+    const ask = hashes.filter((h) => !known[h] || !isFinal(known[h]) || unchecked.has(`${repoID}|${h}`))
     if (!ask.length) return
     const got = await api.commitStatuses(repoID, ask)
     // repoID was captured when the request was made, so a repository switched
@@ -159,7 +196,7 @@ export function refreshStatuses(repoID: string): void {
   if (!repoID || !last.length) return
   commitStatuses.update((m) => {
     const kept: Record<string, CommitStatus> = {}
-    for (const [h, st] of Object.entries(m[repoID] ?? {})) if (isFinal(st.state)) kept[h] = st
+    for (const [h, st] of Object.entries(m[repoID] ?? {})) if (isFinal(st)) kept[h] = st
     return { ...m, [repoID]: kept }
   })
   // The account may have changed since the info was read.
@@ -173,20 +210,41 @@ export function startHostingPolling(): () => void {
   const id = setInterval(() => {
     if (!current) return
     const statuses = get(commitStatuses)[current] ?? {}
-    const running = watched(current).filter((h) => statuses[h]?.state === 'running')
+    const running = watched(current).filter((h) => statuses[h] && isBusy(statuses[h]))
     if (running.length) enqueue(current, running)
   }, POLL_MS)
   return () => clearInterval(id)
 }
 
-/** Keeps `hosting:limit` payloads by host; a null `until` ends the limit. */
+const limitTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+/** Keeps `hosting:limit` payloads by host; a null `until` ends the limit, and
+ *  so does the clock reaching `until` (the backend only announces the end with
+ *  a later request, which may not come). */
 export function applyLimit(l: HostingLimit): void {
+  const old = limitTimers.get(l.host)
+  if (old !== undefined) clearTimeout(old)
+  limitTimers.delete(l.host)
   hostingLimits.update((m) => {
     const next = { ...m }
     if (l.until === null) delete next[l.host as HostName]
     else next[l.host] = l
     return next
   })
+  const at = l.until === null ? NaN : new Date(l.until).getTime()
+  if (!Number.isFinite(at)) return
+  limitTimers.set(
+    l.host,
+    setTimeout(() => {
+      limitTimers.delete(l.host)
+      hostingLimits.update((m) => {
+        if (m[l.host] !== l) return m
+        const next = { ...m }
+        delete next[l.host as HostName]
+        return next
+      })
+    }, Math.max(0, at - Date.now())),
+  )
 }
 
 /** The notice shown while a host's request limit is in force. */
@@ -249,7 +307,7 @@ export function statusTooltip(noun: string, st: CommitStatus, now: Date): string
   if (checks.length <= 1) {
     const c = checks[0]
     if (st.state === 'running') {
-      const since = c && (c.started || c.created)
+      const since = c && (validTime(c.started) ? c.started : validTime(c.created) ? c.created : '')
       return `${singular(noun)} running${since ? ` · started ${ago(since, now)}` : ''}`
     }
     const duration = c && c.durationSec > 0 ? ` · ${formatDuration(c.durationSec)}` : ''

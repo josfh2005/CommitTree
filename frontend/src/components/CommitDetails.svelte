@@ -5,7 +5,7 @@
   import SubmoduleDiffView from './SubmoduleDiff.svelte'
   import { api } from '../lib/api'
   import { blameBlocker } from '../lib/blame'
-  import { isHosted, loadHostingInfo } from '../lib/hosting'
+  import { isHosted, loadHostingInfo, settleChecks } from '../lib/hosting'
   import { jumpTo, openBlame, repos, selectRepo } from '../lib/stores'
   import { parseSubmoduleDiff, submoduleRepoId } from '../lib/submodules'
   import type { CommitStatus, Details, FileChange } from '../lib/types'
@@ -57,6 +57,8 @@
     checksError = ''
     checksLoading = false
     try {
+      // Selecting commits one after another (arrow keys) asks for the last one only.
+      if (!(await settleChecks(() => current === checksRequest))) return
       const info = await loadHostingInfo(id)
       if (current !== checksRequest || !isHosted(info)) return
       checksNoun = info.noun

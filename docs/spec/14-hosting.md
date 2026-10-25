@@ -287,7 +287,9 @@ nothing is asked and nothing is drawn, and the rows have no reserved space.
   (success), cross (failed), turning arrow (running), square (stopped), none
   for a commit without checks. The tooltip reads, for one pipeline,
   "Pipeline #412 passed · 3 min" (name, outcome, duration when known), or
-  "Pipeline running · started 2 min ago" while it runs; for several,
+  "Pipeline running · started 2 min ago" while it runs (just "Pipeline
+  running" when the host gave no start time; a zero or missing time is never
+  shown as a date); for several,
   "2 of 3 checks failed", "3 checks passed" or "1 of 2 checks running" (the
   noun in lower case: "pipelines" on Bitbucket). Durations read "42 s",
   "3 min" or "1 h 5 min".
@@ -308,8 +310,15 @@ nothing is asked and nothing is drawn, and the rows have no reserved space.
   again.
 - **Watch events.** A `hosting:status` event puts the state of the watched
   commit into the log at once, whatever repository is selected.
+- **Not final yet.** A commit that is failed while another of its checks still
+  runs is treated like a running one: it is not kept as final, a refresh
+  forgets it, and the 30 s poll asks for it again until nothing runs.
+- **Edited remote.** When the repository's remote is edited to another hosted
+  repository (a different host, owner or name), every status the log held for
+  it, final ones too, is forgotten.
 - **Rate limits.** A `hosting:limit` event is kept by host until the event
-  that ends it. While a host is blocked, the status bar shows "GitHub:
+  that ends it or until the time it names has passed, whichever is first (the
+  backend only announces the end with a later request, which may not come). While a host is blocked, the status bar shows "GitHub:
   request limit reached, retrying at HH:MM" (the local time the host gave) or
   "Bitbucket: request limit reached, retrying shortly" (no time known) in
   place of HEAD's pipeline, for a repository on that host. Nothing is asked
@@ -324,7 +333,9 @@ nothing is asked and nothing is drawn, and the rows have no reserved space.
   final, so tooltips never show checks that disagree with the state.
 - **Commit details.** Under the commit's author and date, a **Pipelines** or
   **Checks** section lists every pipeline or check of the commit, always asked
-  of the host: state icon, name, state, duration when known and an **Open**
+  of the host, 300 ms after the selection settles (a later selection inside
+  that window cancels the earlier one, so arrow-keying through the log asks
+  for the last commit only): state icon, name, state, duration when known and an **Open**
   link, which opens the host's page in the system browser and only for an
   `https:` address. While loading it reads "Loading…"; a failure shows its
   message with **Retry**. A commit with no pipelines or checks hides the

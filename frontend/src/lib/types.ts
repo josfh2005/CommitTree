@@ -644,9 +644,10 @@ export interface Check {
   name: string
   state: HostState
   url: string
-  started: string
+  /** Left out when the host did not give a time. */
+  started?: string
   durationSec: number
-  created: string
+  created?: string
 }
 
 export interface CommitStatus {

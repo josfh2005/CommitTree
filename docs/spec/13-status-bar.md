@@ -55,7 +55,8 @@ whether or not the log is on screen, and it follows a watched push at once.
 While the selected repository's host has reached its request limit, the same
 spot reads "GitHub: request limit reached, retrying at HH:MM" or "Bitbucket:
 request limit reached, retrying shortly" (when the host gave no time),
-instead of the pipeline; it goes when the limit ends. Rate limits are per
+instead of the pipeline; it goes when the limit ends, or when the time it
+names has passed, whichever is first. Rate limits are per
 host, so a repository on the other host is not affected.
 
 ## What counts as a task

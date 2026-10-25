@@ -12,7 +12,7 @@ vi.mock('./api', () => ({
 import { api } from './api'
 import {
   applyLimit, applyWatchEvent, commitStatuses, headStatusText, hostingInfo, hostingLimitText, hostingLimits, isHttps, pullCounts, refreshPullCount, refreshStatuses,
-  requestHeadStatus, requestStatuses, startHostingPolling, stateIcon, statusTooltip,
+  CHECKS_DEBOUNCE_MS, loadHostingInfo, requestHeadStatus, requestStatuses, settleChecks, startHostingPolling, stateIcon, statusTooltip, validTime,
 } from './hosting'
 import type { Check, CommitStatus, HostingInfo, HostState } from './types'
 
@@ -22,7 +22,7 @@ const info = (over: Partial<HostingInfo> = {}): HostingInfo => ({
 })
 const st = (hash: string, state: HostState, checks: Check[] | null = null): CommitStatus => ({ hash, state, checks })
 const check = (over: Partial<Check> = {}): Check => ({
-  key: 'k', name: 'build', state: 'success', url: '', started: '', durationSec: 0, created: '', ...over,
+  key: 'k', name: 'build', state: 'success', url: '', durationSec: 0, ...over,
 })
 const deferred = <T>() => {
   let resolve!: (v: T) => void
@@ -120,6 +120,83 @@ describe('refreshStatuses', () => {
   })
 })
 
+describe('failed with a sibling still running', () => {
+  const mixed = st('h1', 'failed', [check({ key: 'a', state: 'failed' }), check({ key: 'b', state: 'running' })])
+
+  it('is not final: it is asked again, and a refresh forgets it', async () => {
+    commitStatuses.set({ A: { h1: mixed, h2: st('h2', 'failed', [check({ state: 'failed' })]) } })
+    statuses.mockResolvedValue({})
+    requestStatuses('A', ['h1', 'h2'])
+    await vi.advanceTimersByTimeAsync(500)
+    expect(statuses.mock.calls[0][1]).toEqual(['h1'])
+    refreshStatuses('A')
+    expect(Object.keys(get(commitStatuses).A)).toEqual(['h2'])
+  })
+
+  it('is polled like a running commit', async () => {
+    statuses.mockResolvedValueOnce({ h1: mixed })
+    requestStatuses('A', ['h1'])
+    await vi.advanceTimersByTimeAsync(500)
+    statuses.mockResolvedValue({ h1: st('h1', 'failed', [check({ key: 'a', state: 'failed' }), check({ key: 'b', state: 'success' })]) })
+    const stop = startHostingPolling()
+    await vi.advanceTimersByTimeAsync(30_000)
+    await vi.advanceTimersByTimeAsync(500)
+    expect(statuses).toHaveBeenCalledTimes(2)
+    // Settled now: no more asking.
+    await vi.advanceTimersByTimeAsync(31_000)
+    expect(statuses).toHaveBeenCalledTimes(2)
+    stop()
+  })
+})
+
+describe('a remote edited to point at another hosted repository', () => {
+  it('forgets the old statuses of the repository, final ones too', async () => {
+    infoCall.mockResolvedValueOnce(info({ owner: 'o', name: 'old' }))
+    await loadHostingInfo('A')
+    commitStatuses.set({ A: { h1: st('h1', 'success') }, B: { h9: st('h9', 'success') } })
+    infoCall.mockResolvedValueOnce(info({ owner: 'o', name: 'old' }))
+    await loadHostingInfo('A')
+    expect(get(commitStatuses).A.h1.state).toBe('success') // same repository: kept
+    infoCall.mockResolvedValueOnce(info({ owner: 'o', name: 'new' }))
+    await loadHostingInfo('A')
+    expect(get(commitStatuses).A).toBeUndefined()
+    expect(get(commitStatuses).B.h9.state).toBe('success')
+  })
+
+  it('does the same when the host changes', async () => {
+    infoCall.mockResolvedValueOnce(info({ host: 'bitbucket' }))
+    await loadHostingInfo('A')
+    commitStatuses.set({ A: { h1: st('h1', 'failed') } })
+    infoCall.mockResolvedValueOnce(info({ host: 'github' }))
+    await loadHostingInfo('A')
+    expect(get(commitStatuses).A).toBeUndefined()
+  })
+})
+
+describe('settleChecks', () => {
+  it('debounces: of ten quick selections only the last goes on', async () => {
+    let latest = 0
+    const went: number[] = []
+    for (let i = 1; i <= 10; i++) {
+      latest = i
+      void settleChecks(() => latest === i).then((ok) => ok && went.push(i))
+      await vi.advanceTimersByTimeAsync(50)
+    }
+    await vi.advanceTimersByTimeAsync(CHECKS_DEBOUNCE_MS)
+    expect(went).toEqual([10])
+  })
+
+  it('waits 300 ms', async () => {
+    expect(CHECKS_DEBOUNCE_MS).toBe(300)
+    let done = false
+    void settleChecks(() => true).then(() => (done = true))
+    await vi.advanceTimersByTimeAsync(299)
+    expect(done).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(done).toBe(true)
+  })
+})
+
 describe('startHostingPolling', () => {
   it('re-asks only running', async () => {
     statuses.mockResolvedValueOnce({ h1: st('h1', 'running'), h2: st('h2', 'success'), h3: st('h3', 'failed') })
@@ -164,6 +241,32 @@ describe('events', () => {
     applyLimit({ host: 'github', until: null, known: false })
     expect(get(hostingLimits).github).toBeUndefined()
   })
+
+  it('a limit whose time has passed is dropped without waiting for the backend', async () => {
+    vi.setSystemTime(new Date('2026-10-24T09:00:00Z'))
+    applyLimit({ host: 'github', until: '2026-10-24T09:05:00Z', known: true })
+    applyLimit({ host: 'bitbucket', until: '2026-10-24T09:01:00Z', known: false })
+    await vi.advanceTimersByTimeAsync(61_000)
+    expect(get(hostingLimits).bitbucket).toBeUndefined()
+    expect(get(hostingLimits).github).toBeDefined()
+    await vi.advanceTimersByTimeAsync(4 * 60_000)
+    expect(get(hostingLimits).github).toBeUndefined()
+  })
+
+  it('a newer limit replaces the timer of the older one', async () => {
+    vi.setSystemTime(new Date('2026-10-24T09:00:00Z'))
+    applyLimit({ host: 'github', until: '2026-10-24T09:01:00Z', known: true })
+    applyLimit({ host: 'github', until: '2026-10-24T09:10:00Z', known: true })
+    await vi.advanceTimersByTimeAsync(2 * 60_000)
+    expect(get(hostingLimits).github?.until).toBe('2026-10-24T09:10:00Z')
+  })
+
+  it('a limit that is already past is dropped at once', async () => {
+    vi.setSystemTime(new Date('2026-10-24T09:00:00Z'))
+    applyLimit({ host: 'github', until: '2026-10-24T08:00:00Z', known: true })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(get(hostingLimits).github).toBeUndefined()
+  })
 })
 
 describe('statusTooltip', () => {
@@ -190,6 +293,29 @@ describe('statusTooltip', () => {
 
   it('draws nothing for none', () => {
     expect(statusTooltip('Checks', st('h', 'none'), now)).toBe('')
+  })
+
+  it('a zero time from the host is not a start: no "started" part', () => {
+    const zero = '0001-01-01T00:00:00Z'
+    const s = st('h', 'running', [check({ name: 'Pipeline #413', state: 'running', started: zero, created: zero })])
+    expect(statusTooltip('Pipelines', s, now)).toBe('Pipeline running')
+    const missing = st('h', 'running', [check({ state: 'running' })])
+    expect(statusTooltip('Pipelines', missing, now)).toBe('Pipeline running')
+  })
+
+  it('falls back to created when started is a zero time', () => {
+    const s = st('h', 'running', [check({ state: 'running', started: '0001-01-01T00:00:00Z', created: ago(5) })])
+    expect(statusTooltip('Pipelines', s, now)).toBe('Pipeline running · started 5 min ago')
+  })
+})
+
+describe('validTime', () => {
+  it('rejects missing, unparseable and pre-1970 times', () => {
+    expect(validTime(undefined)).toBe(false)
+    expect(validTime('')).toBe(false)
+    expect(validTime('nonsense')).toBe(false)
+    expect(validTime('0001-01-01T00:00:00Z')).toBe(false)
+    expect(validTime('2026-10-24T12:00:00Z')).toBe(true)
   })
 })
 

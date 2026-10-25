@@ -195,7 +195,8 @@ account, comes a **Pipelines** (Bitbucket) or **Checks** (GitHub) section:
 one line per pipeline or check with its state icon, name, state ("passed",
 "failed", "running", "stopped"), duration when known, and an **Open** link
 to the host's page for it (opened in the system browser, and only for an
-`https:` address). It shows "Loading…" while the host is asked and an error
+`https:` address). The host is asked 300 ms after the selection settles, so
+moving through commits quickly asks for the last one only. It shows "Loading…" while the host is asked and an error
 with a **Retry** link when that fails; it is hidden when the commit has no
 pipelines or checks. Below
 that is the list of files the commit changed; the first file is opened

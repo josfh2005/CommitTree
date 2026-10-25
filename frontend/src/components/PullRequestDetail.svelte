@@ -156,7 +156,7 @@
 
       {#if pr.reviewers?.length}
         <div class="section">Reviewers</div>
-        {#each pr.reviewers as r (r.name)}
+        {#each pr.reviewers as r, i (`${i}|${r.name}`)}
           <div class="reviewer">
             <span class="ellipsis">{r.name}</span>
             <span class="verdict v-{r.verdict}">{VERDICTS[r.verdict] ?? r.verdict}</span>
