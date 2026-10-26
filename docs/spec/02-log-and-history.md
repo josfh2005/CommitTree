@@ -65,7 +65,11 @@ running, a grey square for stopped, and nothing for a commit with no
 pipelines or checks. The icon's space is reserved on every row of such a
 repository, so the hashes stay aligned, and the row height does not change;
 the tooltip says what happened ("Pipeline #412 passed · 3 min", "Pipeline
-running · started 2 min ago", "2 of 3 checks failed"). Any other repository
+running · started 2 min ago", "2 of 3 checks failed"). Clicking the icon (or
+Enter or Space on it, as it takes focus) opens the pipeline's page in the
+system browser when the commit has exactly one pipeline or check with an
+`https:` address; otherwise it selects the commit, whose details list the
+pipelines or checks. The click does not toggle the row. Any other repository
 has no icon and no reserved space. The rows on screen plus one screen of
 rows above and below are asked about, 500 ms after the last scroll. The
 statuses are asked again on window focus, after a fetch, pull, push or any
@@ -193,9 +197,9 @@ and a link for each of its parents that jumps the log to that parent. Under
 that, for a commit in a repository on Bitbucket or GitHub with a connected
 account, comes a **Pipelines** (Bitbucket) or **Checks** (GitHub) section:
 one line per pipeline or check with its state icon, name, state ("passed",
-"failed", "running", "stopped"), duration when known, and an **Open** link
-to the host's page for it (opened in the system browser, and only for an
-`https:` address). The host is asked 300 ms after the selection settles, so
+"failed", "running", "stopped"), duration when known, and an **Open** cue;
+the whole line opens the host's page for it (in the system browser, and only
+for an `https:` address; a line without one is not clickable). The host is asked 300 ms after the selection settles, so
 moving through commits quickly asks for the last one only. It shows "Loading…" while the host is asked and an error
 with a **Retry** link when that fails; it is hidden when the commit has no
 pipelines or checks. Below

@@ -293,6 +293,11 @@ nothing is asked and nothing is drawn, and the rows have no reserved space.
   "2 of 3 checks failed", "3 checks passed" or "1 of 2 checks running" (the
   noun in lower case: "pipelines" on Bitbucket). Durations read "42 s",
   "3 min" or "1 h 5 min".
+  The icon is a button (it takes focus; Enter or Space act). With exactly one
+  pipeline or check and an `https:` address it opens that page in the system
+  browser; with several, none known yet or no `https:` address it selects the
+  commit (never toggles it), so Commit details list them. It does not also
+  trigger the row's own click.
 - **What is asked.** The rows on screen plus one screen of rows above and
   below, 500 ms after the last change of the visible range; calls inside that
   window are one request carrying every hash. Commits already known as
@@ -336,8 +341,10 @@ nothing is asked and nothing is drawn, and the rows have no reserved space.
   of the host, 300 ms after the selection settles (a later selection inside
   that window cancels the earlier one, so arrow-keying through the log asks
   for the last commit only): state icon, name, state, duration when known and an **Open**
-  link, which opens the host's page in the system browser and only for an
-  `https:` address. While loading it reads "Loading…"; a failure shows its
+  cue. The whole line is the button: clicking it (or Enter or Space) opens
+  the host's page in the system browser, and only for an `https:` address; a
+  line without one is not clickable (no pointer, no focus). The same list
+  shows in the pull request detail. While loading it reads "Loading…"; a failure shows its
   message with **Retry**. A commit with no pipelines or checks hides the
   section.
 - Only a "No access to <owner>/<repo> with this account" answer is said (as a
@@ -369,7 +376,10 @@ that opens it is described in `01-repositories-and-sidebar.md`.
   `source → target`, and at the right "✓ <approvals>", a speech bubble with
   the comment count, and when it was last updated ("just now", "5m ago",
   "3h ago", "2d ago", then the date). The status icon's tooltip is "Pipeline
-  passed", "Checks failed" and so on, as in the status bar.
+  passed", "Checks failed" and so on, as in the status bar. The list carries
+  only the head commit's state, not its checks, so clicking the icon selects
+  the pull request (once, like a click elsewhere on the row) and its detail
+  shows the checks, whose lines open in the browser.
 - **More than 100.** The last line reads "Showing 100. Open the rest in the
   browser" and is a link that opens the same list.
 - **Empty and error states** replace the rows with one line. No account:

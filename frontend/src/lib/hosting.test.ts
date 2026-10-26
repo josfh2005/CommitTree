@@ -12,7 +12,7 @@ vi.mock('./api', () => ({
 import { api } from './api'
 import {
   applyLimit, applyWatchEvent, commitStatuses, headStatusText, hostingInfo, hostingLimitText, hostingLimits, isHttps, pullCounts, refreshPullCount, refreshStatuses,
-  CHECKS_DEBOUNCE_MS, loadHostingInfo, requestHeadStatus, requestStatuses, settleChecks, startHostingPolling, stateIcon, statusTooltip, validTime,
+  CHECKS_DEBOUNCE_MS, loadHostingInfo, singleCheckURL, requestHeadStatus, requestStatuses, settleChecks, startHostingPolling, stateIcon, statusTooltip, validTime,
 } from './hosting'
 import type { Check, CommitStatus, HostingInfo, HostState } from './types'
 
@@ -337,6 +337,26 @@ describe('isHttps', () => {
     expect(isHttps('http://example.com')).toBe(false)
     expect(isHttps('javascript:alert(1)')).toBe(false)
     expect(isHttps('')).toBe(false)
+  })
+})
+
+describe('singleCheckURL', () => {
+  const url = 'https://bitbucket.org/o/n/pipelines/results/1'
+  it('gives the address of the only check when it is https', () => {
+    expect(singleCheckURL(st('a', 'success', [check({ url })]))).toBe(url)
+  })
+  it('gives nothing for several checks, even when each has an address', () => {
+    expect(singleCheckURL(st('a', 'failed', [check({ key: '1', url }), check({ key: '2', url })]))).toBeNull()
+  })
+  it('gives nothing without checks, without a status or with unknown checks', () => {
+    expect(singleCheckURL(undefined)).toBeNull()
+    expect(singleCheckURL(st('a', 'success', null))).toBeNull()
+    expect(singleCheckURL(st('a', 'success', []))).toBeNull()
+  })
+  it('gives nothing for an address that is not https', () => {
+    expect(singleCheckURL(st('a', 'success', [check({ url: 'http://example.com' })]))).toBeNull()
+    expect(singleCheckURL(st('a', 'success', [check({ url: 'javascript:alert(1)' })]))).toBeNull()
+    expect(singleCheckURL(st('a', 'success', [check({ url: '' })]))).toBeNull()
   })
 })
 

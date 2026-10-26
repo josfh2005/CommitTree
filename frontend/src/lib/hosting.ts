@@ -61,6 +61,14 @@ export function isHttps(url: string): boolean {
   }
 }
 
+/** The address a status icon opens: that of the commit's only check, when it
+ *  is https. With several checks, none, or an address that is not https,
+ *  there is nothing to open and the icon selects the commit instead. */
+export function singleCheckURL(st: CommitStatus | undefined): string | null {
+  const checks = st?.checks ?? []
+  return checks.length === 1 && isHttps(checks[0].url) ? checks[0].url : null
+}
+
 const inflightInfo = new Map<string, Promise<HostingInfo>>()
 
 /** Reads the repository's host info from the backend (it never reaches the network) and stores it. */

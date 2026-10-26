@@ -8,13 +8,14 @@
   import {
     arrowAt, DOT_RADIUS, edgeSegment, graphWidth, LANE_WIDTH, laneColor, laneX, ROW_HEIGHT, rowCenterY, visibleRange,
   } from '../lib/geometry'
-  import { commitStatuses, hostingInfo, isHosted, requestStatuses, statusTooltip } from '../lib/hosting'
+  import { commitStatuses, hostingInfo, isHosted, requestStatuses, singleCheckURL, statusTooltip } from '../lib/hosting'
   import { badgeLaneColor, isCurrentBranchRef } from '../lib/refBadge'
   import { cherryPickBlocker, rebaseBlocker } from '../lib/rebase'
   import { isMine } from '../lib/identity'
   import { aiOff, busy, chatOpen, explainIntoChat, filters, identity, jumpTo, logOrder, logVersion, mergeState, refs, selectedHash, toggleCommit, toggleUncommitted, uncommittedSelected, worktreeState } from '../lib/stores'
-  import type { LogRow } from '../lib/types'
+  import type { CommitStatus, LogRow } from '../lib/types'
   import { copyText, errorMessage, openMenuAsync, toast } from '../lib/ui'
+  import { BrowserOpenURL } from '../../wailsjs/runtime/runtime'
   import { cleanTreeSelection, followHead, uncommittedCount, uncommittedMarker } from '../lib/uncommitted'
 
   export let repoId: string
@@ -304,6 +305,15 @@
     }
   }
 
+  /** A status icon opens its one check's page; otherwise it selects the
+   *  commit, whose details list the pipelines or checks. */
+  function openStatus(e: Event, row: LogRow, st: CommitStatus) {
+    e.stopPropagation()
+    const url = singleCheckURL(st)
+    if (url) BrowserOpenURL(url)
+    else selectedHash.set(row.hash)
+  }
+
   function commitMenu(event: MouseEvent, row: LogRow) {
     selectedHash.set(row.hash)
     const head = $refs?.head ?? ''
@@ -403,9 +413,24 @@
           <span class="date">{relativeDate(row.date)}</span>
           <span class="hashcell">
             {#if hosted}
-              <span class="st" title={st && st.state !== 'none' ? statusTooltip(noun, st, new Date()) : undefined}>
-                {#if st}<StatusIcon state={st.state} />{/if}
-              </span>
+              {#if st && st.state !== 'none'}
+                <span
+                  class="st act"
+                  role="button"
+                  tabindex="0"
+                  aria-label={singleCheckURL(st) ? `Open ${noun === 'Checks' ? 'checks' : 'pipeline'}` : `Show ${noun.toLowerCase()}`}
+                  title={statusTooltip(noun, st, new Date())}
+                  on:click={(e) => openStatus(e, row, st)}
+                  on:keydown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      openStatus(e, row, st)
+                    }
+                  }}
+                ><StatusIcon state={st.state} /></span>
+              {:else}
+                <span class="st"></span>
+              {/if}
             {/if}
             <span class="hash mono">{row.short}</span>
           </span>
@@ -450,6 +475,9 @@
      so the hashes line up whether or not a row has a status. */
   .hashcell { display: flex; align-items: center; gap: 6px; min-width: 0; }
   .st { display: inline-flex; width: 12px; height: 12px; flex: none; }
+.st.act { cursor: pointer; border-radius: 3px; }
+.st.act:hover { background: var(--hover); }
+.st.act:focus-visible { outline: 1px solid var(--accent); }
   .row.selected { background: var(--selection); }
   .merge .subject { color: var(--merge-text); }
   /* The user's own commits: subject and author in semibold, the author also

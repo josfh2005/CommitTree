@@ -21,13 +21,20 @@
     <div class="note err">{error} <button class="link" on:click={onRetry}>Retry</button></div>
   {:else}
     {#each status?.checks ?? [] as c (c.key)}
-      <div class="check">
+      {@const url = isHttps(c.url) ? c.url : ''}
+      <button
+        class="check"
+        class:open={!!url}
+        disabled={!url}
+        aria-label={url ? `Open ${c.name}` : undefined}
+        on:click={() => BrowserOpenURL(url)}
+      >
         <StatusIcon state={c.state} />
         <span class="name ellipsis" title={c.name}>{c.name}</span>
         <span class="state">{stateText(c.state)}</span>
         {#if c.durationSec > 0}<span class="duration">{formatDuration(c.durationSec)}</span>{/if}
-        {#if isHttps(c.url)}<button class="link" on:click={() => BrowserOpenURL(c.url)}>Open</button>{/if}
-      </div>
+        {#if url}<span class="link">Open</span>{/if}
+      </button>
     {/each}
   {/if}
 </div>
@@ -35,7 +42,12 @@
 <style>
   .checks { margin-bottom: 10px; font-size: 12px; }
   .title { font-weight: 600; margin-bottom: 4px; }
-  .check { display: flex; align-items: center; gap: 6px; min-height: 22px; }
+  .check { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 22px; border-radius: 4px; text-align: left; color: inherit; cursor: default; }
+  .check.open { cursor: pointer; }
+  .check:disabled { opacity: 1; }
+  .check.open:hover { background: var(--hover); }
+  .check.open:hover .link { text-decoration: underline; }
+  .check.open:focus-visible { outline: 1px solid var(--accent); }
   .name { flex: 1; min-width: 0; }
   .state, .duration { color: var(--muted); flex: none; }
   .note { color: var(--muted); }
