@@ -58,6 +58,23 @@ when the repository is selected and when the window regains focus. The commit cu
 `HEAD` is marked by drawing its graph dot hollow (outlined, not filled)
 rather than by an extra badge.
 
+In a repository on Bitbucket or GitHub with a connected account, a 12 px
+status icon sits just left of the short hash (see Code hosting): a green
+check for passed, a red cross for failed, an amber turning arrow for
+running, a grey square for stopped, and nothing for a commit with no
+pipelines or checks. The icon's space is reserved on every row of such a
+repository, so the hashes stay aligned, and the row height does not change;
+the tooltip says what happened ("Pipeline #412 passed · 3 min", "Pipeline
+running · started 2 min ago", "2 of 3 checks failed"). Clicking the icon (or
+Enter or Space on it, as it takes focus) opens the pipeline's page in the
+system browser when the commit has exactly one pipeline or check with an
+`https:` address; otherwise it selects the commit, whose details list the
+pipelines or checks. The click does not toggle the row. Any other repository
+has no icon and no reserved space. The rows on screen plus one screen of
+rows above and below are asked about, 500 ms after the last scroll. The
+statuses are asked again on window focus, after a fetch, pull, push or any
+other write, and every 30 seconds for the visible rows still running.
+
 A branch badge, local or remote-tracking, takes the colour of its commit's
 dot in the graph: a soft tint of that lane colour with a border in a
 stronger shade of it, and its label in the ordinary text colour, so the name
@@ -176,7 +193,18 @@ pane; the same holds for the "Uncommitted changes" row. Opening a row's
 context menu, following a graph arrow, and selecting from anywhere outside
 the log always select and never clear. The pane shows the commit's full subject and
 body, its author and email, its full commit date, its full hash (copyable)
-and a link for each of its parents that jumps the log to that parent. Below
+and a link for each of its parents that jumps the log to that parent. Jira
+keys of the listed projects in the subject and body are links to their tickets
+(`14-hosting.md`, "Jira ticket links"); the log rows never are. Under
+that, for a commit in a repository on Bitbucket or GitHub with a connected
+account, comes a **Pipelines** (Bitbucket) or **Checks** (GitHub) section:
+one line per pipeline or check with its state icon, name, state ("passed",
+"failed", "running", "stopped"), duration when known, and an **Open** cue;
+the whole line opens the host's page for it (in the system browser, and only
+for an `https:` address; a line without one is not clickable). The host is asked 300 ms after the selection settles, so
+moving through commits quickly asks for the last one only. It shows "Loading…" while the host is asked and an error
+with a **Retry** link when that fails; it is hidden when the commit has no
+pipelines or checks. Below
 that is the list of files the commit changed; the first file is opened
 automatically. For a merge commit the file list, like the diff, is computed
 against the merge's first parent only — the same "what did this branch's

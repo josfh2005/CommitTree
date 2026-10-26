@@ -36,7 +36,28 @@ From left to right:
    back to "Cancel" (the operation may already be running its next
    command). Any other failure to cancel is an error toast and the button
    is usable again too. "Cancelling…" disappears with the task.
-3. At the right edge, **"+N"** when N more tasks run ("+2" for two more).
+3. **The pipeline of HEAD**, at the right, before the "+N" chip (see below),
+   or a host's request-limit notice in its place.
+4. At the right edge, **"+N"** when N more tasks run ("+2" for two more).
+
+## The pipeline of HEAD
+
+For the selected repository, when it is on Bitbucket or GitHub and its
+account is connected (`14-hosting.md`), the right side shows the state of the
+checked-out commit: the state's icon and "Pipeline passed", "Pipeline failed"
+or "Pipeline running" ("Pipeline stopped" for a stopped one). For a GitHub
+repository the words are "Checks passed", "Checks failed", "Checks running"
+and "Checks stopped". A commit with no pipelines or checks shows nothing, as
+does any other repository. Clicking it selects HEAD in the log. It is asked
+for like the log's rows (cached, and asked again every 30 s while it runs),
+whether or not the log is on screen, and it follows a watched push at once.
+
+While the selected repository's host has reached its request limit, the same
+spot reads "GitHub: request limit reached, retrying at HH:MM" or "Bitbucket:
+request limit reached, retrying shortly" (when the host gave no time),
+instead of the pipeline; it goes when the limit ends, or when the time it
+names has passed, whichever is first. Rate limits are per
+host, so a repository on the other host is not affected.
 
 ## What counts as a task
 

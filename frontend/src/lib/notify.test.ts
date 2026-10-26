@@ -11,8 +11,8 @@ vi.mock('./stores', async (importOriginal) => {
 })
 
 import { api } from './api'
-import { notify, notifyStashConflicts, openTarget, opError, startNotifications, track, windowFocused } from './notify'
-import { chatOpen, mergeState, notifyEnabled, notifyRemote, repos, selectedRepoId } from './stores'
+import { notify, notifyPipelineEvent, notifyStashConflicts, openTarget, opError, startNotifications, track, windowFocused } from './notify'
+import { chatOpen, mainView, mergeState, notifyEnabled, notifyPipelines, notifyRemote, repos, selectedHash, selectedRepoId } from './stores'
 import type { MergeState, Repo } from './types'
 import { toasts } from './ui'
 
@@ -26,6 +26,7 @@ beforeEach(() => {
   chatOpen.set(true)
   notifyEnabled.set(true)
   notifyRemote.set(true)
+  notifyPipelines.set(true)
   windowFocused.set(true)
 })
 
@@ -38,10 +39,20 @@ describe('notify', () => {
     expect(await notify({ category: 'remote', repoID: 'b', body: '1 new commit on origin/main', target: 'repo' })).toBe('system')
   })
 
+  it('honours the Pipelines switch and sends the commit with the notification', async () => {
+    windowFocused.set(false)
+    notifyPipelines.set(false)
+    const e = { category: 'pipelines' as const, repoID: 'b', body: 'Pipeline passed on main', target: 'repo' as const, hash: 'h1' }
+    expect(await notify(e)).toBe('none')
+    notifyPipelines.set(true)
+    expect(await notify(e)).toBe('system')
+    expect(api.notify).toHaveBeenCalledWith({ id: 'b:pipelines', title: 'beta', body: 'Pipeline passed on main', repoID: 'b', target: 'repo', hash: 'h1' })
+  })
+
   it('sends a system notification when unfocused', async () => {
     windowFocused.set(false)
     expect(await notify({ category: 'problem', repoID: 'b', body: 'Push failed: x', target: 'repo' })).toBe('system')
-    expect(api.notify).toHaveBeenCalledWith({ id: 'b:problem', title: 'beta', body: 'Push failed: x', repoID: 'b', target: 'repo' })
+    expect(api.notify).toHaveBeenCalledWith({ id: 'b:problem', title: 'beta', body: 'Push failed: x', repoID: 'b', target: 'repo', hash: undefined })
     expect(get(toasts)).toEqual([])
   })
 
@@ -81,12 +92,37 @@ describe('notify', () => {
   })
 })
 
+describe('notifyPipelineEvent', () => {
+  const we = (over = {}) => ({ repoID: 'b', branch: 'feature/x', hash: 'h1', state: 'failed' as const, final: true, noun: 'Checks' as const, ...over })
+
+  it('notifies a final event with the branch and the commit', async () => {
+    windowFocused.set(false)
+    notifyPipelineEvent(we())
+    await Promise.resolve()
+    expect(api.notify).toHaveBeenCalledWith({ id: 'b:pipelines', title: 'beta', body: 'Checks failed on feature/x', repoID: 'b', target: 'repo', hash: 'h1' })
+  })
+
+  it('ignores an event that is not final', async () => {
+    windowFocused.set(false)
+    notifyPipelineEvent(we({ final: false, state: 'running' }))
+    await Promise.resolve()
+    expect(api.notify).not.toHaveBeenCalled()
+  })
+})
+
 describe('openTarget', () => {
   it('selects the repository and opens the chat for chat targets', () => {
     chatOpen.set(false)
     openTarget('b', 'chat')
     expect(get(selectedRepoId)).toBe('b')
     expect(get(chatOpen)).toBe(true)
+  })
+
+  it('selects that commit in the log when a hash is given', () => {
+    openTarget('b', 'repo', 'h1')
+    expect(get(selectedRepoId)).toBe('b')
+    expect(get(selectedHash)).toBe('h1')
+    expect(get(mainView)).toBe('log')
   })
 
   it('openTarget ignores unknown repositories', () => {
@@ -171,6 +207,9 @@ describe('startNotifications', () => {
     const stop = startNotifications(on)
     handlers['notify:open']({ repoID: 'b', target: 'repo' })
     expect(get(selectedRepoId)).toBe('b')
+    handlers['notify:open']({ repoID: 'a', target: 'repo', hash: 'h7' })
+    expect(get(selectedRepoId)).toBe('a')
+    expect(get(selectedHash)).toBe('h7')
 
     windowFocused.set(false)
     handlers['chat:confirm']({ repoID: 'a', runID: 'x', confirmID: 'c', tool: 'push', title: 'Push main', details: [] })

@@ -51,11 +51,12 @@ func UseStore(s Store) (restore func()) {
 	return func() { store = previous }
 }
 
-// known guards what can be used as an account name, so a caller can't reach
+// known guards what can be used as an account name (the AI providers and the
+// two code hosts of the hosting integration), so a caller can't reach
 // another application's entries.
 func known(provider string) error {
 	switch provider {
-	case "openai", "anthropic":
+	case "openai", "anthropic", "bitbucket", "github":
 		return nil
 	}
 	return fmt.Errorf("keys: unknown provider %q", provider)

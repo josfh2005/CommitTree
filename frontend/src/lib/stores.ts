@@ -8,6 +8,7 @@ import { emptyFilters, type AISettings, type AheadBehind, type Filters, type Git
 import { isLogOrder } from './logOrder'
 import { isRepoSortOrder, type RepoSortOrder } from './repoGroups'
 import { coalesce } from './coalesce'
+import { refreshStatuses } from './hosting'
 import type { RepoRefsData } from './repoRefs'
 import { removeRepoTabs, terminalState } from './terminal'
 import { isThemePref, resolveTheme, type ThemePref } from './theme'
@@ -57,6 +58,7 @@ export const notifyDone = persisted('notifyDone', true, isBool)
 export const notifyAi = persisted('notifyAi', true, isBool)
 export const notifyProblem = persisted('notifyProblem', true, isBool)
 export const notifyRemote = persisted('notifyRemote', true, isBool)
+export const notifyPipelines = persisted('notifyPipelines', true, isBool)
 
 /** Settings → General → Fetch in the background, in minutes; 0 is Off
  *  (docs/spec/05-remote-and-stash.md). */
@@ -163,10 +165,21 @@ export const repoAI = writable<RepoAIInfo | null>(null)
 /** The selected repository has the AI off (or its settings can't be read). */
 export const aiOff = derived(repoAI, (r) => !!r?.aiOff)
 /** Which view the main pane shows: the log (with commit details / the merge
- *  view below it), the Changes view, a stash preview, or a file's blame. A
+ *  view below it), the Changes view, a stash preview, a file's blame, or the repository's
+ *  Pull requests. A
  *  merge in progress always wins over either — see conflictOwnsScreen in
  *  remote.ts, which App.svelte applies on top of this. */
-export const mainView = writable<'log' | 'changes' | 'stash' | 'blame'>('log')
+export const mainView = writable<'log' | 'changes' | 'stash' | 'blame' | 'pulls'>('log')
+
+/** The pull request open in the Pull requests view's detail, by repository ID
+ *  (in memory; a repository without an entry has none open). */
+export const selectedPR = writable<Record<string, number>>({})
+
+/** Shows a repository's Pull requests view (selecting the repository first). */
+export function openPullRequests(repoID: string) {
+  selectRepo(repoID)
+  mainView.set('pulls')
+}
 
 /** The file the Blame view shows, and the targets Blame previous revision
  *  left behind, newest last, for Back to return to. */
@@ -550,9 +563,14 @@ export const refreshRepo = coalesce(async () => {
   await loadStashEntries()
   await loadOwedStashDrop()
   logVersion.update((v) => v + 1)
+  // Refresh, fetch, push and every other write end here: pipelines may have
+  // started or finished since the log was last drawn.
+  refreshStatuses(get(selectedRepoId))
 })
 
 export function selectRepo(id: string) {
+  // Selecting a repository shows its log, also from its Pull requests view.
+  if (get(mainView) === 'pulls') mainView.set('log')
   if (get(selectedRepoId) !== id) {
     filters.set(emptyFilters())
     selectedHash.set('')

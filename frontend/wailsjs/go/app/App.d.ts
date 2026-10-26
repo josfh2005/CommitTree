@@ -7,12 +7,14 @@ import {worktree} from '../models';
 import {ops} from '../models';
 import {merge} from '../models';
 import {cmdlog} from '../models';
+import {hosting} from '../models';
 import {refs} from '../models';
 import {gitflow} from '../models';
 import {settings} from '../models';
 import {gitlog} from '../models';
 import {ai} from '../models';
 import {gitsettings} from '../models';
+import {accounts} from '../models';
 import {stash} from '../models';
 import {submodules} from '../models';
 import {prompts} from '../models';
@@ -55,6 +57,8 @@ export function Checkout(arg1:string,arg2:string):Promise<void>;
 
 export function CheckoutDetached(arg1:string,arg2:string):Promise<void>;
 
+export function CheckoutPullRequest(arg1:string,arg2:number):Promise<string>;
+
 export function CheckoutRemote(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function CherryPick(arg1:string,arg2:string):Promise<merge.Result>;
@@ -77,7 +81,11 @@ export function CommandLogOutput(arg1:string,arg2:number):Promise<cmdlog.Output>
 
 export function CommitChanges(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
+export function CommitChecks(arg1:string,arg2:string):Promise<hosting.CommitStatus>;
+
 export function CommitMerge(arg1:string,arg2:string):Promise<void>;
+
+export function CommitStatuses(arg1:string,arg2:Array<string>):Promise<Record<string, hosting.CommitStatus>>;
 
 export function ConfirmChatAction(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
@@ -139,13 +147,21 @@ export function GetFlowSettings(arg1:string):Promise<gitflow.Settings>;
 
 export function GetGitSettings():Promise<gitsettings.Settings>;
 
+export function GetHostingAccounts():Promise<Array<app.HostingAccount>>;
+
 export function GetIdentity(arg1:string):Promise<app.Identity>;
+
+export function GetJiraSettings():Promise<accounts.Jira>;
 
 export function GetLog(arg1:string,arg2:gitlog.Filters,arg3:string,arg4:number,arg5:number):Promise<app.LogPage>;
 
 export function GetMergeMessage(arg1:string):Promise<string>;
 
 export function GetMergeState(arg1:string):Promise<merge.State>;
+
+export function GetPullRequest(arg1:string,arg2:number):Promise<hosting.PullRequestDetail>;
+
+export function GetPullRequestFiles(arg1:string,arg2:number):Promise<Array<hosting.PRFile>>;
 
 export function GetRebasePreview(arg1:string,arg2:string):Promise<merge.Preview>;
 
@@ -171,6 +187,8 @@ export function GetWorktreeDiff(arg1:string,arg2:string,arg3:boolean):Promise<ap
 
 export function GetWorktreeState(arg1:string):Promise<worktree.State>;
 
+export function HostingInfo(arg1:string):Promise<app.HostingInfo>;
+
 export function IgnoreRepoInstructions(arg1:string,arg2:string):Promise<void>;
 
 export function InitAllSubmodules(arg1:string):Promise<void>;
@@ -188,6 +206,8 @@ export function ListDirs(arg1:string):Promise<Array<string>>;
 export function ListModels(arg1:string):Promise<Array<string>>;
 
 export function ListPrompts():Promise<Array<prompts.Info>>;
+
+export function ListPullRequests(arg1:string,arg2:string):Promise<app.PullRequestList>;
 
 export function ListRemotes(arg1:string):Promise<Array<ops.Remote>>;
 
@@ -219,6 +239,8 @@ export function Pull(arg1:string):Promise<ops.Result>;
 
 export function PullModel(arg1:string):Promise<void>;
 
+export function PullRequestCount(arg1:string):Promise<hosting.Count>;
+
 export function Push(arg1:string):Promise<void>;
 
 export function PushAll(arg1:string):Promise<Array<ops.BranchPushResult>>;
@@ -228,6 +250,8 @@ export function PushBranch(arg1:string,arg2:string):Promise<ops.BranchPushResult
 export function RebaseOnto(arg1:string,arg2:string):Promise<merge.Result>;
 
 export function RelocateRepo(arg1:string):Promise<repos.Repo>;
+
+export function RemoveHostingAccount(arg1:string):Promise<void>;
 
 export function RemoveRemote(arg1:string,arg2:string):Promise<void>;
 
@@ -255,9 +279,15 @@ export function RestartConflictFile(arg1:string,arg2:string):Promise<void>;
 
 export function SaveAISettings(arg1:settings.Settings):Promise<void>;
 
+export function SaveBitbucketAccount(arg1:string,arg2:string):Promise<app.HostingAccount>;
+
 export function SaveFlowSettings(arg1:string,arg2:gitflow.Config):Promise<void>;
 
+export function SaveGitHubAccount(arg1:string,arg2:string):Promise<app.HostingAccount>;
+
 export function SaveGitSettings(arg1:gitsettings.Settings):Promise<void>;
+
+export function SaveJiraSettings(arg1:string,arg2:string):Promise<accounts.Jira>;
 
 export function SaveRepoAISettings(arg1:string,arg2:reposettings.Override):Promise<void>;
 

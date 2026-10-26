@@ -7,13 +7,14 @@ function memoryStorage(initial: Record<string, string>) {
 }
 
 describe('settings tabs', () => {
-  it('lists General first, then the AI tabs', () => {
-    expect(SETTINGS_TABS.map((t) => t.label)).toEqual(['General', 'Providers', 'AI models', 'Prompts'])
+  it('lists General first, then Accounts, then the AI tabs', () => {
+    expect(SETTINGS_TABS.map((t) => t.label)).toEqual(['General', 'Accounts', 'Providers', 'AI models', 'Prompts'])
   })
 
   it('only accepts a known tab id as the remembered tab', () => {
     expect(isSettingsTab('prompts')).toBe(true)
     expect(isSettingsTab('providers')).toBe(true)
+    expect(isSettingsTab('accounts')).toBe(true)
     expect(isSettingsTab('keys')).toBe(false)
     expect(isSettingsTab('nope')).toBe(false)
     expect(isSettingsTab(3)).toBe(false)
@@ -21,6 +22,7 @@ describe('settings tabs', () => {
 
   it('knows which tabs need the AI settings loaded', () => {
     expect(tabUsesAI('general')).toBe(false)
+    expect(tabUsesAI('accounts')).toBe(false)
     expect(tabUsesAI('providers')).toBe(true)
     expect(tabUsesAI('models')).toBe(true)
     expect(tabUsesAI('prompts')).toBe(true)

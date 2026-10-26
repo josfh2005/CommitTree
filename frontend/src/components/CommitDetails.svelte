@@ -1,17 +1,19 @@
 <script lang="ts">
+  import ChecksList from './ChecksList.svelte'
+  import DiffText from './DiffText.svelte'
   import Icon from './Icon.svelte'
   import SubmoduleDiffView from './SubmoduleDiff.svelte'
+  import Tickets from './Tickets.svelte'
   import { api } from '../lib/api'
   import { blameBlocker } from '../lib/blame'
+  import { isHosted, loadHostingInfo, settleChecks } from '../lib/hosting'
   import { jumpTo, openBlame, repos, selectRepo } from '../lib/stores'
   import { parseSubmoduleDiff, submoduleRepoId } from '../lib/submodules'
-  import type { Details, FileChange } from '../lib/types'
+  import type { CommitStatus, Details, FileChange } from '../lib/types'
   import { copyText, errorMessage, openMenu } from '../lib/ui'
 
   export let repoId: string
   export let hash: string
-
-  const MAX_LINES = 5000
 
   let details: Details | null = null
   let error = ''
@@ -19,10 +21,18 @@
   let diff = ''
   let request = 0
 
-
+  // The commit's pipelines or checks, asked of the host once the repository
+  // is known to be on one with a connected account.
+  let checks: CommitStatus | null = null
+  let checksNoun = ''
+  let checksLoading = false
+  let checksError = ''
+  let checksRequest = 0
+  // Nothing to show for a commit with no pipelines or checks.
+  $: showChecks = checksLoading || !!checksError || (!!checks && (checks.state !== 'none' || !!checks.checks?.length))
 
   $: load(repoId, hash)
-  $: lines = diff.split('\n')
+  $: loadChecks(repoId, hash)
   $: sub = file?.submodule ? parseSubmoduleDiff(diff) : null
   $: subRepoId = file?.submodule ? submoduleRepoId($repos, repoId, file.path) : undefined
 
@@ -39,6 +49,27 @@
       if (d.files.length) openFile(d.files[0])
     } catch (e) {
       if (current === request) error = errorMessage(e)
+    }
+  }
+
+  async function loadChecks(id: string, h: string) {
+    const current = ++checksRequest
+    checks = null
+    checksError = ''
+    checksLoading = false
+    try {
+      // Selecting commits one after another (arrow keys) asks for the last one only.
+      if (!(await settleChecks(() => current === checksRequest))) return
+      const info = await loadHostingInfo(id)
+      if (current !== checksRequest || !isHosted(info)) return
+      checksNoun = info.noun
+      checksLoading = true
+      const answer = await api.commitChecks(id, h)
+      if (current === checksRequest) checks = answer
+    } catch (e) {
+      if (current === checksRequest) checksError = errorMessage(e)
+    } finally {
+      if (current === checksRequest) checksLoading = false
     }
   }
 
@@ -62,15 +93,6 @@
     const why = blameBlocker(f)
     openMenu(event, [{ label: 'Blame', action: () => openBlame(f.path, hash), disabled: why !== null, title: why ?? undefined }])
   }
-
-  function lineClass(line: string): string {
-    if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('diff ') || line.startsWith('index ')) return 'meta'
-    if (line.startsWith('@@')) return 'hunk'
-    if (line.startsWith('+')) return 'add'
-    if (line.startsWith('-')) return 'del'
-    return ''
-  }
-
 </script>
 
 <div class="details">
@@ -78,8 +100,8 @@
     <div class="error">{error}</div>
   {:else if details}
     <div class="info">
-      <div class="subject">{details.subject}</div>
-      {#if details.body}<pre class="body">{details.body}</pre>{/if}
+      <div class="subject"><Tickets text={details.subject} /></div>
+      {#if details.body}<pre class="body"><Tickets text={details.body} /></pre>{/if}
       <div class="meta">
         <span>{details.author} &lt;{details.email}&gt;</span>
         <span>{new Date(details.date).toLocaleString()}</span>
@@ -90,6 +112,9 @@
           {/each}
         </span>
       </div>
+      {#if showChecks}
+        <ChecksList status={checks} noun={checksNoun} loading={checksLoading} error={checksError} onRetry={() => loadChecks(repoId, hash)} />
+      {/if}
       <div class="files">
         {#each details.files as f (f.path)}
           <button
@@ -112,12 +137,7 @@
       {#if sub}
         <SubmoduleDiffView diff={sub} onOpen={subRepoId ? () => selectRepo(subRepoId) : null} />
       {:else}
-        {#each lines.slice(0, MAX_LINES) as line}
-          <div class="line {lineClass(line)}">{line || ' '}</div>
-        {/each}
-        {#if lines.length > MAX_LINES}
-          <div class="line meta">… diff truncated after {MAX_LINES} lines</div>
-        {/if}
+        <DiffText text={diff} />
       {/if}
     </div>
   {/if}
@@ -140,10 +160,6 @@
   .s-R, .s-C { color: #3f7fbf; }
   .none { padding: 4px 10px; color: var(--faint); font-size: 12px; }
   .diff { overflow: auto; padding: 8px 0; -webkit-user-select: text; user-select: text; }
-  .line { padding: 0 12px; white-space: pre; line-height: 18px; }
-  .add { background: var(--add-bg); }
-  .del { background: var(--del-bg); }
-  .hunk { color: #3f7fbf; }
   .meta { color: var(--faint); }
   .error { padding: 12px; color: var(--danger); white-space: pre-wrap; }
   .explanation :global(p) { margin: 0 0 6px; }

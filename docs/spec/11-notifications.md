@@ -16,6 +16,7 @@ focused, an in-app toast when it is focused but the event is out of sight.
 | | A decision card shown to you | always; not when the card was refused and the AI retries |
 | Problems | A chat answer ended with an error | always |
 | | A git command waits for credentials in the credential dialog | the window is not focused; once per request |
+| Pipelines | A pipeline (Bitbucket) or the checks (GitHub) of a commit you pushed reach a final state — "Pipeline passed on feature/x", "Pipeline failed on feature/x", "Checks passed on feature/x", "Checks failed on feature/x" ("stopped" for a stopped pipeline) | always, once per push (see `14-hosting.md`, "Watching a push") |
 | New commits on the remote | A background fetch brought commits to the checked-out branch's upstream that the branch does not have — "3 new commits on origin/main" | always (while Fetch in the background is on) |
 
 One user operation is one event, however many git commands it runs. An
@@ -24,6 +25,10 @@ the main branches in which any branch was not pushed is a failed Push: "Push
 failed: N of M branches were not pushed".
 Staging, discarding, reads, terminal commands, creating branches or tags
 never notify.
+
+A pipeline notification names the branch that was pushed. Clicking it, or
+**View**, selects the repository and that pushed commit in the log; it never
+opens the chat.
 
 Only commits that arrived in that background fetch count: commits a manual
 Fetch already brought, or that the branch already contains, are never
@@ -78,8 +83,8 @@ focused window, so it shows nothing.
 
 Settings → General → Notifications: **Show notifications** turns them all
 off; **Finished operations (10 s or longer)**, **The AI needs you**,
-**Problems — failures and conflicts** and **New commits on the remote** turn
-off one category each. All on by default; kept on this computer, not per
+**Problems — failures and conflicts**, **New commits on the remote** and
+**Pipelines and checks finished** turn off one category each. All on by default; kept on this computer, not per
 repository. **New commits on the remote** is disabled, with the hint "Turn on
 Fetch in the background first", while **Fetch in the background** — just
 above, under Fetch: Off, Every 5, 15 (default), 30 or 60 min — is Off. Below them a line says

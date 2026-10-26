@@ -1,0 +1,77 @@
+{
+  "pagelen": 100,
+  "page": 1,
+  "next": "HOST/2.0/repositories/acme/api/pullrequests/7/comments?page=2&pagelen=100",
+  "values": [
+    {
+      "type": "pullrequest_comment",
+      "id": 101,
+      "created_on": "2026-10-21T10:00:00.000000+00:00",
+      "deleted": false,
+      "user": {
+        "type": "user",
+        "display_name": "Cy",
+        "uuid": "{u-Cy}"
+      },
+      "content": {
+        "raw": "General note",
+        "markup": "markdown"
+      }
+    },
+    {
+      "type": "pullrequest_comment",
+      "id": 102,
+      "created_on": "2026-10-21T10:05:00.000000+00:00",
+      "deleted": false,
+      "user": {
+        "type": "user",
+        "display_name": "Cy",
+        "uuid": "{u-Cy}"
+      },
+      "content": {
+        "raw": "On line 12",
+        "markup": "markdown"
+      },
+      "inline": {
+        "path": "src/a.go",
+        "from": null,
+        "to": 12
+      }
+    },
+    {
+      "type": "pullrequest_comment",
+      "id": 103,
+      "created_on": "2026-10-21T10:06:00.000000+00:00",
+      "deleted": false,
+      "user": {
+        "type": "user",
+        "display_name": "Di",
+        "uuid": "{u-Di}"
+      },
+      "content": {
+        "raw": "Removed line",
+        "markup": "markdown"
+      },
+      "inline": {
+        "path": "src/b.go",
+        "from": 4,
+        "to": null
+      }
+    },
+    {
+      "type": "pullrequest_comment",
+      "id": 104,
+      "created_on": "2026-10-21T10:07:00.000000+00:00",
+      "deleted": true,
+      "user": {
+        "type": "user",
+        "display_name": "Cy",
+        "uuid": "{u-Cy}"
+      },
+      "content": {
+        "raw": "gone",
+        "markup": "markdown"
+      }
+    }
+  ]
+}

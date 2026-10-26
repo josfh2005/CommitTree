@@ -70,6 +70,10 @@ export function CheckoutDetached(arg1, arg2) {
   return window['go']['app']['App']['CheckoutDetached'](arg1, arg2);
 }
 
+export function CheckoutPullRequest(arg1, arg2) {
+  return window['go']['app']['App']['CheckoutPullRequest'](arg1, arg2);
+}
+
 export function CheckoutRemote(arg1, arg2, arg3) {
   return window['go']['app']['App']['CheckoutRemote'](arg1, arg2, arg3);
 }
@@ -114,8 +118,16 @@ export function CommitChanges(arg1, arg2, arg3) {
   return window['go']['app']['App']['CommitChanges'](arg1, arg2, arg3);
 }
 
+export function CommitChecks(arg1, arg2) {
+  return window['go']['app']['App']['CommitChecks'](arg1, arg2);
+}
+
 export function CommitMerge(arg1, arg2) {
   return window['go']['app']['App']['CommitMerge'](arg1, arg2);
+}
+
+export function CommitStatuses(arg1, arg2) {
+  return window['go']['app']['App']['CommitStatuses'](arg1, arg2);
 }
 
 export function ConfirmChatAction(arg1, arg2, arg3) {
@@ -238,8 +250,16 @@ export function GetGitSettings() {
   return window['go']['app']['App']['GetGitSettings']();
 }
 
+export function GetHostingAccounts() {
+  return window['go']['app']['App']['GetHostingAccounts']();
+}
+
 export function GetIdentity(arg1) {
   return window['go']['app']['App']['GetIdentity'](arg1);
+}
+
+export function GetJiraSettings() {
+  return window['go']['app']['App']['GetJiraSettings']();
 }
 
 export function GetLog(arg1, arg2, arg3, arg4, arg5) {
@@ -252,6 +272,14 @@ export function GetMergeMessage(arg1) {
 
 export function GetMergeState(arg1) {
   return window['go']['app']['App']['GetMergeState'](arg1);
+}
+
+export function GetPullRequest(arg1, arg2) {
+  return window['go']['app']['App']['GetPullRequest'](arg1, arg2);
+}
+
+export function GetPullRequestFiles(arg1, arg2) {
+  return window['go']['app']['App']['GetPullRequestFiles'](arg1, arg2);
 }
 
 export function GetRebasePreview(arg1, arg2) {
@@ -302,6 +330,10 @@ export function GetWorktreeState(arg1) {
   return window['go']['app']['App']['GetWorktreeState'](arg1);
 }
 
+export function HostingInfo(arg1) {
+  return window['go']['app']['App']['HostingInfo'](arg1);
+}
+
 export function IgnoreRepoInstructions(arg1, arg2) {
   return window['go']['app']['App']['IgnoreRepoInstructions'](arg1, arg2);
 }
@@ -336,6 +368,10 @@ export function ListModels(arg1) {
 
 export function ListPrompts() {
   return window['go']['app']['App']['ListPrompts']();
+}
+
+export function ListPullRequests(arg1, arg2) {
+  return window['go']['app']['App']['ListPullRequests'](arg1, arg2);
 }
 
 export function ListRemotes(arg1) {
@@ -398,6 +434,10 @@ export function PullModel(arg1) {
   return window['go']['app']['App']['PullModel'](arg1);
 }
 
+export function PullRequestCount(arg1) {
+  return window['go']['app']['App']['PullRequestCount'](arg1);
+}
+
 export function Push(arg1) {
   return window['go']['app']['App']['Push'](arg1);
 }
@@ -416,6 +456,10 @@ export function RebaseOnto(arg1, arg2) {
 
 export function RelocateRepo(arg1) {
   return window['go']['app']['App']['RelocateRepo'](arg1);
+}
+
+export function RemoveHostingAccount(arg1) {
+  return window['go']['app']['App']['RemoveHostingAccount'](arg1);
 }
 
 export function RemoveRemote(arg1, arg2) {
@@ -470,12 +514,24 @@ export function SaveAISettings(arg1) {
   return window['go']['app']['App']['SaveAISettings'](arg1);
 }
 
+export function SaveBitbucketAccount(arg1, arg2) {
+  return window['go']['app']['App']['SaveBitbucketAccount'](arg1, arg2);
+}
+
 export function SaveFlowSettings(arg1, arg2) {
   return window['go']['app']['App']['SaveFlowSettings'](arg1, arg2);
 }
 
+export function SaveGitHubAccount(arg1, arg2) {
+  return window['go']['app']['App']['SaveGitHubAccount'](arg1, arg2);
+}
+
 export function SaveGitSettings(arg1) {
   return window['go']['app']['App']['SaveGitSettings'](arg1);
+}
+
+export function SaveJiraSettings(arg1, arg2) {
+  return window['go']['app']['App']['SaveJiraSettings'](arg1, arg2);
 }
 
 export function SaveRepoAISettings(arg1, arg2) {

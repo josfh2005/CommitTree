@@ -4,11 +4,13 @@
   import { openCloneDialog } from '../lib/actions'
   import { cancelClone, cloneCancelling } from '../lib/clone'
   import { credentialRequest, waitingText } from '../lib/credential'
+  import { commitStatuses, headStatusText, hostingInfo, hostingLimitText, hostingLimits, isHosted, requestHeadStatus, stateIcon } from '../lib/hosting'
   import { settingsTab } from '../lib/settingsTabs'
   import { announcement, cancelTask, elapsedText, openAction, outcomeIcon } from '../lib/statusBar'
-  import { commandsOpen, repos, selectRepo, selectedRepoId, settingsOpen } from '../lib/stores'
+  import { commandsOpen, refs, repos, selectRepo, selectedRepoId, settingsOpen, showCommitInLog } from '../lib/stores'
   import { cancelTarget, relativeTime, shownTasks, taskState, type Task, type TaskResult } from '../lib/tasks'
   import { toast } from '../lib/ui'
+  import StatusIcon from './StatusIcon.svelte'
 
   let now = Date.now()
   const timer = setInterval(() => (now = Date.now()), 1000)
@@ -32,6 +34,17 @@
     if (Object.keys(kept).length !== Object.keys(cancelling).length) cancelling = kept
   }
   $: if (listOpen && tasks.length <= 1) listOpen = false
+
+  // The right side: the rate-limit notice of the selected repository's host,
+  // else the status of its checked-out commit.
+  $: info = $hostingInfo[$selectedRepoId]
+  $: headHash = $refs?.headHash ?? ''
+  // The request itself ends quietly for a repository that is not hosted.
+  $: if ($selectedRepoId && headHash) requestHeadStatus($selectedRepoId, headHash)
+  $: limit = info?.supported ? $hostingLimits[info.host] : undefined
+  $: headState = isHosted(info) && headHash ? ($commitStatuses[$selectedRepoId]?.[headHash]?.state ?? 'none') : 'none'
+  $: headText = headStatusText(info?.noun ?? 'Checks', headState)
+  $: headIcon = stateIcon(headState)
 
   const canCancel = (t: Task) => cancelTarget($taskState, t) !== null
   const isCancelling = (t: Task, flags: Record<string, boolean>, cloneFlag: boolean) => (t.kind === 'clone' ? cloneFlag : !!flags[t.id])
@@ -126,6 +139,14 @@
     </button>
   {/if}
   <span class="spacer"></span>
+  {#if limit}
+    <span class="limit muted" role="status">{hostingLimitText(limit)}</span>
+  {:else if headText && headIcon}
+    <button class="head" title="Show HEAD in the log" on:click={() => showCommitInLog(headHash)}>
+      <StatusIcon state={headState} />
+      <span class="label">{headText}</span>
+    </button>
+  {/if}
   {#if tasks.length > 1}
     <button bind:this={chip} class="chip" aria-haspopup="true" aria-expanded={listOpen} on:click={toggleList}>+{tasks.length - 1}</button>
   {/if}
@@ -160,6 +181,9 @@
   .result.error .label { color: var(--danger); }
   .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
   .spacer { flex: 1; }
+  .head { display: flex; align-items: center; gap: 4px; flex: none; padding: 0 4px; border-radius: 4px; }
+  .head:hover { background: var(--hover); }
+  .limit { flex: none; }
   .chip { font-size: 11px; padding: 0 6px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); }
   .chip:hover { background: var(--hover); }
   .list { position: absolute; right: 8px; bottom: 26px; z-index: 50; margin: 0; padding: 4px; list-style: none; min-width: 320px; max-width: min(560px, calc(100vw - 16px)); max-height: 50vh; overflow: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; box-shadow: var(--shadow); }

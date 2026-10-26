@@ -42,11 +42,33 @@ func (a *App) PushBranch(id, branch string) (ops.BranchPushResult, error) {
 		result, pushErr = ops.PushBranch(a.prompting(ctx, id, dir, "Push "+branch), dir, branch)
 		return pushErr
 	})
+	if err == nil && result.Status == ops.PushPushed {
+		a.watchPushed(id, []string{result.Branch})
+	}
 	return result, err
 }
 
+// Push pushes the current branch. When it moved the branch's upstream (a new
+// branch counts), the pushed tip's pipeline is watched afterwards
+// (docs/spec/14-hosting.md); the chat's push tool comes through here too. The
+// branch is read under the write lock, so a later switch cannot change it.
 func (a *App) Push(id string) error {
-	return a.write(id, func(ctx context.Context, dir string) error { return ops.Push(a.prompting(ctx, id, dir, "Push"), dir) })
+	var pushed string
+	err := a.write(id, func(ctx context.Context, dir string) error {
+		branch := currentBranch(ctx, dir)
+		before := upstreamHash(ctx, dir, branch)
+		if err := ops.Push(a.prompting(ctx, id, dir, "Push"), dir); err != nil {
+			return err
+		}
+		if branch != "" && upstreamHash(ctx, dir, branch) != before {
+			pushed = branch
+		}
+		return nil
+	})
+	if err == nil && pushed != "" {
+		a.watchPushed(id, []string{pushed})
+	}
+	return err
 }
 
 // PushAll pushes the main (official) branches ahead of their
@@ -59,7 +81,21 @@ func (a *App) PushAll(id string) ([]ops.BranchPushResult, error) {
 		results, pushErr = ops.PushAll(a.prompting(ctx, id, dir, "Push all"), dir)
 		return pushErr
 	})
+	// The branches that did move their upstream are watched even when the
+	// call as a whole reports an error.
+	a.watchPushed(id, pushedBranches(results))
 	return results, err
+}
+
+// pushedBranches are the branches whose upstream a Push all moved.
+func pushedBranches(results []ops.BranchPushResult) []string {
+	var pushed []string
+	for _, r := range results {
+		if r.Status == ops.PushPushed {
+			pushed = append(pushed, r.Branch)
+		}
+	}
+	return pushed
 }
 
 // Pull reads the configured strategy once per call and runs it under the

@@ -82,6 +82,8 @@ type App struct {
 	// paused is the remotes background fetches skip (see autoPause).
 	paused autoPause
 	ai     *aiState
+	// hosting is the Bitbucket/GitHub integration; see hosting.go.
+	hosting *hostingState
 	// cmds is the log behind the Commands panel; aiWrites marks
 	// repositories (by cmdlog.RepoKey) running an approved AI write.
 	cmds     *cmdlog.Log
@@ -135,6 +137,7 @@ func New(store *repos.Store) *App {
 		OnSettled: func(tab, repo string) { a.emit("terminal:settled", TerminalSettled{tab, repo}) },
 		OnExit:    func(tab string, code int) { a.emit("terminal:exit", TerminalExit{tab, code}) },
 	})
+	a.initHosting()
 	a.cmds = cmdlog.New()
 	// One recorder per process: the most recently created App owns it —
 	// there is one App in the real application.

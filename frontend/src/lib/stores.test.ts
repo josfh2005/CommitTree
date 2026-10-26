@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('./api', () => ({ api: {} }))
 
 import { isLogOrder } from './logOrder'
-import { autoFetchMinutes, expandedRepos, isAutoFetchMinutes, notifyRemote, blameBack, blamePrevious, blameStack, blameTarget, chatPreparing, closeBlame, expandedStashSections, explainIntoChat, expandedTagSections, mainView, openBlame, persisted, selectedHash, selectRepo, selectUncommitted, showCommitInLog, toggleCommit, toggleStashExpanded, toggleTagsExpanded, toggleUncommitted, uncommittedSelected } from './stores'
+import { autoFetchMinutes, expandedRepos, isAutoFetchMinutes, notifyRemote, blameBack, blamePrevious, blameStack, blameTarget, chatPreparing, closeBlame, expandedStashSections, explainIntoChat, expandedTagSections, mainView, openBlame, openPullRequests, persisted, selectedHash, selectRepo, selectUncommitted, showCommitInLog, toggleCommit, toggleStashExpanded, toggleTagsExpanded, toggleUncommitted, uncommittedSelected } from './stores'
 
 /** A minimal in-memory Storage, since these tests don't run in a DOM
  *  environment and so have no real localStorage to read from. */
@@ -296,5 +296,15 @@ describe('auto fetch settings', () => {
     expect(get(persisted('autoFetchMinutes', 15, isAutoFetchMinutes))).toBe(15)
     vi.stubGlobal('localStorage', fakeStorage({ autoFetchMinutes: '30' }))
     expect(get(persisted('autoFetchMinutes', 15, isAutoFetchMinutes))).toBe(30)
+  })
+})
+
+describe('Pull requests view', () => {
+  afterEach(() => mainView.set('log'))
+  it('opens for a repository and leaves when a repository is selected', () => {
+    openPullRequests('r1')
+    expect(get(mainView)).toBe('pulls')
+    selectRepo('r1')
+    expect(get(mainView)).toBe('log')
   })
 })

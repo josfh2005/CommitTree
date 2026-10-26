@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte'
+  import StatusIcon from './StatusIcon.svelte'
   import { api } from '../lib/api'
   import { checkoutBranch, checkoutCommit, cherryPick, newBranch, newTag, rebaseOnto, resetBranch } from '../lib/actions'
   import { checkoutChoices } from '../lib/checkout'
@@ -7,12 +8,14 @@
   import {
     arrowAt, DOT_RADIUS, edgeSegment, graphWidth, LANE_WIDTH, laneColor, laneX, ROW_HEIGHT, rowCenterY, visibleRange,
   } from '../lib/geometry'
+  import { commitStatuses, hostingInfo, isHosted, requestStatuses, singleCheckURL, statusTooltip } from '../lib/hosting'
   import { badgeLaneColor, isCurrentBranchRef } from '../lib/refBadge'
   import { cherryPickBlocker, rebaseBlocker } from '../lib/rebase'
   import { isMine } from '../lib/identity'
   import { aiOff, busy, chatOpen, explainIntoChat, filters, identity, jumpTo, logOrder, logVersion, mergeState, refs, selectedHash, toggleCommit, toggleUncommitted, uncommittedSelected, worktreeState } from '../lib/stores'
-  import type { LogRow } from '../lib/types'
+  import type { CommitStatus, LogRow } from '../lib/types'
   import { copyText, errorMessage, openMenuAsync, toast } from '../lib/ui'
+  import { BrowserOpenURL } from '../../wailsjs/runtime/runtime'
   import { cleanTreeSelection, followHead, uncommittedCount, uncommittedMarker } from '../lib/uncommitted'
 
   export let repoId: string
@@ -28,6 +31,8 @@
   let error = ''
   let generation = 0
   let loadingGen = -1
+  // The repository `rows` belong to: empty from a reload until its first page arrives.
+  let rowsRepo = ''
 
   let scroller: HTMLDivElement
   let canvas: HTMLCanvasElement
@@ -94,6 +99,7 @@
   async function reload(..._deps: unknown[]) {
     const gen = ++generation
     rows = []
+    rowsRepo = ''
     byHash = new Map()
     hasMore = false
     error = ''
@@ -111,6 +117,7 @@
       if (gen !== generation) return
       page.rows.forEach((r, i) => byHash.set(r.hash, rows.length + i))
       rows = rows.concat(page.rows)
+      rowsRepo = repoId
       hasMore = page.hasMore
       graphVisible = page.graphVisible
     } catch (e) {
@@ -134,6 +141,20 @@
   // Size the graph column to the rows on screen so one wide stretch of history
   // doesn't squeeze the messages everywhere else — plus the lane reserved for
   // the uncommitted row's line, when there is one.
+  // The pipelines or checks of the rows on screen and one screen more each
+  // way; the icons show only for a repository on a supported host whose
+  // account is connected.
+  $: hosted = isHosted($hostingInfo[repoId])
+  $: noun = $hostingInfo[repoId]?.noun ?? 'Checks'
+  $: if (rowsRepo === repoId) askStatuses(repoId, rows, range, viewport)
+
+  function askStatuses(id: string, all: LogRow[], r: { start: number; end: number }, height: number) {
+    const margin = Math.ceil(height / ROW_HEIGHT)
+    const from = Math.max(0, r.start - margin)
+    const to = Math.min(all.length, r.end + margin)
+    if (to > from) requestStatuses(id, all.slice(from, to).map((x) => x.hash))
+  }
+
   $: width = graphVisible ? graphWidth(rows.slice(range.start, Math.min(rows.length, range.end + 1))) + shiftX : 12
   $: draw(canvas, rows, range, width, viewport, scrollTop, graphVisible, lead, marker, shiftX)
 
@@ -284,6 +305,15 @@
     }
   }
 
+  /** A status icon opens its one check's page; otherwise it selects the
+   *  commit, whose details list the pipelines or checks. */
+  function openStatus(e: Event, row: LogRow, st: CommitStatus) {
+    e.stopPropagation()
+    const url = singleCheckURL(st)
+    if (url) BrowserOpenURL(url)
+    else selectedHash.set(row.hash)
+  }
+
   function commitMenu(event: MouseEvent, row: LogRow) {
     selectedHash.set(row.hash)
     const head = $refs?.head ?? ''
@@ -336,7 +366,7 @@
   onDestroy(stopJump)
 </script>
 
-<div class="log">
+<div class="log" class:hosted>
   <div class="scroller" bind:this={scroller} bind:clientHeight={viewport} on:scroll={onScroll}>
     <div class="spacer" style="height: {(rows.length + (shallow && !hasMore && rows.length ? 1 : 0)) * ROW_HEIGHT + lead}px">
       {#if graphVisible}
@@ -362,6 +392,7 @@
         </button>
       {/if}
       {#each rows.slice(range.start, range.end) as row, i (row.hash)}
+        {@const st = hosted ? $commitStatuses[repoId]?.[row.hash] : undefined}
         <button
           class="row"
           class:selected={row.hash === $selectedHash}
@@ -380,7 +411,29 @@
           </span>
           <span class="author ellipsis">{row.author}</span>
           <span class="date">{relativeDate(row.date)}</span>
-          <span class="hash mono">{row.short}</span>
+          <span class="hashcell">
+            {#if hosted}
+              {#if st && st.state !== 'none'}
+                <span
+                  class="st act"
+                  role="button"
+                  tabindex="0"
+                  aria-label={singleCheckURL(st) ? `Open ${noun === 'Checks' ? 'checks' : 'pipeline'}` : `Show ${noun.toLowerCase()}`}
+                  title={statusTooltip(noun, st, new Date())}
+                  on:click={(e) => openStatus(e, row, st)}
+                  on:keydown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      openStatus(e, row, st)
+                    }
+                  }}
+                ><StatusIcon state={st.state} /></span>
+              {:else}
+                <span class="st"></span>
+              {/if}
+            {/if}
+            <span class="hash mono">{row.short}</span>
+          </span>
         </button>
       {/each}
       {#if shallow && !hasMore && rows.length}
@@ -417,6 +470,14 @@
     padding-right: 12px;
     text-align: left;
   }
+  .hosted .row { grid-template-columns: minmax(0, 1fr) 150px 90px 90px; }
+  /* On a hosted repository the icon's 12 px (and its gap) is always reserved,
+     so the hashes line up whether or not a row has a status. */
+  .hashcell { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .st { display: inline-flex; width: 12px; height: 12px; flex: none; }
+.st.act { cursor: pointer; border-radius: 3px; }
+.st.act:hover { background: var(--hover); }
+.st.act:focus-visible { outline: 1px solid var(--accent); }
   .row.selected { background: var(--selection); }
   .merge .subject { color: var(--merge-text); }
   /* The user's own commits: subject and author in semibold, the author also

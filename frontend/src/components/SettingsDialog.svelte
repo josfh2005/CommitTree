@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte'
   import { EventsOn } from '../../wailsjs/runtime/runtime'
+  import AccountsTab from './AccountsTab.svelte'
   import Icon from './Icon.svelte'
   import { api } from '../lib/api'
   import { formatBytes, percent } from '../lib/format'
@@ -8,7 +9,7 @@
   import { SETTINGS_TABS, settingsTab, tabUsesAI } from '../lib/settingsTabs'
   import { modelDone, modelProgress, modelPull, startModelPull } from '../lib/modelPull'
   import { statusText } from '../lib/notifyRules'
-  import { AUTO_FETCH_CHOICES, autoFetchMinutes, highContrast, loadAISettings, loadGitSettings, notifyAi, notifyDone, notifyEnabled, notifyProblem, notifyRemote, settingsOpen, themePref } from '../lib/stores'
+  import { AUTO_FETCH_CHOICES, autoFetchMinutes, highContrast, loadAISettings, loadGitSettings, notifyAi, notifyDone, notifyEnabled, notifyPipelines, notifyProblem, notifyRemote, settingsOpen, themePref } from '../lib/stores'
   import type { ThemePref } from '../lib/theme'
 
   const THEMES: { value: ThemePref; label: string }[] = [
@@ -306,6 +307,10 @@
                 <span>New commits on the remote</span>
               </label>
               {#if $autoFetchMinutes === 0}<p class="hint remote-off">Turn on Fetch in the background first</p>{/if}
+              <label class="row check sub">
+                <input type="checkbox" bind:checked={$notifyPipelines} disabled={!$notifyEnabled} />
+                <span>Pipelines and checks finished</span>
+              </label>
               {#if statusText(notifyStatus)}<p class="hint notify-status">{statusText(notifyStatus)}</p>{/if}
             </section>
 
@@ -329,6 +334,8 @@
               </label>
               <p class="hint push-hint">main, master, develop and release/*, or your git-flow names.</p>
             </section>
+          {:else if $tab === 'accounts'}
+            <AccountsTab />
           {:else if tabUsesAI($tab) && !settings}
             <p class={aiError ? 'warn' : 'hint'}>{aiError || 'Loading…'}</p>
           {:else if settings && $tab === 'providers'}

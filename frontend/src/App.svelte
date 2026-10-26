@@ -11,6 +11,7 @@
   import CredentialDialog from './components/CredentialDialog.svelte'
   import DialogHost from './components/DialogHost.svelte'
   import LogView from './components/LogView.svelte'
+  import PullRequestsView from './components/PullRequestsView.svelte'
   import SettingsDialog from './components/SettingsDialog.svelte'
   import RepoSettingsDialog from './components/RepoSettingsDialog.svelte'
   import Sidebar from './components/Sidebar.svelte'
@@ -21,17 +22,19 @@
   import { startFocusRefresh } from './lib/actions'
   import { nextChatRunRepo } from './lib/chat'
   import { notifyBody, onClosed, onRequest, type CredentialRequest } from './lib/credential'
-  import { notify, startNotifications, windowFocused } from './lib/notify'
+  import { notify, notifyPipelineEvent, startNotifications, windowFocused } from './lib/notify'
   import { startAutoFetch } from './lib/autoFetch'
+  import { applyLimit, applyWatchEvent, hostingInfo, refreshStatuses, startHostingPolling } from './lib/hosting'
   import { startCloneEvents } from './lib/clone'
   import { isCommandsToggle } from './lib/cmdlog'
   import { isSettingsShortcut } from './lib/shortcuts'
   import { isTerminalToggle } from './lib/terminal'
   import { conflictOwnsScreen } from './lib/remote'
   import { blameTarget, chatOpen, chatRunRepo, chatWidth, closeBlame, commandsOpen, dockHeight, loadAISettings, loadGitSettings, loadRefs, loadRepos, loadWorktreeState, mainView, mergeState, platform, refreshRepo, selectRepo, selectedHash, selectedRepo, selectedRepoId, selectedStash, settingsOpen, sidebarWidth, stashConflictDismissed, stashEntries, terminalOpen, uncommittedSelected } from './lib/stores'
+  import { loadJira } from './lib/tickets'
   import { noteCommand } from './lib/tasks'
   import { toast } from './lib/ui'
-  import type { RepoChangedEvent, WorktreeChangedEvent } from './lib/types'
+  import type { HostingLimit, RepoChangedEvent, WatchEvent, WorktreeChangedEvent } from './lib/types'
   import { Environment, EventsOn } from '../wailsjs/runtime/runtime'
 
   // A merge in progress always wins: neither the Changes view nor a stash
@@ -52,6 +55,11 @@
   $: selectedStashEntry = $stashEntries.find((e) => e.hash === $selectedStash?.hash) ?? null
   $: showStash = $mainView === 'stash' && !conflictWins && !!$selectedRepo && !$selectedRepo.missing && !!selectedStashEntry
   $: showBlame = $mainView === 'blame' && !conflictWins && !!$selectedRepo && !$selectedRepo.missing && !!$blameTarget
+  $: showPulls = $mainView === 'pulls' && !conflictWins && !!$selectedRepo && !$selectedRepo.missing && !!$hostingInfo[$selectedRepo.id]?.supported
+  // The Pull requests view hidden because it cannot be shown (the repository
+  // is unsupported, missing or in a merge) falls back to the log for good, or
+  // it would come back later with the sidebar row still highlighted.
+  $: if ($mainView === 'pulls' && !showPulls) mainView.set('log')
   // Selecting a commit — or the log's uncommitted row — means the user
   // wants the log pane, so switch the main pane back.
   $: if ($selectedHash || $uncommittedSelected) mainView.set('log')
@@ -89,6 +97,7 @@
   onMount(() => {
     loadRepos().then(loadRefs)
     loadGitSettings()
+    loadJira()
     const offSelected = selectedRepoId.subscribe(() => loadAISettings())
     // The payload is ignored on purpose: a worktree and its main repository share
     // their AI settings, so the event may name a repo other than the selected one.
@@ -97,6 +106,22 @@
     const stopFocus = startFocusRefresh()
     const stopNotifications = startNotifications()
     const stopAutoFetch = startAutoFetch()
+    const stopHostingPolling = startHostingPolling()
+    // A host's request limit started or ended, and a watched push changed
+    // state: both feed lib/hosting.ts, which the log and the status bar read.
+    const offLimit = EventsOn('hosting:limit', (payload: HostingLimit) => applyLimit(payload))
+    const offHostingStatus = EventsOn('hosting:status', (payload: WatchEvent) => {
+      applyWatchEvent(payload)
+      // A final state is said once, and the checks behind it are asked again.
+      if (payload.final) {
+        notifyPipelineEvent(payload)
+        refreshStatuses(payload.repoID)
+      }
+    })
+    // Closing Settings: an account may have been connected or removed.
+    const offSettingsClosed = settingsOpen.subscribe((open) => {
+      if (!open) refreshStatuses(get(selectedRepoId))
+    })
     // Every view of the working tree follows $worktreeState — the Changes
     // view and the log's "Uncommitted changes" row alike — so one app-wide
     // listener keeps them fresh whether or not a Changes pane is mounted.
@@ -150,6 +175,10 @@
       stopFocus()
       stopNotifications()
       stopAutoFetch()
+      stopHostingPolling()
+      offLimit()
+      offHostingStatus()
+      offSettingsClosed()
       offWorktree()
       offRepoChanged()
       offSettings()
@@ -183,6 +212,8 @@
           <StashView repoId={$selectedRepo.id} entry={selectedStashEntry} />
         {:else if showBlame && $selectedRepo}
           <BlameView repoId={$selectedRepo.id} />
+        {:else if showPulls && $selectedRepo}
+          <PullRequestsView repoId={$selectedRepo.id} />
         {:else}
           <LogView />
         {/if}

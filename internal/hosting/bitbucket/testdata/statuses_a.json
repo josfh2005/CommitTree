@@ -1,0 +1,39 @@
+{
+  "pagelen": 100,
+  "page": 1,
+  "values": [
+    {
+      "type": "build",
+      "key": "jenkins-build",
+      "name": "Jenkins build",
+      "state": "FAILED",
+      "url": "https://ci.example.com/job/api/42/",
+      "updated_on": "2026-10-20T09:10:00.000000+00:00"
+    },
+    {
+      "type": "build",
+      "key": "bb-pipe-11",
+      "name": "Pipeline: feature/x",
+      "state": "SUCCESSFUL",
+      "url": "https://bitbucket.org/acme/api/pipelines/results/11",
+      "updated_on": "2026-10-20T09:32:00.000000+00:00"
+    },
+    {
+      "type": "build",
+      "key": "bb-pipe-10",
+      "name": "Pipeline: feature/x",
+      "state": "FAILED",
+      "url": "https://bitbucket.org/acme/api/addon/pipelines/home#!/results/10",
+      "updated_on": "2026-10-20T09:02:00.000000+00:00"
+    },
+    {
+      "type": "build",
+      "key": "sonar",
+      "name": "SonarCloud",
+      "state": "INPROGRESS",
+      "url": "https://sonar.example.com/p/api",
+      "created_on": "2026-10-20T09:15:00.000000+00:00",
+      "updated_on": "2026-10-20T09:20:00.000000+00:00"
+    }
+  ]
+}

@@ -189,3 +189,18 @@ func TestBranchRemoteActionsRefuseWhileAnotherWriteRuns(t *testing.T) {
 		t.Errorf("PushBranch err = %v, want ErrBusy", err)
 	}
 }
+
+func TestPushedBranchesKeepsOnlyThePushedOnes(t *testing.T) {
+	got := pushedBranches([]ops.BranchPushResult{
+		{Branch: "main", Status: ops.PushPushed},
+		{Branch: "develop", Status: ops.PushFailed},
+		{Branch: "release", Status: ops.PushUpToDate},
+		{Branch: "hotfix", Status: ops.PushPushed},
+	})
+	if len(got) != 2 || got[0] != "main" || got[1] != "hotfix" {
+		t.Fatalf("pushed = %v", got)
+	}
+	if got := pushedBranches(nil); got != nil {
+		t.Fatalf("nil results gave %v", got)
+	}
+}
