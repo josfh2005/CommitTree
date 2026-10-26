@@ -4,6 +4,7 @@
   import { canSaveBitbucket, canSaveGitHub, githubSourceFor, type GitHubSource } from '../lib/accounts'
   import { api } from '../lib/api'
   import type { HostingAccount, HostName } from '../lib/types'
+  import { loadJira } from '../lib/tickets'
   import { errorMessage } from '../lib/ui'
 
   const BITBUCKET_TOKENS_URL = 'https://id.atlassian.com/manage-profile/security/api-tokens'
@@ -23,6 +24,12 @@
   let bbError = ''
   let ghError = ''
   let busy: HostName | '' = ''
+
+  // Jira: where ticket keys in commit and pull request text link to.
+  let jiraSite = ''
+  let jiraKeys = ''
+  let jiraError = ''
+  let jiraBusy = false
 
   // The radio follows the saved account, else offers the CLI when it exists.
   function applyGitHub(acc: HostingAccount) {
@@ -45,7 +52,35 @@
       bbError = errorMessage(e)
     }
   }
-  onMount(load)
+  async function loadJiraFields() {
+    try {
+      const j = await api.getJiraSettings()
+      jiraSite = j.site
+      jiraKeys = (j.keys ?? []).join(', ')
+    } catch (e) {
+      jiraError = errorMessage(e)
+    }
+  }
+  onMount(() => {
+    load()
+    loadJiraFields()
+  })
+
+  async function saveJira() {
+    jiraBusy = true
+    jiraError = ''
+    try {
+      const j = await api.saveJiraSettings(jiraSite, jiraKeys)
+      // The fields show what was kept: trimmed site, upper-case keys.
+      jiraSite = j.site
+      jiraKeys = (j.keys ?? []).join(', ')
+      await loadJira()
+    } catch (e) {
+      jiraError = errorMessage(e)
+    } finally {
+      jiraBusy = false
+    }
+  }
 
   async function saveBitbucket() {
     busy = 'bitbucket'
@@ -163,6 +198,23 @@
     <p class="ok status">Connected as {github.name}</p>
   {/if}
   {#if ghError}<p class="warn error">{ghError}</p>{/if}
+</section>
+
+<section class="jira">
+  <h4>Jira</h4>
+  <label>
+    <span>Site</span>
+    <input type="url" autocomplete="off" placeholder="https://your-team.atlassian.net" bind:value={jiraSite} />
+  </label>
+  <label>
+    <span>Project keys</span>
+    <input type="text" autocomplete="off" placeholder="NEXO, SCL" bind:value={jiraKeys} />
+  </label>
+  <p class="hint">Ticket keys of these projects, like <code>NEXO-123</code>, become links to the ticket in commit details and pull requests. Both fields are needed.</p>
+  <div class="actions">
+    <button class="btn primary" disabled={jiraBusy} on:click={saveJira}>Save</button>
+  </div>
+  {#if jiraError}<p class="warn error">{jiraError}</p>{/if}
 </section>
 
 <style>

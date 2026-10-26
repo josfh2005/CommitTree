@@ -258,6 +258,10 @@ export function GetIdentity(arg1) {
   return window['go']['app']['App']['GetIdentity'](arg1);
 }
 
+export function GetJiraSettings() {
+  return window['go']['app']['App']['GetJiraSettings']();
+}
+
 export function GetLog(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['app']['App']['GetLog'](arg1, arg2, arg3, arg4, arg5);
 }
@@ -524,6 +528,10 @@ export function SaveGitHubAccount(arg1, arg2) {
 
 export function SaveGitSettings(arg1) {
   return window['go']['app']['App']['SaveGitSettings'](arg1);
+}
+
+export function SaveJiraSettings(arg1, arg2) {
+  return window['go']['app']['App']['SaveJiraSettings'](arg1, arg2);
 }
 
 export function SaveRepoAISettings(arg1, arg2) {

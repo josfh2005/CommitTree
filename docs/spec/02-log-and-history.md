@@ -193,7 +193,9 @@ pane; the same holds for the "Uncommitted changes" row. Opening a row's
 context menu, following a graph arrow, and selecting from anywhere outside
 the log always select and never clear. The pane shows the commit's full subject and
 body, its author and email, its full commit date, its full hash (copyable)
-and a link for each of its parents that jumps the log to that parent. Under
+and a link for each of its parents that jumps the log to that parent. Jira
+keys of the listed projects in the subject and body are links to their tickets
+(`14-hosting.md`, "Jira ticket links"); the log rows never are. Under
 that, for a commit in a repository on Bitbucket or GitHub with a connected
 account, comes a **Pipelines** (Bitbucket) or **Checks** (GitHub) section:
 one line per pipeline or check with its state icon, name, state ("passed",

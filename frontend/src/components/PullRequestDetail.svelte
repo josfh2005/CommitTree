@@ -2,6 +2,7 @@
   import ChecksList from './ChecksList.svelte'
   import DiffText from './DiffText.svelte'
   import FileList, { rowKey } from './FileList.svelte'
+  import Tickets from './Tickets.svelte'
   import { warnMovedSubmodules } from '../lib/actions'
   import { api } from '../lib/api'
   import { checkoutNotice } from '../lib/checkout'
@@ -9,6 +10,7 @@
   import { isHttps } from '../lib/hosting'
   import { commentTree, fileSections, renderUntrusted, safeHref } from '../lib/prs'
   import { mainView, refreshRepo, refs, showCommitInLog } from '../lib/stores'
+  import { jiraSettings, linkTicketsHtml } from '../lib/tickets'
   import { beginOp } from '../lib/tasks'
   import type { HostingInfo, PRCommit, PRFile, PullRequestDetail } from '../lib/types'
   import { errorMessage, toast } from '../lib/ui'
@@ -133,10 +135,10 @@
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (links in the text are anchors, which take the keyboard) -->
     <div class="info" on:click={onTextClick}>
       <div class="head">
-        <div class="title"><span class="id">#{pr.number}</span> {pr.title}</div>
+        <div class="title"><span class="id">#{pr.number}</span> <Tickets text={pr.title} /></div>
         <div class="meta">
           <span>{pr.draft ? 'Draft' : 'Open'} · {pr.author}</span>
-          <span class="mono">{pr.source} → {pr.target}</span>
+          <span class="mono"><Tickets text={pr.source} /> → {pr.target}</span>
           <span>
             <span title={new Date(pr.created).toLocaleString()}>Created {relativeDate(pr.created)}</span>
             · <span title={new Date(pr.updated).toLocaleString()}>updated {relativeDate(pr.updated)}</span>
@@ -151,7 +153,7 @@
       {#if pr.fork}<div class="hint">{FORK_NOTE}</div>{/if}
 
       {#if pr.description.trim()}
-        <div class="rendered text">{@html renderUntrusted(pr.description)}</div>
+        <div class="rendered text">{@html linkTicketsHtml(renderUntrusted(pr.description), $jiraSettings)}</div>
       {/if}
 
       {#if pr.reviewers?.length}
@@ -173,7 +175,7 @@
         {#each pr.commits as c (c.hash)}
           <button class="row-item commit" title={c.subject} on:click={() => openCommit(c)}>
             <span class="mono sha">{c.short}</span>
-            <span class="ellipsis">{c.subject}</span>
+            <span class="ellipsis"><Tickets text={c.subject} /></span>
             {#if notFetched[c.hash]}<span class="nf">Not fetched</span>{/if}
           </button>
         {/each}

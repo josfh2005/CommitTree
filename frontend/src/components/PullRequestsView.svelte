@@ -3,6 +3,7 @@
   import PullRequestDetail from './PullRequestDetail.svelte'
   import Splitter from './Splitter.svelte'
   import StatusIcon from './StatusIcon.svelte'
+import Tickets from './Tickets.svelte'
   import { api } from '../lib/api'
   import { relativeDate } from '../lib/format'
   import { headStatusText, hostingInfo, isHttps, loadHostingInfo, pullCounts } from '../lib/hosting'
@@ -122,7 +123,7 @@
           <span class="main">
             <span class="line">
               <span class="id">#{pr.number}</span>
-              <span class="subject ellipsis" title={pr.title}>{pr.title}</span>
+              <span class="subject ellipsis" title={pr.title}><Tickets text={pr.title} /></span>
               {#if pr.draft}<span class="draft">Draft</span>{/if}
             </span>
             <span class="meta ellipsis">{pr.author} · {pr.source} → {pr.target}</span>

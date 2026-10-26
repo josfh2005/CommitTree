@@ -1048,3 +1048,22 @@ func TestRunWatchEmitsHostingStatus(t *testing.T) {
 		t.Fatalf("event %+v, want %+v", got, want)
 	}
 }
+
+func TestJiraSettingsRoundTrip(t *testing.T) {
+	a, _, _, _ := newHostingApp(t)
+	j, err := a.GetJiraSettings()
+	if err != nil || j.Site != "" || len(j.Keys) != 0 {
+		t.Fatalf("GetJiraSettings = %+v, %v", j, err)
+	}
+	if _, err := a.SaveJiraSettings("ftp://x", "NEXO"); err == nil {
+		t.Fatal("a non-https site must be refused")
+	}
+	saved, err := a.SaveJiraSettings("https://escala.atlassian.net/", "nexo, scl")
+	if err != nil || saved.Site != "https://escala.atlassian.net" || len(saved.Keys) != 2 {
+		t.Fatalf("SaveJiraSettings = %+v, %v", saved, err)
+	}
+	got, err := a.GetJiraSettings()
+	if err != nil || got.Site != saved.Site || len(got.Keys) != 2 || got.Keys[0] != "NEXO" {
+		t.Fatalf("GetJiraSettings = %+v, %v", got, err)
+	}
+}

@@ -39,6 +39,8 @@ type Config struct {
 	BitbucketID    string `json:"bitbucketID,omitempty"`   // uuid, for the Mine/Review filters
 	GitHubSource   string `json:"githubSource,omitempty"`  // "gh" | "token" | ""
 	GitHubLogin    string `json:"githubLogin,omitempty"`
+	JiraSite       string `json:"jiraSite,omitempty"` // https://<site>, no trailing slash
+	JiraKeys       string `json:"jiraKeys,omitempty"` // "NEXO,SCL"
 }
 
 // PathNextTo returns the hosting.json that sits in the same directory as the

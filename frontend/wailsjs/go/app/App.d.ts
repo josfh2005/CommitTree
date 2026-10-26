@@ -14,6 +14,7 @@ import {settings} from '../models';
 import {gitlog} from '../models';
 import {ai} from '../models';
 import {gitsettings} from '../models';
+import {accounts} from '../models';
 import {stash} from '../models';
 import {submodules} from '../models';
 import {prompts} from '../models';
@@ -150,6 +151,8 @@ export function GetHostingAccounts():Promise<Array<app.HostingAccount>>;
 
 export function GetIdentity(arg1:string):Promise<app.Identity>;
 
+export function GetJiraSettings():Promise<accounts.Jira>;
+
 export function GetLog(arg1:string,arg2:gitlog.Filters,arg3:string,arg4:number,arg5:number):Promise<app.LogPage>;
 
 export function GetMergeMessage(arg1:string):Promise<string>;
@@ -283,6 +286,8 @@ export function SaveFlowSettings(arg1:string,arg2:gitflow.Config):Promise<void>;
 export function SaveGitHubAccount(arg1:string,arg2:string):Promise<app.HostingAccount>;
 
 export function SaveGitSettings(arg1:gitsettings.Settings):Promise<void>;
+
+export function SaveJiraSettings(arg1:string,arg2:string):Promise<accounts.Jira>;
 
 export function SaveRepoAISettings(arg1:string,arg2:reposettings.Override):Promise<void>;
 

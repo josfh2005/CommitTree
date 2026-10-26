@@ -3,6 +3,7 @@
   import DiffText from './DiffText.svelte'
   import Icon from './Icon.svelte'
   import SubmoduleDiffView from './SubmoduleDiff.svelte'
+  import Tickets from './Tickets.svelte'
   import { api } from '../lib/api'
   import { blameBlocker } from '../lib/blame'
   import { isHosted, loadHostingInfo, settleChecks } from '../lib/hosting'
@@ -99,8 +100,8 @@
     <div class="error">{error}</div>
   {:else if details}
     <div class="info">
-      <div class="subject">{details.subject}</div>
-      {#if details.body}<pre class="body">{details.body}</pre>{/if}
+      <div class="subject"><Tickets text={details.subject} /></div>
+      {#if details.body}<pre class="body"><Tickets text={details.body} /></pre>{/if}
       <div class="meta">
         <span>{details.author} &lt;{details.email}&gt;</span>
         <span>{new Date(details.date).toLocaleString()}</span>

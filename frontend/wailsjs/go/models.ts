@@ -1,3 +1,22 @@
+export namespace accounts {
+	
+	export class Jira {
+	    site: string;
+	    keys: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Jira(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.site = source["site"];
+	        this.keys = source["keys"];
+	    }
+	}
+
+}
+
 export namespace ai {
 	
 	export class Usage {

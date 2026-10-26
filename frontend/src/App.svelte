@@ -31,6 +31,7 @@
   import { isTerminalToggle } from './lib/terminal'
   import { conflictOwnsScreen } from './lib/remote'
   import { blameTarget, chatOpen, chatRunRepo, chatWidth, closeBlame, commandsOpen, dockHeight, loadAISettings, loadGitSettings, loadRefs, loadRepos, loadWorktreeState, mainView, mergeState, platform, refreshRepo, selectRepo, selectedHash, selectedRepo, selectedRepoId, selectedStash, settingsOpen, sidebarWidth, stashConflictDismissed, stashEntries, terminalOpen, uncommittedSelected } from './lib/stores'
+  import { loadJira } from './lib/tickets'
   import { noteCommand } from './lib/tasks'
   import { toast } from './lib/ui'
   import type { HostingLimit, RepoChangedEvent, WatchEvent, WorktreeChangedEvent } from './lib/types'
@@ -96,6 +97,7 @@
   onMount(() => {
     loadRepos().then(loadRefs)
     loadGitSettings()
+    loadJira()
     const offSelected = selectedRepoId.subscribe(() => loadAISettings())
     // The payload is ignored on purpose: a worktree and its main repository share
     // their AI settings, so the event may name a repo other than the selected one.

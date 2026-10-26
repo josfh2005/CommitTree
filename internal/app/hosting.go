@@ -349,6 +349,26 @@ func (a *App) GetHostingAccounts() ([]HostingAccount, error) {
 	return out, nil
 }
 
+// GetJiraSettings returns the Jira site and project keys that make ticket
+// keys links.
+func (a *App) GetJiraSettings() (accounts.Jira, error) {
+	store, err := a.accountStore()
+	if err != nil {
+		return accounts.Jira{}, err
+	}
+	return store.Jira()
+}
+
+// SaveJiraSettings validates and stores the Jira site and project keys (comma
+// or space separated). Nothing is stored when they are invalid.
+func (a *App) SaveJiraSettings(site, keys string) (accounts.Jira, error) {
+	store, err := a.accountStore()
+	if err != nil {
+		return accounts.Jira{}, err
+	}
+	return store.SaveJira(site, keys)
+}
+
 // SaveBitbucketAccount checks the email and token against Bitbucket, and only
 // then stores them. Nothing is stored when the check fails.
 func (a *App) SaveBitbucketAccount(email, token string) (HostingAccount, error) {

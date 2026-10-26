@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -429,5 +430,92 @@ func TestProbeGitHubCLIDoesNotCacheTheToken(t *testing.T) {
 	}
 	if s.ghToken != "" {
 		t.Fatal("the probe cached a token")
+	}
+}
+
+func TestNormalizeJira(t *testing.T) {
+	ok := []struct {
+		site, keys string
+		want       Jira
+	}{
+		{"https://escala.atlassian.net", "NEXO, SCL", Jira{Site: "https://escala.atlassian.net", Keys: []string{"NEXO", "SCL"}}},
+		{"  https://escala.atlassian.net/// ", "nexo,scl nexo\tAB1", Jira{Site: "https://escala.atlassian.net", Keys: []string{"NEXO", "SCL", "AB1"}}},
+		{"https://jira.example.com/jira/", "x1", Jira{Site: "https://jira.example.com/jira", Keys: []string{"X1"}}},
+		{"", "", Jira{Keys: []string{}}},
+		{"https://a.b", "", Jira{Site: "https://a.b", Keys: []string{}}},
+		{"", "NEXO", Jira{Keys: []string{"NEXO"}}},
+	}
+	for _, c := range ok {
+		got, err := NormalizeJira(c.site, c.keys)
+		if err != nil || !reflect.DeepEqual(got, c.want) {
+			t.Errorf("NormalizeJira(%q, %q) = %+v, %v; want %+v", c.site, c.keys, got, err, c.want)
+		}
+	}
+	bad := []struct{ site, keys string }{
+		{"http://escala.atlassian.net", "NEXO"},
+		{"escala.atlassian.net", "NEXO"},
+		{"https://", "NEXO"},
+		{"javascript:alert(1)", "NEXO"},
+		{"https://u:p@escala.atlassian.net", "NEXO"},
+		{"https://escala.atlassian.net/?q=1", "NEXO"},
+		{"https://escala.atlassian.net/#x", "NEXO"},
+		{"https://escala.atlassian.net", "N"},
+		{"https://escala.atlassian.net", "1AB"},
+		{"https://escala.atlassian.net", "NE-XO"},
+		{"https://escala.atlassian.net", "NEXO, a_b"},
+	}
+	for _, c := range bad {
+		if got, err := NormalizeJira(c.site, c.keys); err == nil {
+			t.Errorf("NormalizeJira(%q, %q) = %+v, want an error", c.site, c.keys, got)
+		}
+	}
+}
+
+func TestSaveJiraPersistsNextToAccounts(t *testing.T) {
+	s, _, path := newStore(t)
+	if err := s.SaveBitbucket("a@b.c", "tok", hosting.Account{ID: "{u}", Name: "Ann"}); err != nil {
+		t.Fatal(err)
+	}
+	if j, err := s.Jira(); err != nil || j.Site != "" || len(j.Keys) != 0 {
+		t.Fatalf("Jira before = %+v, %v", j, err)
+	}
+	saved, err := s.SaveJira("https://escala.atlassian.net/", "nexo scl")
+	if err != nil || saved.Site != "https://escala.atlassian.net" || !reflect.DeepEqual(saved.Keys, []string{"NEXO", "SCL"}) {
+		t.Fatalf("SaveJira = %+v, %v", saved, err)
+	}
+	// A new store on the same file sees it, and the account is untouched.
+	again := NewStore(path)
+	j, err := again.Jira()
+	if err != nil || j.Site != "https://escala.atlassian.net" || !reflect.DeepEqual(j.Keys, []string{"NEXO", "SCL"}) {
+		t.Fatalf("Jira after = %+v, %v", j, err)
+	}
+	cfg, _ := again.Config()
+	if cfg.BitbucketEmail != "a@b.c" {
+		t.Errorf("the account must stay: %+v", cfg)
+	}
+	// Saving an account or removing it leaves the Jira block alone.
+	if err := again.Remove(hosting.Bitbucket); err != nil {
+		t.Fatal(err)
+	}
+	if j, _ := again.Jira(); j.Site == "" || len(j.Keys) != 2 {
+		t.Errorf("Remove must keep Jira: %+v", j)
+	}
+	// An invalid save changes nothing.
+	if _, err := again.SaveJira("http://x.y", "NEXO"); err == nil {
+		t.Fatal("http site must be refused")
+	}
+	if j, _ := again.Jira(); j.Site != "https://escala.atlassian.net" {
+		t.Errorf("a refused save must keep the old settings: %+v", j)
+	}
+	// Clearing both fields turns the feature off.
+	if _, err := again.SaveJira("", ""); err != nil {
+		t.Fatal(err)
+	}
+	if j, _ := again.Jira(); j.Site != "" || len(j.Keys) != 0 {
+		t.Errorf("cleared Jira = %+v", j)
+	}
+	data, _ := os.ReadFile(path)
+	if strings.Contains(string(data), "jira") {
+		t.Errorf("cleared Jira must leave no keys in the file: %s", data)
 	}
 }

@@ -83,6 +83,9 @@ does not need the AI settings, so it opens even when those cannot be loaded.
   The choice follows the saved account; with none saved, the CLI is chosen when
   `gh` exists. Save, and Remove once connected; Save with a token needs a
   non-blank one.
+- **Jira block** (below GitHub; see **Jira ticket links**). Two fields, "Site"
+  and "Project keys", and Save. Nothing here is connected to Jira: no account,
+  no token, no request.
 - **Status line** under each block: "Connected as <name>", or "Bitbucket
   rejected the token" / "GitHub rejected the token" when the account is
   marked rejected. A block with no account shows none.
@@ -99,8 +102,8 @@ or the network is touched.
 the service `git-ui`, accounts `bitbucket` and `github`; there is no
 plain-text fallback, and when the store is unusable saving fails with the
 same message as for AI keys. The rest (the Bitbucket email and display name,
-the GitHub source and login) is in `hosting.json` next to the AI settings
-file, written atomically. A token is never written there, nor to the command
+the GitHub source and login, the Jira site and keys) is in `hosting.json`
+next to the AI settings file, written atomically. A token is never written there, nor to the command
 log, an error message, the chat or a URL.
 
 **Where a token goes.** Only to its own API host (`api.bitbucket.org`,
@@ -116,6 +119,45 @@ by the host's own text when a 403 carries one; the log shows nothing else.
 The account's own call (reading who the token belongs to) has no repository
 to name: a 403 there reads "<Host> token can't read your account", followed
 by the host's text when it gave one.
+
+## Jira ticket links
+
+Commit messages carry Jira keys such as `NEXO-123`. They become links to the
+ticket, in the places listed below, once **Settings → Accounts → Jira** has
+both fields. One Jira site serves every repository.
+
+- **Site**: an `https` address with a host (for example
+  `https://escala.atlassian.net`); the trailing slash is trimmed. Anything else
+  (`http`, no host, credentials, a query or a fragment) is refused.
+- **Project keys**: separated by commas or spaces (for example `NEXO, SCL`).
+  Each is upper-cased and must be a letter followed by letters or digits
+  (`^[A-Z][A-Z0-9]+$`); duplicates are dropped. One invalid key refuses the
+  whole Save.
+- Save stores both (or clears them when both are empty) in `hosting.json`; it
+  is not secret and uses no keychain. A refused Save shows its reason under the
+  block, stores nothing and leaves the fields as typed; a good Save shows the
+  fields as kept. Until a site and at least one key are saved, nothing changes
+  anywhere.
+
+**What is a ticket.** A listed key, a dash and digits, written as its own
+word: the character before it is not a letter, digit, `-` or `_`, and the one
+after it is not a letter, digit or `_`. So `NEXO-123`, `(NEXO-123)`,
+`NEXO-123:` and `feature/NEXO-123-login` match; `XNEXO-1`, `NEXO-12a`,
+`-NEXO-1` and `NEXO-1_x` do not. The key is matched without regard to case
+(`nexo-123` in a branch name matches) and shown as written, but the link
+always carries the upper-case key: `<site>/browse/NEXO-123`. A key of a
+project that is not listed (`UTF-8`, `ABC-12`) stays plain text. Nothing is
+guessed: a key is a link only where it is literally written, and a pull
+request never gets keys from its commits (only from what it shows itself).
+
+**Where they are links.** Commit details (subject and message body); the pull
+request list (the title); the pull request detail (the title, the description,
+the source branch and each commit's message in its commit list). Not in the
+log rows, comments, the chat or the status bar. A link opens in the system
+browser, and only an `https` address opens. Clicking one never also selects the
+row or commit it sits in. In a rendered description, keys are linked only in
+plain text: never inside a tag, an attribute, an existing link, inline code or
+a code block.
 
 ## Statuses
 
