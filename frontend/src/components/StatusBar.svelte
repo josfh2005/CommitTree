@@ -10,6 +10,7 @@
   import { commandsOpen, refs, repos, selectRepo, selectedRepoId, settingsOpen, showCommitInLog } from '../lib/stores'
   import { cancelTarget, relativeTime, shownTasks, taskState, type Task, type TaskResult } from '../lib/tasks'
   import { toast } from '../lib/ui'
+  import { updateCardOpen, updateInfo } from '../lib/update'
   import StatusIcon from './StatusIcon.svelte'
 
   let now = Date.now()
@@ -150,6 +151,9 @@
   {#if tasks.length > 1}
     <button bind:this={chip} class="chip" aria-haspopup="true" aria-expanded={listOpen} on:click={toggleList}>+{tasks.length - 1}</button>
   {/if}
+  {#if $updateInfo?.newer}
+    <button class="update" title="CommitTree {$updateInfo.latest} is available" on:click={() => updateCardOpen.set(true)}>↑ Update</button>
+  {/if}
   {#if listOpen}
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions (arrow keys move between the rows) -->
     <ul class="list" bind:this={listEl} aria-label="Running tasks" on:keydown={onListKey}>
@@ -186,6 +190,8 @@
   .limit { flex: none; }
   .chip { font-size: 11px; padding: 0 6px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); }
   .chip:hover { background: var(--hover); }
+  .update { flex: none; padding: 0 8px; border-radius: 9px; background: var(--update-bg); color: #fff; font-size: 12px; line-height: 16px; }
+  .update:hover { opacity: 0.85; }
   .list { position: absolute; right: 8px; bottom: 26px; z-index: 50; margin: 0; padding: 4px; list-style: none; min-width: 320px; max-width: min(560px, calc(100vw - 16px)); max-height: 50vh; overflow: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; box-shadow: var(--shadow); }
   .list li { display: flex; align-items: center; gap: 6px; }
   .row { flex: 1; display: flex; align-items: center; gap: 4px; min-width: 0; padding: 4px 6px; text-align: left; border-radius: 4px; }

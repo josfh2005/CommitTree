@@ -2,7 +2,7 @@ import { get } from 'svelte/store'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import {
   FOCUS_SPACING_MS, createUpdateController, manualCheckResult, restartBlockers, setUpdateProgress, shouldCheck, shouldShowCard,
-  startUpdate, updateCardOpen, updateInfo, updatePhase,
+  progressText, startUpdate, updateCardOpen, updateInfo, updatePhase,
 } from './update'
 import type { UpdateInfo } from './types'
 
@@ -203,11 +203,11 @@ describe('startUpdate', () => {
     expect(order).toEqual(['prepare', 'confirm', 'apply'])
   })
 
-  it('declining leaves the update ready and does not apply', async () => {
+  it('declining does not apply and puts the card back to idle', async () => {
     confirm.mockResolvedValue(false)
     await startUpdate({ prepare, apply, confirm, blockers: () => ['x is running'] })
     expect(apply).not.toHaveBeenCalled()
-    expect(get(updatePhase).phase).toBe('ready')
+    expect(get(updatePhase)).toEqual({ phase: 'idle', done: 0, total: 0, error: '' })
   })
 
   it('shows the download while preparing', async () => {
@@ -241,6 +241,40 @@ describe('startUpdate', () => {
     updatePhase.set({ phase: 'download', done: 1, total: 2, error: '' })
     await startUpdate({ prepare, apply, confirm, blockers: () => [] })
     expect(prepare).not.toHaveBeenCalled()
+  })
+
+  it('ignores a second start while the restart question is open', async () => {
+    updatePhase.set({ phase: 'ready', done: 0, total: 0, error: '' })
+    await startUpdate({ prepare, apply, confirm, blockers: () => [] })
+    expect(prepare).not.toHaveBeenCalled()
+    expect(apply).not.toHaveBeenCalled()
+    expect(get(updatePhase).phase).toBe('ready')
+  })
+
+  it('after an error a new start downloads again', async () => {
+    updatePhase.set({ phase: 'error', done: 0, total: 0, error: 'x' })
+    await startUpdate({ prepare, apply, confirm, blockers: () => [] })
+    expect(prepare).toHaveBeenCalledTimes(1)
+  })
+
+  it('after declining, a new start downloads again', async () => {
+    confirm.mockResolvedValue(false)
+    await startUpdate({ prepare, apply, confirm, blockers: () => ['x is running'] })
+    await startUpdate({ prepare, apply, confirm, blockers: () => ['x is running'] })
+    expect(prepare).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('progressText', () => {
+  it('shows a percentage when the total is known', () => {
+    expect(progressText(42, 100)).toBe('Downloading 42 %')
+    expect(progressText(0, 100)).toBe('Downloading 0 %')
+  })
+  it('shows the bytes received when the total is unknown', () => {
+    expect(progressText(3 * 1024 * 1024, -1)).toBe('Downloading 3 MB')
+  })
+  it('shows no number before the first byte of an unknown total', () => {
+    expect(progressText(0, -1)).toBe('Downloading…')
   })
 })
 

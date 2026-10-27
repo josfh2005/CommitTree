@@ -170,7 +170,11 @@ another window is the only moment external changes are checked for.
 
 The sidebar's Settings row shows the app's version (for example v0.2.0) on
 its right, muted; the version comes from `wails.json` (`info.productVersion`),
-which also stamps the macOS bundle.
+which also stamps the macOS bundle. While a newer release is known
+(`15-updates.md`) the label reads "v0.9.0 → 0.10.0" (the running version,
+an arrow, the newer one) in an accent colour instead of muted; the colour is
+a variant of the accent that keeps at least 4.5:1 on the sidebar in Light and
+Dark.
 
 Settings opens from the sidebar's Settings row and, following each system's
 convention, from the keyboard. On macOS the menu bar's CommitTree menu has
@@ -181,7 +185,7 @@ Settings.
 
 The Settings dialog has a fixed size, with tabs in a column on the left:
 
-- **General**: Appearance, the Git pull strategy and what Push does (ask, current branch, main branches).
+- **General**: Appearance, Fetch, Notifications, the Git pull strategy and what Push does (ask, current branch, main branches), and Updates (`15-updates.md`).
 - **Accounts**: the Bitbucket and GitHub accounts of the code hosting
   integration and the Jira site and project keys for ticket links
   (`14-hosting.md`). It does not need the AI settings.

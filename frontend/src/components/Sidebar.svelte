@@ -6,6 +6,7 @@
   import { GROUP_DRAG_MIME, REPO_DRAG_MIME } from '../lib/repoDrop'
   import { busy, collapsedRepoGroups, repoSortOrder, repos, settingsOpen, toggleRepoGroupCollapsed } from '../lib/stores'
   import { openMenu } from '../lib/ui'
+  import { updateInfo } from '../lib/update'
 
   // Which drop target (a group name, or '' for the loose area) the drag is
   // currently over, for the highlight. A drop target spans a whole section
@@ -244,7 +245,7 @@
 
   <div class="footer">
     {#if $busy}<div class="note">{$busy}</div>{/if}
-    <button class="row-item" on:click={() => settingsOpen.set(true)}><Icon name="settings" /> Settings<span class="version">v{__APP_VERSION__}</span></button>
+    <button class="row-item" on:click={() => settingsOpen.set(true)}><Icon name="settings" /> Settings<span class="version" class:update={$updateInfo?.newer}>{#if $updateInfo?.newer}v{__APP_VERSION__} → {$updateInfo.latest}{:else}v{__APP_VERSION__}{/if}</span></button>
   </div>
 </div>
 
@@ -276,5 +277,6 @@
   .empty { margin: 0; padding: 6px 10px; color: var(--muted); }
   .footer { flex: none; border-top: 1px solid var(--border); padding-top: 6px; }
   .version { margin-left: auto; font-size: 11px; color: var(--muted); }
+  .version.update { color: var(--update-text); }
   .note { padding: 4px 10px; font-size: 12px; color: var(--muted); }
 </style>

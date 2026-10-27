@@ -267,8 +267,10 @@ the card. Clicking it opens the card.
 
 "Update and restart" downloads and unpacks the update first. If restarting
 would interrupt something, CommitTree then asks for confirmation, listing what
-is in the way, and swaps only if the user agrees; declining leaves the update
-downloaded. The reasons, in this order:
+is in the way, and swaps only if the user agrees. Declining puts the card back as it was
+before the click, so a new click on "Update and restart" downloads and unpacks
+again (there is no way to reuse the first download). The reasons, in this
+order:
 
 1. One per task running in the status bar: "*task* is running".
 2. "The chat is answering".
@@ -278,3 +280,52 @@ downloaded. The reasons, in this order:
 With none of these there is no question. Cancelling the download is not an
 error: the card goes back to how it was, with no message. Any other failure
 shows its message in the card (see *Errors as the user reads them*).
+
+## What the user sees
+
+### The card
+
+A floating panel fixed at the bottom right of the window, 16 px from the edge
+and just above the status bar, at most 340 px wide. It looks like a toast
+(same surface, border and shadow) with a 4 px accent-coloured left edge. When
+toasts are on screen the card stacks above them, so neither covers the other.
+It stays until closed with ✕ or Esc; closing it never stops a download in
+progress, and the pill opens it again.
+
+Its title is "CommitTree *latest* is available", with a muted "You have
+*current*" under it. Then, by state:
+
+- **Ready.** Two buttons: **Update and restart** (primary) and **What's new**,
+  which opens the release page in the browser.
+- **Cannot install in place** (see *When it cannot install*). The primary
+  button is **Download** and opens the release page; a muted line gives the
+  reason. There is no "What's new" button, since both would open the same page.
+- **Downloading.** "Downloading 42 %", or the bytes received ("Downloading
+  3 MB") when the server did not say the total, or "Downloading…" before the
+  first byte; and a **Cancel** button. Update and restart is disabled.
+- **Installing.** "Installing…" while the update is unpacked and swapped in;
+  nothing can be clicked. While the restart question is open the card says
+  "Waiting for your answer…". A click on Update and restart during any of
+  these does nothing.
+- **Failed.** The message in one line (see *Errors as the user reads them*)
+  in the danger colour, **Update and restart** again (a new attempt downloads
+  again) and **Open release page**. A cancelled download is not a failure: the
+  card goes back to its ready state with no message.
+
+### The pill
+
+"↑ Update" at the right end of the status bar (`13-status-bar.md`), shown while
+a newer version is known. Clicking it opens the card.
+
+### The sidebar
+
+The version label next to Settings reads "v*current* → *latest*" in an accent
+colour while a newer version is known (`07-conventions-and-constraints.md`).
+
+### Settings → General → Updates
+
+- A checkbox **Check for updates automatically** (on by default, kept between
+  runs). It turns the checks at start and on focus on or off.
+- A line "CommitTree *version*" and a **Check now** button, disabled and
+  reading "Checking…" while it runs. Its answer shows under it: "You're up to
+  date", "*version* is available", or the error's text.

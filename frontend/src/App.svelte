@@ -19,6 +19,7 @@
   import StashView from './components/StashView.svelte'
   import StatusBar from './components/StatusBar.svelte'
   import Toasts from './components/Toasts.svelte'
+import UpdateCard from './components/UpdateCard.svelte'
   import { startFocusRefresh } from './lib/actions'
   import { nextChatRunRepo } from './lib/chat'
   import { notifyBody, onClosed, onRequest, type CredentialRequest } from './lib/credential'
@@ -34,7 +35,9 @@
   import { loadJira } from './lib/tickets'
   import { noteCommand } from './lib/tasks'
   import { toast } from './lib/ui'
-  import type { HostingLimit, RepoChangedEvent, WatchEvent, WorktreeChangedEvent } from './lib/types'
+  import { setUpdateProgress } from './lib/update'
+  import { updateChecker } from './lib/updateInstall'
+  import type { HostingLimit, RepoChangedEvent, UpdateProgress, WatchEvent, WorktreeChangedEvent } from './lib/types'
   import { Environment, EventsOn } from '../wailsjs/runtime/runtime'
 
   // A merge in progress always wins: neither the Changes view nor a stash
@@ -166,7 +169,15 @@
     })
     const offCredClosed = EventsOn('credential:closed', (p: { id: string }) => onClosed(p.id))
     const offCredNotice = EventsOn('credential:notice', (p: { text: string }) => toast(p.text, 'info'))
+    // Looks for a newer release at start and when the window gets focus (at
+    // most every 6 h); the card and the status-bar pill follow what it finds.
+    void updateChecker.run('start')
+    const onFocus = () => void updateChecker.run('focus')
+    window.addEventListener('focus', onFocus)
+    const offUpdateProgress = EventsOn('update:progress', (p: UpdateProgress) => setUpdateProgress(p))
     return () => {
+      window.removeEventListener('focus', onFocus)
+      offUpdateProgress()
       offClone()
       offCommands()
       offCredReq()
@@ -241,6 +252,7 @@
 <DialogHost />
 <CredentialDialog />
 <Toasts />
+<UpdateCard />
 <SettingsDialog />
 
 <style>

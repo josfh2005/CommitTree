@@ -52,9 +52,9 @@ export const reposParent = persisted<string>('reposParent', '')
 /** Settings → Appearance → High contrast; main.ts applies it to the page. */
 export const highContrast = persisted('highContrast', false, (v): v is boolean => typeof v === 'boolean')
 const isBool = (v: unknown): v is boolean => typeof v === 'boolean'
-/** Settings → General → Notifications (docs/spec/11-notifications.md). */
-/** Whether CommitTree looks for a newer release by itself (at start and on window focus). */
+/** Settings → General → Updates: whether CommitTree looks for a newer release by itself (at start and on window focus). */
 export const autoUpdateCheck = persisted('autoUpdateCheck', true, isBool)
+/** Settings → General → Notifications (docs/spec/11-notifications.md). */
 export const notifyEnabled = persisted('notifyEnabled', true, isBool)
 export const notifyDone = persisted('notifyDone', true, isBool)
 export const notifyAi = persisted('notifyAi', true, isBool)

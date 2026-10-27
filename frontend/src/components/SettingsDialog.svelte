@@ -9,8 +9,10 @@
   import { SETTINGS_TABS, settingsTab, tabUsesAI } from '../lib/settingsTabs'
   import { modelDone, modelProgress, modelPull, startModelPull } from '../lib/modelPull'
   import { statusText } from '../lib/notifyRules'
-  import { AUTO_FETCH_CHOICES, autoFetchMinutes, highContrast, loadAISettings, loadGitSettings, notifyAi, notifyDone, notifyEnabled, notifyPipelines, notifyProblem, notifyRemote, settingsOpen, themePref } from '../lib/stores'
+  import { AUTO_FETCH_CHOICES, autoFetchMinutes, autoUpdateCheck, highContrast, loadAISettings, loadGitSettings, notifyAi, notifyDone, notifyEnabled, notifyPipelines, notifyProblem, notifyRemote, settingsOpen, themePref } from '../lib/stores'
   import type { ThemePref } from '../lib/theme'
+  import { manualCheckResult } from '../lib/update'
+  import { updateChecker } from '../lib/updateInstall'
 
   const THEMES: { value: ThemePref; label: string }[] = [
     { value: 'auto', label: 'Auto' },
@@ -93,6 +95,16 @@
     }
     await refresh()
     await syncModels()
+  }
+
+  let checking = false
+  async function checkNow() {
+    checking = true
+    try {
+      await updateChecker.run('manual')
+    } finally {
+      checking = false
+    }
   }
 
   async function saveGit() {
@@ -334,6 +346,19 @@
               </label>
               <p class="hint push-hint">main, master, develop and release/*, or your git-flow names.</p>
             </section>
+
+            <section>
+              <h4>Updates</h4>
+              <label class="row check">
+                <input type="checkbox" bind:checked={$autoUpdateCheck} />
+                <span>Check for updates automatically</span>
+              </label>
+              <div class="row update-row">
+                <span>CommitTree {__APP_VERSION__}</span>
+                <button class="btn" disabled={checking} on:click={checkNow}>{checking ? 'Checking…' : 'Check now'}</button>
+              </div>
+              {#if $manualCheckResult}<p class="hint check-result" role="status">{$manualCheckResult}</p>{/if}
+            </section>
           {:else if $tab === 'accounts'}
             <AccountsTab />
           {:else if tabUsesAI($tab) && !settings}
@@ -539,6 +564,7 @@
   label.check { gap: 6px; color: var(--text); font-size: 13px; }
   .key-label { flex: none; width: 130px; }
   .row { display: flex; gap: 6px; }
+  .update-row { align-items: center; justify-content: space-between; color: var(--text); font-size: 13px; }
   .theme { align-items: center; justify-content: space-between; color: var(--text); font-size: 13px; }
   .segmented { display: inline-flex; padding: 2px; gap: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
   .segmented button { padding: 3px 12px; border-radius: 6px; color: var(--muted); }
@@ -556,7 +582,7 @@
   .hint { font-size: 12px; color: var(--muted); }
   p.hint, p.warn { padding: 14px 0; }
 .check.sub { padding-left: 22px; }
-p.hint.notify-status, p.hint.push-hint { padding: 4px 0 0; }
+p.hint.notify-status, p.hint.push-hint, p.hint.check-result { padding: 4px 0 0; }
   p.hint.remote-off { padding: 0 0 0 44px; }
   .pull { display: flex; align-items: center; gap: 8px; }
   .bar { flex: 1; height: 6px; border-radius: 3px; background: var(--hover); overflow: hidden; }

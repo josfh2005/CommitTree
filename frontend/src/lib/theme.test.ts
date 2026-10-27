@@ -78,6 +78,13 @@ describe('high contrast palettes in theme.css', () => {
   const dark = { ...lightBase, ...darkBase, ...darkHigh }
   const textTokens = ['--text', '--muted', '--faint', '--merge-text', '--ahead', '--behind']
 
+  for (const [name, palette] of [['light', light], ['dark', dark]] as const) {
+    it(`${name}: the update pill and the sidebar's version label stay at least 4.5:1`, () => {
+      expect(contrastRatio('#ffffff', palette['--update-bg']), 'white on --update-bg').toBeGreaterThanOrEqual(4.5)
+      expect(contrastRatio(palette['--update-text'], palette['--sidebar']), '--update-text on --sidebar').toBeGreaterThanOrEqual(4.5)
+    })
+  }
+
   it('changes only text colours, never backgrounds or borders', () => {
     expect(Object.keys(lightHigh).sort()).toEqual([...textTokens].sort())
     expect(Object.keys(darkHigh).sort()).toEqual([...textTokens].sort())

@@ -6,13 +6,15 @@
   import { commitChanges, stashChanges } from '../lib/actions'
   import { amendWarning, canCommit, shouldAutoGenerate } from '../lib/worktree'
   import type { CommitDeltaEvent, CommitDoneEvent, CommitInfo, WorktreeChangedEvent } from '../lib/types'
-  import { aiOff, aiSettings, busy, focusCommitBox, worktreeState } from '../lib/stores'
+  import { aiOff, aiSettings, busy, commitDraft, focusCommitBox, worktreeState } from '../lib/stores'
   import { confirmDialog, errorMessage, toast } from '../lib/ui'
 
   export let repoId: string
 
   let info: CommitInfo | null = null
   let message = ''
+  // The Update card asks before a restart would drop unsaved text.
+  $: commitDraft.set(message)
   let touched = false
   let amend = false
   let preAmendMessage = ''
@@ -51,6 +53,7 @@
     offDone()
     offChanged()
     clearStallTimer()
+    commitDraft.set('') // the text goes with the box
   })
 
   $: load(repoId)

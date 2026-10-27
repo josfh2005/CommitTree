@@ -1,4 +1,5 @@
 import { writable } from 'svelte/store'
+import { formatBytes, percent } from './format'
 import { errorMessage } from './ui'
 import type { UpdateInfo, UpdateProgress } from './types'
 
@@ -32,6 +33,13 @@ export function restartBlockers(tasks: { label: string }[], chatRunRepo: string,
   if (chatRunRepo !== '') reasons.push('The chat is answering')
   if (commitDraft.trim() !== '') reasons.push('The commit message has unsaved text')
   return reasons
+}
+
+/** The card's line while downloading: a percentage, or the bytes received
+ *  when the server did not say the total (total < 0). */
+export function progressText(done: number, total: number): string {
+  if (total >= 0) return `Downloading ${percent(done, total)} %`
+  return done > 0 ? `Downloading ${formatBytes(done)}` : 'Downloading…'
 }
 
 /** The last check's result; null before one succeeded. The status-bar pill
@@ -89,14 +97,16 @@ const isCancelled = (e: unknown) => /context canceled/i.test(errorMessage(e))
 
 /** "Update and restart": download and unpack, ask first when a restart would
  *  interrupt something, then swap and relaunch. A cancelled download is not an
- *  error; declining the question leaves the update ready. */
+ *  error. Declining the question puts the card back to idle (the update stays
+ *  staged in the app, but the next click downloads again). A click while a download,
+ *  the install or the question is going on does nothing. */
 export async function startUpdate(deps: {
   prepare: () => Promise<void>
   apply: () => Promise<void>
   confirm: (reasons: string[]) => Promise<boolean>
   blockers: () => string[]
 }): Promise<void> {
-  if (phaseNow.phase === 'download' || phaseNow.phase === 'install') return
+  if (phaseNow.phase === 'download' || phaseNow.phase === 'install' || phaseNow.phase === 'ready') return
   updatePhase.set({ phase: 'download', done: 0, total: 0, error: '' })
   try {
     await deps.prepare()
@@ -106,7 +116,10 @@ export async function startUpdate(deps: {
   }
   updatePhase.set({ ...IDLE, phase: 'ready' })
   const reasons = deps.blockers()
-  if (reasons.length > 0 && !(await deps.confirm(reasons))) return
+  if (reasons.length > 0 && !(await deps.confirm(reasons))) {
+    updatePhase.set({ ...IDLE })
+    return
+  }
   updatePhase.set({ ...IDLE, phase: 'install' })
   try {
     await deps.apply()
