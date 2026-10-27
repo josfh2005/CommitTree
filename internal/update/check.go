@@ -88,18 +88,7 @@ func (c *Checker) fetch(ctx context.Context, u *url.URL) ([]byte, error) {
 		client = defaultClient
 	}
 	if !c.Override {
-		// Work on a copy so the caller's client is left as it was.
-		cp := *client
-		cp.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				return errors.New("stopped after 10 redirects")
-			}
-			if !AllowedHost(req.URL) {
-				return fmt.Errorf("refusing redirect to %s", req.URL.Host)
-			}
-			return nil
-		}
-		client = &cp
+		client = guardRedirects(client)
 	}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -110,6 +99,22 @@ func (c *Checker) fetch(ctx context.Context, u *url.URL) ([]byte, error) {
 		return nil, fmt.Errorf("fetch manifest: %s", resp.Status)
 	}
 	return readCapped(resp.Body)
+}
+
+// guardRedirects returns a copy of client that follows at most 10 redirects
+// and only to AllowedHost addresses. The caller's client is left as it was.
+func guardRedirects(client *http.Client) *http.Client {
+	cp := *client
+	cp.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return errors.New("stopped after 10 redirects")
+		}
+		if !AllowedHost(req.URL) {
+			return fmt.Errorf("refusing redirect to %s", req.URL.Host)
+		}
+		return nil
+	}
+	return &cp
 }
 
 func readFileCapped(path string) ([]byte, error) {

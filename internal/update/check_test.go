@@ -184,3 +184,26 @@ func TestNewChecker(t *testing.T) {
 		t.Errorf("override checker = %+v", c)
 	}
 }
+
+func TestLatestRedirectAllowed(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/josfh2005/CommitTree/releases/latest/download/latest.json" {
+			http.Redirect(w, r, "https://objects.githubusercontent.com/blob/latest.json", http.StatusFound)
+			return
+		}
+		w.Write(validManifest())
+	}))
+	defer srv.Close()
+	c := &Checker{
+		ManifestURL: DefaultManifestURL,
+		Platform:    "darwin-arm64",
+		HTTP:        &http.Client{Transport: routeTo{addr: srv.Listener.Addr().String()}},
+	}
+	r, err := c.Latest(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Version != "0.10.0" || r.AssetName != "CommitTree-macos-arm64.zip" {
+		t.Errorf("release = %+v", r)
+	}
+}
