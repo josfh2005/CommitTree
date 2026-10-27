@@ -2,10 +2,13 @@ package update
 
 import (
 	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestTargetDarwin(t *testing.T) {
@@ -238,5 +241,66 @@ func TestRelaunchCommand(t *testing.T) {
 	}
 	if strings.Contains(joined, "open -n") {
 		t.Errorf("linux command must not call open: %q", joined)
+	}
+}
+
+func TestSwapDarwinRemovesStaleOldBundle(t *testing.T) {
+	x := t.TempDir()
+	target := filepath.Join(x, "CommitTree.app")
+	os.MkdirAll(target, 0o755)
+	os.WriteFile(filepath.Join(target, "old"), []byte("o"), 0o644)
+	stale := filepath.Join(x, fmt.Sprintf(".CommitTree.app.old-%d", os.Getpid()))
+	os.MkdirAll(stale, 0o755)
+	os.WriteFile(filepath.Join(stale, "junk"), []byte("j"), 0o644)
+	staged := filepath.Join(t.TempDir(), "CommitTree.app")
+	os.MkdirAll(staged, 0o755)
+	os.WriteFile(filepath.Join(staged, "new"), []byte("n"), 0o644)
+
+	if err := Swap(target, staged, "darwin"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(target, "new")); err != nil {
+		t.Fatalf("new missing: %v", err)
+	}
+	entries, _ := os.ReadDir(x)
+	if len(entries) != 1 {
+		t.Fatalf("leftovers: %v", entries)
+	}
+}
+
+func TestRelaunchCapsTheWait(t *testing.T) {
+	if _, err := exec.LookPath("sleep"); err != nil {
+		t.Skip("no sleep")
+	}
+	// A process that never exits within the test: the relaunch shell must
+	// give up waiting and start the target anyway.
+	hog := exec.Command("sleep", "60")
+	if err := hog.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { hog.Process.Kill(); hog.Wait() })
+
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "started")
+	target := filepath.Join(dir, "CommitTree")
+	os.WriteFile(target, []byte("#!/bin/sh\ntouch "+marker+"\n"), 0o755)
+
+	name, args := relaunchCommand(target, "linux", hog.Process.Pid, 3)
+	start := time.Now()
+	if err := exec.Command(name, args...).Run(); err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Since(start); d > 10*time.Second {
+		t.Fatalf("the wait was not capped: took %v", d)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("target was not started after the capped wait: %v", err)
+	}
+}
+
+func TestRelaunchCommandCapsWaitAtThirtySeconds(t *testing.T) {
+	_, args := RelaunchCommand("/opt/x/CommitTree", "linux", 7)
+	if joined := strings.Join(args, " "); !strings.Contains(joined, "150") || !strings.Contains(joined, "sleep 0.2") {
+		t.Errorf("wait loop is not capped at 150 x 0.2 s: %q", joined)
 	}
 }

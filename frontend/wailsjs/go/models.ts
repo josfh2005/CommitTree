@@ -736,6 +736,28 @@ export namespace app {
 		    return a;
 		}
 	}
+	export class UpdateInfo {
+	    current: string;
+	    latest: string;
+	    newer: boolean;
+	    pageURL: string;
+	    canInstall: boolean;
+	    reason: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UpdateInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.current = source["current"];
+	        this.latest = source["latest"];
+	        this.newer = source["newer"];
+	        this.pageURL = source["pageURL"];
+	        this.canInstall = source["canInstall"];
+	        this.reason = source["reason"];
+	    }
+	}
 	export class WorktreeDiff {
 	    text: string;
 	    hash: string;

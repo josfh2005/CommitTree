@@ -90,6 +90,8 @@ func Swap(target, staged, goos string) error {
 func swapDarwin(target, staged string) error {
 	dir, base, pid := filepath.Dir(target), filepath.Base(target), os.Getpid()
 	old := filepath.Join(dir, fmt.Sprintf(".%s.old-%d", base, pid))
+	// A leftover from an earlier attempt of this pid would make the rename fail.
+	os.RemoveAll(old)
 	if err := os.Rename(target, old); err != nil {
 		return err
 	}
@@ -142,6 +144,12 @@ func swapLinux(target, staged string) (err error) {
 		dst.Close()
 		return err
 	}
+	// On disk before the rename makes it the program, so a crash cannot
+	// leave a truncated binary under the real name.
+	if err = dst.Sync(); err != nil {
+		dst.Close()
+		return err
+	}
 	if err = dst.Close(); err != nil {
 		return err
 	}
@@ -154,11 +162,20 @@ func swapLinux(target, staged string) (err error) {
 // RelaunchCommand builds the command that starts target again once the
 // process pid has exited.
 func RelaunchCommand(target, goos string, pid int) (name string, args []string) {
+	return relaunchCommand(target, goos, pid, relaunchWaitTries)
+}
+
+// relaunchWaitTries bounds how long the relaunch shell waits for the old
+// process to exit: tries x 0.2 s (30 s), after which it starts the target
+// anyway rather than never reopening the app.
+const relaunchWaitTries = 150
+
+func relaunchCommand(target, goos string, pid, tries int) (name string, args []string) {
 	start := "exec " + shellQuote(target)
 	if goos == "darwin" {
 		start = "/usr/bin/open -n " + shellQuote(target)
 	}
-	script := "while kill -0 " + strconv.Itoa(pid) + " 2>/dev/null; do sleep 0.2; done; " + start
+	script := "n=0; while kill -0 " + strconv.Itoa(pid) + " 2>/dev/null && [ $n -lt " + strconv.Itoa(tries) + " ]; do sleep 0.2; n=$((n+1)); done; " + start
 	return "/bin/sh", []string{"-c", script}
 }
 

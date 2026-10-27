@@ -133,19 +133,21 @@ running application where it stands, then CommitTree starts again.
   (symlinks resolved) that contains it under `Contents/MacOS/`. On Linux, the
   running binary itself.
 - **Swap on macOS.** The old bundle is renamed aside in the same folder to
-  `.CommitTree.app.old-<pid>`, then the new bundle is moved in. When the new
+  `.CommitTree.app.old-<pid>` (a leftover of that name from an earlier attempt
+  is deleted first), then the new bundle is moved in. When the new
   bundle sits on another volume, so a rename is impossible, it is first copied
   next to the old one with the system `ditto` and the copy is renamed. If
   anything fails, the old bundle is renamed back and the update fails with the
   application as it was. Only after success is the old bundle deleted (a
   failure to delete it is ignored).
 - **Swap on Linux.** The new binary is copied next to the running one as
-  `.CommitTree.new-<pid>`, given mode 0755 and renamed over the old binary
-  (atomic on one filesystem). A failure removes the copy and leaves the old
+  `.CommitTree.new-<pid>`, given mode 0755, flushed to disk and renamed over the
+  old binary (atomic on one filesystem). A failure removes the copy and leaves the old
   binary untouched.
 - **Restart.** CommitTree starts a detached shell (`/bin/sh`, in its own
   session) that waits until this process has exited (`kill -0 <pid>`), then
-  starts the application again: on macOS with `/usr/bin/open -n '<bundle>'`,
+  starts the application again (it waits at most 30 seconds for this process to
+  exit, then starts it anyway): on macOS with `/usr/bin/open -n '<bundle>'`,
   on Linux with `exec '<binary>'`. Single quotes in the path are escaped. The
   caller then quits, so the new instance opens once the old one is gone.
 - **Quarantine and signature.** A file the application downloads itself does
@@ -175,3 +177,49 @@ release page instead. The reason is one of these, checked in this order:
    creating and removing a temporary `.committree-write-*` file there.
 
 With none of these, installing is allowed and there is no reason.
+
+## Installing
+
+The frontend drives an install in two steps, each a call into the application,
+so that the long part (download) can be shown and cancelled and the short part
+(swap) happens only when the user's click asks for it.
+
+1. **Prepare** (`PrepareUpdate`) fetches the manifest again, downloads and
+   verifies the asset, unpacks it and keeps the result for the next step. It
+   blocks until done and reports `update:progress` events: phase `download`
+   with the bytes received and the total (-1 when unknown), at most every
+   100 ms plus a last one with the final numbers; then phase `install` (while
+   unpacking). It refuses to start when the release is not newer than the
+   running version ("CommitTree is already up to date") or when the update
+   cannot be installed in place (see *When it cannot install*). Each attempt
+   works in its own new, empty temporary folder, deleted when the attempt
+   fails or is cancelled, when a later Prepare replaces the staged update, and
+   when CommitTree quits without applying it. Only one Prepare or Apply runs
+   at a time; another call fails with "an update is already in progress".
+2. **Apply** (`ApplyUpdate`) swaps the staged update in for the running
+   application, starts the new one (see *Installing in place*) and quits
+   CommitTree. Before swapping it checks again that the staged version is newer
+   than the running one and that installing is still possible. Without a staged
+   update it fails with "no update has been downloaded". If the swap fails the
+   old version is untouched, the staged update is kept so the user can try
+   again, and CommitTree does not quit. If the swap worked but the restart
+   could not be started, CommitTree stays open and says so.
+
+**Cancelling** (`CancelUpdate`) stops a running Prepare, which ends with a
+cancellation, not an error message; it does nothing when none is running.
+
+### Errors as the user reads them
+
+| Cause | Text |
+| --- | --- |
+| Checksum differs from the manifest | The download didn't match the expected checksum |
+| Stalled, network failure, too large | Couldn't download the update |
+| Archive unreadable or without the expected content, or the unpacked app has another version than announced | The downloaded update isn't valid |
+| Unpacking failed for another reason | Couldn't unpack the update: *reason* |
+| The swap failed | Couldn't install the update: *reason* |
+| The swap worked, the restart did not start | The update was installed, but CommitTree couldn't restart itself. Quit and open it again. |
+| Cannot install in place | CommitTree can't install this update itself: *reason* (one of *When it cannot install*) |
+
+The version the application compares against comes from `wails.json`
+(`info.productVersion`), embedded in the program; a build whose version is not
+`MAJOR.MINOR.PATCH` fails its checks.
