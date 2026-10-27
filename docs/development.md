@@ -48,14 +48,15 @@ The update check reads `latest.json` from the latest release (`docs/spec/15-upda
    codesign --force --deep -s - build/bin/CommitTree.app
    ditto -c -k --keepParent build/bin/CommitTree.app build/bin/CommitTree-macos-amd64.zip
    ```
+   A bare `wails build` also rewrites the generated runtime files, so afterwards run `git checkout -- frontend/wailsjs/runtime` to drop that churn.
 3. Apple Silicon build and zip (on an arm64 Mac): `make build`, then
    `ditto -c -k --keepParent build/bin/CommitTree.app build/bin/CommitTree-macos-arm64.zip`.
 4. Linux: `make build-linux` (Docker; writes `build/bin/CommitTree-linux-amd64.tar.gz`).
 5. `make release-manifest` hashes the three files in `build/bin` and writes `build/bin/latest.json`. It fails, naming the file, if one is missing, is older than `wails.json` (a build left over from the previous release), is a macOS zip whose `Info.plist` version differs from `wails.json`, or if the version in `wails.json` is not `MAJOR.MINOR.PATCH`. So make the version commit first, then build; if it complains, rebuild that asset.
-6. Tag and publish, attaching the three assets and `latest.json`:
+6. Tag and publish, attaching the three assets and `latest.json`. The version commit and the tag must be pushed first: `--verify-tag` makes `gh` refuse to create the release (and so a tag nobody has pushed) otherwise.
    ```bash
    git tag vX.Y.Z && git push origin main vX.Y.Z
-   gh release create vX.Y.Z --title "vX.Y.Z" --notes "..." \
+   gh release create vX.Y.Z --verify-tag --title "vX.Y.Z" --notes "..." \
      build/bin/CommitTree-macos-arm64.zip build/bin/CommitTree-macos-amd64.zip \
      build/bin/CommitTree-linux-amd64.tar.gz build/bin/latest.json
    ```
