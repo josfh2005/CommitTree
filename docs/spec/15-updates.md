@@ -108,7 +108,10 @@ Downloading fetches the asset of the release for this platform (see
 
 ### Unpacking
 
-- **macOS:** the zip is extracted with the system `ditto`. The result must
+- **macOS:** before anything is extracted the zip's entry list is read and the
+  archive is refused ("update archive is not valid") if any entry has an
+  absolute name or a `..` path element, or is a symbolic link pointing
+  outside the app bundle. Then the zip is extracted with the system `ditto`. The result must
   contain `CommitTree.app` at its top level (a directory, not a link);
   otherwise the archive is rejected. The bundle's `Info.plist` is then read
   (`CFBundleShortVersionString`) and must equal the version announced by the

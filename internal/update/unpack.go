@@ -69,6 +69,9 @@ func BundleVersion(app string) (string, error) {
 }
 
 func unpackDarwin(archive, dir string) (string, error) {
+	if err := checkZipNames(archive); err != nil {
+		return "", err
+	}
 	if out, err := exec.Command("/usr/bin/ditto", "-x", "-k", archive, dir).CombinedOutput(); err != nil {
 		return "", fmt.Errorf("%w: ditto: %v: %s", ErrBadArchive, err, strings.TrimSpace(string(out)))
 	}
