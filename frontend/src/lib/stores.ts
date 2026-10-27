@@ -53,6 +53,8 @@ export const reposParent = persisted<string>('reposParent', '')
 export const highContrast = persisted('highContrast', false, (v): v is boolean => typeof v === 'boolean')
 const isBool = (v: unknown): v is boolean => typeof v === 'boolean'
 /** Settings → General → Notifications (docs/spec/11-notifications.md). */
+/** Whether CommitTree looks for a newer release by itself (at start and on window focus). */
+export const autoUpdateCheck = persisted('autoUpdateCheck', true, isBool)
 export const notifyEnabled = persisted('notifyEnabled', true, isBool)
 export const notifyDone = persisted('notifyDone', true, isBool)
 export const notifyAi = persisted('notifyAi', true, isBool)
@@ -150,6 +152,9 @@ export const pendingFinish = writable<PendingFinish | null>(null)
 /** The repository an AI run is working on, '' when none (tracked from chat events in App),
  *  so the Merge view's buttons wait for it. */
 export const chatRunRepo = writable('')
+/** The commit message being typed in the Changes view (CommitBox keeps it
+ *  here), so an update restart can warn about unsaved text. */
+export const commitDraft = writable('')
 export const settingsOpen = writable(false)
 /** The repository whose Repository settings dialog is open. */
 export const repoSettings = writable<{ repoID: string; tab?: 'remotes' | 'flow' | 'ai' } | null>(null)

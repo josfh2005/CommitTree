@@ -223,3 +223,58 @@ cancellation, not an error message; it does nothing when none is running.
 The version the application compares against comes from `wails.json`
 (`info.productVersion`), embedded in the program; a build whose version is not
 `MAJOR.MINOR.PATCH` fails its checks.
+
+## When the card and the pill show
+
+When a check finds a version newer than the running one, two things can show
+it: the **card** (a floating panel at the bottom right of the window, above the
+status bar, that stays until closed) and the **pill** (a button at the right end
+of the status bar that opens the card again).
+
+### When a check runs
+
+- **At app start**, if "Check for updates automatically" is on (the default).
+- **When the window gets focus**, if that setting is on and at least 6 hours
+  (`6 * 60 * 60 * 1000` ms) have passed since the last check. A check that
+  failed also counts as a check. The time of the last check and the versions
+  already shown are kept in memory only, so every run of the application starts
+  fresh.
+- **Check now** in Settings always checks, whatever the setting says, and
+  answers in Settings: "You're up to date", "*version* is available", or the
+  error's text.
+
+A failed check at start or on focus says nothing and keeps what was already
+known.
+
+### When the card opens
+
+- **At start, always** when a newer version is known.
+- **On focus, each version once per run.** The first time a focus check finds a
+  version not yet shown in this run, the card opens; later focus checks that
+  find the same version leave it closed. A still newer version (0.11.0 after
+  0.10.0) is new and opens it once.
+- **Check now** opens the card when it finds a newer version.
+- **The card shown at start, or by Check now, counts as that version's one
+  showing** in this run.
+- **✕ only closes the card.** No snooze, no "skip this version".
+
+### The pill
+
+The pill shows for as long as a newer version is known, whatever happened to
+the card. Clicking it opens the card.
+
+### Before restarting
+
+"Update and restart" downloads and unpacks the update first. If restarting
+would interrupt something, CommitTree then asks for confirmation, listing what
+is in the way, and swaps only if the user agrees; declining leaves the update
+downloaded. The reasons, in this order:
+
+1. One per task running in the status bar: "*task* is running".
+2. "The chat is answering".
+3. "The commit message has unsaved text" (a commit message that is empty or
+   only whitespace does not count).
+
+With none of these there is no question. Cancelling the download is not an
+error: the card goes back to how it was, with no message. Any other failure
+shows its message in the card (see *Errors as the user reads them*).

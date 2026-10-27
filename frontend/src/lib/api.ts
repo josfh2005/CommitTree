@@ -1,5 +1,5 @@
 import * as Go from '../../wailsjs/go/app/App'
-import type { AddReposResult, ScanResult, BranchPushResult, CloneStatus, RepoAIInfo, RepoAIOverride, AIMessage, AISettings, AIStatus, AheadBehind, AutoFetchResult, Blame, ChatConfirmEvent, CommandLogView, CommandOutput, CommitInfo, ConflictFile, Details, Filters, Flow, FlowConfig, FlowSettings, FlowFinishResult, FlowPlan, FlowStartResult, FlowType, GitSettings, HunkAction, HunkPick, Identity, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, RemoteConfig, RemoteTest, RegionChoice, RegionResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, WorktreeDiff, WorktreeRemovalInfo, WorktreeState } from './types'
+import type { AddReposResult, ScanResult, BranchPushResult, CloneStatus, RepoAIInfo, RepoAIOverride, AIMessage, AISettings, AIStatus, AheadBehind, AutoFetchResult, Blame, ChatConfirmEvent, CommandLogView, CommandOutput, CommitInfo, ConflictFile, Details, Filters, Flow, FlowConfig, FlowSettings, FlowFinishResult, FlowPlan, FlowStartResult, FlowType, GitSettings, HunkAction, HunkPick, Identity, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, RemoteConfig, RemoteTest, RegionChoice, RegionResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, UpdateInfo, WorktreeDiff, WorktreeRemovalInfo, WorktreeState } from './types'
 import type { NotifyTarget } from './notifyRules'
 import type { CredentialAnswer } from './credential'
 import type { Tracking } from './tracking'
@@ -189,4 +189,9 @@ export const api = {
   syncSubmodule: (id: string, path: string) => call<void>(Go.SyncSubmodule(id, path)),
   initAllSubmodules: (id: string) => call<void>(Go.InitAllSubmodules(id)),
   updateAllSubmodules: (id: string) => call<void>(Go.UpdateAllSubmodules(id)),
+
+  checkForUpdate: () => call<UpdateInfo>(Go.CheckForUpdate()),
+  prepareUpdate: () => call<void>(Go.PrepareUpdate()),
+  cancelUpdate: () => call<void>(Go.CancelUpdate()),
+  applyUpdate: () => call<void>(Go.ApplyUpdate()),
 }
