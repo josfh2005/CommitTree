@@ -133,14 +133,17 @@ running application where it stands, then CommitTree starts again.
   executable: the nearest folder named `*.app` on the path to the executable
   (symlinks resolved) that contains it under `Contents/MacOS/`. On Linux, the
   running binary itself.
-- **Swap on macOS.** The old bundle is renamed aside in the same folder to
-  `.CommitTree.app.old-<pid>` (a leftover of that name from an earlier attempt
-  is deleted first), then the new bundle is moved in. When the new
-  bundle sits on another volume, so a rename is impossible, it is first copied
-  next to the old one with the system `ditto` and the copy is renamed. If
-  anything fails, the old bundle is renamed back and the update fails with the
-  application as it was. Only after success is the old bundle deleted (a
-  failure to delete it is ignored).
+- **Swap on macOS.** Stage first, swap second. The new bundle is first
+  brought next to the installed one as `.CommitTree.app.new-<pid>` (a rename;
+  when the new bundle sits on another volume, a copy with the system `ditto`),
+  before the installed bundle is touched, so the slow copy never happens while
+  no app exists at the install path. Only then are two renames in that same
+  folder done: the old bundle to `.CommitTree.app.old-<pid>`, the new one to
+  the app's name (a leftover of either name from an earlier attempt is deleted
+  first). If anything fails, the `.new-` folder is removed, the old bundle is
+  renamed back if it had been moved, and the update fails with the application
+  as it was. Only after success is the old bundle deleted (a failure to delete
+  it is ignored).
 - **Swap on Linux.** The new binary is copied next to the running one as
   `.CommitTree.new-<pid>`, given mode 0755, flushed to disk and renamed over the
   old binary (atomic on one filesystem). A failure removes the copy and leaves the old

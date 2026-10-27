@@ -87,20 +87,38 @@ func Swap(target, staged, goos string) error {
 	return fmt.Errorf("cannot install updates on %s", goos)
 }
 
+// Hooks the tests replace to force the cross-volume path.
+var (
+	renameFn   = os.Rename
+	copyBundle = dittoBundle
+)
+
+// swapDarwin stages first and swaps second: the new bundle is brought next to
+// target (a rename, or a copy when staged is on another volume) before the
+// installed bundle is touched, so a slow copy never happens while no app
+// exists at target. Only two same-folder renames remain after that.
 func swapDarwin(target, staged string) error {
 	dir, base, pid := filepath.Dir(target), filepath.Base(target), os.Getpid()
 	old := filepath.Join(dir, fmt.Sprintf(".%s.old-%d", base, pid))
-	// A leftover from an earlier attempt of this pid would make the rename fail.
+	next := filepath.Join(dir, fmt.Sprintf(".%s.new-%d", base, pid))
+	// Leftovers from an earlier attempt of this pid would make a rename fail.
 	os.RemoveAll(old)
-	if err := os.Rename(target, old); err != nil {
-		return err
-	}
-	err := os.Rename(staged, target)
+	os.RemoveAll(next)
+	err := renameFn(staged, next)
 	if errors.Is(err, syscall.EXDEV) {
-		err = copyBundle(staged, target, filepath.Join(dir, fmt.Sprintf(".%s.new-%d", base, pid)))
+		err = copyBundle(staged, next)
 	}
 	if err != nil {
-		if rerr := os.Rename(old, target); rerr != nil {
+		os.RemoveAll(next)
+		return err
+	}
+	if err := renameFn(target, old); err != nil {
+		os.RemoveAll(next)
+		return err
+	}
+	if err := renameFn(next, target); err != nil {
+		os.RemoveAll(next)
+		if rerr := renameFn(old, target); rerr != nil {
 			return fmt.Errorf("%w (and the old version could not be restored: %v)", err, rerr)
 		}
 		return err
@@ -109,17 +127,12 @@ func swapDarwin(target, staged string) error {
 	return nil
 }
 
-// copyBundle copies staged next to target (ditto keeps the bundle's
-// attributes and links) and renames the copy to target.
-func copyBundle(staged, target, tmp string) error {
-	os.RemoveAll(tmp)
-	if out, err := exec.Command("/usr/bin/ditto", staged, tmp).CombinedOutput(); err != nil {
-		os.RemoveAll(tmp)
+// dittoBundle copies staged to dst (ditto keeps the bundle's attributes and
+// links).
+func dittoBundle(staged, dst string) error {
+	if out, err := exec.Command("/usr/bin/ditto", staged, dst).CombinedOutput(); err != nil {
+		os.RemoveAll(dst)
 		return fmt.Errorf("copying the new version: %v: %s", err, strings.TrimSpace(string(out)))
-	}
-	if err := os.Rename(tmp, target); err != nil {
-		os.RemoveAll(tmp)
-		return err
 	}
 	return nil
 }

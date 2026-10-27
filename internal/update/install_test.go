@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -302,5 +303,108 @@ func TestRelaunchCommandCapsWaitAtThirtySeconds(t *testing.T) {
 	_, args := RelaunchCommand("/opt/x/CommitTree", "linux", 7)
 	if joined := strings.Join(args, " "); !strings.Contains(joined, "150") || !strings.Contains(joined, "sleep 0.2") {
 		t.Errorf("wait loop is not capped at 150 x 0.2 s: %q", joined)
+	}
+}
+
+// forceCrossVolume makes the first rename (staged -> next to target) fail
+// with EXDEV, like a staging folder on another volume, and replaces the copy.
+func forceCrossVolume(t *testing.T, staged string, copyFn func(src, dst string) error) {
+	t.Helper()
+	oldRename, oldCopy := renameFn, copyBundle
+	t.Cleanup(func() { renameFn, copyBundle = oldRename, oldCopy })
+	renameFn = func(from, to string) error {
+		if from == staged {
+			return &os.LinkError{Op: "rename", Old: from, New: to, Err: syscall.EXDEV}
+		}
+		return os.Rename(from, to)
+	}
+	copyBundle = copyFn
+}
+
+func TestSwapDarwinCrossVolumeCopiesBeforeTouchingTarget(t *testing.T) {
+	x := t.TempDir()
+	target := filepath.Join(x, "CommitTree.app")
+	os.MkdirAll(target, 0o755)
+	os.WriteFile(filepath.Join(target, "old"), []byte("o"), 0o644)
+	staged := filepath.Join(t.TempDir(), "CommitTree.app")
+	os.MkdirAll(staged, 0o755)
+	os.WriteFile(filepath.Join(staged, "new"), []byte("n"), 0o644)
+
+	copied := false
+	forceCrossVolume(t, staged, func(src, dst string) error {
+		// The multi-second copy: the installed bundle must still be there.
+		if _, err := os.Stat(filepath.Join(target, "old")); err != nil {
+			t.Errorf("installed bundle touched during the copy: %v", err)
+		}
+		if filepath.Dir(dst) != x {
+			t.Errorf("copy goes to %q, want a folder next to the target", dst)
+		}
+		copied = true
+		if err := os.MkdirAll(dst, 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(dst, "new"), []byte("n"), 0o644)
+	})
+	if err := Swap(target, staged, "darwin"); err != nil {
+		t.Fatal(err)
+	}
+	if !copied {
+		t.Fatal("copy path not taken")
+	}
+	if _, err := os.Stat(filepath.Join(target, "new")); err != nil {
+		t.Fatalf("new missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(target, "old")); !os.IsNotExist(err) {
+		t.Fatalf("old still there: %v", err)
+	}
+	if entries, _ := os.ReadDir(x); len(entries) != 1 {
+		t.Fatalf("leftovers: %v", entries)
+	}
+}
+
+func TestSwapDarwinCrossVolumeCopyFailureKeepsOriginal(t *testing.T) {
+	x := t.TempDir()
+	target := filepath.Join(x, "CommitTree.app")
+	os.MkdirAll(target, 0o755)
+	os.WriteFile(filepath.Join(target, "old"), []byte("o"), 0o644)
+	staged := filepath.Join(t.TempDir(), "CommitTree.app")
+	os.MkdirAll(staged, 0o755)
+
+	forceCrossVolume(t, staged, func(src, dst string) error {
+		os.MkdirAll(dst, 0o755) // a half-written copy
+		return errors.New("disk full")
+	})
+	if err := Swap(target, staged, "darwin"); err == nil || !strings.Contains(err.Error(), "disk full") {
+		t.Fatalf("err = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(target, "old")); err != nil {
+		t.Fatalf("original not in place: %v", err)
+	}
+	if entries, _ := os.ReadDir(x); len(entries) != 1 {
+		t.Fatalf("leftovers: %v", entries)
+	}
+}
+
+func TestSwapDarwinCrossVolumeWithRealDitto(t *testing.T) {
+	if _, err := os.Stat("/usr/bin/ditto"); err != nil {
+		t.Skip("no ditto")
+	}
+	x := t.TempDir()
+	target := filepath.Join(x, "CommitTree.app")
+	os.MkdirAll(target, 0o755)
+	os.WriteFile(filepath.Join(target, "old"), []byte("o"), 0o644)
+	staged := filepath.Join(t.TempDir(), "CommitTree.app")
+	os.MkdirAll(staged, 0o755)
+	os.WriteFile(filepath.Join(staged, "new"), []byte("n"), 0o644)
+
+	forceCrossVolume(t, staged, dittoBundle)
+	if err := Swap(target, staged, "darwin"); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := os.ReadFile(filepath.Join(target, "new")); err != nil || string(b) != "n" {
+		t.Fatalf("new = %q, %v", b, err)
+	}
+	if entries, _ := os.ReadDir(x); len(entries) != 1 {
+		t.Fatalf("leftovers: %v", entries)
 	}
 }
