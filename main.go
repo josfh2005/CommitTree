@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"log"
 	"os"
 	"path/filepath"
@@ -20,10 +21,29 @@ import (
 	"git-ui/internal/app"
 	"git-ui/internal/credprompt"
 	"git-ui/internal/repos"
+	"git-ui/internal/update"
 )
 
 //go:embed all:frontend/dist
 var assets embed.FS
+
+// wailsJSON is the only source of the running version (info.productVersion).
+//
+//go:embed wails.json
+var wailsJSON []byte
+
+// productVersion is the version in wails.json.
+func productVersion() (string, error) {
+	var cfg struct {
+		Info struct {
+			ProductVersion string `json:"productVersion"`
+		} `json:"info"`
+	}
+	if err := json.Unmarshal(wailsJSON, &cfg); err != nil {
+		return "", err
+	}
+	return cfg.Info.ProductVersion, nil
+}
 
 func main() {
 	// Relaunched by git or ssh as the credential helper / askpass program:
@@ -62,17 +82,35 @@ func main() {
 		Prompts:      prompts.New(promptsDir),
 	})
 
-	// Credential prompts are optional: without them (Windows, no socket)
-	// network commands behave as before.
-	if exe, err := os.Executable(); err == nil {
-		if exe, err = filepath.EvalSymlinks(exe); err == nil {
-			err = app.WithCredentials(api, credprompt.Options{
-				Exe:      exe,
-				Platform: credprompt.DetectPlatformHelper(context.Background()),
+	// Credential prompts and in-app updates both need this executable, with
+	// symlinks resolved; without it neither is available.
+	exe, err := os.Executable()
+	if err == nil {
+		exe, err = filepath.EvalSymlinks(exe)
+	}
+	if err != nil {
+		log.Printf("credential prompts and updates off: %v", err)
+	} else {
+		// Credential prompts are optional: without them (Windows, no socket)
+		// network commands behave as before.
+		err = app.WithCredentials(api, credprompt.Options{
+			Exe:      exe,
+			Platform: credprompt.DetectPlatformHelper(context.Background()),
+		})
+		if err != nil {
+			log.Printf("credential prompts off: %v", err)
+		}
+		// In-app updates replace this executable (its bundle on macOS).
+		if version, err := productVersion(); err != nil {
+			log.Printf("updates off: %v", err)
+		} else {
+			app.WithUpdates(api, app.UpdateOptions{
+				Version: version,
+				Source:  update.NewChecker(os.Getenv),
+				Exe:     exe,
+				GOOS:    goruntime.GOOS,
+				Dev:     update.DevBuild,
 			})
-			if err != nil {
-				log.Printf("credential prompts off: %v", err)
-			}
 		}
 	}
 

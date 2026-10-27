@@ -25,6 +25,11 @@
      to sit on legibly — so this needed its own two pairs rather than reuse. */
   --tag-badge-bg: #fbe9d0;
   --tag-badge-text: #99590a;
+  /* "A new version is available": the status-bar pill (white text on
+     --update-bg) and the sidebar's version label (--update-text on
+     --sidebar). --accent alone is under 4.5:1 for small text on either. */
+  --update-bg: #a8482b;
+  --update-text: #a8482b;
   --shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
   --radius: 8px;
   --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
@@ -88,6 +93,7 @@
   --del-bg: #45221f;
   --tag-badge-bg: #40301a;
   --tag-badge-text: #e3a94f;
+  --update-text: #e58e6c;
   --shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
   color-scheme: dark;
 }

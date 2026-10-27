@@ -82,6 +82,8 @@ type App struct {
 	// paused is the remotes background fetches skip (see autoPause).
 	paused autoPause
 	ai     *aiState
+	// upd is the in-app update API; nil until WithUpdates (see update.go).
+	upd *updateState
 	// hosting is the Bitbucket/GitHub integration; see hosting.go.
 	hosting *hostingState
 	// cmds is the log behind the Commands panel; aiWrites marks

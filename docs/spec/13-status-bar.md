@@ -38,7 +38,14 @@ From left to right:
    is usable again too. "Cancelling…" disappears with the task.
 3. **The pipeline of HEAD**, at the right, before the "+N" chip (see below),
    or a host's request-limit notice in its place.
-4. At the right edge, **"+N"** when N more tasks run ("+2" for two more).
+4. **"+N"** when N more tasks run ("+2" for two more).
+5. At the far right, after "+N", the **update pill** "↑ Update" while a newer
+   version of CommitTree is known (`15-updates.md`). It is a small rounded
+   button in the status bar's font size, white text on an accent-coloured
+   background that follows Light, Dark and High contrast (the fill is a
+   darker orange than the accent so the text stays at least 4.5:1). Its
+   tooltip is "CommitTree *version* is available" and a click opens the
+   update card. It does not depend on a repository being selected.
 
 ## The pipeline of HEAD
 

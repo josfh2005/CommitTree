@@ -116,6 +116,21 @@ export type Dialog =
 
 export const dialog = writable<Dialog | null>(null)
 
+/** Resolves once no dialog is open (at once when none is). A caller that must
+ *  not replace a dialog the user is working in waits on this first. */
+export function whenNoDialog(): Promise<void> {
+  return new Promise((resolve) => {
+    let off = () => {}
+    let done = false
+    off = dialog.subscribe((d) => {
+      if (d !== null || done) return
+      done = true
+      queueMicrotask(off) // subscribe may call back before `off` is assigned
+      resolve()
+    })
+  })
+}
+
 export const confirmDialog = (options: ConfirmOptions) =>
   new Promise<boolean>((resolve) => dialog.set({ ...options, kind: 'confirm', resolve: (result) => resolve(result.ok) }))
 

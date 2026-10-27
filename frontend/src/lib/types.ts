@@ -747,3 +747,21 @@ export interface HostingLimit {
   /** The host gave the time (GitHub's reset); false means a guess. */
   known: boolean
 }
+
+/** Result of CheckForUpdate: this version, the newest release and whether it can be installed in place. */
+export interface UpdateInfo {
+  current: string
+  latest: string
+  newer: boolean
+  pageURL: string
+  canInstall: boolean
+  /** Why it cannot be installed in place; '' when it can. */
+  reason: string
+}
+
+/** Payload of the update:progress event (total is -1 when unknown). */
+export interface UpdateProgress {
+  phase: 'download' | 'install'
+  done: number
+  total: number
+}

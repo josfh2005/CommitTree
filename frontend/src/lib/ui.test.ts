@@ -1,6 +1,6 @@
 import { get } from 'svelte/store'
 import { describe, expect, it } from 'vitest'
-import { dialog, formDialog, formMessage, initialFormValues, type FormField, SEPARATOR, tidySeparators, type MenuEntry, resultsDialog } from './ui'
+import { dialog, formDialog, formMessage, initialFormValues, type FormField, SEPARATOR, tidySeparators, type MenuEntry, resultsDialog, whenNoDialog } from './ui'
 
 const fields: FormField[] = [
   { kind: 'text', key: 'name', label: 'Name', value: 'x', prefix: 'feature/' },
@@ -52,5 +52,25 @@ describe('tidySeparators', () => {
   })
   it('leaves an empty list empty', () => {
     expect(tidySeparators([SEPARATOR])).toEqual([])
+  })
+})
+
+describe('whenNoDialog', () => {
+  it('resolves at once when no dialog is open', async () => {
+    dialog.set(null)
+    await whenNoDialog()
+  })
+  it('waits until the open dialog closes, without replacing it', async () => {
+    const open = { kind: 'results', title: 'x', resolve: () => {} } as never
+    dialog.set(open)
+    let done = false
+    const p = whenNoDialog().then(() => (done = true))
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(done).toBe(false)
+    expect(get(dialog)).toBe(open)
+    dialog.set(null)
+    await p
+    expect(done).toBe(true)
   })
 })

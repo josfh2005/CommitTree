@@ -42,6 +42,7 @@ Then take the area documents in any order.
 | [Repository settings](12-repository-settings.md) | A repository's own settings dialog; the Remotes tab: list, test, edit, remove and add remotes |
 | [Status bar](13-status-bar.md) | The bar along the bottom of the window: the task running now, Cancel, and how the last one ended |
 | [Code hosting](14-hosting.md) | Bitbucket and GitHub: detecting the host, accounts, commit statuses with their cache and rate limits, the Pull requests view (list, detail, checkout), and the watch of a pushed commit with its notification |
+| [Updates](15-updates.md) | Where the latest release is read from (the `latest.json` manifest, its format, the allowed hosts) and how a check works |
 | [Conventions and constraints](07-conventions-and-constraints.md) | What is true everywhere, plus the git appendix |
 
 ## What this specification is not

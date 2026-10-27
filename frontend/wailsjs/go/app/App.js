@@ -30,6 +30,10 @@ export function ApplyHunkSelection(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['app']['App']['ApplyHunkSelection'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
+export function ApplyUpdate() {
+  return window['go']['app']['App']['ApplyUpdate']();
+}
+
 export function ApproveRepoInstructions(arg1, arg2) {
   return window['go']['app']['App']['ApproveRepoInstructions'](arg1, arg2);
 }
@@ -60,6 +64,14 @@ export function CancelCredential(arg1) {
 
 export function CancelPull() {
   return window['go']['app']['App']['CancelPull']();
+}
+
+export function CancelUpdate() {
+  return window['go']['app']['App']['CancelUpdate']();
+}
+
+export function CheckForUpdate() {
+  return window['go']['app']['App']['CheckForUpdate']();
 }
 
 export function Checkout(arg1, arg2) {
@@ -426,6 +438,10 @@ export function PlanFinish(arg1, arg2, arg3) {
   return window['go']['app']['App']['PlanFinish'](arg1, arg2, arg3);
 }
 
+export function PrepareUpdate() {
+  return window['go']['app']['App']['PrepareUpdate']();
+}
+
 export function Pull(arg1) {
   return window['go']['app']['App']['Pull'](arg1);
 }
@@ -568,6 +584,10 @@ export function StageFile(arg1, arg2) {
 
 export function StageMergeFile(arg1, arg2) {
   return window['go']['app']['App']['StageMergeFile'](arg1, arg2);
+}
+
+export function StagedUpdateVersion() {
+  return window['go']['app']['App']['StagedUpdateVersion']();
 }
 
 export function StartFlow(arg1, arg2, arg3, arg4) {

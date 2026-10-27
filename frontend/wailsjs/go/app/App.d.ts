@@ -37,6 +37,8 @@ export function AnswerCredential(arg1:string,arg2:credprompt.Answer):Promise<voi
 
 export function ApplyHunkSelection(arg1:string,arg2:string,arg3:boolean,arg4:string,arg5:Array<worktree.HunkPick>,arg6:string):Promise<void>;
 
+export function ApplyUpdate():Promise<void>;
+
 export function ApproveRepoInstructions(arg1:string,arg2:string):Promise<void>;
 
 export function AutoFetch(arg1:string):Promise<ops.AutoFetchResult>;
@@ -52,6 +54,10 @@ export function CancelCommand(arg1:string,arg2:number):Promise<void>;
 export function CancelCredential(arg1:string):Promise<void>;
 
 export function CancelPull():Promise<void>;
+
+export function CancelUpdate():Promise<void>;
+
+export function CheckForUpdate():Promise<app.UpdateInfo>;
 
 export function Checkout(arg1:string,arg2:string):Promise<void>;
 
@@ -235,6 +241,8 @@ export function PickReposParent(arg1:string):Promise<string>;
 
 export function PlanFinish(arg1:string,arg2:string,arg3:Array<string>):Promise<gitflow.Plan>;
 
+export function PrepareUpdate():Promise<void>;
+
 export function Pull(arg1:string):Promise<ops.Result>;
 
 export function PullModel(arg1:string):Promise<void>;
@@ -306,6 +314,8 @@ export function SkipStep(arg1:string):Promise<void>;
 export function StageFile(arg1:string,arg2:string):Promise<void>;
 
 export function StageMergeFile(arg1:string,arg2:string):Promise<void>;
+
+export function StagedUpdateVersion():Promise<string>;
 
 export function StartFlow(arg1:string,arg2:string,arg3:string,arg4:string):Promise<gitflow.StartResult>;
 

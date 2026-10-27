@@ -59,6 +59,7 @@ func (a *App) Shutdown(ctx context.Context) {
 		a.creds.Shutdown()
 	}
 	a.CancelClone()
+	a.cleanupUpdate()
 	a.term.CloseAll()
 	a.stopNotifications()
 }
