@@ -47,6 +47,7 @@ the GitHub API, so the API's request limit does not apply to it.
 - **The download address is never read from the manifest.** The application
   builds it: `https://github.com/josfh2005/CommitTree/releases/download/v<version>/<name>`.
 - **Size caps:** the manifest is at most 64 KiB; anything larger is an error.
+- **Publishing:** `make release-manifest` (`cmd/release-manifest`) writes `latest.json` from `info.productVersion` in `wails.json` and the SHA-256 of the three assets in `build/bin`; it refuses to write if an asset is missing or the version is invalid. It is attached to the release by hand next to the assets (`docs/development.md`, Releases).
 
 ### Where the manifest is allowed to come from
 

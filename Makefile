@@ -4,7 +4,7 @@ NODE := source ~/.nvm/nvm.sh && nvm use 22 >/dev/null &&
 
 ARCH ?= amd64
 
-.PHONY: build build-linux dev icon icon-previews
+.PHONY: build build-linux release-manifest dev icon icon-previews
 
 build:
 	$(NODE) ~/go/bin/wails build
@@ -15,6 +15,9 @@ build-linux:
 	docker buildx build --platform linux/$(ARCH) -f build/linux/Dockerfile \
 		--output type=local,dest=build/bin/linux-$(ARCH) .
 	tar -czf build/bin/CommitTree-linux-$(ARCH).tar.gz -C build/bin/linux-$(ARCH) CommitTree
+
+release-manifest:
+	go run ./cmd/release-manifest -dir build/bin -wails wails.json
 
 dev:
 	$(NODE) ~/go/bin/wails dev

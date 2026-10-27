@@ -37,7 +37,28 @@ The Linux build runs in Docker (`build/linux/Dockerfile`, Debian 12), so it need
 
 ## Releases
 
-Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds a universal macOS app (ad-hoc signed, not notarized) and a Linux amd64 binary and attaches them to a GitHub Release. Running the workflow by hand (Actions → Release → Run workflow) builds the same files as downloadable artifacts without publishing a release. Windows is not built yet: the embedded terminal uses Unix-only syscalls.
+Releases are made by hand. The workflow in `.github/workflows/release.yml` (a `v*` tag builds a universal macOS app and a Linux amd64 binary and attaches them to a GitHub Release) has never run, because Actions billing is locked, and it does not produce the files the in-place update needs, so do not rely on it. Windows is not built yet: the embedded terminal uses Unix-only syscalls.
+
+The update check reads `latest.json` from the latest release (`docs/spec/15-updates.md`), so every release carries it next to three assets with fixed names. To publish version X.Y.Z:
+
+1. Set `info.productVersion` in `wails.json` to `X.Y.Z` and commit it.
+2. Intel build and zip. `make build` is the host-architecture build, so for Intel run the same steps with the platform flag:
+   ```bash
+   source ~/.nvm/nvm.sh && nvm use 22 && ~/go/bin/wails build -platform darwin/amd64
+   codesign --force --deep -s - build/bin/CommitTree.app
+   ditto -c -k --keepParent build/bin/CommitTree.app build/bin/CommitTree-macos-amd64.zip
+   ```
+3. Apple Silicon build and zip (on an arm64 Mac): `make build`, then
+   `ditto -c -k --keepParent build/bin/CommitTree.app build/bin/CommitTree-macos-arm64.zip`.
+4. Linux: `make build-linux` (Docker; writes `build/bin/CommitTree-linux-amd64.tar.gz`).
+5. `make release-manifest` hashes the three files in `build/bin` and writes `build/bin/latest.json`. It fails, naming the file, if one is missing or the version in `wails.json` is not `MAJOR.MINOR.PATCH`.
+6. Tag and publish, attaching the three assets and `latest.json`:
+   ```bash
+   git tag vX.Y.Z && git push origin main vX.Y.Z
+   gh release create vX.Y.Z --title "vX.Y.Z" --notes "..." \
+     build/bin/CommitTree-macos-arm64.zip build/bin/CommitTree-macos-amd64.zip \
+     build/bin/CommitTree-linux-amd64.tar.gz build/bin/latest.json
+   ```
 
 ## AI providers
 
