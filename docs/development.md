@@ -51,7 +51,7 @@ The update check reads `latest.json` from the latest release (`docs/spec/15-upda
 3. Apple Silicon build and zip (on an arm64 Mac): `make build`, then
    `ditto -c -k --keepParent build/bin/CommitTree.app build/bin/CommitTree-macos-arm64.zip`.
 4. Linux: `make build-linux` (Docker; writes `build/bin/CommitTree-linux-amd64.tar.gz`).
-5. `make release-manifest` hashes the three files in `build/bin` and writes `build/bin/latest.json`. It fails, naming the file, if one is missing or the version in `wails.json` is not `MAJOR.MINOR.PATCH`.
+5. `make release-manifest` hashes the three files in `build/bin` and writes `build/bin/latest.json`. It fails, naming the file, if one is missing, is older than `wails.json` (a build left over from the previous release), is a macOS zip whose `Info.plist` version differs from `wails.json`, or if the version in `wails.json` is not `MAJOR.MINOR.PATCH`. So make the version commit first, then build; if it complains, rebuild that asset.
 6. Tag and publish, attaching the three assets and `latest.json`:
    ```bash
    git tag vX.Y.Z && git push origin main vX.Y.Z

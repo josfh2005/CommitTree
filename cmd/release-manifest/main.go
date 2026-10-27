@@ -11,6 +11,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"git-ui/internal/update"
 )
@@ -35,7 +37,8 @@ func main() {
 }
 
 // build reads the version from wailsPath, hashes the three assets in dir and
-// writes dir/latest.json. Nothing is written if anything is missing or wrong.
+// writes dir/latest.json. Nothing is written if anything is missing, stale or
+// wrong.
 func build(dir, wailsPath string) (update.Manifest, error) {
 	raw, err := os.ReadFile(wailsPath)
 	if err != nil {
@@ -58,8 +61,16 @@ func build(dir, wailsPath string) (update.Manifest, error) {
 		URL:     "https://github.com/" + update.Repo + "/releases/tag/v" + v.String(),
 		Assets:  map[string]update.Asset{},
 	}
+	wi, err := os.Stat(wailsPath)
+	if err != nil {
+		return update.Manifest{}, err
+	}
 	for key, name := range assets {
-		sum, err := fileSHA256(filepath.Join(dir, name))
+		path := filepath.Join(dir, name)
+		if err := checkFresh(path, name, wi.ModTime(), v.String()); err != nil {
+			return update.Manifest{}, err
+		}
+		sum, err := fileSHA256(path)
 		if err != nil {
 			return update.Manifest{}, fmt.Errorf("asset %s: %w", name, err)
 		}
@@ -73,6 +84,29 @@ func build(dir, wailsPath string) (update.Manifest, error) {
 		return update.Manifest{}, err
 	}
 	return m, nil
+}
+
+// checkFresh refuses an asset left over from an earlier build: one older than
+// wails.json (the version bump comes before the builds) and, for a macOS zip,
+// one whose Info.plist names another version.
+func checkFresh(path, name string, wailsTime time.Time, version string) error {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("asset %s: %w", name, err)
+	}
+	if fi.ModTime().Before(wailsTime) {
+		return fmt.Errorf("asset %s is older than wails.json: a stale build? Rebuild it", name)
+	}
+	if strings.HasSuffix(name, ".zip") {
+		got, err := update.ZipBundleVersion(path)
+		if err != nil {
+			return fmt.Errorf("asset %s: %w", name, err)
+		}
+		if got != version {
+			return fmt.Errorf("asset %s holds version %s, wails.json says %s: a stale build? Rebuild it", name, got, version)
+		}
+	}
+	return nil
 }
 
 func fileSHA256(path string) (string, error) {
