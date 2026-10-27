@@ -2,7 +2,7 @@ import { get } from 'svelte/store'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import {
   FOCUS_SPACING_MS, createUpdateController, manualCheckResult, restartBlockers, setUpdateProgress, shouldCheck, shouldShowCard,
-  progressText, startUpdate, updateCardOpen, updateInfo, updatePhase,
+  escClosesCard, progressText, startUpdate, updateCardOpen, updateInfo, updatePhase,
 } from './update'
 import type { UpdateInfo } from './types'
 
@@ -217,6 +217,79 @@ describe('startUpdate', () => {
     expect(seen).toBe('download')
   })
 
+  it('starts the download with an unknown total, so the card reads "Downloading…"', async () => {
+    let seen: { done: number; total: number } | null = null
+    prepare.mockImplementation(async () => { const p = get(updatePhase); seen = { done: p.done, total: p.total } })
+    await startUpdate({ prepare, apply, confirm, blockers: () => [] })
+    expect(seen).toEqual({ done: 0, total: -1 })
+    expect(progressText(seen!.done, seen!.total)).toBe('Downloading…')
+  })
+
+  it('waits for the dialogs to close before asking and before applying', async () => {
+    const order: string[] = []
+    let release!: () => void
+    const quiet = () => new Promise<void>((r) => { release = r; order.push('quiet') })
+    confirm.mockImplementation(async () => { order.push('confirm'); return true })
+    apply.mockImplementation(async () => { order.push('apply') })
+    const run = startUpdate({ prepare, apply, confirm, blockers: () => ['x is running'], quiet })
+    await vi.waitFor(() => expect(order).toEqual(['quiet']))
+    expect(get(updatePhase).phase).toBe('ready')
+    expect(confirm).not.toHaveBeenCalled()
+    release()
+    await run
+    expect(order).toEqual(['quiet', 'confirm', 'apply'])
+  })
+
+  it('does not apply while a dialog is open even when nothing blocks', async () => {
+    let release!: () => void
+    const quiet = () => new Promise<void>((r) => { release = r })
+    const run = startUpdate({ prepare, apply, confirm, blockers: () => [], quiet })
+    await vi.waitFor(() => expect(get(updatePhase).phase).toBe('ready'))
+    await Promise.resolve()
+    expect(apply).not.toHaveBeenCalled()
+    release()
+    await run
+    expect(apply).toHaveBeenCalledTimes(1)
+  })
+
+  it('"already up to date" refreshes the check and drops the card once nothing is newer', async () => {
+    updateInfo.set(info('0.10.0'))
+    prepare.mockRejectedValue('CommitTree is already up to date')
+    const refresh = vi.fn(async () => updateInfo.set(info('0.9.0', false)))
+    await startUpdate({ prepare, apply, confirm, blockers: () => [], refresh })
+    expect(refresh).toHaveBeenCalledTimes(1)
+    expect(get(updateInfo)?.newer).toBe(false)
+    expect(get(updatePhase)).toEqual({ phase: 'idle', done: 0, total: 0, error: '' })
+  })
+
+  it('"already up to date" keeps the error when the refresh fails or still finds an update', async () => {
+    updateInfo.set(info('0.10.0'))
+    prepare.mockRejectedValue('CommitTree is already up to date')
+    await startUpdate({ prepare, apply, confirm, blockers: () => [], refresh: async () => { throw new Error('offline') } })
+    expect(get(updatePhase).phase).toBe('error')
+  })
+
+  it('other errors do not refresh the check', async () => {
+    prepare.mockRejectedValue("Couldn't download the update")
+    const refresh = vi.fn(async () => {})
+    await startUpdate({ prepare, apply, confirm, blockers: () => [], refresh })
+    expect(refresh).not.toHaveBeenCalled()
+  })
+
+  it('names the staged version when it differs from what the card showed', async () => {
+    updateInfo.set(info('0.10.0'))
+    await startUpdate({ prepare, apply, confirm, blockers: () => [], staged: async () => '0.11.0' })
+    expect(get(updateInfo)?.latest).toBe('0.11.0')
+  })
+
+  it('keeps the card as it was when the staged version matches or is unknown', async () => {
+    updateInfo.set(info('0.10.0'))
+    await startUpdate({ prepare, apply, confirm, blockers: () => [], staged: async () => '0.10.0' })
+    expect(get(updateInfo)).toEqual(info('0.10.0'))
+    await startUpdate({ prepare, apply, confirm, blockers: () => [], staged: async () => { throw new Error('x') } })
+    expect(get(updateInfo)).toEqual(info('0.10.0'))
+  })
+
   it('a rejected prepare is an error with its message', async () => {
     prepare.mockRejectedValue('Couldn\'t download the update')
     await startUpdate({ prepare, apply, confirm, blockers: () => [] })
@@ -291,4 +364,12 @@ describe('setUpdateProgress', () => {
     setUpdateProgress({ phase: 'download', done: 5, total: 10 })
     expect(get(updatePhase).phase).toBe('idle')
   })
+})
+
+describe('escClosesCard', () => {
+  const esc = { key: 'Escape', defaultPrevented: false }
+  it('closes on a plain Esc', () => expect(escClosesCard(esc, false)).toBe(true))
+  it('ignores other keys', () => expect(escClosesCard({ key: 'a', defaultPrevented: false }, false)).toBe(false))
+  it('leaves Esc to a dialog or Settings that was open', () => expect(escClosesCard(esc, true)).toBe(false))
+  it('leaves an Esc somebody already handled', () => expect(escClosesCard({ ...esc, defaultPrevented: true }, false)).toBe(false))
 })

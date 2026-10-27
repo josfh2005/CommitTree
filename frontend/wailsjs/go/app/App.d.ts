@@ -315,6 +315,8 @@ export function StageFile(arg1:string,arg2:string):Promise<void>;
 
 export function StageMergeFile(arg1:string,arg2:string):Promise<void>;
 
+export function StagedUpdateVersion():Promise<string>;
+
 export function StartFlow(arg1:string,arg2:string,arg3:string,arg4:string):Promise<gitflow.StartResult>;
 
 export function StashApply(arg1:string,arg2:number):Promise<void>;

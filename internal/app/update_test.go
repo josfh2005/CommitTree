@@ -329,6 +329,31 @@ func TestPrepareRefusesWhenNotNewer(t *testing.T) {
 	}
 }
 
+func TestStagedUpdateVersion(t *testing.T) {
+	h := newUpdateHarness(t, "0.9.0", "0.10.0", false)
+	if got := h.a.StagedUpdateVersion(); got != "" {
+		t.Fatalf("before Prepare: %q", got)
+	}
+	if err := h.a.PrepareUpdate(); err != nil {
+		t.Fatal(err)
+	}
+	if got := h.a.StagedUpdateVersion(); got != "0.10.0" {
+		t.Fatalf("after Prepare: %q", got)
+	}
+	// A newer release than the one a check announced is what gets staged.
+	h.src.rel.Version = "0.11.0"
+	if err := h.a.PrepareUpdate(); err != nil {
+		t.Fatal(err)
+	}
+	if got := h.a.StagedUpdateVersion(); got != "0.11.0" {
+		t.Fatalf("after second Prepare: %q", got)
+	}
+	var off App
+	if got := off.StagedUpdateVersion(); got != "" {
+		t.Fatalf("updates off: %q", got)
+	}
+}
+
 func TestPrepareEmitsProgress(t *testing.T) {
 	h := newUpdateHarness(t, "0.9.0", "0.10.0", false)
 	h.src.download = func(ctx context.Context, r update.Release, dir string, progress func(done, total int64)) (string, error) {

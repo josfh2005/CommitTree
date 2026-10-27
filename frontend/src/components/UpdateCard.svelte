@@ -1,8 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import Icon from './Icon.svelte'
+  import { get } from 'svelte/store'
   import { api } from '../lib/api'
-  import { progressText, updateCardOpen, updateInfo, updatePhase } from '../lib/update'
+  import { dialog } from '../lib/ui'
+  import { settingsOpen } from '../lib/stores'
+  import { escClosesCard, progressText, updateCardOpen, updateInfo, updatePhase } from '../lib/update'
   import { installUpdate } from '../lib/updateInstall'
   import { BrowserOpenURL } from '../../wailsjs/runtime/runtime'
 
@@ -28,12 +31,16 @@
   const openPage = () => info && BrowserOpenURL(info.pageURL)
   const close = () => updateCardOpen.set(false)
   const cancel = () => void api.cancelUpdate().catch(() => {})
+  // Esc belongs to a dialog or Settings when one is open. The state is read in
+  // the capture phase, before their own handlers close them.
+  let escTaken = false
+  const beforeKey = () => (escTaken = get(dialog) !== null || get(settingsOpen))
   const onKey = (e: KeyboardEvent) => {
-    if (e.key === 'Escape' && $updateCardOpen) close()
+    if ($updateCardOpen && escClosesCard(e, escTaken)) close()
   }
 </script>
 
-<svelte:window on:keydown={onKey} />
+<svelte:window on:keydown|capture={beforeKey} on:keydown={onKey} />
 
 {#if $updateCardOpen && info?.newer}
   <section class="card" style:bottom="{38 + lift}px" aria-label="Update available">

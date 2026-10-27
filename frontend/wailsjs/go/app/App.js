@@ -586,6 +586,10 @@ export function StageMergeFile(arg1, arg2) {
   return window['go']['app']['App']['StageMergeFile'](arg1, arg2);
 }
 
+export function StagedUpdateVersion() {
+  return window['go']['app']['App']['StagedUpdateVersion']();
+}
+
 export function StartFlow(arg1, arg2, arg3, arg4) {
   return window['go']['app']['App']['StartFlow'](arg1, arg2, arg3, arg4);
 }

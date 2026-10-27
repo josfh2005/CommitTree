@@ -300,6 +300,21 @@ func (a *App) PrepareUpdate() (err error) {
 	return nil
 }
 
+// StagedUpdateVersion is the version PrepareUpdate staged for ApplyUpdate, or
+// "" when nothing is staged. PrepareUpdate asks the server again, so it may
+// have staged a version other than the one the last check announced.
+func (a *App) StagedUpdateVersion() string {
+	if a.upd == nil {
+		return ""
+	}
+	a.upd.mu.Lock()
+	defer a.upd.mu.Unlock()
+	if a.upd.staged == nil {
+		return ""
+	}
+	return a.upd.staged.version
+}
+
 // CancelUpdate stops a running PrepareUpdate, which then returns
 // context.Canceled. It does nothing when none is running.
 func (a *App) CancelUpdate() {

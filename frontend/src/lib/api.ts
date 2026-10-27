@@ -192,6 +192,7 @@ export const api = {
 
   checkForUpdate: () => call<UpdateInfo>(Go.CheckForUpdate()),
   prepareUpdate: () => call<void>(Go.PrepareUpdate()),
+  stagedUpdateVersion: () => call<string>(Go.StagedUpdateVersion()),
   cancelUpdate: () => call<void>(Go.CancelUpdate()),
   applyUpdate: () => call<void>(Go.ApplyUpdate()),
 }

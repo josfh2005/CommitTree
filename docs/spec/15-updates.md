@@ -2,9 +2,9 @@
 
 CommitTree finds out by itself whether a newer release exists, so the user
 does not have to watch the project's release page. This document covers where
-the latest version comes from, how it is checked and how the new version is
-downloaded. Showing it (the banner, the card, Check now) and installing it are
-described in later sections.
+the latest version comes from, how it is checked, how the new version is
+downloaded and unpacked, how it is installed in place, and how the card, the
+status-bar pill and Check now show it.
 
 ## Where the latest version comes from
 
@@ -265,7 +265,7 @@ known.
   showing** in this run.
 - **✕ only closes the card.** No snooze, no "skip this version".
 
-### The pill
+### When the pill shows
 
 The pill shows for as long as a newer version is known, whatever happened to
 the card. Clicking it opens the card.
@@ -274,10 +274,13 @@ the card. Clicking it opens the card.
 
 "Update and restart" downloads and unpacks the update first. If restarting
 would interrupt something, CommitTree then asks for confirmation, listing what
-is in the way, and swaps only if the user agrees. Declining puts the card back as it was
-before the click, so a new click on "Update and restart" downloads and unpacks
-again (there is no way to reuse the first download). The reasons, in this
-order:
+is in the way, and swaps only if the user agrees. Declining puts the card back
+as it was before the click, so a new click on "Update and restart" downloads
+and unpacks again (there is no way to reuse the first download). The question
+never replaces a dialog the user already has open, and the restart never
+happens while one is open: when the download is ready and a dialog is open,
+CommitTree waits (the card says "Waiting for your answer…") until it is closed,
+and only then asks or restarts. The reasons, in this order:
 
 1. One per task running in the status bar: "*task* is running".
 2. "The chat is answering".
@@ -288,6 +291,16 @@ With none of these there is no question. Cancelling the download is not an
 error: the card goes back to how it was, with no message. Any other failure
 shows its message in the card (see *Errors as the user reads them*).
 
+Two cases where Prepare disagrees with the card:
+
+- **The release is no longer newer** ("CommitTree is already up to date", for
+  example a pulled release). The card checks again like Check now; once nothing
+  newer is known the card and the pill go away and the message with them.
+- **A newer release than the card's** appeared meanwhile. Prepare installs what
+  the server offers now; once it is staged, the card (and pill) name that
+  version (`StagedUpdateVersion` returns it), so what is installed is what was
+  shown.
+
 ## What the user sees
 
 ### The card
@@ -297,12 +310,14 @@ and just above the status bar, at most 340 px wide. It looks like a toast
 (same surface, border and shadow) with a 4 px accent-coloured left edge. When
 toasts are on screen the card stacks above them, so neither covers the other.
 It stays until closed with ✕ or Esc; closing it never stops a download in
-progress, and the pill opens it again.
+progress, and the pill opens it again. Esc leaves the card alone when a dialog
+(for example the restart question) or Settings is open, and when another part
+already handled the key.
 
 Its title is "CommitTree *latest* is available", with a muted "You have
 *current*" under it. Then, by state:
 
-- **Ready.** Two buttons: **Update and restart** (primary) and **What's new**,
+- **Idle.** Two buttons: **Update and restart** (primary) and **What's new**,
   which opens the release page in the browser.
 - **Cannot install in place** (see *When it cannot install*). The primary
   button is **Download** and opens the release page; a muted line gives the
@@ -317,7 +332,7 @@ Its title is "CommitTree *latest* is available", with a muted "You have
 - **Failed.** The message in one line (see *Errors as the user reads them*)
   in the danger colour, **Update and restart** again (a new attempt downloads
   again) and **Open release page**. A cancelled download is not a failure: the
-  card goes back to its ready state with no message.
+  card goes back to its idle state with no message.
 
 ### The pill
 

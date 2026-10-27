@@ -2,7 +2,7 @@ import { get } from 'svelte/store'
 import { api } from './api'
 import { chatRunRepo, autoUpdateCheck, commitDraft } from './stores'
 import { shownTasks } from './tasks'
-import { confirmDialog } from './ui'
+import { confirmDialog, whenNoDialog } from './ui'
 import { createUpdateController, restartBlockers, startUpdate } from './update'
 
 /** The app's one update checker (Settings' Check now and App's start and
@@ -19,5 +19,8 @@ export const installUpdate = () =>
     prepare: api.prepareUpdate,
     apply: api.applyUpdate,
     confirm: (reasons) => confirmDialog({ title: 'Restart CommitTree?', message: reasons.join('\n'), confirmLabel: 'Restart anyway' }),
+    quiet: whenNoDialog,
+    staged: api.stagedUpdateVersion,
+    refresh: () => updateChecker.run('manual'),
     blockers: () => restartBlockers(get(shownTasks), get(chatRunRepo), get(commitDraft)),
   })

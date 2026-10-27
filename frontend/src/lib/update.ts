@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store'
+import { get, writable } from 'svelte/store'
 import { formatBytes, percent } from './format'
 import { errorMessage } from './ui'
 import type { UpdateInfo, UpdateProgress } from './types'
@@ -40,6 +40,13 @@ export function restartBlockers(tasks: { label: string }[], chatRunRepo: string,
 export function progressText(done: number, total: number): string {
   if (total >= 0) return `Downloading ${percent(done, total)} %`
   return done > 0 ? `Downloading ${formatBytes(done)}` : 'Downloading…'
+}
+
+/** Whether Esc closes the update card: not when the key was already handled
+ *  (a menu or field took it) or a dialog / Settings is open and takes Esc
+ *  itself. `otherOpen` is read before those handlers run. */
+export function escClosesCard(e: { key: string; defaultPrevented: boolean }, otherOpen: boolean): boolean {
+  return e.key === 'Escape' && !e.defaultPrevented && !otherOpen
 }
 
 /** The last check's result; null before one succeeded. The status-bar pill
@@ -105,16 +112,26 @@ export async function startUpdate(deps: {
   apply: () => Promise<void>
   confirm: (reasons: string[]) => Promise<boolean>
   blockers: () => string[]
+  /** Resolves when no dialog is open; the question and the restart wait for it. */
+  quiet?: () => Promise<void>
+  /** The version Prepare staged ('' when unknown); the card then names it. */
+  staged?: () => Promise<string>
+  /** Prepare found the release is no longer newer: refresh the check. */
+  refresh?: () => Promise<void>
 }): Promise<void> {
   if (phaseNow.phase === 'download' || phaseNow.phase === 'install' || phaseNow.phase === 'ready') return
-  updatePhase.set({ phase: 'download', done: 0, total: 0, error: '' })
+  // total -1: size unknown, so the card says "Downloading…" until the first byte.
+  updatePhase.set({ phase: 'download', done: 0, total: -1, error: '' })
   try {
     await deps.prepare()
   } catch (e) {
     updatePhase.set(isCancelled(e) ? { ...IDLE } : { ...IDLE, phase: 'error', error: errorMessage(e) })
+    if (/already up to date/i.test(errorMessage(e))) await dropGoneUpdate(deps.refresh)
     return
   }
   updatePhase.set({ ...IDLE, phase: 'ready' })
+  await nameStagedVersion(deps.staged)
+  await deps.quiet?.()
   const reasons = deps.blockers()
   if (reasons.length > 0 && !(await deps.confirm(reasons))) {
     updatePhase.set({ ...IDLE })
@@ -126,4 +143,27 @@ export async function startUpdate(deps: {
   } catch (e) {
     updatePhase.set({ ...IDLE, phase: 'error', error: errorMessage(e) })
   }
+}
+
+/** Prepare installs what the server offers now, which can differ from what the
+ *  last check showed: the card is made to name the staged version. */
+async function nameStagedVersion(staged?: () => Promise<string>) {
+  try {
+    const v = staged ? await staged() : ''
+    const info = get(updateInfo)
+    if (v && info && info.latest !== v) updateInfo.set({ ...info, latest: v })
+  } catch {
+    // the card keeps the version the check showed
+  }
+}
+
+/** The release the card advertises is gone: check again, so the card and the
+ *  pill stop offering it, and drop the error once nothing newer is left. */
+async function dropGoneUpdate(refresh?: () => Promise<void>) {
+  try {
+    await refresh?.()
+  } catch {
+    return
+  }
+  if (!get(updateInfo)?.newer && phaseNow.phase === 'error') updatePhase.set({ ...IDLE })
 }
