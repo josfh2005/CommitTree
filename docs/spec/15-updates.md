@@ -116,9 +116,62 @@ Downloading fetches the asset of the release for this platform (see
   another build.
 - **Linux:** the tar.gz is read entry by entry and only one entry is
   extracted: a regular file whose cleaned name is exactly `CommitTree`
-  (a leading `./` is fine). Every other entry is ignored, so no path in the
-  archive can write outside the folder; a link, or a `CommitTree` entry that
-  is not a regular file, rejects the archive, as does an archive without the
-  file. The file is written with mode 0755 and is capped at 200 MiB.
+  (a leading `./` is fine). Every other entry, links included, is ignored, so
+  no path in the archive can write outside the folder; a `CommitTree` entry
+  that is not a regular file rejects the archive, as does an archive without
+  the file. The file is written with mode 0755 and is capped at 200 MiB.
 - An archive that cannot be read, or lacks the expected content, fails with
   "update archive is not valid".
+
+## Installing in place
+
+Once an update is downloaded and unpacked (see *Unpacking*) it replaces the
+running application where it stands, then CommitTree starts again.
+
+- **What is replaced.** On macOS, the app bundle that holds the running
+  executable: the nearest folder named `*.app` on the path to the executable
+  (symlinks resolved) that contains it under `Contents/MacOS/`. On Linux, the
+  running binary itself.
+- **Swap on macOS.** The old bundle is renamed aside in the same folder to
+  `.CommitTree.app.old-<pid>`, then the new bundle is moved in. When the new
+  bundle sits on another volume, so a rename is impossible, it is first copied
+  next to the old one with the system `ditto` and the copy is renamed. If
+  anything fails, the old bundle is renamed back and the update fails with the
+  application as it was. Only after success is the old bundle deleted (a
+  failure to delete it is ignored).
+- **Swap on Linux.** The new binary is copied next to the running one as
+  `.CommitTree.new-<pid>`, given mode 0755 and renamed over the old binary
+  (atomic on one filesystem). A failure removes the copy and leaves the old
+  binary untouched.
+- **Restart.** CommitTree starts a detached shell (`/bin/sh`, in its own
+  session) that waits until this process has exited (`kill -0 <pid>`), then
+  starts the application again: on macOS with `/usr/bin/open -n '<bundle>'`,
+  on Linux with `exec '<binary>'`. Single quotes in the path are escaped. The
+  caller then quits, so the new instance opens once the old one is gone.
+- **Quarantine and signature.** A file the application downloads itself does
+  not carry the `com.apple.quarantine` attribute, so Gatekeeper does not block
+  the ad-hoc signed bundle. The new version has a new ad-hoc signature, so
+  macOS may ask once more for keychain access to the stored API keys and
+  tokens; this already happens with a manual reinstall and nothing is done
+  about it.
+
+## When it cannot install
+
+Before offering "Update and restart", CommitTree checks whether it can
+install in place. If not, the primary button is "Download" and opens the
+release page instead. The reason is one of these, checked in this order:
+
+1. `development build`: the Wails dev build (compiled with `-tags dev`).
+2. `not running from an app bundle`: on macOS, the executable is not inside a
+   `*.app/Contents/MacOS/`.
+3. `no download for this platform`: the release has no asset for this
+   platform.
+4. `running from a temporary location — move CommitTree to Applications
+   first`: macOS runs an app opened straight from a downloaded disk image or
+   archive from a read-only randomised copy (a path containing
+   `/AppTranslocation/`), which cannot be replaced.
+5. `CommitTree can't write to <folder>`: the folder holding the bundle (macOS)
+   or the binary (Linux) rejects the creation of a file. This is probed by
+   creating and removing a temporary `.committree-write-*` file there.
+
+With none of these, installing is allowed and there is no reason.
