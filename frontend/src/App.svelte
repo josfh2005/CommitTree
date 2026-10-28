@@ -12,6 +12,7 @@
   import DialogHost from './components/DialogHost.svelte'
   import LogView from './components/LogView.svelte'
   import PullRequestsView from './components/PullRequestsView.svelte'
+  import PushDialog from './components/PushDialog.svelte'
   import SettingsDialog from './components/SettingsDialog.svelte'
   import RepoSettingsDialog from './components/RepoSettingsDialog.svelte'
   import Sidebar from './components/Sidebar.svelte'
@@ -248,6 +249,7 @@ import UpdateCard from './components/UpdateCard.svelte'
 <!-- Before DialogHost: a confirm opened from it must stack on top. -->
 <RepoSettingsDialog />
 <CloneDialog />
+<PushDialog />
 <AddReposDialog />
 <DialogHost />
 <CredentialDialog />

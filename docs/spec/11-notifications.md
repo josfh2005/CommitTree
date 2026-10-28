@@ -21,8 +21,10 @@ focused, an in-app toast when it is focused but the event is out of sight.
 
 One user operation is one event, however many git commands it runs. An
 operation notifies once: conflicts or a failure replace "finished". A push of
-the main branches in which any branch was not pushed is a failed Push: "Push
-failed: N of M branches were not pushed".
+the Push dialog in which any branch was not pushed is a failed Push: "Push
+failed: N of M branches were not pushed" (M counts the branches, not the
+"Tags" row; when only the tags were rejected: "Push failed: Tags were not
+pushed"). Cancelling the dialog is not an operation and notifies nothing.
 Staging, discarding, reads, terminal commands, creating branches or tags
 never notify.
 

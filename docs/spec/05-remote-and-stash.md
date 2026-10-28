@@ -55,7 +55,7 @@ why it is disabled; an enabled one's says what it does.
 | Stash | The "Stash changes" dialog | busy; a conflict is in progress; nothing is uncommitted ("Nothing to stash") |
 | Fetch | Fetch, below; an amber dot while background fetches skip a remote that needs credentials, with the tooltip "Background fetch paused for <remotes>: authentication failed. Fetch to retry." | busy |
 | Pull | Pull, below; the behind count as a badge | busy; a conflict is in progress |
-| Push | Push, below (following Settings → General → Push); the current branch's ahead count as a badge | same as Pull |
+| Push | The Push dialog (Push, below), with the current branch ticked; the current branch's ahead count as a badge | same as Pull |
 | Branch | The "New branch" dialog, from HEAD (a detached HEAD's commit included) | busy |
 | Merge | The branch picker below, then the usual merge confirmation | busy; a conflict is in progress; detached HEAD ("Check out a branch first"); no branch other than the current one, local or remote ("No other branches") |
 | Terminal | A toggle: shows or hides the terminal panel, and looks pressed (soft background and border, no colour) while it is open | never |
@@ -152,75 +152,129 @@ checked-out branch's upstream can notify (see `11-notifications.md`).
 
 ### Push
 
-Settings → General → **Push** says what a click on Push (toolbar or the
-repository row's menu) does: *Ask each time* (the default), *Current branch
-only* or *Main branches* (the setting's value is still stored as `all`). The toolbar
-button's tooltip follows it: "Push
-`<branch>`" (just "Push" with a detached HEAD), "Push main branches" or "Push — asks current or main branches";
-its badge always counts the current branch. A one-line hint under the setting names the main branches: "main, master, develop and release/*, or your git-flow names".
+Push always opens the **Push dialog** (`PushDialog.svelte`), modelled on
+SourceTree's "Push to repository" window: pick a remote, tick the branches to
+push, name or create their remote branches, choose whether they track, and
+optionally push the tags or force. OK pushes every ticked branch to that
+remote in one go. The toolbar button's badge counts the current branch's
+commits to push.
 
-With *Ask each time*, Push pushes the current branch without asking when no
-other main branch is ahead of its upstream (counted from the last fetch).
-Otherwise a dialog "Push `<repository>`" offers *Current branch (`<name>`)*
-(selected) and *Main branches (N)* — N counts the current branch (when it is
-a main branch) plus the other main branches ahead — with "Change the default in Settings → General." under it;
-confirming reads "Push" or "Push N branches" ("Push 1 branch" for one),
-Cancel pushes nothing. With a detached HEAD it offers only *Main branches
-(N)*. The repository row's menu also has **Push main branches**, which pushes
-the main branches whatever the setting says. Ask each time asks only when
-some other *main* branch is ahead; a feature branch ahead does not make it ask.
+**Entry points.** Each opens the same dialog; they differ in what comes
+ticked and on which remote it opens:
 
-**Current branch** publishes the checked-out branch:
+| Entry point | Ticked | Opens on |
+|---|---|---|
+| Toolbar **Push**, repository row **Push** | the current branch (nothing with a detached HEAD) | the remote of the current branch's upstream, else `origin`, else the first remote |
+| Branch menu **Push** on a branch (sidebar) | that branch, current or not | the remote of that branch's upstream, else `origin`, else the first remote |
+| Repository row **Push main branches** | the current branch when it is a main branch, plus every other main branch ahead of a live upstream, as in the next paragraph | the remote most of those branches track (ties: `origin`, then name order); only the branches whose upstream is on it come ticked, plus a current main branch with no upstream |
+| The AI chat's `push` tool | no dialog: it pushes the current branch behind its own confirmation card (`06-ai.md`) | |
 
-- If the branch already has an upstream, Push pushes to it as-is.
-- If the branch has no upstream yet, Push sets one on the remote named
-  `origin`, publishing under the branch's own name. This is a deliberate
-  default rather than a prompt: a first push almost always means "publish
-  this to the usual remote," and asking every time would slow down the
-  common case.
-- A detached HEAD has nothing to publish; Push refuses.
+A *main* (official) branch is `main`, `master`, `develop` or one starting with
+`release/`; when git-flow is configured in the repository
+(`gitflow.branch.master` and `gitflow.branch.develop` set) its names replace
+those defaults: the master and develop names and the release prefix (default
+`release/`); the Git-flow tab of Repository settings edits those names
+(`12-repository-settings.md`). One Go rule (`refs.OfficialRule`) decides it,
+and the refs it returns carry the result (`official` on each local branch).
+"Push main branches" ticks the current branch when it is a main branch and
+does not track another local branch, plus every other local main branch whose
+upstream is on a remote, still exists, and is ahead of it according to the last
+fetch. Nothing else is ticked by itself.
 
-**Main branches** is `App.PushAll`. A branch is a *main* (official) branch when
-its name is `main`, `master`, `develop` or starts with `release/`; when
-git-flow is configured in the repository (`gitflow.branch.master` and
-`gitflow.branch.develop` set) its names replace those defaults: the master
-and develop names and the release prefix (default `release/`); the Git-flow tab of Repository
-settings edits those names (`12-repository-settings.md`). One Go rule
-(`refs.OfficialRule`) decides it, and the refs it returns carry the result
-(`official` on each local branch) for the "Main branches (N)" count. Only
-main branches are ever pushed this way — never a feature, hotfix or other
-branch, even the checked-out one. It pushes the current branch when it is a
-main branch (as above; to its upstream even when that is gone, and up to
-date counts; with no upstream it is published to `origin` and gets one) plus
-every other local main branch whose upstream is on a remote, still exists,
-and is ahead of it according to the last fetch. A branch that tracks another
-local branch, or has no upstream, is never pushed this way (except a main
-current branch with no upstream, as above); with a detached HEAD only the
-other branches go. Each branch goes to its upstream by name
-(`branch.<name>.pushRemote` and `push.default` are not consulted), with one
-`git push --porcelain` per remote, remotes in name order. Nothing is forced,
-no tag is pushed, and the push is not atomic: a branch the remote rejects
-does not stop the others. Like Push it takes the repository's write lock and
-has no conflict check of its own; the toolbar button and both menu items are
-disabled while a conflict is in progress. The busy label reads "Pushing
-branches…".
+A repository with no remote opens nothing: a toast says "No remote to push to
+— add one in Repository settings". A repository row's Push for a repository
+that is not the selected one reads that repository's refs afresh when the
+dialog opens, and its toasts are prefixed with the repository's name.
 
-When nothing failed, a toast sums it up: "Pushed `<branch>`" or "Pushed N
-branches", plus ", M already up to date" when some were; "Everything up to
-date" when none moved; "Nothing to push" when no branch qualified. A push of
-a repository that is not the selected one (from its row menu) prefixes the
-toast with its name: "beta: Nothing to push". When any branch was not
-pushed, a results dialog "Push results — `<repository>`" lists every branch
-with its target, one row each, closed by a single OK: ✓ pushed, — up to
-date, ✗ and the reason. It opens once the busy label is gone and the refs
-have reloaded, so the toolbar is usable behind it. A branch the remote has
-moved on from reads "The remote has commits you don't have — pull
-`<branch>` first"; any other rejection shows git's reason. A remote that
-cannot be reached (network, authentication, a missing remote) fails all of
-its branches with git's message, and the other remotes are still pushed; a
-push cancelled from the Commands panel reads "Cancelled". If the push cannot
-start at all (the repository is missing or another write is running), an
-error toast shows instead of the dialog.
+**The dialog.**
+
+```
+Push to repository: [origin ▾]   git@bitbucket.org:team/repo.git
+┌ Branches to push ─────────────────────────────────────────────┐
+│ Push? │ Local branch        │ Remote branch        │ Track?   │
+│ [ ]   │ develop             │                      │  [–]     │
+│ [x]   │ feature/NEXO-1682   │ feature/NEXO-1682 ▾  │  [x]     │
+│ [ ]   │ master              │ master            ▾  │  [–]     │
+│ [ ] Select All                                                │
+└───────────────────────────────────────────────────────────────┘
+[ ] Push all tags                                  [Cancel] [OK]
+[ ] Force push
+```
+
+- **Push to repository** is a dropdown of the repository's remotes; the
+  remote's URL (its push URL, else its fetch URL) is shown beside it, dim and
+  read-only. One dialog pushes to one remote. Changing the remote recomputes
+  every row's Remote branch from the new remote, except a name the user typed.
+- **Local branch**: every local branch, by name, including ones that track a
+  local branch and ones checked out in another worktree (git decides what it
+  accepts). The table scrolls when there are many.
+- **Remote branch** is a combo box: a dropdown of the selected remote's
+  branches (as of the last fetch; opening the dialog or changing the remote
+  fetches nothing) in which any name can also be typed — a name that does not
+  exist yet creates that remote branch. While a row is unticked it shows its
+  remote counterpart on the selected remote — the name of its upstream when
+  the upstream is on that remote, otherwise the remote branch of the same name
+  when one exists — and is blank when there is none. Ticking a row with a
+  blank Remote branch fills it with the local branch's own name; leaving it
+  blank is sent as the same name. Unticking keeps the name.
+- **Track?**: an unticked row shows it greyed out with a dash. Ticking Push?
+  ticks Track?, which the user can untick. Ticked, the local branch's
+  upstream becomes that remote branch after the push (`git push -u`, repointing
+  an upstream that was something else). Unticked, the branch's upstream is
+  left alone, whatever it is.
+- **Select All** ticks every row that is not ticked yet (rows already ticked
+  stay exactly as they are, including a Track? the user turned off) and
+  unticks them all when everything was ticked.
+- **Push all tags** also pushes every local tag to that remote. **Force push**
+  is `--force-with-lease`, with an explicit expectation per ref (the remote
+  branch as the last fetch saw it; a remote branch the last fetch did not know
+  is expected not to exist), applied to every ticked branch — never a plain
+  `--force`, and never to tags. Both start unticked.
+- **OK** is enabled when at least one branch is ticked or *Push all tags* is
+  ticked. It closes the dialog and pushes; **Cancel**, Esc, or a click outside
+  pushes nothing.
+
+**What OK sends** is `App.PushBranches` (under the repository's write lock,
+with the in-app credential prompt): `git push --porcelain` with an explicit
+refspec `refs/heads/<local>:refs/heads/<remote branch>` per ticked branch.
+Tracking rows go in one invocation with `-u` and the others in another, so an
+untracked row never gets an upstream; tags go in a third (`--tags`), without
+force. The push is not atomic: a branch the remote rejects does not stop the
+others. The busy label reads "Pushing…" for one branch and "Pushing
+branches…" for more.
+
+**Results.** One result per ticked branch, in the order of the dialog, then one
+"Tags" row when tags were pushed. When nothing failed, a toast sums it up:
+"Pushed `<branch>`" or "Pushed N branches", plus " and tags" when the tags
+moved too ("Pushed tags" when only they did), plus ", M already up to date"
+when some branches were; "Everything up to date" when nothing moved; "Nothing
+to push" when there were no results. A push of a repository that is not the
+selected one (from its row menu) prefixes the toast with its name: "beta:
+Pushed feature/x". When any branch (or the tags) was not pushed, a results
+dialog "Push results — `<repository>`" lists every row with its target, one
+each, closed by a single OK: ✓ pushed, — up to date, ✗ and the reason; the
+tags row reads "Tags → `<remote>`". It opens once the busy label is gone and
+the refs have reloaded, so the toolbar is usable behind it. A branch the
+remote has moved on from reads "The remote has commits you don't have — pull
+`<branch>` first"; a lease that no longer holds is a rejection with git's
+reason; a tag that differs on the remote is reported under "Tags" with git's
+reason. A remote that cannot be reached (network, authentication) fails all
+of its rows with git's message; a push cancelled from the Commands panel
+reads "Cancelled". If the push cannot start at all (the repository is missing,
+another write is running, the request is invalid), an error toast shows
+instead of the dialog.
+
+Every branch whose remote branch moved starts a pipeline watch
+(`14-hosting.md`, "Watching a push"), even when the call as a whole reports an
+error. The entry points are disabled while another write runs and while a
+conflict is in progress, as Pull is.
+
+**The chat's push** (`App.Push`) is not the dialog. It pushes the current
+branch as `06-ai.md` describes: to where a plain push goes, or — with no
+upstream — to the remote named `origin` under the branch's own name, setting
+the upstream. This is a deliberate default rather than a prompt there: the
+chat asks for confirmation on its card instead. A detached HEAD has nothing to
+publish; it refuses.
 
 ### Pull
 
@@ -303,20 +357,14 @@ badges) afterwards.
   deleted on the remote ("The upstream was deleted on the remote"), one that
   tracks a local branch ("Tracks a local branch") and one checked out in a
   linked worktree ("Checked out in another worktree").
-- **Push `<branch>`** (`App.PushBranch`, under the write lock) pushes only
-  that local branch, current or not, to its upstream with
-  `git push --porcelain <remote> refs/heads/<branch>:<upstream ref>`: never
-  forced, no tags, no scope dialog. A branch with no upstream reads "Publish
-  `<branch>` to `<remote>`" (origin, else the only remote; disabled with "No
-  remote" when there is neither) and is pushed there with `-u`. A branch
-  whose upstream was deleted on the remote also reads "Publish": pushing it
-  re-creates the remote branch (Main branches skips such a branch). A branch that
-  tracks a local branch is disabled ("Tracks a local branch"). The outcome is
-  read from the same per-ref porcelain parsing as Main branches, so a rejected
-  push reads "The remote has commits you don't have — pull `<branch>` first"
-  (any other rejection shows git's reason) as an error toast; success toasts
-  "Pushed `<branch>`" (or "Everything up to date"). The push uses the same
-  network timeout as the other remote commands.
+- **Push `<branch>`** opens the Push dialog with that branch ticked (Push,
+  above), on its upstream's remote. The menu item is disabled while a write
+  runs, and while a merge, rebase or cherry-pick is in progress. Its label
+  reads "Publish `<branch>` to `<remote>`" (origin, else the only remote)
+  when the branch has no upstream or its upstream was deleted on the remote,
+  and is disabled with "No remote" when it has to publish and there is none;
+  a branch that tracks a local branch is disabled ("Tracks a local branch").
+  The results are those of the dialog.
 
 ### Credentials
 
@@ -337,7 +385,8 @@ enter a new one."; the next attempt shows the dialog.
 
 **Which commands may ask.** Only network commands the user starts:
 
-- the toolbar's Fetch, Pull and Push, and Push main branches;
+- the toolbar's Fetch, Pull and Push (the Push dialog's OK), and Push main
+  branches;
 - the branch menu's Fetch `<remote>`, Pull and Push, and deleting a remote
   branch;
 - Clone (`01-repositories-and-sidebar.md`);
@@ -565,8 +614,9 @@ stashes.
    while another write runs.
 3. Pull refuses outright, without attempting anything, when the repository
    already has an unresolved merge, rebase or stash conflict.
-4. A push with no upstream sets one on the remote named `origin`, using the
-   branch's own name, without asking.
+4. The chat's push of a branch with no upstream sets one on the remote named
+   `origin`, using the branch's own name, without asking; the Push dialog
+   always shows the remote and the branch names before anything is pushed.
 5. Pull reports exactly one of: already up to date, merged, rebased,
    conflicted. A conflicted pull is a result, not an error.
 6. Stashing with nothing to stash is refused, not silently accepted as an

@@ -62,7 +62,9 @@ export function setTicked(row: PushRow, on: boolean): PushRow {
   return { ...row, push: false, track: false }
 }
 
-export const selectAll = (rows: PushRow[], on: boolean): PushRow[] => rows.map((r) => setTicked(r, on))
+/** Select All: rows already ticked stay as they are (a user who unticked
+ *  Track? keeps it off); unticking clears every row. */
+export const selectAll = (rows: PushRow[], on: boolean): PushRow[] => rows.map((r) => (on && r.push ? r : setTicked(r, on)))
 
 /** The remote changed: typed names stay, the rest follow the new remote
  *  (a ticked row left blank gets its local name). */
@@ -75,7 +77,7 @@ export function changeRemote(rows: PushRow[], refs: Refs, remote: string): PushR
   })
 }
 
-export const editRemote = (row: PushRow, name: string): PushRow => ({ ...row, remote: name, typed: true })
+export const editRemote = (row: PushRow, name: string): PushRow => ({ ...row, remote: name.trim(), typed: true })
 
 /** What OK sends: the ticked rows, in row order. */
 export function pushRequest(remote: string, rows: PushRow[], tags: boolean, force: boolean): PushRequest {

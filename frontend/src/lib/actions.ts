@@ -1,11 +1,11 @@
-import { get } from 'svelte/store'
+import { get, writable } from 'svelte/store'
 import { api } from './api'
-import { chatOpen, chatRunRepo, collapsedRepoGroups, expandedRepos, filters, focusCommitBox, gitSettings, loadIdentity, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, refs, repoManualSeeded, repos, repoSortOrder, selectRepo, selectUncommitted, selectedHash, selectedRepoId, stashConflictDismissed } from './stores'
+import { chatOpen, chatRunRepo, collapsedRepoGroups, expandedRepos, filters, focusCommitBox, loadIdentity, loadMergeState, loadRefs, loadRepos, loadWorktreeState, logVersion, mergeState, refreshRepo, refs, repoManualSeeded, repos, repoSortOrder, selectRepo, selectUncommitted, selectedHash, selectedRepoId, stashConflictDismissed } from './stores'
 import { refreshStatuses } from './hosting'
 import { beginOp } from './tasks'
 import { notifyStashConflicts, opError, track } from './notify'
 import { conflictsBody, type OpKind } from './notifyRules'
-import type { AddReposResult, Branch, BranchPushResult, FileStatus, HunkAction, HunkPick, MergeState, RebasePreview, RegionChoice, Refs, Repo, ResetInfo, ResetMode, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
+import type { AddReposResult, Branch, BranchPushResult, FileStatus, HunkAction, HunkPick, MergeState, PushRequest, RebasePreview, RegionChoice, Refs, RemoteConfig, Repo, ResetInfo, ResetMode, Submodule, WorktreeRemovalInfo, WorktreeState } from './types'
 import { PULL_UP_TO_DATE, UP_TO_DATE } from './types'
 import { abortWarning, commitWarning, isEmptyStepError, skipWarning, staleMergeChoice, takeMessage } from './merge'
 import { doneMessage, rebaseMessage } from './rebase'
@@ -14,7 +14,8 @@ import { resetMessage } from './reset'
 import { discardMessage, neverCommitted } from './worktree'
 import { stashApplyAction } from './stash'
 import { choiceDialog, confirmDialog, confirmDialogWithCheckbox, dismissToast, errorMessage, pickDialog, promptDialog, resultsDialog, toast } from './ui'
-import { PartialPushError, pushChoiceOptions, pushDecision, pushedMessage, pushFailed, pushResultRows } from './push'
+import { PartialPushError, pushedMessage, pushFailed, pushResultRows } from './push'
+import { defaultRemote, initialRows, mainBranchesSelection, type PushRow } from './pushDialog'
 import { mergeCandidates } from './toolbar'
 import { resolveRepoDrop } from './repoDrop'
 import { moveGroup, moveRepo, nameOrder, type RepoPlace, type RepoSortOrder } from './repoGroups'
@@ -880,33 +881,68 @@ async function refsOf(id: string): Promise<Refs | null> {
   }
 }
 
-// push follows Settings → General → Push: the current branch, the main
-// branches, or — the default — a choice, asked only when another main
-// branch has commits to push (docs/spec/05-remote-and-stash.md).
-export async function push(id: string): Promise<boolean> {
-  const scope = get(gitSettings)?.pushScope ?? 'ask'
-  const current = scope === 'ask' ? await refsOf(id) : null
-  let choice = pushDecision(scope, current)
-  if (choice === 'ask') {
-    const picked = await choiceDialog(pushChoiceOptions(repoLabel(id), current))
-    if (!picked) return false
-    choice = picked
+/** What the Push dialog shows (docs/spec/05-remote-and-stash.md): null while closed. */
+export interface PushDialogState { id: string; repo: string; refs: Refs; remotes: RemoteConfig[]; remote: string; rows: PushRow[] }
+export const pushDialogState = writable<PushDialogState | null>(null)
+
+// openPushDialog reads the refs and remotes fresh (the row menu can push a
+// repository that is not the selected one) and opens the dialog with the
+// branches `pre` ticks ticked, on the remote it names (else the default one).
+async function openPushDialog(id: string, pre: (refs: Refs) => { remote?: string; ticked: string[] }) {
+  const refs = await refsOf(id)
+  if (!refs) {
+    toast('Could not read the repository\'s branches', 'error')
+    return
   }
-  return choice === 'all' ? pushAll(id) : runOp(id, 'push', 'Pushing…', () => api.push(id))
+  let remotes: RemoteConfig[]
+  try {
+    remotes = (await api.listRemotes(id)) ?? []
+  } catch (e) {
+    toast(errorMessage(e), 'error')
+    return
+  }
+  if (remotes.length === 0) {
+    toast('No remote to push to — add one in Repository settings', 'error')
+    return
+  }
+  const { remote: preferred, ticked } = pre(refs)
+  const names = remotes.map((r) => r.name)
+  let remote = preferred ?? defaultRemote(refs, ticked)
+  if (!names.includes(remote)) remote = names.includes('origin') ? 'origin' : names[0]
+  pushDialogState.set({ id, repo: repoLabel(id), refs, remotes, remote, rows: initialRows(refs, remote, ticked) })
 }
 
-// pushAll pushes the main branches with something to push. A toast sums up a
+const currentOf = (refs: Refs) => (refs.detached ? [] : refs.local.filter((b) => b.current).map((b) => b.name))
+
+// push is the toolbar's and the repo row's Push: the dialog, with the
+// current branch ticked (nothing with a detached HEAD).
+export async function push(id: string): Promise<void> {
+  await openPushDialog(id, (refs) => ({ ticked: currentOf(refs) }))
+}
+
+// pushBranch is the branch menu's Push: the dialog with that branch ticked.
+export async function pushBranch(id: string, branch: Branch): Promise<void> {
+  await openPushDialog(id, () => ({ ticked: [branch.name] }))
+}
+
+// pushMainBranches is the repo row's "Push main branches": the dialog with
+// the main branches that have something to push ticked.
+export async function pushMainBranches(id: string): Promise<void> {
+  await openPushDialog(id, (refs) => mainBranchesSelection(refs))
+}
+
+// runPush is the dialog's OK: it pushes what req says. A toast sums up a
 // push in which nothing failed; otherwise a dialog lists every branch —
 // opened once the busy label is gone and the refs reloaded — and the push
 // notifies as failed.
-export async function pushAll(id: string): Promise<boolean> {
+export async function runPush(id: string, req: PushRequest): Promise<boolean> {
   const name = repoLabel(id)
-  const end = beginOp('Pushing branches…', id)
+  const end = beginOp(req.branches.length > 1 ? 'Pushing branches…' : 'Pushing…', id)
   let failure: unknown
   let partial: BranchPushResult[] | null = null
   try {
     const results = await track(id, 'push', async () => {
-      const res = (await api.pushAll(id)) ?? []
+      const res = (await api.pushBranches(id, req)) ?? []
       if (res.some(pushFailed)) throw new PartialPushError(res)
       return res
     })
@@ -961,23 +997,6 @@ export async function pullBranch(id: string, branch: Branch, twin = '') {
     if (!branch.upstream && twin) message += `; ${nowTracksMessage(branch.name, twin)}`
     toast(id === get(selectedRepoId) ? message : `${name}: ${message}`, 'info')
   }
-}
-
-// pushBranch is the branch menu's Push: one branch to its upstream, or
-// published to a remote. A rejection is an error toast with git's reason.
-export async function pushBranch(id: string, branch: Branch): Promise<boolean> {
-  const name = repoLabel(id)
-  const outcome: { result?: BranchPushResult } = {}
-  const ok = await runOp(id, 'push', `Pushing ${branch.name}…`, async () => {
-    const r = await api.pushBranch(id, branch.name)
-    if (pushFailed(r)) throw new Error(r.reason || `Could not push ${branch.name}`)
-    outcome.result = r
-  })
-  if (ok && outcome.result) {
-    const message = pushedMessage([outcome.result])
-    toast(id === get(selectedRepoId) ? message : `${name}: ${message}`, 'info')
-  }
-  return ok
 }
 
 export async function stashChanges(id: string) {

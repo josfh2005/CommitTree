@@ -51,18 +51,25 @@ export function pushChoiceOptions(repoName: string, refs: Refs | null): ChoiceOp
 
 export const pushFailed = (r: BranchPushResult) => r.status === 'rejected' || r.status === 'failed'
 
-/** The toast after a push of the main branches in which nothing failed. */
+/** The toast after a push in which nothing failed. The tags row, when the
+ *  push also sent tags, is not a branch: it reads "and tags" after them. */
 export function pushedMessage(results: BranchPushResult[]): string {
   if (results.length === 0) return 'Nothing to push'
-  const pushed = results.filter((r) => r.status === 'pushed')
-  if (pushed.length === 0) return 'Everything up to date'
+  const tags = results.find((r) => r.tags)?.status === 'pushed'
+  const rows = results.filter((r) => !r.tags)
+  const pushed = rows.filter((r) => r.status === 'pushed')
+  if (pushed.length === 0) return tags ? withUpToDate('Pushed tags', rows.length) : 'Everything up to date'
   const head = pushed.length === 1 ? `Pushed ${pushed[0].branch}` : `Pushed ${pushed.length} branches`
-  const upToDate = results.length - pushed.length
-  return upToDate > 0 ? `${head}, ${upToDate} already up to date` : head
+  return withUpToDate(tags ? `${head} and tags` : head, rows.length - pushed.length)
 }
 
-export const failedMessage = (results: BranchPushResult[]) =>
-  `${results.filter(pushFailed).length} of ${results.length} branches were not pushed`
+const withUpToDate = (head: string, upToDate: number) => (upToDate > 0 ? `${head}, ${upToDate} already up to date` : head)
+
+export function failedMessage(results: BranchPushResult[]): string {
+  const rows = results.filter((r) => !r.tags)
+  const failed = rows.filter(pushFailed).length
+  return failed === 0 ? 'Tags were not pushed' : `${failed} of ${rows.length} branches were not pushed`
+}
 
 export function pushResultRows(results: BranchPushResult[]): ResultRow[] {
   return results.map((r) => {

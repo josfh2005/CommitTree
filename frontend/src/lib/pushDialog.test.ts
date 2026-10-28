@@ -134,11 +134,21 @@ describe('selectAll', () => {
     expect(none.every((x) => !x.push && !x.track)).toBe(true)
     expect(none.map((x) => x.remote)).toEqual(all.map((x) => x.remote))
   })
+  it('leaves a row that is already ticked as it is, even with Track? unticked', () => {
+    const kept = row({ local: 'a', remote: 'x', push: true, track: false, typed: true })
+    const other = row({ local: 'b' })
+    const all = selectAll([kept, other], true)
+    expect(all[0]).toEqual(kept)
+    expect(all[1]).toMatchObject({ push: true, track: true, remote: 'b' })
+  })
 })
 
 describe('editRemote', () => {
   it('sets the name and marks the row typed', () => {
     expect(editRemote(row({ push: true }), 'mine')).toMatchObject({ remote: 'mine', typed: true, push: true })
+  })
+  it('trims the typed name', () => {
+    expect(editRemote(row(), '  mine \n').remote).toBe('mine')
   })
 })
 

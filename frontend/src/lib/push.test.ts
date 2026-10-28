@@ -77,6 +77,24 @@ describe('result summaries', () => {
     expect(pushedMessage([res('main', 'upToDate'), res('a', 'pushed'), res('b', 'pushed')])).toBe('Pushed 2 branches, 1 already up to date')
     expect(pushedMessage([res('main', 'upToDate')])).toBe('Everything up to date')
   })
+  it('reads a push of tags only, and tags after the branches', () => {
+    const tags = (status: BranchPushResult['status'], reason?: string): BranchPushResult => ({ branch: 'Tags', target: 'origin', tags: true, status, ...(reason ? { reason } : {}) })
+    expect(pushedMessage([tags('pushed')])).toBe('Pushed tags')
+    expect(pushedMessage([tags('upToDate')])).toBe('Everything up to date')
+    expect(pushedMessage([res('feature/x', 'pushed'), tags('pushed')])).toBe('Pushed feature/x and tags')
+    expect(pushedMessage([res('a', 'pushed'), res('b', 'pushed'), res('c', 'upToDate'), tags('pushed')])).toBe('Pushed 2 branches and tags, 1 already up to date')
+    expect(pushedMessage([res('a', 'upToDate'), tags('pushed')])).toBe('Pushed tags, 1 already up to date')
+    expect(pushedMessage([res('a', 'upToDate'), tags('upToDate')])).toBe('Everything up to date')
+  })
+  it('counts only branches when tags are in the report', () => {
+    const tags: BranchPushResult = { branch: 'Tags', target: 'origin', tags: true, status: 'rejected', reason: 'x' }
+    expect(failedMessage([res('a', 'rejected', 'pull'), res('b', 'pushed'), tags])).toBe('1 of 2 branches were not pushed')
+    expect(failedMessage([res('a', 'pushed'), tags])).toBe('Tags were not pushed')
+  })
+  it('names the remote on the tags row', () => {
+    const tags: BranchPushResult = { branch: 'Tags', target: 'origin', tags: true, status: 'pushed' }
+    expect(pushResultRows([tags])).toEqual([{ mark: '✓', label: 'Tags → origin', detail: 'Pushed', tone: 'ok' }])
+  })
   it('counts the branches that were not pushed', () => {
     const r = [res('main', 'rejected', 'pull'), res('a', 'pushed'), res('b', 'failed', 'auth')]
     expect(failedMessage(r)).toBe('2 of 3 branches were not pushed')
