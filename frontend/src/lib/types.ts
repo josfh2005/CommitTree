@@ -92,7 +92,7 @@ export interface Branch {
   upstreamGone?: boolean
   /** The upstream is another local branch, not a remote one. */
   upstreamLocal?: boolean
-  /** A local branch "Main branches" pushes: main, master, develop, release/*
+  /** A local branch "Push main branches" pre-ticks: main, master, develop, release/*
    *  or the repository's git-flow names (decided in Go, refs.OfficialRule). */
   official: boolean
   /** Path of another worktree that has this branch checked out. */
