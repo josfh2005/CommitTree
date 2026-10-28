@@ -53,6 +53,19 @@ func PushBranches(ctx context.Context, dir string, req PushRequest) ([]BranchPus
 	if len(req.Branches) == 0 && !req.Tags {
 		return nil, errors.New("nothing to push: choose a branch or tags")
 	}
+	seen := map[string]bool{}
+	for _, s := range req.Branches {
+		for _, name := range []string{s.Local, s.remoteBranch()} {
+			if !validBranchName(ctx, dir, name) {
+				return nil, fmt.Errorf("invalid branch name %q", name)
+			}
+		}
+		if rb := s.remoteBranch(); seen[rb] {
+			return nil, fmt.Errorf("two branches push to %q", rb)
+		} else {
+			seen[rb] = true
+		}
+	}
 	for _, s := range req.Branches {
 		if _, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "rev-parse", "--verify", "--quiet", "refs/heads/"+s.Local); err != nil {
 			return nil, fmt.Errorf("%q is not a local branch", s.Local)
@@ -69,19 +82,57 @@ func PushBranches(ctx context.Context, dir string, req PushRequest) ([]BranchPus
 			untracked = append(untracked, i)
 		}
 	}
-	pushSpecs(ctx, dir, req, tracked, true, results)
-	pushSpecs(ctx, dir, req, untracked, false, results)
+	// One OK prompts for credentials at most once: when an invocation ends
+	// in a cancelled or failed prompt, the rest are not started and fail
+	// with the same reason.
+	var stop error
+	for _, g := range []struct {
+		idx []int
+		set bool
+	}{{tracked, true}, {untracked, false}} {
+		if stop != nil {
+			failRows(g.idx, results, stop)
+			continue
+		}
+		stop = pushSpecs(ctx, dir, req, g.idx, g.set, results)
+	}
 	if req.Tags {
-		results = append(results, pushTags(ctx, dir, req.Remote))
+		if stop != nil {
+			results = append(results, BranchPushResult{Branch: "Tags", Target: req.Remote, Status: PushFailed, Reason: pushErrorText(stop), Tags: true})
+		} else {
+			results = append(results, pushTags(ctx, dir, req.Remote))
+		}
 	}
 	return results, nil
 }
 
+// validBranchName reports whether name is a branch name git accepts as it
+// stands (--branch would also expand "@{-1}" to a name; that is not one).
+func validBranchName(ctx context.Context, dir, name string) bool {
+	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "check-ref-format", "--branch", name)
+	return err == nil && strings.TrimSpace(out) == name
+}
+
+func failRows(idx []int, results []BranchPushResult, err error) {
+	for _, i := range idx {
+		results[i].Status, results[i].Reason = PushFailed, pushErrorText(err)
+	}
+}
+
+// endsInPromptStop reports whether err is a credentials prompt that was
+// cancelled or refused, or a push cancelled outright: a reason not to try
+// the next invocation.
+func endsInPromptStop(ctx context.Context, err error) bool {
+	var pe *gitcmd.PromptError
+	return errors.As(err, &pe) || errors.Is(err, gitcmd.ErrCancelled) || ctx.Err() != nil
+}
+
 // pushSpecs pushes the specs at idx in one `git push --porcelain`, with -u
-// when setUpstream, and fills in their results.
-func pushSpecs(ctx context.Context, dir string, req PushRequest, idx []int, setUpstream bool, results []BranchPushResult) {
+// when setUpstream, and fills in their results. It returns the error that
+// should stop the invocations after it (see endsInPromptStop), nil otherwise.
+func pushSpecs(ctx context.Context, dir string, req PushRequest, idx []int, setUpstream bool, results []BranchPushResult) error {
 	if len(idx) == 0 {
-		return
+		return nil
 	}
 	args := []string{"push", "--porcelain"}
 	if setUpstream {
@@ -115,6 +166,10 @@ func pushSpecs(ctx context.Context, dir string, req PushRequest, idx []int, setU
 			results[i].Status, results[i].Reason = PushFailed, "No result from git"
 		}
 	}
+	if len(lines) == 0 && runErr != nil && endsInPromptStop(ctx, runErr) {
+		return runErr
+	}
+	return nil
 }
 
 // pushTags pushes every local tag to remote and folds git's per-tag lines

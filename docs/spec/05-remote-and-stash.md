@@ -240,7 +240,14 @@ refspec `refs/heads/<local>:refs/heads/<remote branch>` per ticked branch.
 Tracking rows go in one invocation with `-u` and the others in another, so an
 untracked row never gets an upstream; tags go in a third (`--tags`), without
 force. The push is not atomic: a branch the remote rejects does not stop the
-others. The busy label reads "Pushing…" for one branch and "Pushing
+others. A request is refused before anything is pushed when a Local is not a
+local branch, when a Local or a remote branch name is not a valid branch name
+(`invalid branch name "<name>"`, checked with `git check-ref-format --branch`),
+or when two ticked branches push to the same remote branch name (`two branches
+push to "<name>"`). One OK asks for credentials at most once: when an
+invocation ends because the credential prompt was cancelled or refused (or the
+push was cancelled) and printed no ref line, the invocations after it are not
+started and their rows, and the "Tags" row, fail with the same reason. The busy label reads "Pushing…" for one branch and "Pushing
 branches…" for more.
 
 **Results.** One result per ticked branch, in the order of the dialog, then one

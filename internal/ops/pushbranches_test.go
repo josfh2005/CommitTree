@@ -1,11 +1,13 @@
 package ops_test
 
 import (
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
+	"git-ui/internal/gitcmd"
 	"git-ui/internal/ops"
 	"git-ui/internal/testrepo"
 )
@@ -198,5 +200,126 @@ func TestPushBranchesRefusesBadRequests(t *testing.T) {
 	}
 	if remoteHash(a, "origin", "main") != before {
 		t.Error("a refused request still pushed")
+	}
+}
+
+func TestPushBranchesPushesTrackedAndUntrackedNewBranchesInOneRequest(t *testing.T) {
+	a, _ := aheadClone(t)
+	a.Git("switch", "-q", "-c", "new-tracked")
+	a.Commit("tracked")
+	a.Git("switch", "-q", "-c", "new-untracked")
+	a.Commit("untracked")
+	got := pushBranches(t, a, ops.PushRequest{Remote: "origin", Branches: []ops.PushSpec{
+		{Local: "new-tracked", Track: true},
+		{Local: "new-untracked"},
+	}})
+	want := []ops.BranchPushResult{
+		{Branch: "new-tracked", Target: "origin/new-tracked", Status: ops.PushPushed},
+		{Branch: "new-untracked", Target: "origin/new-untracked", Status: ops.PushPushed},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+	if up := a.Git("rev-parse", "--abbrev-ref", "new-tracked@{u}"); up != "origin/new-tracked" {
+		t.Errorf("new-tracked upstream = %q, want origin/new-tracked", up)
+	}
+	if a.GitFails("config", "branch.new-untracked.remote") != "" {
+		t.Error("new-untracked has a remote configured")
+	}
+	for _, b := range []string{"new-tracked", "new-untracked"} {
+		if remoteHash(a, "origin", b) != a.Git("rev-parse", b) {
+			t.Errorf("%s did not reach the remote", b)
+		}
+	}
+}
+
+func TestPushBranchesRefusesInvalidAndDuplicateNames(t *testing.T) {
+	a, _ := aheadClone(t)
+	before := remoteHash(a, "origin", "main")
+	for name, tc := range map[string]struct {
+		req  ops.PushRequest
+		want string
+	}{
+		"invalid remote name": {
+			ops.PushRequest{Remote: "origin", Branches: []ops.PushSpec{{Local: "main", Remote: "bad..name"}}},
+			`invalid branch name "bad..name"`,
+		},
+		"remote name with a space": {
+			ops.PushRequest{Remote: "origin", Branches: []ops.PushSpec{{Local: "main", Remote: "a b"}}},
+			`invalid branch name "a b"`,
+		},
+		"invalid local name": {
+			ops.PushRequest{Remote: "origin", Branches: []ops.PushSpec{{Local: "main"}, {Local: "x~1"}}},
+			`invalid branch name "x~1"`,
+		},
+		"two to one remote branch": {
+			ops.PushRequest{Remote: "origin", Branches: []ops.PushSpec{{Local: "main", Remote: "same"}, {Local: "develop", Remote: "same"}}},
+			`two branches push to "same"`,
+		},
+		"explicit and implied name collide": {
+			ops.PushRequest{Remote: "origin", Branches: []ops.PushSpec{{Local: "main"}, {Local: "develop", Remote: "main"}}},
+			`two branches push to "main"`,
+		},
+	} {
+		got, err := ops.PushBranches(ctx, a.Dir, tc.req)
+		if err == nil || err.Error() != tc.want {
+			t.Errorf("%s: got %+v, %v; want error %q", name, got, err, tc.want)
+		}
+	}
+	if remoteHash(a, "origin", "main") != before {
+		t.Error("a refused request still pushed")
+	}
+	if a.Git("ls-remote", "origin", "refs/heads/same") != "" {
+		t.Error("a refused request created a remote branch")
+	}
+}
+
+// sessionFailing is a credentials prompt that was cancelled: every git
+// command that fails ends with "No credentials entered.".
+type sessionFailing struct{}
+
+func (sessionFailing) Env() []string { return nil }
+func (sessionFailing) End(failed bool) error {
+	if failed {
+		return &gitcmd.PromptError{Msg: "No credentials entered."}
+	}
+	return nil
+}
+
+func TestPushBranchesStopsAfterACancelledCredentialPrompt(t *testing.T) {
+	a, _ := aheadClone(t)
+	// A pre-push hook that fails and counts its runs stands in for a remote
+	// whose authentication was refused: git exits without any ref line.
+	counter := filepath.Join(t.TempDir(), "runs")
+	hooks := t.TempDir()
+	a.Git("config", "core.hooksPath", hooks)
+	hook := filepath.Join(hooks, "pre-push")
+	script := "#!/bin/sh\necho x >> '" + counter + "'\nexit 1\n"
+	if err := os.WriteFile(hook, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	a.Git("switch", "-q", "-c", "fresh")
+	a.Commit("fresh")
+	a.Git("tag", "v1")
+	ctx := gitcmd.WithPrompts(ctx, func() gitcmd.PromptSession { return sessionFailing{} })
+
+	got, err := ops.PushBranches(ctx, a.Dir, ops.PushRequest{Remote: "origin", Tags: true, Branches: []ops.PushSpec{
+		{Local: "fresh", Track: true},
+		{Local: "develop"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []ops.BranchPushResult{
+		{Branch: "fresh", Target: "origin/fresh", Status: ops.PushFailed, Reason: "No credentials entered."},
+		{Branch: "develop", Target: "origin/develop", Status: ops.PushFailed, Reason: "No credentials entered."},
+		{Branch: "Tags", Target: "origin", Status: ops.PushFailed, Reason: "No credentials entered.", Tags: true},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+	runs, _ := os.ReadFile(counter)
+	if n := strings.Count(string(runs), "x"); n != 1 {
+		t.Errorf("git push ran %d times, want 1", n)
 	}
 }
