@@ -53,11 +53,11 @@ cleared. Any embedded-terminal tabs open on the repository are closed along
 with it, without a separate confirmation (see Terminal).
 
 A repository row's context menu is grouped, with a line between groups:
-Locate… (only while the folder is missing); Fetch, Pull, Push, Push main branches (both open the Push dialog, `05-remote-and-stash.md`); the
+Locate… (only while the folder is missing); Fetch, Pull, Push…, Push main branches… (both open the Push dialog, `05-remote-and-stash.md`); the
 show-in-file-manager action and Open in Terminal; Repository settings…
 (disabled while the folder is missing; see `12-repository-settings.md`);
 Move to group… and Remove from list…. A linked worktree's menu has Fetch,
-Pull, Push, Push main branches; the same two open actions; and Remove worktree… — no Repository
+Pull, Push…, Push main branches…; the same two open actions; and Remove worktree… — no Repository
 settings…, since its remotes are its main repository's.
 
 A repository row's context menu also offers to show the repository's
@@ -425,7 +425,7 @@ marked "↳", sorted by name the same way. They follow their main repository
 wherever it is, whatever their own group field says, and are visible whether
 or not the main repository is expanded or selected. A worktree row selects
 and expands exactly like a repository row. Its context menu offers only
-Fetch, Pull, Push, Push main branches, the show-in-file-manager action, Open in Terminal and
+Fetch, Pull, Push…, Push main branches…, the show-in-file-manager action, Open in Terminal and
 Remove worktree…; a stored repository
 shown nested (see Worktrees) keeps "Remove from list" and loses only "Move
 to group…". A worktree row cannot be dragged into a group. A group section is a header row (its name and a count of the
@@ -618,14 +618,14 @@ entries below, in groups separated by a line: Check out; then Fetch, Pull and
 Push (a local branch) or only Fetch (a remote-tracking branch); then Merge and
 Rebase; then New branch and New tag; then Delete. Fetch and Pull are
 described in docs/spec/05-remote-and-stash.md ("Per-branch Fetch, Pull and
-Push"); Push opens the Push dialog with that branch ticked ("Push").
+Push"); Push… opens the Push dialog with that branch ticked ("Push…").
 
 | Action | Refused when |
 |---|---|
 | Check out | It is the current branch, it is checked out in a linked worktree, or a write is already running. |
 | Fetch `<remote>` | A write is already running. `<remote>` is the branch's upstream remote, a remote-tracking row's own remote, or, for a local branch with no upstream, `origin` (else the only remote; with neither it is disabled, "No remote"). |
 | Pull `<branch>` (local branches) | A write is running, a merge, rebase or cherry-pick is in progress, the branch has neither an upstream nor a remote twin ("No upstream"; see `05-remote-and-stash.md`), its upstream was deleted on the remote, it is checked out in a linked worktree, or it tracks a local branch ("Tracks a local branch"); each shows its reason as a tooltip. |
-| Push (local branches; opens the Push dialog with the branch ticked) | A write is running, a merge, rebase or cherry-pick is in progress, or the repository has no remote ("No remote"). Any local branch can be pushed whatever its upstream (none, deleted, or a local branch): the dialog lists every local branch and decides what each pushes to. The label is always "Push". |
+| Push… (local branches; opens the Push dialog with the branch ticked) | A write is running, a merge, rebase or cherry-pick is in progress, or the repository has no remote ("No remote"). Any local branch can be pushed whatever its upstream (none, deleted, or a local branch): the dialog lists every local branch and decides what each pushes to. The label is always "Push…". |
 | Merge `<branch>` into `<head>` | It is the current branch, a write is running, the head is detached, or a merge is already in progress. The confirmation asks "Merge `<branch>` into `<head>`? A merge commit is always created." When `<branch>` is a local branch behind its upstream (counted from the last fetch; nothing is fetched), it becomes a choice instead: "Merge `<upstream>`" (the default) or "Merge `<branch>` as it is", with a message naming how many commits only the upstream has (and, when the branch also has commits of its own, that merging the upstream leaves those out); the chosen one is merged. A remote-tracking branch, a branch without an upstream or not behind it, or counts that cannot be read keep the plain confirmation. |
 | Rebase `<head>` onto `<branch>` | It is the current branch, the head already contains it, a write is running, the head is detached, or any conflicted operation is in progress. Uncommitted changes to tracked files refuse it on click ("Commit or stash your changes first"). The confirmation states how many commits are replayed and warns, without blocking, when some are already on the upstream (a force-push, which the application does not offer, would be needed) or when merge commits in the range will be flattened. |
 | New branch from here… | Never. |

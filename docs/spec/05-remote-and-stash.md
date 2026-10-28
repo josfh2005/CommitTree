@@ -164,9 +164,9 @@ ticked and on which remote it opens:
 
 | Entry point | Ticked | Opens on |
 |---|---|---|
-| Toolbar **Push**, repository row **Push** | the current branch (nothing with a detached HEAD) | the remote of the current branch's upstream, else `origin`, else the first remote |
-| Branch menu **Push** on a branch (sidebar) | that branch, current or not | the remote of that branch's upstream, else `origin`, else the first remote |
-| Repository row **Push main branches** | the current branch when it is a main branch, plus every other main branch ahead of a live upstream, as in the next paragraph | the remote most of those branches track (ties: `origin`, then name order); only the branches whose upstream is on it come ticked, plus a current main branch with no upstream |
+| Toolbar **Push**, repository row **Push…** | the current branch (nothing with a detached HEAD) | the remote of the current branch's upstream, else `origin`, else the first remote |
+| Branch menu **Push…** on a branch (sidebar) | that branch, current or not | the remote of that branch's upstream, else `origin`, else the first remote |
+| Repository row **Push main branches…** | the current branch when it is a main branch, plus every other main branch ahead of a live upstream, as in the next paragraph | the remote most of those branches track (ties: `origin`, then name order); only the branches whose upstream is on it come ticked, plus a current main branch with no upstream |
 | The AI chat's `push` tool | no dialog: it pushes the current branch behind its own confirmation card (`06-ai.md`) | |
 
 A *main* (official) branch is `main`, `master`, `develop` or one starting with
@@ -207,7 +207,9 @@ Push to repository: [origin ▾]   git@bitbucket.org:team/repo.git
   every row's Remote branch from the new remote, except a name the user typed.
 - **Local branch**: every local branch, by name, including ones that track a
   local branch and ones checked out in another worktree (git decides what it
-  accepts). The table scrolls when there are many.
+  accepts). The table scrolls when there are many; on opening, the first
+  ticked row is scrolled into view. The dialog is named "Push `<repository>`
+  to repository" for assistive technology.
 - **Remote branch** is a combo box: a dropdown of the selected remote's
   branches (as of the last fetch; opening the dialog or changing the remote
   fetches nothing) in which any name can also be typed — a name that does not
@@ -216,7 +218,10 @@ Push to repository: [origin ▾]   git@bitbucket.org:team/repo.git
   the upstream is on that remote, otherwise the remote branch of the same name
   when one exists — and is blank when there is none. Ticking a row with a
   blank Remote branch fills it with the local branch's own name; leaving it
-  blank is sent as the same name. Unticking keeps the name.
+  blank is sent as the same name. Unticking keeps the name. A Remote branch
+  that differs from the row's Local branch name (taken from an upstream with
+  another name, or typed) is kept as it is, but its cell gets an amber tint and
+  the tooltip "Differs from the local branch name".
 - **Track?**: an unticked row shows it greyed out with a dash. Ticking Push?
   ticks Track?, which the user can untick. Ticked, the local branch's
   upstream becomes that remote branch after the push (`git push -u`, repointing
@@ -366,7 +371,7 @@ badges) afterwards.
   deleted on the remote ("The upstream was deleted on the remote"), one that
   tracks a local branch ("Tracks a local branch") and one checked out in a
   linked worktree ("Checked out in another worktree").
-- **Push** opens the Push dialog with that branch ticked (Push, above), on
+- **Push…** opens the Push dialog with that branch ticked (Push, above), on
   its upstream's remote. It is enabled for any local branch — with or without
   an upstream, whose upstream was deleted, or that tracks a local branch —
   whenever the repository has at least one remote. It is disabled while a

@@ -81,6 +81,6 @@ export function branchMenuGroups(b: Branch, o: BranchMenuOptions): BranchMenuEnt
   // remote to push to.
   const pushWhy = o.busy ? BUSY : o.merging ? 'Finish the operation in progress first' : o.remotes.length === 0 ? 'No remote' : undefined
   const pull: BranchMenuEntry = { id: 'pull', label: `Pull ${b.name}`, disabled: !!pullWhy, title: pullWhy }
-  const push: BranchMenuEntry = { id: 'push', label: 'Push', disabled: !!pushWhy, title: pushWhy }
+  const push: BranchMenuEntry = { id: 'push', label: 'Push…', disabled: !!pushWhy, title: pushWhy }
   return [[checkout], [fetch, pull, push], integrate, create, [del]]
 }

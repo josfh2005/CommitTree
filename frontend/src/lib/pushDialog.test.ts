@@ -8,6 +8,7 @@ import {
   editRemote,
   initialRows,
   mainBranchesSelection,
+  namesDiffer,
   pushRequest,
   selectAll,
   setTicked,
@@ -221,5 +222,17 @@ describe('mainBranchesSelection', () => {
     const r2 = refs()
     r2.local[2] = local('main', { current: true, upstream: 'dev', upstreamLocal: true, official: true })
     expect(mainBranchesSelection(r2).ticked).toEqual(['develop'])
+  })
+})
+
+describe('namesDiffer', () => {
+  it('is true when the remote branch name is not the local name', () => {
+    expect(namesDiffer(row({ local: 'feature/x', remote: 'feature/y' }))).toBe(true)
+  })
+  it('is false when the names match', () => {
+    expect(namesDiffer(row({ local: 'feature/x', remote: 'feature/x' }))).toBe(false)
+  })
+  it('is false while the remote branch is blank', () => {
+    expect(namesDiffer(row({ local: 'feature/x', remote: '' }))).toBe(false)
   })
 })

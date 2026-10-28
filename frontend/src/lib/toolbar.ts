@@ -62,7 +62,7 @@ export function toolbarItems(i: ToolbarInput): ToolbarItem[] {
     item('stash', 'Stash', 'stash', 'work', first([!!i.busy, i.busy], [conflict, blocked], [!changes, 'Nothing to stash']), 'Stash the changes'),
     item('fetch', 'Fetch', 'refresh', 'sync', first([!!i.busy, i.busy]), pausedTooltip(i.paused) || 'Fetch from all remotes', { dot: i.paused.length > 0 }),
     item('pull', 'Pull', 'download', 'sync', first([!!i.busy, i.busy], [conflict, blocked]), 'Pull', { badge: i.remote?.behind ?? 0 }),
-    item('push', 'Push', 'upload', 'sync', first([!!i.busy, i.busy], [conflict, blocked]), pushTitle(i.refs), { badge: i.remote?.ahead ?? 0 }),
+    item('push', 'Push', 'upload', 'sync', first([!!i.busy, i.busy], [conflict, blocked]), pushTitle(), { badge: i.remote?.ahead ?? 0 }),
     item('branch', 'Branch', 'branch', 'refs', first([!!i.busy, i.busy]), 'New branch from HEAD'),
     item('merge', 'Merge', 'merge', 'refs', first([!!i.busy, i.busy], [conflict, blocked], [!!i.refs?.detached, 'Check out a branch first'], [mergeCandidates(i.refs).length === 0, 'No other branches']), 'Merge a branch into the current one'),
     item('flow', 'Flow', 'flow', 'refs', first([!!i.busy, i.busy], [conflict, blocked]), 'git-flow: start or finish a feature, release, hotfix or warmfix'),

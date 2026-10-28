@@ -77,6 +77,10 @@ export function changeRemote(rows: PushRow[], refs: Refs, remote: string): PushR
   })
 }
 
+/** The row's remote branch has another name than the local branch (a name
+ *  taken from an upstream, or typed): the dialog keeps it but marks the cell. */
+export const namesDiffer = (row: PushRow): boolean => row.remote !== '' && row.remote !== row.local
+
 export const editRemote = (row: PushRow, name: string): PushRow => ({ ...row, remote: name.trim(), typed: true })
 
 /** What OK sends: the ticked rows, in row order. */

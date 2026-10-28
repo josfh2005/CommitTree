@@ -1,6 +1,6 @@
 <script lang="ts">
   import { pushDialogState, runPush } from '../lib/actions'
-  import { canPush, changeRemote, editRemote, pushRequest, selectAll, setTicked, type PushRow } from '../lib/pushDialog'
+  import { canPush, changeRemote, editRemote, namesDiffer, pushRequest, selectAll, setTicked, type PushRow } from '../lib/pushDialog'
   import type { PushDialogState } from '../lib/actions'
   import { dialog } from '../lib/ui'
 
@@ -11,6 +11,8 @@
   let rows: PushRow[] = []
   let tags = false
   let force = false
+  // The row to bring into view when the dialog opens: the first ticked one.
+  let reveal = ''
   $: if ($pushDialogState !== opened) {
     opened = $pushDialogState
     if (opened) {
@@ -18,10 +20,12 @@
       rows = opened.rows
       tags = false
       force = false
+      reveal = rows.find((r) => r.push)?.local ?? ''
     }
   }
 
-  $: url = opened ? (opened.remotes.find((r) => r.name === remote)?.pushURL || opened.remotes.find((r) => r.name === remote)?.fetchURL || '') : ''
+  $: current = opened?.remotes.find((r) => r.name === remote)
+  $: url = current?.pushURL || current?.fetchURL || ''
   // What the last fetch knows of the selected remote (HEAD is not a branch to push to).
   $: remoteBranches = (opened?.refs.remotes.find((r) => r.name === remote)?.branches ?? []).map((b) => b.name).filter((n) => n !== 'HEAD')
   $: ticked = rows.filter((r) => r.push).length
@@ -37,6 +41,11 @@
   const indeterminate = (node: HTMLInputElement, on: boolean) => {
     node.indeterminate = on
     return { update: (v: boolean) => (node.indeterminate = v) }
+  }
+
+  // The table scrolls (280 px): a ticked row far down is scrolled to on opening.
+  const revealed = (node: HTMLElement, on: boolean) => {
+    if (on) node.scrollIntoView({ block: 'nearest' })
   }
 
   // OK takes focus when the dialog opens (as in DialogHost); a disabled OK, with
@@ -59,7 +68,7 @@
 
 {#if opened}
   <div class="backdrop" on:click|self={close} role="presentation">
-    <div class="dialog" role="dialog" aria-modal="true" aria-label="Push to repository">
+    <div class="dialog" role="dialog" aria-modal="true" aria-label="Push {opened.repo} to repository">
       <div class="head">
         <label class="remote">
           <span>Push to repository:</span>
@@ -83,13 +92,13 @@
           </div>
           <div class="body">
             {#each rows as row, i (row.local)}
-              <div class="tr">
+              <div class="tr" use:revealed={row.local === reveal}>
                 <span class="c-push">
                   <input type="checkbox" checked={row.push} aria-label="Push {row.local}"
                     on:change={(e) => replace(i, setTicked(row, e.currentTarget.checked))} />
                 </span>
                 <span class="ellipsis local" title={row.local}>{row.local}</span>
-                <input class="rb" list="push-remote-branches" spellcheck="false" aria-label="Remote branch for {row.local}"
+                <input class="rb" class:differs={namesDiffer(row)} title={namesDiffer(row) ? 'Differs from the local branch name' : null} list="push-remote-branches" spellcheck="false" aria-label="Remote branch for {row.local}"
                   value={row.remote} on:input={(e) => replace(i, editRemote(row, e.currentTarget.value))} />
                 <span class="c-track">
                   <input type="checkbox" checked={row.track && row.push} disabled={!row.push}
@@ -150,6 +159,7 @@
   .c-push, .c-track { display: flex; justify-content: center; }
   .local { font-family: var(--mono); font-size: 12px; }
   .rb { font-family: var(--mono); font-size: 12px; padding: 2px 6px; min-width: 0; }
+  .rb.differs { background: color-mix(in srgb, var(--warning) 22%, var(--surface)); border-color: var(--warning); }
   input[type='checkbox'] { padding: 0; margin: 0; }
   .check { display: flex; align-items: center; gap: 6px; font-size: 13px; }
   fieldset > .check { margin-top: 8px; }

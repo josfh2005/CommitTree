@@ -73,8 +73,7 @@ describe('result summaries', () => {
 
 describe('tooltips', () => {
   it('says the Push button opens the push window', () => {
-    expect(pushTitle(refs([b('main', { current: true })]))).toBe('Push — choose branches to push')
-    expect(pushTitle(null)).toBe('Push — choose branches to push')
+    expect(pushTitle()).toBe('Push — choose branches to push')
   })
   it('explains the badges, leaving out a zero part', () => {
     expect(trackTitle(b('main', { ahead: 2, behind: 1 }))).toBe('2 commits to push to origin/main · 1 commit to pull, as of the last fetch')

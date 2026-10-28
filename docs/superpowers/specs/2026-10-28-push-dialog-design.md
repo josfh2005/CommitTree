@@ -125,6 +125,16 @@ dialog goes away.
 - **Track? off** leaves the branch's current upstream alone (whatever it
   is). **Track? on** sets the upstream to the pushed remote branch, repointing
   it if it tracked something else (`-u` semantics, as SourceTree does).
+- **A differing remote name is flagged, not changed** (owner ruling "(a)
+  Avisar", 2026-10-28). A Remote branch (pre-filled from an upstream with
+  another name, or typed) that differs from the Local name stays as it is;
+  the cell gets a warning tint and the tooltip "Differs from the local branch
+  name" (`namesDiffer`).
+- **One credential prompt per OK.** When an invocation fails with a cancelled
+  or refused prompt and printed no ref line, the remaining invocations (and
+  the Tags row) are not started and fail with the same reason.
+- **Names are checked before any push** (`git check-ref-format --branch`),
+  and two branches may not push to the same remote branch.
 - **Rows**: every local branch, including ones tracking a local branch
   (remote `.`; their Remote branch defaults blank → same name when ticked)
   and ones checked out in other worktrees. git decides what it accepts.

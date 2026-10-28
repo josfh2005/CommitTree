@@ -57,7 +57,7 @@ export class PartialPushError extends Error {
 }
 
 /** The toolbar Push button's tooltip: the button opens the Push dialog. */
-export function pushTitle(_refs: Refs | null): string {
+export function pushTitle(): string {
   return 'Push — choose branches to push'
 }
 
