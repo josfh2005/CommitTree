@@ -165,7 +165,7 @@
   - `push(id)` sets `pushDialogState` with `remote:'origin'` and only the current branch ticked.
   - `pushBranch(id, develop)` ticks only `develop`.
   - `runPush` toasts "Pushed feature/x" when all pushed; opens the results dialog (`Push results — <repo>`) when one is rejected; a tags row reads "Tags → origin".
-  - push.ts: a lone tags row reads `pushedMessage([{branch:'Tags',tags:true,status:'pushed',target:'origin'}])` = `'Pushed tags'`; with branches the tags row counts as one item of "Pushed N branches" is wrong wording, so branches are counted without it and `' and tags'` is appended when it pushed: `[feature/x pushed, tags pushed]` → `'Pushed feature/x and tags'`.
+  - push.ts: a lone tags row reads `pushedMessage([{branch:'Tags',tags:true,status:'pushed',target:'origin'}])` = `'Pushed tags'`; with branches, the branches are counted without the tags row and `' and tags'` is appended when the tags pushed: `[feature/x pushed, tags pushed]` → `'Pushed feature/x and tags'`.
 - [ ] **Step 2: Run** `cd frontend && npx vitest run src/lib/actions.test.ts src/lib/push.test.ts` — Expected: FAIL.
 - [ ] **Step 3: Implement** the component and actions; rename `pushAll` → `runPush(id, req)` (busy label "Pushing…" for one branch, "Pushing branches…" for more, command-log kind `'push'`); wire Toolbar (`push(repoId)` already), RepoRow (`push`, `'push-all'` → `pushMainBranches`), RepoRefs (`pushBranch`). Rewrite spec 05 → Push as the dialog (entry points table, row rules, Track?, Force = `--force-with-lease` per ref, tags, results unchanged); fix 01 (menus), 11 (failed-push wording), 14 (which pushes start a pipeline watch).
 - [ ] **Step 4: Run** `cd frontend && npm test && npm run check` — Expected: PASS.
