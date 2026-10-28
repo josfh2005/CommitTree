@@ -21,11 +21,13 @@ const (
 )
 
 // BranchPushResult is one branch's outcome; Target is <remote>/<branch>.
+// Tags marks the single row PushBranches adds for "Push all tags".
 type BranchPushResult struct {
 	Branch string     `json:"branch"`
 	Target string     `json:"target"`
 	Status PushStatus `json:"status"`
 	Reason string     `json:"reason,omitempty"`
+	Tags   bool       `json:"tags,omitempty"`
 }
 
 type pushTarget struct {
