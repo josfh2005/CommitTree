@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"git-ui/internal/gitsettings"
@@ -27,7 +28,7 @@ func TestLoadOfAMissingFileReturnsDefaults(t *testing.T) {
 
 func TestSaveAndLoadRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "git.json")
-	want := gitsettings.Settings{PullStrategy: gitsettings.PullRebase, PushScope: gitsettings.PushCurrent}
+	want := gitsettings.Settings{PullStrategy: gitsettings.PullRebase}
 	if err := gitsettings.Save(path, want); err != nil {
 		t.Fatal(err)
 	}
@@ -64,34 +65,28 @@ func TestLoadFillsInAMissingStrategy(t *testing.T) {
 	}
 }
 
-func TestPushScopeDefaultsToAsk(t *testing.T) {
-	if got := gitsettings.Defaults().PushScope; got != gitsettings.PushAsk {
-		t.Errorf("default = %q, want ask", got)
-	}
+// The push-scope setting is gone (the Push dialog replaced it): a file that
+// still has it loads fine, and the next save drops it.
+func TestLoadIgnoresAnOldPushScope(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "git.json")
-	if err := os.WriteFile(path, []byte(`{"pullStrategy":"merge"}`), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(`{"pullStrategy":"merge","pushScope":"all"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	got, err := gitsettings.Load(path)
-	if err != nil || got.PushScope != gitsettings.PushAsk || got.PullStrategy != gitsettings.PullMerge {
-		t.Fatalf("got %+v, %v; want merge + ask", got, err)
-	}
-}
-
-func TestSaveFillsAMissingPushScope(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "git.json")
-	if err := gitsettings.Save(path, gitsettings.Settings{PullStrategy: gitsettings.PullAuto}); err != nil {
+	if err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := gitsettings.Load(path); got.PushScope != gitsettings.PushAsk {
-		t.Errorf("push scope = %q, want ask", got.PushScope)
+	if got.PullStrategy != gitsettings.PullMerge {
+		t.Errorf("strategy = %q, want merge", got.PullStrategy)
 	}
-}
-
-func TestSaveRejectsAnUnknownPushScope(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "git.json")
-	err := gitsettings.Save(path, gitsettings.Settings{PullStrategy: gitsettings.PullAuto, PushScope: "some"})
-	if !errors.Is(err, gitsettings.ErrInvalid) {
-		t.Fatalf("err = %v, want ErrInvalid", err)
+	if err := gitsettings.Save(path, got); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "pushScope") {
+		t.Errorf("saved file still has pushScope: %s", data)
 	}
 }

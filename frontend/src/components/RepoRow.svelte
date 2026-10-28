@@ -3,7 +3,7 @@
   import RepoRefs from './RepoRefs.svelte'
   import SubmoduleSection from './SubmoduleSection.svelte'
   import { api } from '../lib/api'
-  import { fetchRemote, moveRepoToGroup, openRepoFolder, openRepoTerminal, pull, push, pushAll, relocateRepo, removeRepo, removeWorktree } from '../lib/actions'
+  import { fetchRemote, moveRepoToGroup, openRepoFolder, openRepoTerminal, pull, push, pushMainBranches, relocateRepo, removeRepo, removeWorktree } from '../lib/actions'
   import { REPO_DRAG_MIME } from '../lib/repoDrop'
   import { revealLabel } from '../lib/platform'
   import { busy, expandedRepos, mergeState, platform, repoSettings, selectRepo, selectedRepo, selectedRepoId, toggleRepoExpanded, worktreeState } from '../lib/stores'
@@ -80,8 +80,8 @@
         return entries(repoMenuGroups({ missing: false, worktree: true, child: true }), {
           fetch: { label: 'Fetch', action: () => fetchRemote(repo.id), disabled: !!$busy },
           pull: { label: 'Pull', action: () => pull(repo.id), disabled: !!$busy || !!$mergeState?.merging },
-          push: { label: 'Push', action: () => push(repo.id), disabled: !!$busy || !!$mergeState?.merging },
-          'push-all': { label: 'Push main branches', action: () => pushAll(repo.id), disabled: !!$busy || !!$mergeState?.merging },
+          push: { label: 'Push…', action: () => push(repo.id), disabled: !!$busy || !!$mergeState?.merging },
+          'push-all': { label: 'Push main branches…', action: () => pushMainBranches(repo.id), disabled: !!$busy || !!$mergeState?.merging },
           reveal: { label: revealLabel($platform), action: () => openRepoFolder(repo.id) },
           terminal: { label: 'Open in Terminal', action: () => openRepoTerminal(repo.id) },
           'remove-worktree': removeItem,
@@ -93,8 +93,8 @@
       locate: { label: 'Locate…', action: () => relocateRepo(repo.id) },
       fetch: { label: 'Fetch', action: () => fetchRemote(repo.id), disabled: repo.missing || !!$busy },
       pull: { label: 'Pull', action: () => pull(repo.id), disabled: repo.missing || !!$busy || !!$mergeState?.merging },
-      push: { label: 'Push', action: () => push(repo.id), disabled: repo.missing || !!$busy || !!$mergeState?.merging },
-      'push-all': { label: 'Push main branches', action: () => pushAll(repo.id), disabled: repo.missing || !!$busy || !!$mergeState?.merging },
+      push: { label: 'Push…', action: () => push(repo.id), disabled: repo.missing || !!$busy || !!$mergeState?.merging },
+      'push-all': { label: 'Push main branches…', action: () => pushMainBranches(repo.id), disabled: repo.missing || !!$busy || !!$mergeState?.merging },
       reveal: { label: revealLabel($platform), action: () => openRepoFolder(repo.id), disabled: repo.missing },
       terminal: { label: 'Open in Terminal', action: () => openRepoTerminal(repo.id), disabled: repo.missing },
       settings: { label: 'Repository settings…', action: () => repoSettings.set({ repoID: repo.id }), disabled: repo.missing, title: "The repository's folder is missing" },

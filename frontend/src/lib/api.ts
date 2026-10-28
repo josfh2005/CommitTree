@@ -1,5 +1,5 @@
 import * as Go from '../../wailsjs/go/app/App'
-import type { AddReposResult, ScanResult, BranchPushResult, CloneStatus, RepoAIInfo, RepoAIOverride, AIMessage, AISettings, AIStatus, AheadBehind, AutoFetchResult, Blame, ChatConfirmEvent, CommandLogView, CommandOutput, CommitInfo, ConflictFile, Details, Filters, Flow, FlowConfig, FlowSettings, FlowFinishResult, FlowPlan, FlowStartResult, FlowType, GitSettings, HunkAction, HunkPick, Identity, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, RebasePreview, RemoteConfig, RemoteTest, RegionChoice, RegionResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, UpdateInfo, WorktreeDiff, WorktreeRemovalInfo, WorktreeState } from './types'
+import type { AddReposResult, ScanResult, BranchPushResult, CloneStatus, RepoAIInfo, RepoAIOverride, AIMessage, AISettings, AIStatus, AheadBehind, AutoFetchResult, Blame, ChatConfirmEvent, CommandLogView, CommandOutput, CommitInfo, ConflictFile, Details, Filters, Flow, FlowConfig, FlowSettings, FlowFinishResult, FlowPlan, FlowStartResult, FlowType, GitSettings, HunkAction, HunkPick, Identity, LogOrder, LogPage, MergeResult, MergeState, ProviderName, PromptInfo, PullResult, PushRequest, RebasePreview, RemoteConfig, RemoteTest, RegionChoice, RegionResult, Refs, Repo, ResetInfo, ResetMode, StashEntry, StashFile, Submodule, UpdateInfo, WorktreeDiff, WorktreeRemovalInfo, WorktreeState } from './types'
 import type { NotifyTarget } from './notifyRules'
 import type { CredentialAnswer } from './credential'
 import type { Tracking } from './tracking'
@@ -75,9 +75,7 @@ export const api = {
   testRemote: (id: string, name: string) => call<RemoteTest>(Go.TestRemote(id, name)),
   fetchRemote: (id: string, remote: string) => call<void>(Go.FetchRemote(id, remote)),
   fastForwardBranch: (id: string, branch: string) => call<boolean>(Go.FastForwardBranch(id, branch)),
-  pushBranch: (id: string, branch: string) => call<BranchPushResult>(Go.PushBranch(id, branch)),
-  push: (id: string) => call<void>(Go.Push(id)),
-  pushAll: (id: string) => call<BranchPushResult[]>(Go.PushAll(id)),
+  pushBranches: (id: string, req: PushRequest) => call<BranchPushResult[]>(Go.PushBranches(id, req as any)),
   pull: (id: string) => call<PullResult>(Go.Pull(id)),
   getRemoteInfo: (id: string) => call<AheadBehind>(Go.GetRemoteInfo(id)),
   repoInfo: (id: string) => call<RepoInfo>(Go.RepoInfo(id)),

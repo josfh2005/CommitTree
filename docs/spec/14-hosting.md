@@ -286,12 +286,14 @@ ended without the user asking.
 
 - **What is watched.** The tip of each branch just pushed, in a repository
   on a supported host with a connected account; otherwise nothing is
-  watched and nothing is asked. Every way of pushing counts: the toolbar,
-  the branch menu, Push all (each branch it pushed, even when the call as a
-  whole reports an error) and the chat's push
-  tool. A push that fails, or that finds the branch already up to
+  watched and nothing is asked. Every way of pushing counts: the Push
+  dialog (opened from the toolbar, the repository row's Push and Push main
+  branches, or the branch menu — each ticked branch it pushed, even when the
+  call as a whole reports an error; the tip of the local branch is watched)
+  and the chat's push tool. Pushing tags alone starts nothing. A push that
+  fails, or that finds the branch already up to
   date (from any of these), starts nothing, since nothing was pushed. A
-  push counts when it moved the branch's upstream; a new branch is
+  push counts when it moved the remote branch it went to; a new branch is
   included. Pushing from a detached HEAD watches nothing.
 - **No waiting.** The watch starts after the push has returned and its
   repository lock is released; the push never waits for it, and no network

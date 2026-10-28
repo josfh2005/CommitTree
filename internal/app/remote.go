@@ -32,22 +32,6 @@ func (a *App) FastForwardBranch(id, branch string) (bool, error) {
 	return moved, err
 }
 
-// PushBranch is the branch menu's Push: one local branch to its upstream,
-// or published to origin when it has none. The outcome comes back as a
-// result; only a branch that cannot be pushed at all is an error.
-func (a *App) PushBranch(id, branch string) (ops.BranchPushResult, error) {
-	var result ops.BranchPushResult
-	err := a.write(id, func(ctx context.Context, dir string) error {
-		var pushErr error
-		result, pushErr = ops.PushBranch(a.prompting(ctx, id, dir, "Push "+branch), dir, branch)
-		return pushErr
-	})
-	if err == nil && result.Status == ops.PushPushed {
-		a.watchPushed(id, []string{result.Branch})
-	}
-	return result, err
-}
-
 // Push pushes the current branch. When it moved the branch's upstream (a new
 // branch counts), the pushed tip's pipeline is watched afterwards
 // (docs/spec/14-hosting.md); the chat's push tool comes through here too. The
@@ -71,27 +55,28 @@ func (a *App) Push(id string) error {
 	return err
 }
 
-// PushAll pushes the main (official) branches ahead of their
-// upstreams (docs/spec/05-remote-and-stash.md). Each branch's outcome comes
-// back as a result; only a failure to start (busy, missing) is an error.
-func (a *App) PushAll(id string) ([]ops.BranchPushResult, error) {
+// PushBranches pushes the branches chosen in the Push dialog to one remote,
+// plus the tags when asked. Each branch's outcome comes back
+// as a result; only a failure to start (busy, missing) is an error.
+func (a *App) PushBranches(id string, req ops.PushRequest) ([]ops.BranchPushResult, error) {
 	var results []ops.BranchPushResult
 	err := a.write(id, func(ctx context.Context, dir string) error {
 		var pushErr error
-		results, pushErr = ops.PushAll(a.prompting(ctx, id, dir, "Push all"), dir)
+		results, pushErr = ops.PushBranches(a.prompting(ctx, id, dir, "Push"), dir, req)
 		return pushErr
 	})
-	// The branches that did move their upstream are watched even when the
+	// The branches that did move their remote are watched even when the
 	// call as a whole reports an error.
 	a.watchPushed(id, pushedBranches(results))
 	return results, err
 }
 
-// pushedBranches are the branches whose upstream a Push all moved.
+// pushedBranches are the branches whose remote a push moved; the tags row
+// is not a branch and has no pipeline to watch.
 func pushedBranches(results []ops.BranchPushResult) []string {
 	var pushed []string
 	for _, r := range results {
-		if r.Status == ops.PushPushed {
+		if r.Status == ops.PushPushed && !r.Tags {
 			pushed = append(pushed, r.Branch)
 		}
 	}

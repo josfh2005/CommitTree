@@ -844,12 +844,13 @@ func watchApp(t *testing.T) (*App, *testrepo.Repo, string, *watchSpy) {
 	return a, r, id, spy
 }
 
-func TestPushBranchStartsWatch(t *testing.T) {
+func TestPushBranchesStartsWatch(t *testing.T) {
 	a, r, id, spy := watchApp(t)
 	r.Git("switch", "-q", "-c", "topic")
 	r.Commit("on topic")
-	res, err := a.PushBranch(id, "topic")
-	if err != nil || res.Status != ops.PushPushed {
+	req := ops.PushRequest{Remote: "origin", Branches: []ops.PushSpec{{Local: "topic", Track: true}}}
+	res, err := a.PushBranches(id, req)
+	if err != nil || len(res) != 1 || res[0].Status != ops.PushPushed {
 		t.Fatalf("push: %+v %v", res, err)
 	}
 	got := spy.next(t)
@@ -858,8 +859,8 @@ func TestPushBranchStartsWatch(t *testing.T) {
 	}
 	// Up to date: nothing was pushed, so nothing to watch.
 	r.Git("switch", "-q", "main")
-	res, err = a.PushBranch(id, "topic")
-	if err != nil || res.Status != ops.PushUpToDate {
+	res, err = a.PushBranches(id, req)
+	if err != nil || len(res) != 1 || res[0].Status != ops.PushUpToDate {
 		t.Fatalf("second push: %+v %v", res, err)
 	}
 	spy.none(t)
@@ -941,11 +942,11 @@ func TestWatchPushedOncePerTipUntilItEnds(t *testing.T) {
 	}
 }
 
-func TestPushAllWatchesEveryPushedBranch(t *testing.T) {
+func TestPushBranchesWatchesEveryPushedBranch(t *testing.T) {
 	a, r, id, spy := watchApp(t)
 	r.Git("push", "-q", "-u", "origin", "main")
 	r.Commit("ahead")
-	results, err := a.PushAll(id)
+	results, err := a.PushBranches(id, ops.PushRequest{Remote: "origin", Branches: []ops.PushSpec{{Local: "main"}}})
 	if err != nil {
 		t.Fatal(err)
 	}

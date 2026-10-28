@@ -185,7 +185,7 @@ Settings.
 
 The Settings dialog has a fixed size, with tabs in a column on the left:
 
-- **General**: Appearance, Fetch, Notifications, the Git pull strategy and what Push does (ask, current branch, main branches), and Updates (`15-updates.md`).
+- **General**: Appearance, Fetch, Notifications, the Git pull strategy, and Updates (`15-updates.md`).
 - **Accounts**: the Bitbucket and GitHub accounts of the code hosting
   integration and the Jira site and project keys for ticket links
   (`14-hosting.md`). It does not need the AI settings.

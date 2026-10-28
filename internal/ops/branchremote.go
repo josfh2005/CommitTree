@@ -10,13 +10,12 @@ import (
 	"git-ui/internal/refs"
 )
 
-// The branch context menu's Pull and Push work on a branch's upstream; these
+// The branch context menu's Pull works on a branch's upstream; these
 // are why one cannot (docs/spec/05-remote-and-stash.md).
 var (
 	ErrNoBranch      = errors.New("ops: no such local branch")
 	ErrNoUpstream    = errors.New("ops: the branch has no upstream")
 	ErrUpstreamLocal = errors.New("ops: the branch tracks a local branch")
-	ErrNoRemote      = errors.New("ops: no remote to publish to")
 )
 
 // FetchRemote fetches one remote and prunes what it no longer has, the
@@ -35,6 +34,10 @@ type branchUpstream struct {
 	current           bool
 	remote, remoteRef string
 }
+
+// pushFormat is the for-each-ref format upstreamOf reads: name, HEAD marker,
+// upstream remote, upstream ref and ahead/behind.
+const pushFormat = "%(refname:strip=2)%00%(HEAD)%00%(upstream:remotename)%00%(upstream:remoteref)%00%(upstream:track,nobracket)"
 
 func upstreamOf(ctx context.Context, dir, branch string) (branchUpstream, error) {
 	if err := checkRef(branch); err != nil {
@@ -108,49 +111,4 @@ func FastForwardBranch(ctx context.Context, dir, branch string) (bool, error) {
 		return false, err
 	}
 	return strings.TrimSpace(after) != strings.TrimSpace(before), nil
-}
-
-// DefaultRemote is where a branch with no upstream is published: origin,
-// else the repository's only remote.
-func DefaultRemote(ctx context.Context, dir string) (string, error) {
-	out, err := gitcmd.Run(ctx, dir, gitcmd.ReadTimeout, "remote")
-	if err != nil {
-		return "", err
-	}
-	remotes := strings.Fields(out)
-	for _, r := range remotes {
-		if r == "origin" {
-			return r, nil
-		}
-	}
-	if len(remotes) == 1 {
-		return remotes[0], nil
-	}
-	return "", ErrNoRemote
-}
-
-// PushBranch pushes one local branch, current or not, to its upstream — to
-// DefaultRemote with -u when it has none — never forced and without tags. Like each
-// branch of PushAll, a rejection or a failure is the result, not an error;
-// only a branch that cannot be pushed at all (unknown, or tracking a local
-// branch) is one.
-func PushBranch(ctx context.Context, dir, branch string) (BranchPushResult, error) {
-	up, err := upstreamOf(ctx, dir, branch)
-	if err != nil {
-		return BranchPushResult{}, err
-	}
-	t := pushTarget{branch: branch, remote: up.remote, remoteRef: up.remoteRef}
-	switch {
-	case up.remote == ".":
-		return BranchPushResult{}, fmt.Errorf("%w: %s", ErrUpstreamLocal, branch)
-	case up.remote == "" || up.remoteRef == "":
-		remote, err := DefaultRemote(ctx, dir)
-		if err != nil {
-			return BranchPushResult{}, err
-		}
-		t = pushTarget{branch: branch, remote: remote, remoteRef: "refs/heads/" + branch, setUpstream: true}
-	}
-	results := []BranchPushResult{{Branch: branch, Target: t.remote + "/" + strings.TrimPrefix(t.remoteRef, "refs/heads/")}}
-	pushGroup(ctx, dir, t.remote, []int{0}, []pushTarget{t}, results)
-	return results[0], nil
 }

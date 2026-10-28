@@ -62,7 +62,7 @@
     <label>Hotfix prefix<input bind:value={$form.prefixes.hotfix} on:keydown={onKey} /></label>
     <label>Warmfix prefix<input bind:value={$form.prefixes.warmfix} on:keydown={onKey} /></label>
   </div>
-  <p class="hint">These names decide the main branches pushed by "Push main branches".</p>
+  <p class="hint">These names decide which branches "Push main branches" ticks.</p>
   {#if formError}<p class="warn">{formError}</p>{/if}
   {#if error && error !== formError}<p class="warn">{error}</p>{/if}
   <div>

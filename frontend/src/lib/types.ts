@@ -92,7 +92,7 @@ export interface Branch {
   upstreamGone?: boolean
   /** The upstream is another local branch, not a remote one. */
   upstreamLocal?: boolean
-  /** A local branch "Main branches" pushes: main, master, develop, release/*
+  /** A local branch "Push main branches" pre-ticks: main, master, develop, release/*
    *  or the repository's git-flow names (decided in Go, refs.OfficialRule). */
   official: boolean
   /** Path of another worktree that has this branch checked out. */
@@ -347,11 +347,8 @@ export interface PullResult {
   tracked?: string
 }
 
-export type PushScope = 'ask' | 'current' | 'all'
-
 export interface GitSettings {
   pullStrategy: 'auto' | 'merge' | 'rebase'
-  pushScope: PushScope
 }
 
 /** One branch's outcome of a push of the main branches (Go's ops.BranchPushResult). */
@@ -361,6 +358,23 @@ export interface BranchPushResult {
   target: string
   status: 'pushed' | 'upToDate' | 'rejected' | 'failed'
   reason?: string
+  /** The single "Tags" row of a push that also sent the tags. */
+  tags?: boolean
+}
+
+/** One branch of the Push dialog: local branch, remote branch name, set upstream. */
+export interface PushSpec {
+  local: string
+  remote: string
+  track: boolean
+}
+
+/** What the Push dialog sends (Go's ops.PushRequest). */
+export interface PushRequest {
+  remote: string
+  branches: PushSpec[]
+  tags: boolean
+  force: boolean
 }
 
 export interface StashEntry {

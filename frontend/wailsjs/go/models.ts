@@ -1356,7 +1356,6 @@ export namespace gitsettings {
 	
 	export class Settings {
 	    pullStrategy: string;
-	    pushScope: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -1365,7 +1364,6 @@ export namespace gitsettings {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.pullStrategy = source["pullStrategy"];
-	        this.pushScope = source["pushScope"];
 	    }
 	}
 
@@ -1956,6 +1954,7 @@ export namespace ops {
 	    target: string;
 	    status: string;
 	    reason?: string;
+	    tags?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new BranchPushResult(source);
@@ -1967,8 +1966,62 @@ export namespace ops {
 	        this.target = source["target"];
 	        this.status = source["status"];
 	        this.reason = source["reason"];
+	        this.tags = source["tags"];
 	    }
 	}
+	export class PushSpec {
+	    local: string;
+	    remote: string;
+	    track: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new PushSpec(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.local = source["local"];
+	        this.remote = source["remote"];
+	        this.track = source["track"];
+	    }
+	}
+	export class PushRequest {
+	    remote: string;
+	    branches: PushSpec[];
+	    tags: boolean;
+	    force: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new PushRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.remote = source["remote"];
+	        this.branches = this.convertValues(source["branches"], PushSpec);
+	        this.tags = source["tags"];
+	        this.force = source["force"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class Remote {
 	    name: string;
 	    fetchURL: string;

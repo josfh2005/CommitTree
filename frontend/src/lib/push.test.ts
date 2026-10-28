@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { failedMessage, othersAhead, PartialPushError, pushChoiceOptions, pushCount, pushDecision, pushedMessage, pushResultRows, pushTitle, trackTitle } from './push'
+import { failedMessage, othersAhead, PartialPushError, pushedMessage, pushResultRows, pushTitle, trackTitle } from './push'
 import type { Branch, BranchPushResult, Refs } from './types'
 
 const b = (name: string, over: Partial<Branch> = {}): Branch => ({ name, remote: '', hash: 'h', current: false, upstream: `origin/${name}`, official: true, ...over })
 const refs = (local: Branch[], over: Partial<Refs> = {}): Refs => ({ head: 'main', headHash: 'h', detached: false, local, remotes: [], tags: [], ...over })
 const res = (branch: string, status: BranchPushResult['status'], reason?: string): BranchPushResult => ({ branch, target: `origin/${branch}`, status, ...(reason ? { reason } : {}) })
 
-describe('othersAhead / pushCount', () => {
+describe('othersAhead', () => {
   const all = refs([
     b('main', { current: true, ahead: 2 }),
     b('feature', { ahead: 1 }),
@@ -26,47 +26,6 @@ describe('othersAhead / pushCount', () => {
   it('leaves out a branch tracking a local branch', () => {
     expect(othersAhead(all).some((x) => x.name === 'child')).toBe(false)
   })
-  it('counts the current branch plus the others', () => {
-    expect(pushCount(all)).toBe(2)
-    expect(pushCount(refs([b('feature', { ahead: 1 })], { detached: true, head: '' }))).toBe(1)
-    expect(pushCount(refs([b('main', { current: true, upstream: 'dev', upstreamLocal: true }), b('feature', { ahead: 1 })]))).toBe(1)
-    expect(pushCount(refs([b('topic', { current: true, official: false }), b('feature', { ahead: 1 })]))).toBe(1)
-    expect(pushCount(null)).toBe(0)
-  })
-})
-
-describe('pushDecision', () => {
-  const lone = refs([b('main', { current: true, ahead: 1 })])
-  const more = refs([b('main', { current: true }), b('feature', { ahead: 1 })])
-  it('follows a fixed setting', () => {
-    expect(pushDecision('current', more)).toBe('current')
-    expect(pushDecision('all', lone)).toBe('all')
-  })
-  it('asks only when another branch has commits to push', () => {
-    expect(pushDecision('ask', lone)).toBe('current')
-    expect(pushDecision('ask', more)).toBe('ask')
-    expect(pushDecision('ask', null)).toBe('current')
-    expect(pushDecision('ask', refs([b('main', { current: true }), b('feature', { ahead: 1, official: false })]))).toBe('current')
-  })
-})
-
-describe('pushChoiceOptions', () => {
-  it('offers the current branch first and names the count', () => {
-    const o = pushChoiceOptions('alpha', refs([b('main', { current: true }), b('a', { ahead: 1 }), b('c', { ahead: 4 })]))
-    expect(o.title).toBe('Push alpha')
-    expect(o.label).toBe('Push')
-    expect(o.options).toEqual([{ value: 'current', label: 'Current branch (main)' }, { value: 'all', label: 'Main branches (3)' }])
-    expect(o.value).toBe('current')
-    expect(o.message('current')).toBe('Change the default in Settings → General.')
-    expect(o.confirmLabel('current')).toBe('Push')
-    expect(o.confirmLabel('all')).toBe('Push 3 branches')
-  })
-  it('offers only main branches with a detached HEAD', () => {
-    const o = pushChoiceOptions('alpha', refs([b('a', { ahead: 1 })], { detached: true, head: '' }))
-    expect(o.options).toEqual([{ value: 'all', label: 'Main branches (1)' }])
-    expect(o.value).toBe('all')
-    expect(o.confirmLabel('all')).toBe('Push 1 branch')
-  })
 })
 
 describe('result summaries', () => {
@@ -76,6 +35,24 @@ describe('result summaries', () => {
     expect(pushedMessage([res('main', 'pushed'), res('a', 'pushed')])).toBe('Pushed 2 branches')
     expect(pushedMessage([res('main', 'upToDate'), res('a', 'pushed'), res('b', 'pushed')])).toBe('Pushed 2 branches, 1 already up to date')
     expect(pushedMessage([res('main', 'upToDate')])).toBe('Everything up to date')
+  })
+  it('reads a push of tags only, and tags after the branches', () => {
+    const tags = (status: BranchPushResult['status'], reason?: string): BranchPushResult => ({ branch: 'Tags', target: 'origin', tags: true, status, ...(reason ? { reason } : {}) })
+    expect(pushedMessage([tags('pushed')])).toBe('Pushed tags')
+    expect(pushedMessage([tags('upToDate')])).toBe('Everything up to date')
+    expect(pushedMessage([res('feature/x', 'pushed'), tags('pushed')])).toBe('Pushed feature/x and tags')
+    expect(pushedMessage([res('a', 'pushed'), res('b', 'pushed'), res('c', 'upToDate'), tags('pushed')])).toBe('Pushed 2 branches and tags, 1 already up to date')
+    expect(pushedMessage([res('a', 'upToDate'), tags('pushed')])).toBe('Pushed tags, 1 already up to date')
+    expect(pushedMessage([res('a', 'upToDate'), tags('upToDate')])).toBe('Everything up to date')
+  })
+  it('counts only branches when tags are in the report', () => {
+    const tags: BranchPushResult = { branch: 'Tags', target: 'origin', tags: true, status: 'rejected', reason: 'x' }
+    expect(failedMessage([res('a', 'rejected', 'pull'), res('b', 'pushed'), tags])).toBe('1 of 2 branches were not pushed')
+    expect(failedMessage([res('a', 'pushed'), tags])).toBe('Tags were not pushed')
+  })
+  it('names the remote on the tags row', () => {
+    const tags: BranchPushResult = { branch: 'Tags', target: 'origin', tags: true, status: 'pushed' }
+    expect(pushResultRows([tags])).toEqual([{ mark: '✓', label: 'Tags → origin', detail: 'Pushed', tone: 'ok' }])
   })
   it('counts the branches that were not pushed', () => {
     const r = [res('main', 'rejected', 'pull'), res('a', 'pushed'), res('b', 'failed', 'auth')]
@@ -95,12 +72,8 @@ describe('result summaries', () => {
 })
 
 describe('tooltips', () => {
-  it('says what a click on Push does', () => {
-    const r = refs([b('main', { current: true })])
-    expect(pushTitle('current', r)).toBe('Push main')
-    expect(pushTitle('current', refs([], { detached: true, head: '' }))).toBe('Push')
-    expect(pushTitle('all', r)).toBe('Push main branches')
-    expect(pushTitle('ask', r)).toBe('Push — asks current or main branches')
+  it('says the Push button opens the push window', () => {
+    expect(pushTitle()).toBe('Push — choose branches to push')
   })
   it('explains the badges, leaving out a zero part', () => {
     expect(trackTitle(b('main', { ahead: 2, behind: 1 }))).toBe('2 commits to push to origin/main · 1 commit to pull, as of the last fetch')

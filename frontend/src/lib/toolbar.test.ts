@@ -135,9 +135,7 @@ describe('toolbarItems, follow-ups', () => {
   })
 })
 
-it('the Push tooltip says what a click does', () => {
-  expect(item({ pushScope: 'current' }, 'push').title).toBe('Push main')
-  expect(item({ pushScope: 'all' }, 'push').title).toBe('Push main branches')
-  expect(item({}, 'push').title).toBe('Push — asks current or main branches')
-  expect(item({ busy: 'Pushing branches…', pushScope: 'all' }, 'push').title).toBe('Pushing branches…')
+it('the Push tooltip says it opens the push window', () => {
+  expect(item({}, 'push').title).toBe('Push — choose branches to push')
+  expect(item({ busy: 'Pushing branches…' }, 'push').title).toBe('Pushing branches…')
 })
