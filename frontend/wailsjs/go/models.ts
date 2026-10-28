@@ -1356,7 +1356,6 @@ export namespace gitsettings {
 	
 	export class Settings {
 	    pullStrategy: string;
-	    pushScope: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -1365,7 +1364,6 @@ export namespace gitsettings {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.pullStrategy = source["pullStrategy"];
-	        this.pushScope = source["pushScope"];
 	    }
 	}
 

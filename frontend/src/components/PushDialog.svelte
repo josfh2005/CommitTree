@@ -39,6 +39,10 @@
     return { update: (v: boolean) => (node.indeterminate = v) }
   }
 
+  // OK takes focus when the dialog opens (as in DialogHost); a disabled OK, with
+  // nothing ticked, simply stays unfocused.
+  const focus = (node: HTMLElement) => { setTimeout(() => node.focus()) }
+
   const close = () => pushDialogState.set(null)
   function submit() {
     if (!opened || !canPush(rows, tags)) return
@@ -55,7 +59,7 @@
 
 {#if opened}
   <div class="backdrop" on:click|self={close} role="presentation">
-    <div class="dialog" role="dialog" aria-label="Push to repository">
+    <div class="dialog" role="dialog" aria-modal="true" aria-label="Push to repository">
       <div class="head">
         <label class="remote">
           <span>Push to repository:</span>
@@ -113,7 +117,7 @@
         </div>
         <div class="buttons">
           <button type="button" class="btn" on:click={close}>Cancel</button>
-          <button type="button" class="btn primary" disabled={!canPush(rows, tags)} on:click={submit}>OK</button>
+          <button type="button" class="btn primary" disabled={!canPush(rows, tags)} use:focus on:click={submit}>OK</button>
         </div>
       </div>
     </div>

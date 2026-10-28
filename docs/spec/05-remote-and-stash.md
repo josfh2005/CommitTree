@@ -55,7 +55,7 @@ why it is disabled; an enabled one's says what it does.
 | Stash | The "Stash changes" dialog | busy; a conflict is in progress; nothing is uncommitted ("Nothing to stash") |
 | Fetch | Fetch, below; an amber dot while background fetches skip a remote that needs credentials, with the tooltip "Background fetch paused for <remotes>: authentication failed. Fetch to retry." | busy |
 | Pull | Pull, below; the behind count as a badge | busy; a conflict is in progress |
-| Push | The Push dialog (Push, below), with the current branch ticked; the current branch's ahead count as a badge | same as Pull |
+| Push | The Push dialog (Push, below), with the current branch ticked; the current branch's ahead count as a badge; the tooltip reads "Push — choose branches to push" | same as Pull |
 | Branch | The "New branch" dialog, from HEAD (a detached HEAD's commit included) | busy |
 | Merge | The branch picker below, then the usual merge confirmation | busy; a conflict is in progress; detached HEAD ("Check out a branch first"); no branch other than the current one, local or remote ("No other branches") |
 | Terminal | A toggle: shows or hides the terminal panel, and looks pressed (soft background and border, no colour) while it is open | never |
@@ -262,7 +262,9 @@ reason. A remote that cannot be reached (network, authentication) fails all
 of its rows with git's message; a push cancelled from the Commands panel
 reads "Cancelled". If the push cannot start at all (the repository is missing,
 another write is running, the request is invalid), an error toast shows
-instead of the dialog.
+instead of the dialog; and when the repository's branches cannot be read to
+fill the dialog, the toast is "Could not read the repository's branches" and
+the dialog does not open.
 
 Every branch whose remote branch moved starts a pipeline watch
 (`14-hosting.md`, "Watching a push"), even when the call as a whole reports an
@@ -357,14 +359,13 @@ badges) afterwards.
   deleted on the remote ("The upstream was deleted on the remote"), one that
   tracks a local branch ("Tracks a local branch") and one checked out in a
   linked worktree ("Checked out in another worktree").
-- **Push `<branch>`** opens the Push dialog with that branch ticked (Push,
-  above), on its upstream's remote. The menu item is disabled while a write
-  runs, and while a merge, rebase or cherry-pick is in progress. Its label
-  reads "Publish `<branch>` to `<remote>`" (origin, else the only remote)
-  when the branch has no upstream or its upstream was deleted on the remote,
-  and is disabled with "No remote" when it has to publish and there is none;
-  a branch that tracks a local branch is disabled ("Tracks a local branch").
-  The results are those of the dialog.
+- **Push** opens the Push dialog with that branch ticked (Push, above), on
+  its upstream's remote. It is enabled for any local branch — with or without
+  an upstream, whose upstream was deleted, or that tracks a local branch —
+  whenever the repository has at least one remote. It is disabled while a
+  write runs, while a merge, rebase or cherry-pick is in progress, and with
+  "No remote" when the repository has no remote. The results are those of
+  the dialog.
 
 ### Credentials
 

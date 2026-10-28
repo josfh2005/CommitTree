@@ -133,11 +133,11 @@ func TestSecretNeverLeaves(t *testing.T) {
 	lockedOrigin(t, r, sentinel)
 	r.Commit("more")
 	branch := r.Git("rev-parse", "--abbrev-ref", "HEAD")
-	res, err := a.PushBranch(id, branch)
+	res, err := a.PushBranches(id, ops.PushRequest{Remote: "origin", Branches: []ops.PushSpec{{Local: branch}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Status != ops.PushPushed {
+	if len(res) != 1 || res[0].Status != ops.PushPushed {
 		t.Fatalf("push did not succeed: %+v", res)
 	}
 	ev.find(t, "credential:request")

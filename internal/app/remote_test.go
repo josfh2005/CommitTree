@@ -112,7 +112,7 @@ func TestGitSettingsDefaultAndSaveRoundTrip(t *testing.T) {
 	}
 }
 
-func TestPushAllThroughTheAppLayer(t *testing.T) {
+func TestPushBranchesThroughTheAppLayer(t *testing.T) {
 	a, r, id := newPlainApp(t)
 	bare := testrepo.NewBareFrom(t, r)
 	r.Git("remote", "add", "origin", bare)
@@ -120,7 +120,7 @@ func TestPushAllThroughTheAppLayer(t *testing.T) {
 	r.Git("switch", "-q", "-c", "release/1.0")
 	r.Commit("on release")
 
-	results, err := a.PushAll(id)
+	results, err := a.PushBranches(id, ops.PushRequest{Remote: "origin", Branches: []ops.PushSpec{{Local: "release/1.0", Track: true}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,14 +129,14 @@ func TestPushAllThroughTheAppLayer(t *testing.T) {
 	}
 }
 
-func TestPushAllRefusesWhileAnotherWriteRuns(t *testing.T) {
+func TestPushBranchesRefusesWhileAnotherWriteRuns(t *testing.T) {
 	a, _, id := newPlainApp(t)
 	unlock, err := a.lockWrite(id)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer unlock()
-	if _, err := a.PushAll(id); !errors.Is(err, ErrBusy) {
+	if _, err := a.PushBranches(id, ops.PushRequest{Remote: "origin", Branches: []ops.PushSpec{{Local: "main"}}}); !errors.Is(err, ErrBusy) {
 		t.Fatalf("err = %v, want ErrBusy", err)
 	}
 }
@@ -147,14 +147,7 @@ func TestBranchRemoteActionsThroughTheAppLayer(t *testing.T) {
 	r.Git("remote", "add", "origin", bare)
 	r.Git("push", "-q", "-u", "origin", "main")
 	r.Git("branch", "topic")
-
-	res, err := a.PushBranch(id, "topic")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res != (ops.BranchPushResult{Branch: "topic", Target: "origin/topic", Status: ops.PushPushed}) {
-		t.Fatalf("result = %+v", res)
-	}
+	r.Git("push", "-q", "-u", "origin", "topic")
 
 	clone := testrepo.Clone(t, bare)
 	clone.Git("switch", "-q", "topic")
@@ -184,9 +177,6 @@ func TestBranchRemoteActionsRefuseWhileAnotherWriteRuns(t *testing.T) {
 	}
 	if _, err := a.FastForwardBranch(id, "main"); !errors.Is(err, ErrBusy) {
 		t.Errorf("FastForwardBranch err = %v, want ErrBusy", err)
-	}
-	if _, err := a.PushBranch(id, "main"); !errors.Is(err, ErrBusy) {
-		t.Errorf("PushBranch err = %v, want ErrBusy", err)
 	}
 }
 

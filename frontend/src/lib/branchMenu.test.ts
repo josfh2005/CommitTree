@@ -12,25 +12,25 @@ describe('branchMenuGroups', () => {
   it('lays out a non-current local branch', () => {
     expect(labels(branchMenuGroups(local(), opts()))).toEqual([
       ['Check out'],
-      ['Fetch origin', 'Pull feature', 'Push feature'],
+      ['Fetch origin', 'Pull feature', 'Push'],
       ['Merge feature into main', 'Rebase main onto feature'],
       ['New branch from here…', 'New tag here…'],
       ['Delete…'],
     ])
   })
 
-  it('a branch with no upstream publishes to origin', () => {
+  it('a branch with no upstream can still push (the dialog publishes it)', () => {
     const groups = branchMenuGroups(local({ upstream: '' }), opts())
-    expect(find(groups, 'push').label).toBe('Publish feature to origin')
+    expect(find(groups, 'push').label).toBe('Push')
     expect(find(groups, 'push').disabled).toBeFalsy()
     expect(find(groups, 'fetch').label).toBe('Fetch origin')
     expect(find(groups, 'pull')).toMatchObject({ disabled: true, title: 'No upstream' })
   })
 
-  it('a branch tracking a local branch can neither pull nor push', () => {
+  it('a branch tracking a local branch cannot pull but can push (the dialog lists every local branch)', () => {
     const groups = branchMenuGroups(local({ upstream: 'main', upstreamLocal: true }), opts())
     expect(find(groups, 'pull')).toMatchObject({ disabled: true, title: 'Tracks a local branch' })
-    expect(find(groups, 'push')).toMatchObject({ disabled: true, title: 'Tracks a local branch' })
+    expect(find(groups, 'push')).toMatchObject({ label: 'Push', disabled: false })
     expect(find(groups, 'fetch').label).toBe('Fetch origin')
   })
 
@@ -38,7 +38,7 @@ describe('branchMenuGroups', () => {
     const groups = branchMenuGroups(local({ name: 'main', current: true, upstream: 'backup/main' }), opts({ remotes: ['origin', 'backup'] }))
     expect(find(groups, 'fetch').label).toBe('Fetch backup')
     expect(find(groups, 'pull')).toMatchObject({ label: 'Pull main', disabled: false })
-    expect(find(groups, 'push')).toMatchObject({ label: 'Push main', disabled: false })
+    expect(find(groups, 'push')).toMatchObject({ label: 'Push', disabled: false })
     expect(find(groups, 'checkout').disabled).toBe(true)
     expect(find(groups, 'merge').disabled).toBe(true)
     expect(find(groups, 'delete').disabled).toBe(true)
@@ -47,7 +47,7 @@ describe('branchMenuGroups', () => {
   it('the current branch without an upstream cannot pull', () => {
     const groups = branchMenuGroups(local({ name: 'main', current: true, upstream: '' }), opts())
     expect(find(groups, 'pull')).toMatchObject({ disabled: true, title: 'No upstream' })
-    expect(find(groups, 'push').label).toBe('Publish main to origin')
+    expect(find(groups, 'push')).toMatchObject({ label: 'Push', disabled: false })
   })
 
   it('a branch with no upstream can pull when a remote has a branch of the same name', () => {
@@ -96,30 +96,34 @@ describe('Pull and Push in the less common states', () => {
     expect(find(branchMenuGroups(local({ worktree: '/wt' }), opts()), 'pull')).toMatchObject({ disabled: true, title: 'Checked out in another worktree' })
   })
 
-  it('Pull is disabled when the upstream was deleted, and Push says it publishes again', () => {
+  it('Pull is disabled when the upstream was deleted; Push stays available', () => {
     const groups = branchMenuGroups(local({ upstreamGone: true }), opts())
     expect(find(groups, 'pull')).toMatchObject({ disabled: true, title: 'The upstream was deleted on the remote' })
-    expect(find(groups, 'push')).toMatchObject({ label: 'Publish feature to origin', disabled: false })
+    expect(find(groups, 'push')).toMatchObject({ label: 'Push', disabled: false })
   })
 
-  it('publishes to the only remote when there is no origin', () => {
+  it('fetches the only remote when there is no origin', () => {
     const groups = branchMenuGroups(local({ upstream: '' }), opts({ remotes: ['backup'] }))
-    expect(find(groups, 'push').label).toBe('Publish feature to backup')
     expect(find(groups, 'fetch').label).toBe('Fetch backup')
+    expect(find(groups, 'push')).toMatchObject({ label: 'Push', disabled: false })
   })
 
-  it('with no origin and several remotes (or none) Fetch and Publish are disabled', () => {
-    for (const remotes of [['a', 'b'], []]) {
-      const groups = branchMenuGroups(local({ upstream: '' }), opts({ remotes }))
-      expect(find(groups, 'fetch')).toMatchObject({ label: 'Fetch', disabled: true, title: 'No remote' })
-      expect(find(groups, 'push')).toMatchObject({ disabled: true, title: 'No remote' })
-    }
+  it('with no origin and several remotes Fetch is disabled but Push is not (the dialog asks for the remote)', () => {
+    const groups = branchMenuGroups(local({ upstream: '' }), opts({ remotes: ['a', 'b'] }))
+    expect(find(groups, 'fetch')).toMatchObject({ label: 'Fetch', disabled: true, title: 'No remote' })
+    expect(find(groups, 'push')).toMatchObject({ label: 'Push', disabled: false })
+  })
+
+  it('with no remote at all Fetch and Push are disabled', () => {
+    const groups = branchMenuGroups(local({ upstream: '' }), opts({ remotes: [] }))
+    expect(find(groups, 'fetch')).toMatchObject({ label: 'Fetch', disabled: true, title: 'No remote' })
+    expect(find(groups, 'push')).toMatchObject({ label: 'Push', disabled: true, title: 'No remote' })
   })
 
   it('a branch with a live upstream still pushes without an origin', () => {
     const groups = branchMenuGroups(local({ upstream: 'a/feature' }), opts({ remotes: ['a', 'b'] }))
     expect(find(groups, 'fetch').label).toBe('Fetch a')
-    expect(find(groups, 'push')).toMatchObject({ label: 'Push feature', disabled: false })
+    expect(find(groups, 'push')).toMatchObject({ label: 'Push', disabled: false })
   })
 })
 

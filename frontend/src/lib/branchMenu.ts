@@ -31,10 +31,10 @@ export interface BranchMenuOptions {
 /** The name the merge and rebase entries use: remote/name for a remote row. */
 export const branchLabel = (b: Branch) => (b.remote ? `${b.remote}/${b.name}` : b.name)
 
-/** The remote "Fetch <remote>" fetches and "Publish" publishes to: a remote
- *  row's own, a local branch's upstream remote (the longest remote name that
- *  prefixes the upstream, since names may contain a slash), else origin, else
- *  the only remote; '' when there is no way to tell. */
+/** The remote "Fetch <remote>" fetches: a remote row's own, a local
+ *  branch's upstream remote (the longest remote name that prefixes the
+ *  upstream, since names may contain a slash), else origin, else the only
+ *  remote; '' when there is no way to tell. */
 export function branchRemote(b: Branch, remotes: string[]): string {
   if (b.remote) return b.remote
   if (b.upstream && !b.upstreamLocal) {
@@ -72,19 +72,15 @@ export function branchMenuGroups(b: Branch, o: BranchMenuOptions): BranchMenuEnt
   if (b.remote) return [[checkout], [fetch], integrate, create, [del]]
 
   // Pull needs a live upstream — or a remote branch of the same name, which
-  // it tracks first — and a branch no other worktree holds; a branch with
-  // none (or whose upstream was deleted) publishes instead.
+  // it tracks first — and a branch no other worktree holds.
   const pullWhy =
     syncReason(b, o) ??
     (!b.upstream && !o.twin ? 'No upstream' : b.upstreamGone ? 'The upstream was deleted on the remote' : b.worktree ? 'Checked out in another worktree' : undefined)
-  const publishes = !b.upstream || !!b.upstreamGone
-  const pushWhy = syncReason(b, o) ?? (publishes && !remote ? 'No remote' : undefined)
+  // Push opens the Push dialog with this branch ticked, which lists every
+  // local branch and decides what each one pushes to, so it only needs a
+  // remote to push to.
+  const pushWhy = o.busy ? BUSY : o.merging ? 'Finish the operation in progress first' : o.remotes.length === 0 ? 'No remote' : undefined
   const pull: BranchMenuEntry = { id: 'pull', label: `Pull ${b.name}`, disabled: !!pullWhy, title: pullWhy }
-  const push: BranchMenuEntry = {
-    id: 'push',
-    label: publishes ? `Publish ${b.name}${remote ? ` to ${remote}` : ''}` : `Push ${b.name}`,
-    disabled: !!pushWhy,
-    title: pushWhy,
-  }
+  const push: BranchMenuEntry = { id: 'push', label: 'Push', disabled: !!pushWhy, title: pushWhy }
   return [[checkout], [fetch, pull, push], integrate, create, [del]]
 }

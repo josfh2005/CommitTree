@@ -49,8 +49,8 @@ The repository's branch roles, as the `gitflow.*` keys of its own git config
 (`gitflow.branch.master`), **Development branch** (`gitflow.branch.develop`)
 and the **Feature**, **Release**, **Hotfix** and **Warmfix** prefixes
 (`gitflow.prefix.*`; the warmfix one is the same field the Initialise dialog
-has). Under the fields: "These names decide the main branches pushed by "Push
-main branches"." (see `05-remote-and-stash.md`).
+has). Under the fields: "These names decide which branches "Push
+main branches" ticks." (see `05-remote-and-stash.md`).
 
 Checked before saving, and again by Go (`gitflow.SaveSettings`), which refuses
 with the same reasons: both branch names are filled in and valid branch names
@@ -80,7 +80,7 @@ creates the development branch if it is missing. The button reads **Set
 
 After a save the tab reloads, and the repository's refs and sidebar are read
 again (the selected repository, or an expanded one in the sidebar), so the
-"Main branches (N)" count and the Push tooltip follow the new names at once.
+branches that "Push main branches" ticks follow the new names at once.
 
 ## AI
 

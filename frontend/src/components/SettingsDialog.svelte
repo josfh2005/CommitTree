@@ -37,7 +37,7 @@
   // Why the AI settings could not be loaded; the AI tabs show it, General
   // still works.
   let aiError = ''
-  let git: GitSettings = { pullStrategy: 'auto', pushScope: 'ask' }
+  let git: GitSettings = { pullStrategy: 'auto' }
   let status: AIStatus | null = null
   let prompts: PromptInfo[] = []
   let otherModel = ''
@@ -336,15 +336,6 @@
                   <option value="rebase">Always rebase</option>
                 </select>
               </label>
-              <label>
-                <span>Push</span>
-                <select bind:value={git.pushScope} on:change={saveGit}>
-                  <option value="ask">Ask each time</option>
-                  <option value="current">Current branch only</option>
-                  <option value="all">Main branches</option>
-                </select>
-              </label>
-              <p class="hint push-hint">main, master, develop and release/*, or your git-flow names.</p>
             </section>
 
             <section>
@@ -582,7 +573,7 @@
   .hint { font-size: 12px; color: var(--muted); }
   p.hint, p.warn { padding: 14px 0; }
 .check.sub { padding-left: 22px; }
-p.hint.notify-status, p.hint.push-hint, p.hint.check-result { padding: 4px 0 0; }
+p.hint.notify-status, p.hint.check-result { padding: 4px 0 0; }
   p.hint.remote-off { padding: 0 0 0 44px; }
   .pull { display: flex; align-items: center; gap: 8px; }
   .bar { flex: 1; height: 6px; border-radius: 3px; background: var(--hover); overflow: hidden; }

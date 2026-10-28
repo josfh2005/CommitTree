@@ -347,11 +347,8 @@ export interface PullResult {
   tracked?: string
 }
 
-export type PushScope = 'ask' | 'current' | 'all'
-
 export interface GitSettings {
   pullStrategy: 'auto' | 'merge' | 'rebase'
-  pushScope: PushScope
 }
 
 /** One branch's outcome of a push of the main branches (Go's ops.BranchPushResult). */
