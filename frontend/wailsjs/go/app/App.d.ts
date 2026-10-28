@@ -255,6 +255,8 @@ export function PushAll(arg1:string):Promise<Array<ops.BranchPushResult>>;
 
 export function PushBranch(arg1:string,arg2:string):Promise<ops.BranchPushResult>;
 
+export function PushBranches(arg1:string,arg2:ops.PushRequest):Promise<Array<ops.BranchPushResult>>;
+
 export function RebaseOnto(arg1:string,arg2:string):Promise<merge.Result>;
 
 export function RelocateRepo(arg1:string):Promise<repos.Repo>;

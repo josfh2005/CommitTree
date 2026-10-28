@@ -204,3 +204,14 @@ func TestPushedBranchesKeepsOnlyThePushedOnes(t *testing.T) {
 		t.Fatalf("nil results gave %v", got)
 	}
 }
+
+func TestPushedBranchesSkipsTheTagsRow(t *testing.T) {
+	got := pushedBranches([]ops.BranchPushResult{
+		{Branch: "a", Status: ops.PushPushed},
+		{Branch: "Tags", Status: ops.PushPushed, Tags: true},
+		{Branch: "b", Status: ops.PushUpToDate},
+	})
+	if len(got) != 1 || got[0] != "a" {
+		t.Fatalf("pushed = %v, want [a]", got)
+	}
+}

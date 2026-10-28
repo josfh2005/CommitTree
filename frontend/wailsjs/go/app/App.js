@@ -466,6 +466,10 @@ export function PushBranch(arg1, arg2) {
   return window['go']['app']['App']['PushBranch'](arg1, arg2);
 }
 
+export function PushBranches(arg1, arg2) {
+  return window['go']['app']['App']['PushBranches'](arg1, arg2);
+}
+
 export function RebaseOnto(arg1, arg2) {
   return window['go']['app']['App']['RebaseOnto'](arg1, arg2);
 }

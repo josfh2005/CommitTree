@@ -361,6 +361,23 @@ export interface BranchPushResult {
   target: string
   status: 'pushed' | 'upToDate' | 'rejected' | 'failed'
   reason?: string
+  /** The single "Tags" row of a push that also sent the tags. */
+  tags?: boolean
+}
+
+/** One branch of the Push dialog: local branch, remote branch name, set upstream. */
+export interface PushSpec {
+  local: string
+  remote: string
+  track: boolean
+}
+
+/** What the Push dialog sends (Go's ops.PushRequest). */
+export interface PushRequest {
+  remote: string
+  branches: PushSpec[]
+  tags: boolean
+  force: boolean
 }
 
 export interface StashEntry {

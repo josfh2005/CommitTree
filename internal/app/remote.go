@@ -87,11 +87,28 @@ func (a *App) PushAll(id string) ([]ops.BranchPushResult, error) {
 	return results, err
 }
 
-// pushedBranches are the branches whose upstream a Push all moved.
+// PushBranches pushes the branches chosen in the Push dialog to one remote,
+// plus the tags when asked. Like PushAll, each branch's outcome comes back
+// as a result; only a failure to start (busy, missing) is an error.
+func (a *App) PushBranches(id string, req ops.PushRequest) ([]ops.BranchPushResult, error) {
+	var results []ops.BranchPushResult
+	err := a.write(id, func(ctx context.Context, dir string) error {
+		var pushErr error
+		results, pushErr = ops.PushBranches(a.prompting(ctx, id, dir, "Push"), dir, req)
+		return pushErr
+	})
+	// The branches that did move their remote are watched even when the
+	// call as a whole reports an error.
+	a.watchPushed(id, pushedBranches(results))
+	return results, err
+}
+
+// pushedBranches are the branches whose remote a push moved; the tags row
+// is not a branch and has no pipeline to watch.
 func pushedBranches(results []ops.BranchPushResult) []string {
 	var pushed []string
 	for _, r := range results {
-		if r.Status == ops.PushPushed {
+		if r.Status == ops.PushPushed && !r.Tags {
 			pushed = append(pushed, r.Branch)
 		}
 	}
